@@ -1,6 +1,6 @@
 import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSettings } from 'oidc-client-ts';
 // import { db } from '../lib/surreal'; // REMOVED
-import Surreal from '../lib/surreal'; // IMPORT Surreal class for type
+import Surreal from 'surrealdb'; // IMPORT Surreal class for type from the library
 
 // --- OIDC Configuration ---
 // These settings need to be configured based on your Quarkus OIDC provider.
