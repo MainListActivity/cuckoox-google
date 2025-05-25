@@ -8,6 +8,7 @@ import './styles/main.css'; // Tailwind CSS and global styles
 // REMOVED: import { connectSurrealDB } from './lib/surreal';
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // ADDED
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -23,12 +24,15 @@ const surrealDatabase = import.meta.env.VITE_SURREALDB_DATABASE || 'test';
 
 // REMOVED: renderApp, renderError functions, and connectSurrealDB() promise handling
 
+const queryClient = new QueryClient(); // ADDED
+
 root.render(
   <React.StrictMode>
     <I18nextProvider i18n={i18n}>
-      <SurrealProvider
-        endpoint={surrealEndpoint}
-        namespace={surrealNamespace}
+      <QueryClientProvider client={queryClient}> {/* ADDED */}
+        <SurrealProvider
+          endpoint={surrealEndpoint}
+          namespace={surrealNamespace}
         database={surrealDatabase}
         // autoConnect is typically handled by the provider's useEffect internally based on props.
         // If your SurrealProvider implementation from the previous step explicitly uses an autoConnect prop,
@@ -37,12 +41,13 @@ root.render(
         // Let's assume autoConnect={true} behavior is default or managed by an effect in SurrealProvider.
         // If an explicit prop is needed, add it: autoConnect={true}
       >
-        <BrowserRouter>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </BrowserRouter>
-      </SurrealProvider>
+          <BrowserRouter>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </BrowserRouter>
+        </SurrealProvider>
+      </QueryClientProvider> {/* ADDED */}
     </I18nextProvider>
   </React.StrictMode>
 );
