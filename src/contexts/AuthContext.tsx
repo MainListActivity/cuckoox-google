@@ -270,11 +270,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async () => {
     setIsLoading(true);
+    const isAdmin = user && user.github_id === '--admin--';
+
     try {
-      await authService.logoutRedirect();
+      if (isAdmin) {
+        try {
+          await db.signout(); // Sign out from SurrealDB for admin
+          console.log('Admin user signed out from SurrealDB.');
+        } catch (e) {
+          console.error('Error during SurrealDB signout:', e);
+          // Continue with client-side logout even if server signout fails
+        }
+        // For admin, client-side cleanup is handled in finally block
+      } else if (user) { // Regular OIDC user
+        await authService.logoutRedirect(); // This will redirect
+        // Post-redirect, OIDC library and app's initial load logic handle state.
+        // The finally block here ensures immediate client state cleanup
+        // in case the redirect is slow or has issues, or for non-redirect scenarios.
+      } else {
+        console.warn("Logout called without a user session.");
+      }
     } catch (error) {
-      console.error("Error during OIDC logout redirect:", error);
+      // This catches errors primarily from authService.logoutRedirect() or db.signout()
+      console.error("Error during logout process:", error);
     } finally {
+      // Clear all client-side state for any logout type or if logout was called without user
       setUser(null);
       setOidcUser(null);
       setIsLoggedIn(false);
@@ -284,11 +304,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       localStorage.removeItem('cuckoox-isLoggedIn');
       localStorage.removeItem('cuckoox-user');
       localStorage.removeItem('cuckoox-selectedCaseId');
+      // Any other app-specific cleanup related to user session can go here
       setIsLoading(false);
     }
   };
 
   const hasRole = (roleName: string): boolean => {
+    if (roleName === 'admin') {
+      return user ? user.github_id === '--admin--' : false;
+    }
+    // Existing logic for case-specific roles
     if (!selectedCaseId || currentUserCaseRoles.length === 0) {
       return false;
     }
