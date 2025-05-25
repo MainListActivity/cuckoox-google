@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { db } from '../lib/surreal'; // Corrected path
 import { RecordId } from 'surrealdb'; // For typing record IDs
 import RichTextEditor from '../components/RichTextEditor'; // IMPORT RichTextEditor
+import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
 
 // Define interfaces based on your SurrealDB schema
 interface Case {
@@ -28,6 +29,7 @@ interface Document {
 }
 
 const CaseDetailPage: React.FC = () => {
+  const { t } = useTranslation(); // <-- INITIALIZE T
   const { id } = useParams<{ id: string }>();
   const [caseDetail, setCaseDetail] = useState<Case | null>(null);
   const [filingMaterialContent, setFilingMaterialContent] = useState<string>(''); // Default to empty string
@@ -36,7 +38,7 @@ const CaseDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (!id) {
-      setError('未提供案件ID。'); // Chinese: No case ID provided.
+      setError(t('case_detail_unspecified_case')); // Use a generic "unspecified" key if no ID
       setIsLoading(false);
       return;
     }
@@ -49,7 +51,7 @@ const CaseDetailPage: React.FC = () => {
         const result: Case[] = await db.select(caseRecordId);
         
         if (result.length === 0 || !result[0]) {
-          setError('案件未找到。'); // Chinese: Case not found.
+          setError(t('case_detail_error_not_found'));
           setCaseDetail(null);
           setIsLoading(false);
           return;
@@ -59,21 +61,19 @@ const CaseDetailPage: React.FC = () => {
 
         if (fetchedCase.filing_material_doc_id) {
           const docId = fetchedCase.filing_material_doc_id.toString();
-          // Ensure docId has a prefix if it's just a UUID, e.g., `document:${docId}`
-          // Assuming the stored ID is already a full RecordId string like "document:xxxx"
           const docResult: Document[] = await db.select(docId); 
           if (docResult.length > 0 && docResult[0]) {
             setFilingMaterialContent(docResult[0].content);
           } else {
             console.warn(`Filing material document not found for ID: ${docId}`);
-            setFilingMaterialContent('（立案材料内容未找到）'); // Chinese: (Filing material content not found)
+            setFilingMaterialContent(t('case_detail_filing_material_not_found'));
           }
         } else {
-          setFilingMaterialContent('（无关联立案材料文档）'); // Chinese: (No associated filing material document)
+          setFilingMaterialContent(t('case_detail_no_associated_filing_material'));
         }
       } catch (err) {
         console.error("Error fetching case details:", err);
-        setError('获取案件详情失败。请稍后重试。'); // Chinese: Failed to fetch case details. Please try again later.
+        setError(t('case_detail_error_fetch_failed'));
         setCaseDetail(null);
       } finally {
         setIsLoading(false);
@@ -81,10 +81,10 @@ const CaseDetailPage: React.FC = () => {
     };
 
     fetchCaseDetails();
-  }, [id]);
+  }, [id, t]); // Added t to dependency array
 
   if (isLoading) {
-    return <div className="p-6 text-center">正在加载案件详情...</div>; // Chinese: Loading case details...
+    return <div className="p-6 text-center">{t('case_detail_loading')}</div>;
   }
 
   if (error) {
@@ -92,75 +92,73 @@ const CaseDetailPage: React.FC = () => {
   }
 
   if (!caseDetail) {
-    return <div className="p-6 text-center">未找到指定案件。</div>; // Chinese: Specified case not found.
+    return <div className="p-6 text-center">{t('case_detail_unspecified_case')}</div>;
   }
 
-  // Merge fetched data with any remaining mock data for smoother UI transition
-  // Ideally, all these fields would come from `caseDetail` eventually
   const displayCase = {
-    name: caseDetail.name || "未命名案件", // Chinese: Unnamed Case
+    name: caseDetail.name || t('case_detail_unnamed_case'),
     case_number: caseDetail.case_number || `BK-N/A-${caseDetail.id.toString().slice(caseDetail.id.toString().indexOf(':') + 1).slice(-4)}`,
     id: caseDetail.id.toString(),
-    case_lead_name: caseDetail.case_lead_name || '待分配', // Chinese: To be assigned
-    acceptance_date: caseDetail.acceptance_date || '日期未知', // Chinese: Date unknown
-    current_stage: caseDetail.current_stage || caseDetail.status || '阶段未知', // Chinese: Stage unknown (use status if current_stage mock isn't in DB yet)
-    filing_materials_status: filingMaterialContent ? '内容已加载' : '无立案材料内容', // Chinese: Content loaded / No filing material content
-    details: caseDetail.details || '暂无详细信息。' // Chinese: No details available yet.
+    case_lead_name: caseDetail.case_lead_name || t('case_detail_to_be_assigned'),
+    acceptance_date: caseDetail.acceptance_date || t('case_detail_date_unknown'),
+    current_stage: caseDetail.current_stage || caseDetail.status || t('case_detail_stage_unknown'),
+    filing_materials_status: filingMaterialContent ? t('case_detail_content_loaded') : t('case_detail_no_filing_material'),
+    details: caseDetail.details || t('case_detail_no_details')
   };
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="mb-6">
-        <Link to="/cases" className="text-blue-600 hover:underline">&larr; 返回案件列表</Link>
+        <Link to="/cases" className="text-blue-600 hover:underline">&larr; {t('case_detail_back_to_list_link')}</Link>
       </div>
-      <h1 className="text-3xl font-bold text-gray-800 mb-3">案件详情: {displayCase.case_number}</h1>
-      <p className="text-sm text-gray-500 mb-8">案件ID: {displayCase.id}</p>
+      <h1 className="text-3xl font-bold text-gray-800 mb-3">{t('case_detail_page_title_prefix')}: {displayCase.case_number}</h1>
+      <p className="text-sm text-gray-500 mb-8">{t('case_detail_id_label')}: {displayCase.id}</p>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Basic Info Section */}
         <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">基本信息</h2>
+          <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">{t('case_detail_basic_info_title')}</h2>
           <dl className="space-y-3">
-            <div><dt className="font-medium text-gray-600">案件名称:</dt><dd className="text-gray-800">{displayCase.name}</dd></div>
-            <div><dt className="font-medium text-gray-600">案件负责人:</dt><dd className="text-gray-800">{displayCase.case_lead_name}</dd></div>
-            <div><dt className="font-medium text-gray-600">受理时间:</dt><dd className="text-gray-800">{displayCase.acceptance_date}</dd></div>
-            <div><dt className="font-medium text-gray-600">当前阶段:</dt><dd><span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{displayCase.current_stage}</span></dd></div>
-            <div><dt className="font-medium text-gray-600">案件状态:</dt><dd><span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">{caseDetail.status || '未知'}</span></dd></div>
-            <div><dt className="font-medium text-gray-600">案件详情:</dt><dd className="text-gray-800 whitespace-pre-wrap">{displayCase.details}</dd></div>
+            <div><dt className="font-medium text-gray-600">{t('case_detail_name_label')}:</dt><dd className="text-gray-800">{displayCase.name}</dd></div>
+            <div><dt className="font-medium text-gray-600">{t('case_detail_lead_label')}:</dt><dd className="text-gray-800">{displayCase.case_lead_name}</dd></div>
+            <div><dt className="font-medium text-gray-600">{t('case_detail_acceptance_time_label')}:</dt><dd className="text-gray-800">{displayCase.acceptance_date}</dd></div>
+            <div><dt className="font-medium text-gray-600">{t('case_detail_current_stage_label')}:</dt><dd><span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{displayCase.current_stage}</span></dd></div>
+            <div><dt className="font-medium text-gray-600">{t('case_detail_status_label')}:</dt><dd><span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">{caseDetail.status || t('case_detail_status_unknown')}</span></dd></div>
+            <div><dt className="font-medium text-gray-600">{t('case_detail_details_label')}:</dt><dd className="text-gray-800 whitespace-pre-wrap">{displayCase.details}</dd></div>
           </dl>
           
-          <h3 className="text-lg font-semibold text-gray-700 mt-6 mb-3 border-b pb-2">时间轴 (占位)</h3>
+          <h3 className="text-lg font-semibold text-gray-700 mt-6 mb-3 border-b pb-2">{t('case_detail_timeline_title')}</h3>
           <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-            <li>立案: 2023-01-10</li>
-            <li>公告: 2023-01-15</li>
-            <li>债权申报开始: 2023-02-15</li>
+            <li>{t('case_detail_timeline_event1')}</li>
+            <li>{t('case_detail_timeline_event2')}</li>
+            <li>{t('case_detail_timeline_event3')}</li>
           </ul>
         </div>
 
         {/* Filing Material & Actions Section */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">立案材料 (只读预览)</h2>
+          <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">{t('case_detail_filing_material_title')}</h2>
           <div className="border rounded bg-gray-50 min-h-[200px] prose max-w-none editor-container">
             <RichTextEditor
               value={filingMaterialContent}
               onChange={() => {}} // Read-only, so no actual change handling needed
               readOnly={true}
-              placeholder="（当前无立案材料内容）" // Placeholder if content is empty
+              placeholder={t('case_detail_filing_material_empty')}
             />
           </div>
             <div className="mt-6 flex space-x-3">
                 <button className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
-                    填写会议纪要 (条件性显示)
+                    {t('case_detail_actions_meeting_minutes_button')}
                 </button>
                  <button className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors">
-                    修改状态 (条件性显示)
+                    {t('case_detail_actions_change_status_button')}
                 </button>
             </div>
         </div>
       </div>
        <p className="mt-8 text-sm text-gray-500 text-center">
-        此页面将展示案件的详细信息，包括左侧固定的基本信息和时间轴，主区域展示立案材料（使用QuillJS渲染，只读）。
-        操作（如修改状态、填写会议纪要）将根据案件阶段和用户权限显示。
+        {t('case_detail_footer_info_1')}
+        {t('case_detail_footer_info_2')}
       </p>
     </div>
   );

@@ -2,8 +2,10 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
 import { useAuth } from '../contexts/AuthContext'; // We'll use this to set the user later
+import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
 
 const OidcCallbackPage: React.FC = () => {
+  const { t } = useTranslation(); // <-- INITIALIZE T
   const navigate = useNavigate();
   const { login: contextLogin } = useAuth(); // Get the login function from AuthContext
 
@@ -36,7 +38,7 @@ const OidcCallbackPage: React.FC = () => {
       } catch (error) {
         console.error('Error processing OIDC callback:', error);
         // Redirect to login page or an error page on failure
-        navigate('/login', { replace: true, state: { error: '登录失败，请重试。' } });
+        navigate('/login', { replace: true, state: { error: t('error_login_failed') } });
       }
     };
 
@@ -45,7 +47,7 @@ const OidcCallbackPage: React.FC = () => {
 
   return (
     <div className="flex justify-center items-center min-h-screen">
-      <div>正在加载用户会话...</div>
+      <div>{t('oidc_callback_loading_session')}</div>
     </div>
   );
 };

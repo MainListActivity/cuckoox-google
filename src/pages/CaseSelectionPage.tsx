@@ -2,8 +2,10 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Case } from '../contexts/AuthContext'; // Import Case interface
+import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
 
 const CaseSelectionPage: React.FC = () => {
+  const { t } = useTranslation(); // <-- INITIALIZE T
   const { 
     user, 
     userCases, 
@@ -31,7 +33,7 @@ const CaseSelectionPage: React.FC = () => {
   if (isAuthLoading || isCaseLoading) {
     return (
       <div className="min-h-screen flex flex-col justify-center items-center bg-gray-100 p-4">
-        <div className="text-xl font-semibold text-gray-700">正在加载您的信息...</div>
+        <div className="text-xl font-semibold text-gray-700">{t('loading_info')}</div>
         {/* Add a spinner component here if available */}
       </div>
     );
@@ -47,16 +49,16 @@ const CaseSelectionPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-500 to-indigo-600 flex flex-col justify-center items-center p-4">
       <div className="bg-white shadow-2xl rounded-xl p-8 md:p-12 w-full max-w-2xl">
         <h1 className="text-3xl md:text-4xl font-bold text-center text-gray-800 mb-3">
-          选择案件
+          {t('case_selection_title')}
         </h1>
         <p className="text-center text-gray-600 mb-8 md:mb-10">
-          欢迎，{user.name}。请选择一个案件以继续。
+          {t('case_selection_welcome', { name: user.name })}
         </p>
 
         {userCases.length === 0 ? (
           <div className="text-center p-6 bg-yellow-50 border border-yellow-300 rounded-md">
-            <p className="text-yellow-700 font-medium">当前没有为您分配任何案件或没有可供选择的案件。</p>
-            <p className="text-sm text-yellow-600 mt-2">如果您认为这是一个错误，请联系支持人员。</p>
+            <p className="text-yellow-700 font-medium">{t('case_selection_no_cases')}</p>
+            <p className="text-sm text-yellow-600 mt-2">{t('case_selection_no_cases_contact_support')}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -76,7 +78,7 @@ const CaseSelectionPage: React.FC = () => {
                     <h2 className="text-lg md:text-xl font-semibold">{caseItem.name}</h2>
                     {caseItem.case_number && (
                       <p className={`text-sm ${selectedCaseId === caseItem.id.toString() ? 'text-blue-100' : 'text-gray-500'}`}>
-                        案件编号：{caseItem.case_number}
+                        {t('case_selection_case_number_label', { caseNumber: caseItem.case_number })}
                       </p>
                     )}
                   </div>
@@ -100,7 +102,7 @@ const CaseSelectionPage: React.FC = () => {
         </div> */}
       </div>
       <p className="text-center text-sm text-white mt-8">
-        CuckooX 平台 © {new Date().getFullYear()}
+        {t('copyright_platform', { year: new Date().getFullYear() })}
       </p>
     </div>
   );

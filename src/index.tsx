@@ -5,6 +5,8 @@ import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import './styles/main.css'; // Tailwind CSS and global styles
 import { connectSurrealDB } from './lib/surreal'; // <-- IMPORT
+import { I18nextProvider } from 'react-i18next'; // <-- IMPORT
+import i18n from './i18n';                     // <-- IMPORT
 
 // Call the connect function
 connectSurrealDB().then(() => {
@@ -22,10 +24,12 @@ const root = ReactDOM.createRoot(rootElement);
 
 root.render(
   <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <I18nextProvider i18n={i18n}> {/* <-- WRAP HERE */}
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
+    </I18nextProvider> {/* <-- CLOSE WRAPPER */}
   </React.StrictMode>
 );
