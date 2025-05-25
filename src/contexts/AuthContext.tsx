@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import authService from '../services/authService';
 // import { db } from '../lib/surreal'; // REMOVED
-import { useSurrealClient } from './SurrealProvider'; // ADDED
+import {useSurreal} from './SurrealProvider'; // ADDED
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb'; // Import for typing record IDs
 
@@ -60,7 +60,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const client = useSurrealClient(); // ADDED
+  const {surreal:client,signout} = useSurreal(); // ADDED
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
@@ -277,7 +277,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       if (isAdmin) {
         try {
-          await client.signout(); // MODIFIED db.signout to client.signout
+          await signout(); // MODIFIED db.signout to client.signout
           console.log('Admin user signed out from SurrealDB.');
         } catch (e) {
           console.error('Error during SurrealDB signout:', e);
