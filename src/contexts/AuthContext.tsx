@@ -42,7 +42,7 @@ interface AuthContextType {
   isLoggedIn: boolean;
   user: AppUser | null;
   oidcUser: OidcUser | null;
-  setAuthState: (appUser: AppUser, oidcUserInstance: OidcUser) => void;
+  setAuthState: (appUser: AppUser, oidcUserInstance?: OidcUser | null) => void; // MODIFIED
   logout: () => Promise<void>;
   isLoading: boolean; // For main auth state
 
@@ -117,16 +117,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     checkCurrentUser();
   }, []);
 
-  const initializeUserSession = async (appUser: AppUser, oidcUserInstance: OidcUser) => {
+  const initializeUserSession = async (appUser: AppUser, oidcUserInstance?: OidcUser | null) => { // MODIFIED
     setUser(appUser);
-    setOidcUser(oidcUserInstance);
+    setOidcUser(oidcUserInstance || null); // MODIFIED to handle undefined
     setIsLoggedIn(true);
     localStorage.setItem('cuckoox-isLoggedIn', 'true');
     localStorage.setItem('cuckoox-user', JSON.stringify(appUser));
     await loadUserCasesAndRoles(appUser);
   };
   
-  const setAuthState = (appUser: AppUser, oidcUserInstance: OidcUser) => {
+  const setAuthState = (appUser: AppUser, oidcUserInstance?: OidcUser | null) => { // MODIFIED
     initializeUserSession(appUser, oidcUserInstance);
   };
 

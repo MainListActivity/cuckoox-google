@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
 
 interface ProtectedRouteProps {
   children: JSX.Element;
@@ -45,12 +46,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     isCaseLoading 
   } = useAuth();
   const location = useLocation();
+  const { t } = useTranslation(); // <-- INITIALIZE T
 
   // 1. Authentication Check (Primary)
   if (isAuthLoading) {
     // If main authentication is still loading, show a loading indicator or null
     // This prevents premature redirects before auth state is known
-    return <div className="flex justify-center items-center min-h-screen">正在进行身份验证...</div>; // Or a proper spinner component
+    return <div className="flex justify-center items-center min-h-screen">{t('authenticating')}</div>; // Or a proper spinner component
   }
 
   if (!isLoggedIn) {
@@ -66,7 +68,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
   ) {
     if (isCaseLoading) {
       // If cases are still loading (e.g., user just logged in), show a loading indicator
-      return <div className="flex justify-center items-center min-h-screen">正在加载案件信息...</div>;
+      return <div className="flex justify-center items-center min-h-screen">{t('loading_case_info')}</div>;
     }
     // If cases are loaded and still no selectedCaseId, then redirect
     return <Navigate to="/select-case" state={{ from: location }} replace />;

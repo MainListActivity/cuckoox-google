@@ -1,26 +1,31 @@
 import React, { useState, ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-const navItems = [
-  { path: '/dashboard', label: '仪表盘', icon: 'dashboard' },
-  { path: '/cases', label: '案件管理', icon: 'gavel' },
-  { path: '/creditors', label: '债权人管理', icon: 'people' },
-  { path: '/claims', label: '债权申报与审核', icon: 'assignment' },
-  { path: '/claim-dashboard', label: '债权数据大屏', icon: 'bar_chart' },
-  { path: '/online-meetings', label: '在线会议', icon: 'videocam' },
-  { path: '/messages', label: '消息中心', icon: 'chat' },
-  { path: '/admin', label: '系统管理', icon: 'settings', adminOnly: true },
-];
+// navItems will be defined inside the component to use `t`
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { t } = useTranslation(); // <-- INITIALIZE T
   const [drawerOpen, setDrawerOpen] = useState(true);
   const { user, logout, hasRole } = useAuth();
   const navigate = useNavigate();
+
+  // Define navItems inside the component so it can use `t`
+  const navItems = [
+    { path: '/dashboard', label: t('nav_dashboard'), icon: 'dashboard' },
+    { path: '/cases', label: t('nav_case_management'), icon: 'gavel' },
+    { path: '/creditors', label: t('nav_creditor_management'), icon: 'people' },
+    { path: '/claims', label: t('nav_claim_management'), icon: 'assignment' },
+    { path: '/claim-dashboard', label: t('nav_claim_dashboard'), icon: 'bar_chart' },
+    { path: '/online-meetings', label: t('nav_online_meetings'), icon: 'videocam' },
+    { path: '/messages', label: t('nav_message_center'), icon: 'chat' },
+    { path: '/admin', label: t('nav_system_management'), icon: 'settings', adminOnly: true },
+  ];
 
   const handleLogout = () => {
     logout();
@@ -65,10 +70,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center px-3 py-2.5 text-sm rounded-md bg-red-500 hover:bg-red-600 transition-colors"
-            title="登出"
+            title={t('layout_logout_button')}
           >
             <span className="material-icons mr-0 md:mr-3">{drawerOpen ? 'logout' : 'logout'}</span>
-            <span className={`${!drawerOpen && 'hidden'}`}>登出</span>
+            <span className={`${!drawerOpen && 'hidden'}`}>{t('layout_logout_button')}</span>
           </button>
         </div>
       </aside>
@@ -79,11 +84,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <header className="bg-white shadow-md h-16 flex items-center justify-between px-6">
           <div>
             {/* Breadcrumbs or current page title could go here */}
-            <h1 className="text-xl font-semibold text-gray-700">破产案件管理</h1>
+            <h1 className="text-xl font-semibold text-gray-700">{t('layout_header_title')}</h1>
           </div>
           <div>
             {/* User menu, notifications, etc. */}
-            {user && <span className="text-gray-600">欢迎，{user.name}</span>}
+            {user && <span className="text-gray-600">{t('layout_header_welcome', { name: user.name })}</span>}
           </div>
         </header>
 
