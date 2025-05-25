@@ -1,53 +1,59 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '../services/authService';
-import { useAuth } from '../contexts/AuthContext'; // We'll use this to set the user later
-import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
+import { useAuth, AppUser } from '../contexts/AuthContext'; // Import AppUser
+import { useSurrealClient } from '../contexts/SurrealProvider'; // ADDED
+import { useTranslation } from 'react-i18next';
 
 const OidcCallbackPage: React.FC = () => {
-  const { t } = useTranslation(); // <-- INITIALIZE T
+  const { t } = useTranslation();
   const navigate = useNavigate();
-  const { login: contextLogin } = useAuth(); // Get the login function from AuthContext
+  const { setAuthState } = useAuth(); // Get setAuthState directly
+  const client = useSurrealClient(); // ADDED
 
   useEffect(() => {
     const processCallback = async () => {
       try {
-        const oidcUser = await authService.loginRedirectCallback();
-        // The authService.loginRedirectCallback now handles SurrealDB user creation/update.
-        // Now, we need to update the AuthContext with the OIDC user and potentially app user details.
-        // For now, the AuthContext's login function expects AppUser-like data.
-        // We'll adapt this more in the AuthContext update step (Subtask 2.3).
-        // Let's assume oidcUser has profile information.
+        const oidcUser = await authService.loginRedirectCallback(client); // MODIFIED: pass client
+        
         if (oidcUser && oidcUser.profile) {
-            // The actual app user data (roles, etc.) will be fully synced in AuthContext
-            // For now, signal login to AuthContext with basic OIDC profile info.
-            // This will be refined in the next step when AuthContext is updated.
-             contextLogin({ 
-                id: oidcUser.profile.sub, // Use 'sub' as a temporary ID for context
-                name: oidcUser.profile.name || oidcUser.profile.preferred_username || 'N/A',
+            // Construct AppUser from OIDC profile.
+            // authService.loginRedirectCallback should have already created/updated the user in DB.
+            // Here, we just prepare the AppUser object for AuthContext.
+            // The record ID in SurrealDB is `user:${githubId}`
+            const githubId = oidcUser.profile.sub;
+            if (!githubId) {
+                throw new Error('GitHub ID (sub) not found in OIDC user profile after callback.');
+            }
+            const appUserForContext: AppUser = {
+                id: `user:${githubId}`, // This should match the ID used in SurrealDB
+                github_id: githubId,
+                name: oidcUser.profile.name || oidcUser.profile.preferred_username || 'Unknown User',
                 email: oidcUser.profile.email,
-                role: 'user' // Default role, will be overridden by actual roles from DB in AuthContext
-            });
+                // last_login_case_id will be populated by AuthContext's loadUserCasesAndRoles
+            };
+            
+            // Set the auth state in AuthContext
+            setAuthState(appUserForContext, oidcUser);
             
             // Redirect to the intended page (stored by oidc-client-ts) or dashboard
             const returnUrl = oidcUser.state?.path || '/dashboard';
             navigate(returnUrl, { replace: true });
         } else {
-            throw new Error("OIDC user profile not available after callback.");
+            throw new Error("OIDC user or profile not available after callback.");
         }
       } catch (error) {
         console.error('Error processing OIDC callback:', error);
-        // Redirect to login page or an error page on failure
-        navigate('/login', { replace: true, state: { error: t('error_login_failed') } });
+        navigate('/login', { replace: true, state: { error: t('error_login_failed', 'Login failed. Please try again.') } });
       }
     };
 
     processCallback();
-  }, [navigate, contextLogin]);
+  }, [navigate, setAuthState, client, t]); // Added client and t to dependency array
 
   return (
     <div className="flex justify-center items-center min-h-screen">
-      <div>{t('oidc_callback_loading_session')}</div>
+      <div>{t('oidc_callback_loading_session', 'Processing login...')}</div>
     </div>
   );
 };

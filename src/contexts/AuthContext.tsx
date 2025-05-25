@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import authService from '../services/authService';
-import { db } from '../lib/surreal';
+// import { db } from '../lib/surreal'; // REMOVED
+import { useSurrealClient } from './SurrealProvider'; // ADDED
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb'; // Import for typing record IDs
 
@@ -59,6 +60,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const client = useSurrealClient(); // ADDED
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
@@ -80,7 +82,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw new Error("No github_id (sub) found in OIDC user profile during session check.");
           }
           const userRecordId = `user:${githubId}`;
-          const result: AppUser[] = await db.select(userRecordId);
+          const result: AppUser[] = await client.select(userRecordId); // MODIFIED db.select to client.select
 
           if (result.length > 0) {
             const appUserFromDb = result[0];
@@ -150,7 +152,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         WHERE user_id = $userId
         FETCH case_id, role_id;
       `;
-      const results: UserCaseRoleDetails[][] = await db.query(query, { userId: currentAppUser.id });
+      const results: UserCaseRoleDetails[][] = await client.query(query, { userId: currentAppUser.id }); // MODIFIED db.query to client.query
       
       const casesMap = new Map<string, Case>();
       let actualResults: UserCaseRoleDetails[] = [];
@@ -224,7 +226,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const query = `
         SELECT id, user_id, case_id.* AS case_details, role_id.* AS role_details 
         FROM user_case_role WHERE user_id = $userId FETCH case_id, role_id;`;
-      const results: UserCaseRoleDetails[][] = await db.query(query, { userId: user.id });
+      const results: UserCaseRoleDetails[][] = await client.query(query, { userId: user.id }); // MODIFIED db.query to client.query
 
       let userCaseRolesDetails: UserCaseRoleDetails[] = [];
       if (results && results.length > 0 && Array.isArray(results[0])) {
@@ -244,7 +246,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       selectCaseInternal(caseIdToSelect, userCaseRolesDetails);
 
-      await db.merge(user.id, { last_login_case_id: caseIdToSelect });
+      await client.merge(user.id, { last_login_case_id: caseIdToSelect }); // MODIFIED db.merge to client.merge
       
       // Update user object in context with the new last_login_case_id
       setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: caseIdToSelect } : null);
@@ -275,7 +277,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       if (isAdmin) {
         try {
-          await db.signout(); // Sign out from SurrealDB for admin
+          await client.signout(); // MODIFIED db.signout to client.signout
           console.log('Admin user signed out from SurrealDB.');
         } catch (e) {
           console.error('Error during SurrealDB signout:', e);

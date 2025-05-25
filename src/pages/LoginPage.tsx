@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import authService from '../services/authService'; // For OIDC login
-import { db } from '../lib/surreal';
+// import { db } from '../lib/surreal'; // REMOVED
+import { useSurrealClient } from '../contexts/SurrealProvider'; // ADDED
 import { AppUser } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
+  const client = useSurrealClient(); // ADDED
   const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -56,7 +58,7 @@ const LoginPage: React.FC = () => {
         throw new Error(t('error_admin_credentials_required', 'Username and password are required.'));
       }
       
-      await db.signin({
+      await client.signin({ // MODIFIED db.signin to client.signin
         user: adminUsername,
         pass: adminPassword,
         NS: adminNS,
