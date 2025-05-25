@@ -1,5 +1,6 @@
 import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSettings } from 'oidc-client-ts';
-import { db } from '../lib/surreal'; // Assuming db is your SurrealDB instance
+// import { db } from '../lib/surreal'; // REMOVED
+import Surreal from 'surrealdb'; // IMPORT Surreal class for type from the library
 
 // --- OIDC Configuration ---
 // These settings need to be configured based on your Quarkus OIDC provider.
@@ -41,7 +42,7 @@ const authService = {
     await userManager.signinRedirect();
   },
 
-  loginRedirectCallback: async (): Promise<OidcUser> => {
+  loginRedirectCallback: async (client: Surreal): Promise<OidcUser> => { // ADDED client parameter
     try {
       const oidcUser = await userManager.signinRedirectCallback();
       if (!oidcUser || oidcUser.expired) {
@@ -64,11 +65,11 @@ const authService = {
       // So, user:⟨${githubId}⟩ becomes `user:${githubId}` when using template literals for ID.
       const recordId = `user:${githubId}`;
       
-      const existingUsers: AppUser[] = await db.select(recordId); 
+      const existingUsers: AppUser[] = await client.select(recordId); // MODIFIED db.select to client.select
 
       if (existingUsers.length > 0) {
         // Update returns an array of the updated records.
-        const updatedResult: AppUser[] = await db.update(recordId, {
+        const updatedResult: AppUser[] = await client.update(recordId, { // MODIFIED db.update to client.update
           name: name,
           email: email,
           updated_at: new Date().toISOString(),
@@ -78,7 +79,7 @@ const authService = {
         }
       } else {
         // Note: SurrealDB v1.x.x returns an array from create.
-        const createdResult: AppUser[] = await db.create(recordId, {
+        const createdResult: AppUser[] = await client.create(recordId, { // MODIFIED db.create to client.create
           github_id: githubId,
           name: name,
           email: email,

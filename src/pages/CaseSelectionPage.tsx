@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Case } from '../contexts/AuthContext'; // Import Case interface
 import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
+import GlobalLoader from '../components/GlobalLoader'; // ADDED
 
 const CaseSelectionPage: React.FC = () => {
   const { t } = useTranslation(); // <-- INITIALIZE T
@@ -31,12 +32,7 @@ const CaseSelectionPage: React.FC = () => {
   };
 
   if (isAuthLoading || isCaseLoading) {
-    return (
-      <div className="min-h-screen flex flex-col justify-center items-center bg-gray-100 p-4">
-        <div className="text-xl font-semibold text-gray-700">{t('loading_info')}</div>
-        {/* Add a spinner component here if available */}
-      </div>
-    );
+    return <GlobalLoader message={t('loading_info')} />;
   }
 
   if (!isLoggedIn || !user) {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { db } from '../lib/surreal'; // Corrected path
+// import { db } from '../lib/surreal'; // REMOVED
+import { useSurrealClient } from '../contexts/SurrealProvider'; // ADDED
 import RichTextEditor, { QuillDelta } from '../components/RichTextEditor'; // Corrected path
 import Delta from 'quill-delta'; // Import Delta for creating empty/initial deltas
 import { useAuth } from '../contexts/AuthContext'; // To get user ID
@@ -20,6 +21,7 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
 
 const CreateCasePage: React.FC = () => {
   const { t } = useTranslation();
+  const client = useSurrealClient(); // ADDED
   const { user } = useAuth(); // Get current user for created_by/last_edited_by
   const navigate = useNavigate();
 
@@ -46,7 +48,7 @@ const CreateCasePage: React.FC = () => {
         // Ensure content is stringified for SurrealDB.
         // The 'document' table expects content to be a string.
         // SurrealDB JS SDK v1.x returns the created records in an array.
-        const createdRecords: Array<{ id: string, content: string, created_by: string }> = await db.create('document', {
+        const createdRecords: Array<{ id: string, content: string, created_by: string }> = await client.create('document', { // MODIFIED db.create to client.create
           content: JSON.stringify(newEmptyDelta.ops), // Store Delta ops as stringified JSON
           created_by: user.id,
           last_edited_by: user.id,
@@ -86,7 +88,7 @@ const CreateCasePage: React.FC = () => {
     const setupLiveQuery = async () => {
       console.log(`Setting up LIVE query for document: ${filingMaterialDocId}`);
       try {
-        const stream = await db.live('document', filingMaterialDocId); // Pass record ID directly
+        const stream = await client.live('document', filingMaterialDocId); // MODIFIED db.live to client.live
         liveQueryRef.current = stream.toString(); // Store the UUID for killing
 
         for await (const event of stream) {
@@ -126,7 +128,7 @@ const CreateCasePage: React.FC = () => {
       isMounted = false;
       if (liveQueryRef.current) {
          console.log('Requesting to kill live query UUID:', liveQueryRef.current);
-         db.kill(liveQueryRef.current as string).catch(err => console.error("Error killing live query:", err));
+         client.kill(liveQueryRef.current as string).catch(err => console.error("Error killing live query:", err)); // MODIFIED db.kill to client.kill
          liveQueryRef.current = null;
       }
     };
@@ -140,7 +142,7 @@ const CreateCasePage: React.FC = () => {
       console.log(`Debounced save triggered for doc: ${docId} by user: ${editorUserId}`);
       setIsSaving(true);
       try {
-        await db.merge(docId, {
+        await client.merge(docId, { // MODIFIED db.merge to client.merge
           content: JSON.stringify(deltaToSave.ops), // Save Delta ops as stringified JSON
           last_edited_by: editorUserId,
         });
@@ -193,7 +195,7 @@ const CreateCasePage: React.FC = () => {
 
     setIsSaving(true); 
     try {
-      const createdCaseRecords: Array<{id: string}> = await db.create('case', caseData);
+      const createdCaseRecords: Array<{id: string}> = await client.create('case', caseData); // MODIFIED db.create to client.create
       console.log('Case created:', createdCaseRecords);
       alert(t('create_case_success')); 
       if (createdCaseRecords[0]?.id) {
