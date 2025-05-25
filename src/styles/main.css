@@ -1,0 +1,46 @@
+/* Include Tailwind CSS base styles, components, and utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global styles */
+body {
+  font-family: 'Roboto', sans-serif; /* Example: Using Roboto, common with Material Design */
+  line-height: 1.6;
+  background-color: #f5f5f5; /* A light grey background common in Material apps */
+  color: #333;
+  margin: 0; /* Ensure no default body margin */
+}
+
+/* Ensure root takes full height for layouts */
+#root {
+  min-height: 100vh;
+  display: flex; /* Helps with some layout structures like sticky footers */
+  flex-direction: column;
+}
+
+
+/* Custom scrollbar (optional, for a more modern look) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Example of a utility class you might add with Tailwind's @layer directive */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Add any React-specific global styles or overrides here if needed */

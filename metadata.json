@@ -1,0 +1,6 @@
+{
+  "name": "cuckoox",
+  "description": "您的贴心办公小助手 (React + TypeScript Refactor). Frontend for bankruptcy case management.",
+  "requestFramePermissions": [],
+  "prompt": "使用react+ts搭建代码工程，符合，surrealdb的链接支持配置化，github的登录在前期可绕过"
+}
