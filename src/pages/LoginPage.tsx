@@ -51,8 +51,6 @@ const LoginPage: React.FC = () => {
     setAdminLoginError(null);
 
     try {
-      const adminNS = import.meta.env.VITE_SURREALDB_NAMESPACE;
-      const adminDB = import.meta.env.VITE_SURREALDB_DATABASE;
 
       if (!adminUsername || !adminPassword) {
         throw new Error(t('error_admin_credentials_required', 'Username and password are required.'));
@@ -61,8 +59,6 @@ const LoginPage: React.FC = () => {
       await client.signin({ // MODIFIED db.signin to client.signin
         username: adminUsername,
         password: adminPassword,
-        namespace: adminNS,
-        database: adminDB,
       });
 
       console.log('Admin successfully signed into SurrealDB via form.');
