@@ -1,77 +1,305 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import authService from '../services/authService';
+import { db } from '../lib/surreal';
+import { User as OidcUser } from 'oidc-client-ts';
+import { RecordId } from 'surrealdb'; // Import for typing record IDs
 
-interface User {
-  id: string;
+// Matches AppUser in authService and user table in SurrealDB
+interface AppUser {
+  id: string; // SurrealDB record ID, e.g., user:xxxx
+  github_id: string;
   name: string;
   email?: string;
-  role: string; // e.g., 'admin', 'manager', 'creditor'
-  // Add other user properties as needed
+  created_at?: string;
+  updated_at?: string;
+  last_login_case_id?: string | null; // Store as string "case:xxxx"
+}
+
+// Define Case and Role interfaces based on SurrealDB schema
+export interface Case {
+  id: RecordId; // e.g., case:xxxx
+  name: string;
+  case_number?: string;
+  // Add other case properties as needed
+}
+
+export interface Role {
+  id: RecordId; // e.g., role:xxxx
+  name: string;
+  description?: string;
+  // Add other role properties
+}
+
+// From user_case_role table, joining with case and role details
+interface UserCaseRoleDetails {
+  id: RecordId; // ID of the user_case_role record itself
+  user_id: RecordId;
+  case_details: Case; // Populated by SurrealDB FETCH
+  role_details: Role;  // Populated by SurrealDB FETCH
 }
 
 interface AuthContextType {
   isLoggedIn: boolean;
-  user: User | null;
-  login: (userData: Omit<User, 'id'> & { id?: string } ) => void; // Mock login
-  logout: () => void;
-  hasRole: (role: string) => boolean;
-  // selectedCaseId: string | null; // To be implemented
-  // selectCase: (caseId: string) => void; // To be implemented
+  user: AppUser | null;
+  oidcUser: OidcUser | null;
+  setAuthState: (appUser: AppUser, oidcUserInstance: OidcUser) => void;
+  logout: () => Promise<void>;
+  isLoading: boolean; // For main auth state
+
+  // Case and Role specific state and functions
+  selectedCaseId: string | null; // Store as string (e.g. "case:xxxx")
+  userCases: Case[];
+  currentUserCaseRoles: Role[];
+  isCaseLoading: boolean; // For loading cases and case-specific roles
+  selectCase: (caseId: string) => Promise<void>;
+  hasRole: (roleName: string) => boolean;
+  refreshUserCasesAndRoles: () => Promise<void>; // Exposed function to manually refresh
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(localStorage.getItem('cuckoox-selectedCaseId'));
+  const [userCases, setUserCases] = useState<Case[]>([]);
+  const [currentUserCaseRoles, setCurrentUserCaseRoles] = useState<Role[]>([]);
+  const [isCaseLoading, setIsCaseLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    // Check localStorage for persisted login state
-    const storedIsLoggedIn = localStorage.getItem('cuckoox-isLoggedIn') === 'true';
-    const storedUser = localStorage.getItem('cuckoox-user');
-    if (storedIsLoggedIn && storedUser) {
-      setIsLoggedIn(true);
-      setUser(JSON.parse(storedUser));
-    }
+    const checkCurrentUser = async () => {
+      setIsLoading(true);
+      try {
+        const currentOidcUser = await authService.getUser();
+        if (currentOidcUser && !currentOidcUser.expired) {
+          const githubId = currentOidcUser.profile.sub;
+          if (!githubId) {
+            throw new Error("No github_id (sub) found in OIDC user profile during session check.");
+          }
+          const userRecordId = `user:${githubId}`;
+          const result: AppUser[] = await db.select(userRecordId);
+
+          if (result.length > 0) {
+            const appUserFromDb = result[0];
+            await initializeUserSession(appUserFromDb, currentOidcUser); // Modified
+          } else {
+            console.warn(`User ${githubId} found in OIDC but not in DB. Logging out.`);
+            setUser(null);
+            setOidcUser(null);
+            setIsLoggedIn(false);
+            localStorage.removeItem('cuckoox-isLoggedIn');
+            localStorage.removeItem('cuckoox-user');
+            localStorage.removeItem('cuckoox-selectedCaseId');
+          }
+        } else {
+          const storedUser = localStorage.getItem('cuckoox-user');
+          if(storedUser) {
+            localStorage.removeItem('cuckoox-isLoggedIn');
+            localStorage.removeItem('cuckoox-user');
+            localStorage.removeItem('cuckoox-selectedCaseId');
+          }
+        }
+      } catch (error) {
+        console.error("Error checking current user session:", error);
+        setIsLoggedIn(false);
+        setUser(null);
+        setOidcUser(null);
+        localStorage.removeItem('cuckoox-user');
+        localStorage.removeItem('cuckoox-isLoggedIn');
+        localStorage.removeItem('cuckoox-selectedCaseId');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkCurrentUser();
   }, []);
 
-  const login = (userData: Omit<User, 'id'> & { id?: string }) => {
-    // Simulate API call or OIDC flow for GitHub login
-    // For now, mock login:
-    const mockUser: User = {
-      id: userData.id || `user-${Date.now()}`,
-      name: userData.name,
-      email: userData.email,
-      role: userData.role, // Example role
-    };
-    setUser(mockUser);
+  const initializeUserSession = async (appUser: AppUser, oidcUserInstance: OidcUser) => {
+    setUser(appUser);
+    setOidcUser(oidcUserInstance);
     setIsLoggedIn(true);
     localStorage.setItem('cuckoox-isLoggedIn', 'true');
-    localStorage.setItem('cuckoox-user', JSON.stringify(mockUser));
-  };
-
-  const logout = () => {
-    setUser(null);
-    setIsLoggedIn(false);
-    localStorage.removeItem('cuckoox-isLoggedIn');
-    localStorage.removeItem('cuckoox-user');
-    localStorage.removeItem('cuckoox-selectedCaseId'); // Clear selected case on logout
-    // Potentially redirect to login page via useNavigate in the component calling logout
-  };
-
-  const hasRole = (role: string): boolean => {
-    return !!user && user.role === role;
+    localStorage.setItem('cuckoox-user', JSON.stringify(appUser));
+    await loadUserCasesAndRoles(appUser);
   };
   
-  // Placeholder for case selection logic
-  // const [selectedCaseId, setSelectedCaseId] = useState<string | null>(localStorage.getItem('cuckoox-selectedCaseId'));
-  // const selectCase = (caseId: string) => {
-  //   setSelectedCaseId(caseId);
-  //   localStorage.setItem('cuckoox-selectedCaseId', caseId);
-  // };
+  const setAuthState = (appUser: AppUser, oidcUserInstance: OidcUser) => {
+    initializeUserSession(appUser, oidcUserInstance);
+  };
 
+  const loadUserCasesAndRoles = async (currentAppUser: AppUser | null) => {
+    if (!currentAppUser || !currentAppUser.id) {
+      setUserCases([]);
+      setCurrentUserCaseRoles([]);
+      setSelectedCaseId(null);
+      localStorage.removeItem('cuckoox-selectedCaseId');
+      return;
+    }
+    setIsCaseLoading(true);
+    try {
+      const query = `
+        SELECT 
+            id, 
+            user_id, 
+            case_id.* AS case_details, 
+            role_id.* AS role_details 
+        FROM user_case_role 
+        WHERE user_id = $userId
+        FETCH case_id, role_id;
+      `;
+      const results: UserCaseRoleDetails[][] = await db.query(query, { userId: currentAppUser.id });
+      
+      const casesMap = new Map<string, Case>();
+      let actualResults: UserCaseRoleDetails[] = [];
+
+      if (results && results.length > 0 && Array.isArray(results[0])) {
+         actualResults = results[0]; // Assuming the first element of the outer array is the array of records
+         actualResults.forEach(ucr => {
+            if (ucr.case_details && ucr.case_details.id) {
+                 casesMap.set(ucr.case_details.id.toString(), ucr.case_details);
+            }
+         });
+      }
+
+      const fetchedCases = Array.from(casesMap.values());
+      setUserCases(fetchedCases);
+
+      const lastCaseId = currentAppUser.last_login_case_id;
+      const previouslySelectedCaseId = localStorage.getItem('cuckoox-selectedCaseId');
+      
+      let caseToSelect = null;
+      if (previouslySelectedCaseId && casesMap.has(previouslySelectedCaseId)) {
+        caseToSelect = previouslySelectedCaseId;
+      } else if (lastCaseId && casesMap.has(lastCaseId)) {
+        caseToSelect = lastCaseId;
+      }
+
+      if (caseToSelect) {
+        await selectCaseInternal(caseToSelect, actualResults);
+      } else {
+        setCurrentUserCaseRoles([]);
+        setSelectedCaseId(null);
+        localStorage.removeItem('cuckoox-selectedCaseId');
+      }
+
+    } catch (error) {
+      console.error("Error loading user cases and roles:", error);
+      setUserCases([]);
+      setCurrentUserCaseRoles([]);
+      setSelectedCaseId(null);
+      localStorage.removeItem('cuckoox-selectedCaseId');
+    } finally {
+      setIsCaseLoading(false);
+    }
+  };
+  
+  // Internal helper to set roles based on a selected case ID and pre-fetched UserCaseRoleDetails
+  const selectCaseInternal = (caseIdToSelect: string, allUserCaseRolesDetails: UserCaseRoleDetails[]) => {
+    setSelectedCaseId(caseIdToSelect);
+    localStorage.setItem('cuckoox-selectedCaseId', caseIdToSelect);
+
+    const rolesForSelectedCase: Role[] = [];
+    if (allUserCaseRolesDetails && Array.isArray(allUserCaseRolesDetails)) {
+        allUserCaseRolesDetails.forEach(ucr => {
+            if (ucr.case_details && ucr.case_details.id.toString() === caseIdToSelect && ucr.role_details) {
+                rolesForSelectedCase.push(ucr.role_details);
+            }
+        });
+    }
+    setCurrentUserCaseRoles(rolesForSelectedCase);
+  };
+
+  const selectCase = async (caseIdToSelect: string) => {
+    if (!user || !user.id) {
+      console.error("User not available for selecting case.");
+      setIsCaseLoading(false); // Ensure loading state is reset
+      return;
+    }
+    setIsCaseLoading(true);
+    try {
+      // Fetch all user_case_role entries for the user to correctly populate roles for the selected case
+      const query = `
+        SELECT id, user_id, case_id.* AS case_details, role_id.* AS role_details 
+        FROM user_case_role WHERE user_id = $userId FETCH case_id, role_id;`;
+      const results: UserCaseRoleDetails[][] = await db.query(query, { userId: user.id });
+
+      let userCaseRolesDetails: UserCaseRoleDetails[] = [];
+      if (results && results.length > 0 && Array.isArray(results[0])) {
+        userCaseRolesDetails = results[0];
+      }
+      
+      // Check if the caseIdToSelect is one of the user's cases
+      const caseExistsForUser = userCases.some(c => c.id.toString() === caseIdToSelect);
+      if (!caseExistsForUser && userCaseRolesDetails.some(ucrd => ucrd.case_details.id.toString() === caseIdToSelect)) {
+          // This implies userCases might be stale if selectCase is called with a new valid case not yet in userCases
+          // This could happen if roles/cases are modified externally and refreshUserCasesAndRoles wasn't called yet
+          // For simplicity, we'll rely on userCases being up-to-date from loadUserCasesAndRoles or refreshUserCasesAndRoles
+          // Or, ensure loadUserCasesAndRoles is called if caseIdToSelect is not in userCases
+          console.warn("selectCase called with a caseId not in the current userCases list. Roles might be based on a fresh fetch.");
+      }
+
+
+      selectCaseInternal(caseIdToSelect, userCaseRolesDetails);
+
+      await db.merge(user.id, { last_login_case_id: caseIdToSelect });
+      
+      // Update user object in context with the new last_login_case_id
+      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: caseIdToSelect } : null);
+      // Also update localStorage for the user object
+      if (user) {
+          const updatedUser = { ...user, last_login_case_id: caseIdToSelect };
+          localStorage.setItem('cuckoox-user', JSON.stringify(updatedUser));
+      }
+
+
+    } catch (error) {
+      console.error(`Error selecting case ${caseIdToSelect}:`, error);
+    } finally {
+      setIsCaseLoading(false);
+    }
+  };
+  
+  const refreshUserCasesAndRoles = async () => {
+    if (user) {
+      await loadUserCasesAndRoles(user);
+    }
+  };
+
+  const logout = async () => {
+    setIsLoading(true);
+    try {
+      await authService.logoutRedirect();
+    } catch (error) {
+      console.error("Error during OIDC logout redirect:", error);
+    } finally {
+      setUser(null);
+      setOidcUser(null);
+      setIsLoggedIn(false);
+      setSelectedCaseId(null);
+      setUserCases([]);
+      setCurrentUserCaseRoles([]);
+      localStorage.removeItem('cuckoox-isLoggedIn');
+      localStorage.removeItem('cuckoox-user');
+      localStorage.removeItem('cuckoox-selectedCaseId');
+      setIsLoading(false);
+    }
+  };
+
+  const hasRole = (roleName: string): boolean => {
+    if (!selectedCaseId || currentUserCaseRoles.length === 0) {
+      return false;
+    }
+    return currentUserCaseRoles.some(role => role.name === roleName);
+  };
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, user, login, logout, hasRole }}>
+    <AuthContext.Provider value={{ 
+      isLoggedIn, user, oidcUser, setAuthState, logout, isLoading,
+      selectedCaseId, userCases, currentUserCaseRoles, isCaseLoading, selectCase, hasRole, refreshUserCasesAndRoles
+    }}>
       {children}
     </AuthContext.Provider>
   );

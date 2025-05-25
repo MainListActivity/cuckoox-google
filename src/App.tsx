@@ -21,18 +21,21 @@ const MessageCenterPage = React.lazy(() => import('./pages/MessageCenterPage'));
 const AdminPage = React.lazy(() => import('./pages/AdminPage'));
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
 const CaseSelectionPage = React.lazy(() => import('./pages/CaseSelectionPage'));
+const OidcCallbackPage = React.lazy(() => import('./pages/OidcCallbackPage')); // <-- IMPORT
+const CreateCasePage = React.lazy(() => import('./pages/CreateCasePage')); // <-- IMPORT
 
 
 function App() {
   const { isLoggedIn } = useAuth();
   const location = useLocation();
 
-  // Define routes that don't need the main layout (e.g., Login)
-  if (location.pathname === '/login') {
+  // Define routes that don't need the main layout (e.g., Login, OidcCallback)
+  if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
     return (
       <Suspense fallback={<div className="flex justify-center items-center min-h-screen">Loading...</div>}>
         <Routes>
           <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+          <Route path="/oidc-callback" element={<OidcCallbackPage />} /> {/* <-- ADD ROUTE */}
         </Routes>
       </Suspense>
     );
@@ -54,6 +57,8 @@ function App() {
           
           {/* FIX: Cast element to ReactNode to resolve type ambiguity */}
           <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
+          {/* FIX: Cast element to ReactNode to resolve type ambiguity */}
+          <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} /> {/* <-- ADD ROUTE */}
           {/* FIX: Cast element to ReactNode to resolve type ambiguity */}
           <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
           

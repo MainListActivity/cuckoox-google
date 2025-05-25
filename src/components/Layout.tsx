@@ -7,7 +7,7 @@ interface LayoutProps {
 }
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { path: '/dashboard', label: '仪表盘', icon: 'dashboard' },
   { path: '/cases', label: '案件管理', icon: 'gavel' },
   { path: '/creditors', label: '债权人管理', icon: 'people' },
   { path: '/claims', label: '债权申报与审核', icon: 'assignment' },
@@ -59,16 +59,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
            {user && (
             <div className={`mb-2 ${!drawerOpen && 'hidden'}`}>
               <p className="text-sm font-medium">{user.name}</p>
-              <p className="text-xs text-blue-200">{user.role}</p>
+              {/* Removed user.role display as it's no longer globally relevant */}
             </div>
            )}
           <button
             onClick={handleLogout}
             className="w-full flex items-center justify-center px-3 py-2.5 text-sm rounded-md bg-red-500 hover:bg-red-600 transition-colors"
-            title="Logout"
+            title="登出"
           >
             <span className="material-icons mr-0 md:mr-3">{drawerOpen ? 'logout' : 'logout'}</span>
-            <span className={`${!drawerOpen && 'hidden'}`}>Logout</span>
+            <span className={`${!drawerOpen && 'hidden'}`}>登出</span>
           </button>
         </div>
       </aside>
@@ -79,11 +79,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <header className="bg-white shadow-md h-16 flex items-center justify-between px-6">
           <div>
             {/* Breadcrumbs or current page title could go here */}
-            <h1 className="text-xl font-semibold text-gray-700">Bankruptcy Management</h1>
+            <h1 className="text-xl font-semibold text-gray-700">破产案件管理</h1>
           </div>
           <div>
             {/* User menu, notifications, etc. */}
-            {user && <span className="text-gray-600">Welcome, {user.name}</span>}
+            {user && <span className="text-gray-600">欢迎，{user.name}</span>}
           </div>
         </header>
 
