@@ -12,20 +12,20 @@ const GlobalLoader: React.FC<GlobalLoaderProps> = ({ message }) => {
       align-items: center;
       min-height: 100vh;
       flex-direction: column;
-      background-color: #f0f0f0; /* Optional: a light background */
+      background-color: var(--color-background); /* Use CSS variable */
     }
     .spinner {
       width: 50px; /* Spinner size */
       height: 50px; /* Spinner size */
       border: 6px solid #f3f3f3; /* Light grey circle */
-      border-top: 6px solid #3498db; /* Blue arc segment */
+      border-top: 6px solid var(--color-primary); /* Use CSS variable */
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
     .loadingText {
       margin-top: 25px;
       font-size: 1.25em; /* Slightly larger text */
-      color: #333; /* Darker text for better contrast */
+      color: var(--color-text-primary); /* Use CSS variable */
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Nicer font */
     }
     @keyframes spin {

@@ -1,3 +1,23 @@
+:root {
+  --color-primary: #1976D2;        /* Blue Darken 1 */
+  --color-secondary: #78909C;      /* Blue Grey Lighten 1 */
+  --color-accent: #03A9F4;         /* Light Blue Base */
+  --color-background: #FAFAFA;      /* Grey Lighten 5 */
+  --color-surface: #FFFFFF;         /* White */
+  --color-error: #F44336;           /* Red Base */
+  --color-warning: #FFC107;         /* Amber Base */
+  --color-info: #2196F3;            /* Blue Base */
+  --color-success: #4CAF50;         /* Green Base */
+  --color-text-primary: #212121;    /* Grey Darken 4 (for text on background/surface) */
+  --color-text-secondary: #757575;  /* Grey Base (for less prominent text) */
+  --color-text-on-primary: #FFFFFF;
+  --color-text-on-secondary: #FFFFFF;
+  --color-text-disabled: #BDBDBD;     /* Grey Lighten 1 */
+  --color-text-hint: #9E9E9E;         /* Grey Base */
+  --color-border-light: #EEEEEE;       /* Grey Lighten 2 */
+  --color-border-dark: #BDBDBD;        /* Grey Lighten 1 */
+}
+
 /* Include Tailwind CSS base styles, components, and utilities */
 @tailwind base;
 @tailwind components;

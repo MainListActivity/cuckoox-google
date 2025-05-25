@@ -45,6 +45,7 @@ DEFINE FIELD delayed_reorganization_plan_submission_date ON case TYPE option<dat
 DEFINE FIELD closing_date ON case TYPE option<datetime>;
 DEFINE FIELD reorganization_ruling_announcement_doc_id ON case TYPE option<record<document>>;
 DEFINE FIELD reorganization_plan_doc_id ON case TYPE option<record<document>>;
+DEFINE FIELD selected_theme_name ON case TYPE option<string>; -- ADDED
 DEFINE FIELD created_at ON case TYPE datetime VALUE $before OR time::now();
 DEFINE FIELD updated_at ON case TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
 -- Removed 'status' and 'details' as per instruction, assuming covered by procedure_phase and specific doc links.
