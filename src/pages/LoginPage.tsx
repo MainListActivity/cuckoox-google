@@ -51,20 +51,18 @@ const LoginPage: React.FC = () => {
     setAdminLoginError(null);
 
     try {
-      const adminNS = import.meta.env.VITE_SURREALDB_ADMIN_NS || import.meta.env.VITE_SURREALDB_NAMESPACE;
-      const adminDB = import.meta.env.VITE_SURREALDB_ADMIN_DB || import.meta.env.VITE_SURREALDB_DATABASE;
-      const adminSC = import.meta.env.VITE_SURREALDB_ADMIN_SC || 'account'; // Default scope 'account'
+      const adminNS = import.meta.env.VITE_SURREALDB_NAMESPACE;
+      const adminDB = import.meta.env.VITE_SURREALDB_DATABASE;
 
       if (!adminUsername || !adminPassword) {
         throw new Error(t('error_admin_credentials_required', 'Username and password are required.'));
       }
       
       await client.signin({ // MODIFIED db.signin to client.signin
-        user: adminUsername,
-        pass: adminPassword,
-        NS: adminNS,
-        DB: adminDB,
-        SC: adminSC,
+        username: adminUsername,
+        password: adminPassword,
+        namespace: adminNS,
+        database: adminDB,
       });
 
       console.log('Admin successfully signed into SurrealDB via form.');
