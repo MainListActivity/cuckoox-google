@@ -6,6 +6,7 @@ import authService from '../services/authService'; // For OIDC login
 import { useSurrealClient } from '../contexts/SurrealProvider'; // ADDED
 import { AppUser } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import GlobalLoader from '../components/GlobalLoader'; // ADDED
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
@@ -102,11 +103,7 @@ const LoginPage: React.FC = () => {
 
   // Overall page loading state (primarily for AuthContext initial load)
   if (isAuthContextLoading && !isProcessingAdminLogin) { // Show general loading unless admin login is active
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div>{t('loading_session', 'Loading session...')}</div>
-      </div>
-    );
+    return <GlobalLoader message={t('loading_session', 'Loading session...')} />;
   }
   
   // If already logged in (e.g. session restored) and not an admin attempt, this effect handles navigation.
@@ -117,21 +114,13 @@ const LoginPage: React.FC = () => {
      if(location.pathname !== from) {
         navigate(from, { replace: true });
      }
-     return (
-       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-         <div>{t('redirecting', 'Redirecting...')}</div>
-       </div>
-     );
+     return <GlobalLoader message={t('redirecting', 'Redirecting...')} />;
   }
    if (isLoggedIn && userIsAdmin() && isAdminLoginAttempt) {
     if(location.pathname !== '/admin') {
       navigate('/admin', {replace: true});
     }
-     return (
-       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-         <div>{t('redirecting_admin', 'Redirecting to admin dashboard...')}</div>
-       </div>
-     );
+     return <GlobalLoader message={t('redirecting_admin', 'Redirecting to admin dashboard...')} />;
   }
 
 

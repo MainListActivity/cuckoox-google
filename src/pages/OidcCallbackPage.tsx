@@ -4,6 +4,7 @@ import authService from '../services/authService';
 import { useAuth, AppUser } from '../contexts/AuthContext'; // Import AppUser
 import { useSurrealClient } from '../contexts/SurrealProvider'; // ADDED
 import { useTranslation } from 'react-i18next';
+import GlobalLoader from '../components/GlobalLoader'; // ADDED
 
 const OidcCallbackPage: React.FC = () => {
   const { t } = useTranslation();
@@ -52,9 +53,7 @@ const OidcCallbackPage: React.FC = () => {
   }, [navigate, setAuthState, client, t]); // Added client and t to dependency array
 
   return (
-    <div className="flex justify-center items-center min-h-screen">
-      <div>{t('oidc_callback_loading_session', 'Processing login...')}</div>
-    </div>
+    <GlobalLoader message={t('oidc_callback_loading_session', 'Processing login...')} />
   );
 };
 
