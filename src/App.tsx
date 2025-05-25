@@ -1,8 +1,8 @@
-import React, { Suspense, ReactNode } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from './contexts/AuthContext';
-import { useSurreal } from './contexts/SurrealProvider'; // ADDED
-import { useTranslation } from 'react-i18next'; // ADDED
+import React, {Suspense, ReactNode} from 'react';
+import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
+import {useAuth} from './contexts/AuthContext';
+import {useSurreal} from './contexts/SurrealProvider'; // ADDED
+import {useTranslation} from 'react-i18next'; // ADDED
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import GlobalLoader from './components/GlobalLoader'; // ADDED
@@ -30,50 +30,51 @@ const CreateCasePage = React.lazy(() => import('./pages/CreateCasePage')); // <-
 
 
 function App() {
-  const { status: surrealStatus, error: surrealError } = useSurreal(); // ADDED
-  const { t } = useTranslation(); // ADDED
-  const { isLoggedIn } = useAuth();
-  const location = useLocation();
+    const {isSuccess, isConnecting, isError, error: surrealError} = useSurreal(); // ADDED
+    const {t} = useTranslation(); // ADDED
+    const {isLoggedIn} = useAuth();
+    const location = useLocation();
 
-  // Handle SurrealDB connection status
-  if (surrealStatus === 'connecting') {
-    return <GlobalLoader message={t('loader.connectingMessage', 'Connecting to database...')} />;
-  }
+    // Handle SurrealDB connection status
+    if (isConnecting) {
+        return <GlobalLoader message={t('loader.connectingMessage', 'Connecting to database...')}/>;
+    }
 
-  if (surrealStatus === 'error') {
-    return (
-      <GlobalError
-        title={t('error.globalTitle', 'Application Error')}
-        message={surrealError ? surrealError.message : t('error.unknownDbError', 'An unknown database error occurred.')}
-      />
-    );
-  }
+    if (isError) {
+        return (
+            <GlobalError
+                title={t('error.globalTitle', 'Application Error')}
+                message={surrealError ? surrealError.message : t('error.unknownDbError', 'An unknown database error occurred.')}
+            />
+        );
+    }
 
-  // Potentially handle disconnected state differently, e.g., show a specific message or loader
-  if (surrealStatus === 'disconnected' && !surrealError) { // No initial connection error, but now disconnected
-    return <GlobalLoader message={t('error.disconnectedMessage', 'Database connection lost. Attempting to reconnect...')} />;
-    // Or use GlobalError:
-    // return (
-    //   <GlobalError
-    //     title={t('error.disconnectedTitle', 'Disconnected')}
-    //     message={t('error.disconnectedMessage', 'Database connection lost. Attempting to reconnect...')}
-    //   />
-    // );
-  }
-  
-  // If connected, proceed with the rest of the application logic
+    // Potentially handle disconnected state differently, e.g., show a specific message or loader
+    if (!isSuccess && !surrealError) { // No initial connection error, but now disconnected
+        return <GlobalLoader
+            message={t('error.disconnectedMessage', 'Database connection lost. Attempting to reconnect...')}/>;
+        // Or use GlobalError:
+        // return (
+        //   <GlobalError
+        //     title={t('error.disconnectedTitle', 'Disconnected')}
+        //     message={t('error.disconnectedMessage', 'Database connection lost. Attempting to reconnect...')}
+        //   />
+        // );
+    }
 
-  // Define routes that don't need the main layout (e.g., Login, OidcCallback)
-  if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
-    return (
-      <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
-        <Routes>
-          <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-          <Route path="/oidc-callback" element={<OidcCallbackPage />} />
-        </Routes>
-      </Suspense>
-    );
-  }
+    // If connected, proceed with the rest of the application logic
+
+    // Define routes that don't need the main layout (e.g., Login, OidcCallback)
+    if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
+        return (
+            <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
+                <Routes>
+                    <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
+                    <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
+                </Routes>
+            </Suspense>
+        );
+    }
 
   return (
     <Layout>
