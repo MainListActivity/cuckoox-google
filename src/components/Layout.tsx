@@ -105,7 +105,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <Box sx={{ display: 'flex' }}>
-      <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
+      <AppBar
+        position="fixed"
+        sx={(theme) => ({ // Pass theme to sx to access palette
+          zIndex: theme.zIndex.drawer + 1,
+          background: `linear-gradient(to right, ${theme.palette.primary.light}, ${theme.palette.primary.main})`,
+        })}
+      >
         <Toolbar>
           <IconButton
             color="inherit"

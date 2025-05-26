@@ -1,4 +1,21 @@
 import React from 'react';
+import {
+  Box,
+  Typography,
+  Button,
+  Card,
+  CardContent,
+  CardActions,
+  Chip,
+  Paper,
+  SvgIcon,
+} from '@mui/material';
+import {
+  mdiCalendarPlus,
+  mdiInformationOutline,
+  mdiVideoOutline,
+  mdiFileDocumentOutline,
+} from '@mdi/js';
 
 // Mock data, replace with API call relevant to a selected case
 const mockMeetings = [
@@ -11,57 +28,77 @@ const OnlineMeetingPage: React.FC = () => {
   // TODO: Fetch meetings for the selected case from API
   // TODO: Implement meeting creation, joining (if applicable), viewing details
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">在线会议</h1>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+    <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          在线会议
+        </Typography>
+        <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiCalendarPlus} /></SvgIcon>}>
           安排新会议
-        </button>
-      </div>
+        </Button>
+      </Box>
       
-      <div className="space-y-6">
-        {mockMeetings.map((meeting) => (
-          <div key={meeting.id} className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-            <h2 className="text-xl font-semibold text-blue-700 mb-2">{meeting.title}</h2>
-            <p className="text-sm text-gray-600 mb-1"><strong>类型:</strong> {meeting.type}</p>
-            <p className="text-sm text-gray-600 mb-1"><strong>计划时间:</strong> {meeting.scheduled_time}</p>
-            <p className="text-sm text-gray-600 mb-3">
-              <strong>状态:</strong> 
-              <span className={`ml-2 px-2 py-0.5 text-xs font-semibold rounded-full ${
-                meeting.status === '已结束' ? 'bg-gray-200 text-gray-700' : 'bg-green-100 text-green-700'
-              }`}>
-                {meeting.status}
-              </span>
-            </p>
-            <div className="flex space-x-3">
-              <button className="text-sm px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-                查看详情
-              </button>
-              {meeting.recording_url && (
-                <a href={meeting.recording_url} target="_blank" rel="noopener noreferrer"
-                  className="text-sm px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors">
-                  查看录像
-                </a>
-              )}
-              {meeting.minutes_doc_id && (
-                 <button className="text-sm px-3 py-1 bg-teal-500 text-white rounded hover:bg-teal-600 transition-colors">
-                  查看纪要
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-        {mockMeetings.length === 0 && (
-            <div className="bg-white p-6 rounded-lg shadow text-center">
-                <p className="text-gray-500">当前案件暂无会议记录。</p>
-            </div>
-        )}
-      </div>
-      <p className="mt-8 text-sm text-gray-500">
+      {mockMeetings.length === 0 ? (
+        <Paper elevation={1} sx={{ p: 3, textAlign: 'center' }}>
+          <Typography color="text.secondary">当前案件暂无会议记录。</Typography>
+        </Paper>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {mockMeetings.map((meeting) => (
+            <Card key={meeting.id} elevation={2}>
+              <CardContent>
+                <Typography variant="h5" component="h2" color="primary" gutterBottom>
+                  {meeting.title}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  <strong>类型:</strong> {meeting.type}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                  <strong>计划时间:</strong> {meeting.scheduled_time}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                  <Typography variant="body2" color="text.secondary" component="strong" sx={{mr:1}}>
+                    状态:
+                  </Typography>
+                  <Chip
+                    label={meeting.status}
+                    size="small"
+                    color={meeting.status === '已结束' ? 'default' : 'success'}
+                    variant={meeting.status === '已结束' ? 'outlined' : 'filled'}
+                  />
+                </Box>
+              </CardContent>
+              <CardActions sx={{ pt: 0, pb: 1.5, pl: 2, pr: 2 }}>
+                <Button size="small" variant="outlined" startIcon={<SvgIcon><path d={mdiInformationOutline} /></SvgIcon>}>
+                  查看详情
+                </Button>
+                {meeting.recording_url && (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    href={meeting.recording_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    startIcon={<SvgIcon><path d={mdiVideoOutline} /></SvgIcon>}
+                  >
+                    查看录像
+                  </Button>
+                )}
+                {meeting.minutes_doc_id && (
+                  <Button size="small" variant="outlined" startIcon={<SvgIcon><path d={mdiFileDocumentOutline} /></SvgIcon>}>
+                    查看纪要
+                  </Button>
+                )}
+              </CardActions>
+            </Card>
+          ))}
+        </Box>
+      )}
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
         在线会议页面。将展示当前案件的会议列表和会议记录。
         操作权限将根据用户身份和案件程序进程进行控制。
-      </p>
-    </div>
+      </Typography>
+    </Box>
   );
 };
 

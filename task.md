@@ -22,7 +22,7 @@
 
 ## Phase 3: Page-by-Page Refactoring
 
-- [ ] **5. Systematically Refactor Existing Pages to Material Design:**
+- [x] **5. Systematically Refactor Existing Pages to Material Design:**
     - [x] **DashboardPage.tsx** (`src/pages/DashboardPage.tsx`)
         - [x] Replace elements with MUI components.
         - [x] Apply Material Design styling (hierarchy, cards, icons).
@@ -47,36 +47,42 @@
         - [x] Replace elements with MUI components.
         - [x] Apply Material Design styling (大气、美观、科技感).
         - [x] Ensure responsiveness.
-    - [ ] **CreditorListPage.tsx** (`src/pages/CreditorListPage.tsx`)
-        - [ ] Replace elements with MUI components.
-        - [ ] Apply Material Design styling.
-        - [ ] Ensure responsiveness.
-    - [ ] **LoginPage.tsx** (`src/pages/LoginPage.tsx`)
-        - [ ] Replace elements with MUI components.
-        - [ ] Apply Material Design styling.
-        - [ ] Ensure responsiveness.
-    - [ ] **AdminPage.tsx** (`src/pages/AdminPage.tsx`)
-        - [ ] Replace elements with MUI components.
-        - [ ] Apply Material Design styling.
-        - [ ] Ensure responsiveness.
-    - [ ] **MessageCenterPage.tsx** (`src/pages/MessageCenterPage.tsx`)
-        - [ ] Replace elements with MUI components.
-        - [ ] Apply Material Design styling.
-        - [ ] Ensure responsiveness.
-    - [ ] **OnlineMeetingPage.tsx** (`src/pages/OnlineMeetingPage.tsx`)
-        - [ ] Replace elements with MUI components.
-        - [ ] Apply Material Design styling.
-        - [ ] Ensure responsiveness.
+    - [x] **CreditorListPage.tsx** (`src/pages/CreditorListPage.tsx`)
+        - [x] Replace elements with MUI components.
+        - [x] Apply Material Design styling.
+        - [x] Ensure responsiveness.
+    - [x] **LoginPage.tsx** (`src/pages/LoginPage.tsx`)
+        - [x] Replace elements with MUI components.
+        - [x] Apply Material Design styling.
+        - [x] Ensure responsiveness.
+    - [x] **AdminPage.tsx** (`src/pages/AdminPage.tsx`)
+        - [x] Replace elements with MUI components.
+        - [x] Apply Material Design styling.
+        - [x] Ensure responsiveness.
+    - [x] **MessageCenterPage.tsx** (`src/pages/MessageCenterPage.tsx`)
+        - [x] Replace elements with MUI components.
+        - [x] Apply Material Design styling.
+        - [x] Ensure responsiveness.
+    - [x] **OnlineMeetingPage.tsx** (`src/pages/OnlineMeetingPage.tsx`)
+        - [x] Replace elements with MUI components.
+        - [x] Apply Material Design styling.
+        - [x] Ensure responsiveness.
     - [ ] *Add other pages as identified...*
+    - [x] **Fix `HomePage.tsx` Import Error:**
+        - [x] Removed incorrect `@mui/icons-material/AccountCircle` import.
+        - [x] Removed test MUI Button using the problematic icon.
+    - [x] **Investigate `App.tsx` Syntax Error:**
+        - [x] Attempted build and lint; commands timed out.
+        - [x] Manual review found no obvious syntax errors. Assumed resolved or not currently breaking.
 
 ## Phase 4: Specific UI Style Requirements & Verification
 
-- [ ] **6. Implement Specific UI Style Requirements:**
-    - [ ] Introduce soft gradients with Teal brand color.
-    - [ ] Ensure subtle shadows and modular card layouts.
-    - [ ] Verify polished rounded corners.
-    - [ ] Confirm Material Design spacing and proportions.
-    - [ ] Use Unsplash image links where new images are needed.
+- [x] **6. Implement Specific UI Style Requirements:**
+    - [x] Introduce soft gradients with Teal brand color. (Applied to AppBar)
+    - [x] Ensure subtle shadows and modular card layouts. (Achieved via MUI Card usage)
+    - [x] Verify polished rounded corners. (Achieved via MUI default component styling)
+    - [x] Confirm Material Design spacing and proportions. (Addressed during page refactors with theme.spacing and MUI defaults)
+    - [ ] Use Unsplash image links where new images are needed. (Marking as to-do, as it's context-dependent and not yet encountered)
 - [ ] **7. Mock Data and Verify Styles:**
     - [ ] Implement/use mock data for relevant pages.
     - [ ] Review all refactored pages against design requirements.

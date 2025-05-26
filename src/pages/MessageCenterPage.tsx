@@ -1,4 +1,14 @@
 import React from 'react';
+import {
+  Box,
+  Typography,
+  Paper,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
+} from '@mui/material';
+import { alpha } from '@mui/material/styles';
 
 // Mock data, replace with API call (potentially WebSocket for real-time)
 const mockMessages = [
@@ -12,41 +22,91 @@ const MessageCenterPage: React.FC = () => {
   // TODO: Implement real-time updates via WebSocket/SurrealDB live queries
   // TODO: Implement message sending, conversation views
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold text-gray-800 mb-6">消息中心</h1>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" component="h1" gutterBottom>消息中心</Typography>
       
-      <div className="bg-white shadow-md rounded-lg">
-        {/* Tabs for IM / System Alerts could go here */}
-        <div className="p-4 border-b">
-            <h2 className="text-lg font-medium text-gray-700">所有消息</h2>
-        </div>
-        <ul className="divide-y divide-gray-200">
+      <Paper elevation={2}>
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="h6">所有消息</Typography>
+        </Box>
+        <List disablePadding>
           {mockMessages.map((message) => (
-            <li key={message.id} className={`p-4 hover:bg-gray-50 transition-colors ${!message.is_read ? 'bg-blue-50 font-semibold' : ''}`}>
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className={`text-sm ${!message.is_read ? 'text-blue-700' : 'text-gray-800'}`}>
-                    {message.sender}
-                    {message.type === 'IM' && <span className="ml-2 text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full">IM</span>}
-                    {message.type === 'SystemAlert' && <span className="ml-2 text-xs px-1.5 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">提醒</span>}
-                  </p>
-                  <p className={`mt-1 text-sm ${!message.is_read ? 'text-gray-700' : 'text-gray-600'}`}>{message.content}</p>
-                </div>
-                <span className={`text-xs ${!message.is_read ? 'text-blue-600' : 'text-gray-400'}`}>{message.timestamp}</span>
-              </div>
-              {message.case_id && <p className="mt-1 text-xs text-gray-400">相关案件: {message.case_id}</p>}
-            </li>
+            <ListItem
+              alignItems="flex-start"
+              divider
+              button // For hover effect
+              selected={!message.is_read} // For visual distinction of unread messages
+              sx={{
+                backgroundColor: !message.is_read ? (theme) => alpha(theme.palette.primary.light, 0.08) : 'inherit',
+                '&.Mui-selected': { // More specific styling for selected (unread)
+                   backgroundColor: (theme) => alpha(theme.palette.primary.light, 0.12),
+                },
+                '&.Mui-selected:hover': {
+                   backgroundColor: (theme) => alpha(theme.palette.primary.light, 0.15),
+                }
+              }}
+              key={message.id}
+            >
+              <ListItemText
+                primary={
+                  <Box component="span" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <Typography
+                      component="span"
+                      variant="body1"
+                      sx={{
+                        fontWeight: !message.is_read ? 'bold' : 'normal',
+                        color: !message.is_read ? 'primary.main' : 'text.primary',
+                      }}
+                    >
+                      {message.sender}
+                      {message.type === 'IM' && <Chip label="IM" size="small" color="success" variant="outlined" sx={{ ml: 1, height: 'auto', fontSize: '0.7rem', p: '0 4px' }} />}
+                      {message.type === 'SystemAlert' && <Chip label="提醒" size="small" color="warning" variant="outlined" sx={{ ml: 1, height: 'auto', fontSize: '0.7rem', p: '0 4px' }} />}
+                    </Typography>
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      sx={{ color: !message.is_read ? 'primary.dark' : 'text.secondary', whiteSpace: 'nowrap', ml:1 }}
+                    >
+                      {message.timestamp}
+                    </Typography>
+                  </Box>
+                }
+                secondary={
+                  <React.Fragment>
+                    <Typography
+                      component="p"
+                      variant="body2"
+                      color={!message.is_read ? 'text.primary' : 'text.secondary'}
+                      sx={{ mt: 0.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                    >
+                      {message.content}
+                    </Typography>
+                    {message.case_id && (
+                      <Typography variant="caption" display="block" color="text.disabled" sx={{ mt: 0.5 }}>
+                        相关案件: {message.case_id}
+                      </Typography>
+                    )}
+                  </React.Fragment>
+                }
+              />
+            </ListItem>
           ))}
           {mockMessages.length === 0 && (
-             <li className="p-6 text-center text-sm text-gray-500">暂无消息</li>
+            <ListItem>
+              <ListItemText primary={
+                <Typography align="center" color="text.secondary" sx={{ p: 2 }}>
+                  暂无消息
+                </Typography>
+              }/>
+            </ListItem>
           )}
-        </ul>
-      </div>
-      <p className="mt-6 text-sm text-gray-500">
+        </List>
+      </Paper>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
         消息中心。展示IM聊天消息和系统提醒。
         案件机器人将根据案件状态和预设条件在此发送提醒卡片。
-      </p>
-    </div>
+      </Typography>
+    </Box>
   );
 };
 
