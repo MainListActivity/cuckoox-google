@@ -1,4 +1,28 @@
 import React from 'react';
+import {
+  Box,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  Button,
+  SvgIcon,
+} from '@mui/material';
+import {
+  mdiAccountGroupOutline,
+  mdiSecurity,
+  mdiPlaylistCheck,
+  mdiBellRingOutline,
+  mdiCogOutline,
+} from '@mdi/js'; // Using @mdi/js for path data
+
+const adminSections = [
+  { title: '用户管理', description: '管理系统用户账户、分配全局角色。', buttonText: '管理用户', icon: mdiAccountGroupOutline, color: 'primary' as const },
+  { title: '身份与权限管理', description: '定义用户身份（角色）及其可操作的菜单和功能权限。', buttonText: '管理身份权限', icon: mdiSecurity, color: 'success' as const },
+  { title: '审核状态维护', description: '配置债权审核时可选的审核状态列表。', buttonText: '维护审核状态', icon: mdiPlaylistCheck, color: 'warning' as const },
+  { title: '案件通知规则', description: '配置案件机器人基于案件阶段发送通知的规则和模板。', buttonText: '配置通知规则', icon: mdiBellRingOutline, color: 'info' as const },
+  { title: '系统配置', description: '管理系统级参数，如数据库连接（概念性）、OIDC客户端设置等。', buttonText: '系统配置', icon: mdiCogOutline, color: 'error' as const },
+];
 
 const AdminPage: React.FC = () => {
   // TODO: Implement admin functionalities:
@@ -8,54 +32,39 @@ const AdminPage: React.FC = () => {
   // - Audit status management (for claim reviews)
   // - Case stage notification rule configuration
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold text-gray-800 mb-6">系统管理</h1>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" component="h1" gutterBottom>系统管理</Typography>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-          <h2 className="text-xl font-semibold text-blue-700 mb-3">用户管理</h2>
-          <p className="text-gray-600 text-sm mb-4">管理系统用户账户、分配全局角色。</p>
-          <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
-            管理用户
-          </button>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-          <h2 className="text-xl font-semibold text-green-700 mb-3">身份与权限管理</h2>
-          <p className="text-gray-600 text-sm mb-4">定义用户身份（角色）及其可操作的菜单和功能权限。</p>
-          <button className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
-            管理身份权限
-          </button>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-          <h2 className="text-xl font-semibold text-yellow-700 mb-3">审核状态维护</h2>
-          <p className="text-gray-600 text-sm mb-4">配置债权审核时可选的审核状态列表。</p>
-          <button className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors">
-            维护审核状态
-          </button>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-          <h2 className="text-xl font-semibold text-purple-700 mb-3">案件通知规则</h2>
-          <p className="text-gray-600 text-sm mb-4">配置案件机器人基于案件阶段发送通知的规则和模板。</p>
-          <button className="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 transition-colors">
-            配置通知规则
-          </button>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-          <h2 className="text-xl font-semibold text-red-700 mb-3">系统配置</h2>
-          <p className="text-gray-600 text-sm mb-4">管理系统级参数，如数据库连接（概念性）、OIDC客户端设置等。</p>
-          <button className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors">
-            系统配置
-          </button>
-        </div>
-      </div>
-      <p className="mt-8 text-sm text-gray-500">
+      <Grid container spacing={3}>
+        {adminSections.map((section, index) => (
+          <Grid item xs={12} sm={6} md={4} key={index}>
+            <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <CardContent sx={{ flexGrow: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+                  <SvgIcon component="svg" sx={{ mr: 1.5, fontSize: '2.2rem', color: `${section.color}.main` }}>
+                    <path d={section.icon} />
+                  </SvgIcon>
+                  <Typography variant="h5" component="h2" sx={{color: `${section.color}.dark`}}>
+                    {section.title}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {section.description}
+                </Typography>
+              </CardContent>
+              <Box sx={{ p: 2, pt: 0 }}>
+                <Button variant="contained" size="medium" color={section.color} fullWidth>
+                  {section.buttonText}
+                </Button>
+              </Box>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
         系统管理页面，仅限管理员访问。用于配置和维护应用的核心参数和元数据。
-      </p>
-    </div>
+      </Typography>
+    </Box>
   );
 };
 
