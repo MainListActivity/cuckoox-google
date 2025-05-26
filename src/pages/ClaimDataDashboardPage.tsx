@@ -1,6 +1,61 @@
 import React from 'react';
-// You would typically use a charting library like Chart.js, Recharts, Nivo, etc.
-// import { Bar } from 'react-chartjs-2'; (Example)
+import {
+  Box,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  ThemeProvider,
+  createTheme,
+  CssBaseline,
+} from '@mui/material';
+import { teal, cyan, green, yellow, purple, grey } from '@mui/material/colors';
+import { alpha } from '@mui/material/styles';
+
+// Local Dark Theme Definition
+const localDarkTheme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: { main: teal[300], light: teal[200] },
+    secondary: { main: cyan[400] },
+    background: {
+      default: '#121212',
+      paper: '#1e1e1e',
+    },
+    text: {
+      primary: '#ffffff',
+      secondary: grey[400],
+      disabled: grey[600],
+    },
+    statBlue: { main: cyan[400] },
+    statGreen: { main: green[400] },
+    statYellow: { main: yellow[400] },
+    statPurple: { main: purple[300] },
+    statRed: { main: yellow[700] }, // For rejected claims, if added
+  },
+  typography: {
+    fontFamily: 'Roboto, sans-serif',
+    h1: { fontWeight: 700, letterSpacing: '0.05em', color: teal[200], fontSize: '2.5rem' }, // Adjusted size
+    h2: { fontWeight: 600, color: grey[300], fontSize: '1.25rem' }, // Card titles
+    h3: { fontWeight: 700, color: cyan[300], fontSize: '2rem' }, // Large numbers in cards
+    subtitle1: { color: grey[500], fontSize: '0.9rem' },
+    body2: { fontSize: '0.8rem' },
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+          transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
+          '&:hover': {
+            transform: 'scale(1.03)',
+            boxShadow: `0px 8px 20px ${alpha(theme.palette.primary.main, 0.25)}`,
+          },
+        }),
+      },
+    },
+  },
+});
 
 const ClaimDataDashboardPage: React.FC = () => {
   // TODO: Fetch real-time data from SurrealDB for the selected case
@@ -18,70 +73,109 @@ const ClaimDataDashboardPage: React.FC = () => {
     pendingClaimAmount: 3000000,
     creditorCount: 95,
   };
+  // Assume AppBar height is 64px for minHeight calculation
+  const appBarHeight = '64px';
+
 
   return (
-    <div className="p-6 bg-gray-900 text-white min-h-full"> {/* Techy background */}
-      <h1 className="text-3xl font-bold mb-8 text-center text-blue-400 tracking-wider">债权申报数据大屏</h1>
-      <p className="text-center text-gray-400 mb-10">实时监控案件ID: [Selected Case ID] 的债权申报与审核动态</p>
+    <ThemeProvider theme={localDarkTheme}>
+      <CssBaseline />
+      <Box sx={{ p: 3, backgroundColor: 'background.default', color: 'text.primary', minHeight: `calc(100vh - ${appBarHeight})` }}>
+        <Typography variant="h1" gutterBottom textAlign="center" mb={1}>债权申报数据大屏</Typography>
+        <Typography variant="subtitle1" textAlign="center" sx={{ mb: 5 }}>实时监控案件ID: [Selected Case ID] 的债权申报与审核动态</Typography>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {/* Example Stat Cards - these would be styled much more impressively */}
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl border border-blue-500 transform hover:scale-105 transition-transform">
-          <h2 className="text-lg font-semibold text-blue-300 mb-2">当前申请总笔数</h2>
-          <p className="text-4xl font-bold text-cyan-400">{mockData.claimsSubmitted}</p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl border border-green-500 transform hover:scale-105 transition-transform">
-          <h2 className="text-lg font-semibold text-green-300 mb-2">当前已审批总笔数</h2>
-          <p className="text-4xl font-bold text-green-400">{mockData.claimsApproved}</p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl border border-yellow-500 transform hover:scale-105 transition-transform">
-          <h2 className="text-lg font-semibold text-yellow-300 mb-2">当前待审总笔数</h2>
-          <p className="text-4xl font-bold text-yellow-400">{mockData.claimsPending}</p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl border border-purple-500 transform hover:scale-105 transition-transform">
-          <h2 className="text-lg font-semibold text-purple-300 mb-2">当前申请债权人数量</h2>
-          <p className="text-4xl font-bold text-purple-400">{mockData.creditorCount}</p>
-        </div>
-      </div>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{borderColor: 'statBlue.main'}}>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前申请总笔数</Typography>
+                <Typography variant="h3" sx={{color: 'statBlue.main'}}>{mockData.claimsSubmitted}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{borderColor: 'statGreen.main'}}>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前已审批总笔数</Typography>
+                <Typography variant="h3" sx={{color: 'statGreen.main'}}>{mockData.claimsApproved}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{borderColor: 'statYellow.main'}}>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前待审总笔数</Typography>
+                <Typography variant="h3" sx={{color: 'statYellow.main'}}>{mockData.claimsPending}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{borderColor: 'statPurple.main'}}>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前申请债权人数量</Typography>
+                <Typography variant="h3" sx={{color: 'statPurple.main'}}>{mockData.creditorCount}</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl">
-          <h2 className="text-xl font-semibold text-blue-300 mb-3">当前申请总金额</h2>
-          <p className="text-3xl font-bold text-cyan-400">{mockData.totalClaimAmount.toLocaleString()} 元</p>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl">
-          <h2 className="text-xl font-semibold text-green-300 mb-3">当前已审批总金额</h2>
-          <p className="text-3xl font-bold text-green-400">{mockData.approvedClaimAmount.toLocaleString()} 元</p>
-        </div>
-         <div className="bg-gray-800 p-6 rounded-lg shadow-xl">
-          <h2 className="text-xl font-semibold text-yellow-300 mb-3">当前待审总金额</h2>
-          <p className="text-3xl font-bold text-yellow-400">{mockData.pendingClaimAmount.toLocaleString()} 元</p>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl min-h-[300px]">
-          <h2 className="text-xl font-semibold text-teal-300 mb-4">债权状态分布 (Placeholder Chart)</h2>
-          {/* Placeholder for a pie or bar chart */}
-          <div className="flex items-center justify-center h-full text-gray-500">
-            Chart: Approved vs. Pending vs. Rejected Claims
-          </div>
-        </div>
-        <div className="bg-gray-800 p-6 rounded-lg shadow-xl min-h-[300px]">
-          <h2 className="text-xl font-semibold text-indigo-300 mb-4">用户活动 (Placeholder Chart)</h2>
-           {/* Placeholder for a bar chart */}
-          <div className="flex items-center justify-center h-full text-gray-500">
-            Chart: Logged-in users by role (Admin, Manager, Creditor)
-          </div>
-        </div>
-      </div>
-      
-      <p className="mt-10 text-center text-sm text-gray-500">
-        此数据大屏将关联到具体案件，通过SurrealDB实时消息监控债权申报和审核变化。
-        需要使用图表库（如Chart.js, Recharts, ECharts）来实现大气、美观、科技感十足的可视化效果。
-        当前为样式和布局占位。
-      </p>
-    </div>
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前申请总金额</Typography>
+                <Typography variant="h3" sx={{color: 'statBlue.main'}}>{mockData.totalClaimAmount.toLocaleString()} 元</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前已审批总金额</Typography>
+                <Typography variant="h3" sx={{color: 'statGreen.main'}}>{mockData.approvedClaimAmount.toLocaleString()} 元</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前待审总金额</Typography>
+                <Typography variant="h3" sx={{color: 'statYellow.main'}}>{mockData.pendingClaimAmount.toLocaleString()} 元</Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+        
+        <Grid container spacing={3}>
+          <Grid item xs={12} lg={6}>
+            <Card sx={{ minHeight: 300, display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="h5" component="h3" gutterBottom textAlign="center">债权状态分布 (Placeholder Chart)</Typography>
+                <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                  <Typography variant="body2" color="text.disabled">Chart: Approved vs. Pending vs. Rejected Claims</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+          <Grid item xs={12} lg={6}>
+            <Card sx={{ minHeight: 300, display: 'flex', flexDirection: 'column' }}>
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <Typography variant="h5" component="h3" gutterBottom textAlign="center">用户活动 (Placeholder Chart)</Typography>
+                <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                  <Typography variant="body2" color="text.disabled">Chart: Logged-in users by role (Admin, Manager, Creditor)</Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+        
+        <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ mt: 5, display: 'block' }}>
+          此数据大屏将关联到具体案件，通过SurrealDB实时消息监控债权申报和审核变化。
+          需要使用图表库（如Chart.js, Recharts, ECharts）来实现大气、美观、科技感十足的可视化效果。
+          当前为样式和布局占位。
+        </Typography>
+      </Box>
+    </ThemeProvider>
   );
 };
 

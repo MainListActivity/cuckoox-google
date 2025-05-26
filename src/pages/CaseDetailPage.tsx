@@ -4,11 +4,28 @@ import { db } from '../lib/surreal'; // Corrected path
 import { RecordId } from 'surrealdb'; // For typing record IDs
 import RichTextEditor from '../components/RichTextEditor'; // IMPORT RichTextEditor
 import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
+import {
+  Box,
+  Typography,
+  Button,
+  Grid,
+  Card,
+  CardContent,
+  CircularProgress,
+  Alert,
+  Chip,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  SvgIcon,
+} from '@mui/material';
+import { mdiArrowLeft, mdiCircleSmall, mdiBookOpenOutline, mdiSync } from '@mdi/js';
 
 // Define interfaces based on your SurrealDB schema
 interface Case {
   id: RecordId;
-  name: string; 
+  name: string;
   case_number?: string;
   details?: string; // Added from schema
   status?: string; // Added from schema
@@ -16,10 +33,10 @@ interface Case {
   created_at?: string; // Added from schema
   updated_at?: string; // Added from schema
   // Mock fields that might be added to schema later or sourced differently
-  case_lead_name?: string; 
-  acceptance_date?: string; 
-  current_stage?: string; 
-  filing_material_doc_id?: RecordId | null; 
+  case_lead_name?: string;
+  acceptance_date?: string;
+  current_stage?: string;
+  filing_material_doc_id?: RecordId | null;
 }
 
 interface Document {
@@ -49,7 +66,7 @@ const CaseDetailPage: React.FC = () => {
       try {
         const caseRecordId = id.startsWith('case:') ? id : `case:${id}`;
         const result: Case[] = await db.select(caseRecordId);
-        
+
         if (result.length === 0 || !result[0]) {
           setError(t('case_detail_error_not_found'));
           setCaseDetail(null);
@@ -61,7 +78,7 @@ const CaseDetailPage: React.FC = () => {
 
         if (fetchedCase.filing_material_doc_id) {
           const docId = fetchedCase.filing_material_doc_id.toString();
-          const docResult: Document[] = await db.select(docId); 
+          const docResult: Document[] = await db.select(docId);
           if (docResult.length > 0 && docResult[0]) {
             setFilingMaterialContent(docResult[0].content);
           } else {
@@ -84,15 +101,20 @@ const CaseDetailPage: React.FC = () => {
   }, [id, t]); // Added t to dependency array
 
   if (isLoading) {
-    return <div className="p-6 text-center">{t('case_detail_loading')}</div>;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px', p: 3 }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>{t('case_detail_loading')}</Typography>
+      </Box>
+    );
   }
 
   if (error) {
-    return <div className="p-6 text-center text-red-500">{error}</div>;
+    return <Alert severity="error" sx={{ m: 3 }}>{error}</Alert>;
   }
 
   if (!caseDetail) {
-    return <div className="p-6 text-center">{t('case_detail_unspecified_case')}</div>;
+    return <Alert severity="info" sx={{ m: 3 }}>{t('case_detail_unspecified_case')}</Alert>;
   }
 
   const displayCase = {
@@ -107,60 +129,93 @@ const CaseDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-6">
-        <Link to="/cases" className="text-blue-600 hover:underline">&larr; {t('case_detail_back_to_list_link')}</Link>
-      </div>
-      <h1 className="text-3xl font-bold text-gray-800 mb-3">{t('case_detail_page_title_prefix')}: {displayCase.case_number}</h1>
-      <p className="text-sm text-gray-500 mb-8">{t('case_detail_id_label')}: {displayCase.id}</p>
+    <Box sx={{ p: 3 }}>
+      <Button component={Link} to="/cases" startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>} sx={{ mb: 2 }}>
+        {t('case_detail_back_to_list_link')}
+      </Button>
+      <Typography variant="h4" component="h1" gutterBottom>
+        {t('case_detail_page_title_prefix')}: {displayCase.case_number}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" display="block" gutterBottom sx={{ mb: 3 }}>
+        {t('case_detail_id_label')}: {displayCase.id}
+      </Typography>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <Grid container spacing={3}>
         {/* Basic Info Section */}
-        <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">{t('case_detail_basic_info_title')}</h2>
-          <dl className="space-y-3">
-            <div><dt className="font-medium text-gray-600">{t('case_detail_name_label')}:</dt><dd className="text-gray-800">{displayCase.name}</dd></div>
-            <div><dt className="font-medium text-gray-600">{t('case_detail_lead_label')}:</dt><dd className="text-gray-800">{displayCase.case_lead_name}</dd></div>
-            <div><dt className="font-medium text-gray-600">{t('case_detail_acceptance_time_label')}:</dt><dd className="text-gray-800">{displayCase.acceptance_date}</dd></div>
-            <div><dt className="font-medium text-gray-600">{t('case_detail_current_stage_label')}:</dt><dd><span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">{displayCase.current_stage}</span></dd></div>
-            <div><dt className="font-medium text-gray-600">{t('case_detail_status_label')}:</dt><dd><span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">{caseDetail.status || t('case_detail_status_unknown')}</span></dd></div>
-            <div><dt className="font-medium text-gray-600">{t('case_detail_details_label')}:</dt><dd className="text-gray-800 whitespace-pre-wrap">{displayCase.details}</dd></div>
-          </dl>
-          
-          <h3 className="text-lg font-semibold text-gray-700 mt-6 mb-3 border-b pb-2">{t('case_detail_timeline_title')}</h3>
-          <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-            <li>{t('case_detail_timeline_event1')}</li>
-            <li>{t('case_detail_timeline_event2')}</li>
-            <li>{t('case_detail_timeline_event3')}</li>
-          </ul>
-        </div>
+        <Grid item xs={12} lg={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
+                {t('case_detail_basic_info_title')}
+              </Typography>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_name_label')}: </Typography>
+                <Typography variant="body1" component="span">{displayCase.name}</Typography>
+              </Box>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_lead_label')}: </Typography>
+                <Typography variant="body1" component="span">{displayCase.case_lead_name}</Typography>
+              </Box>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_acceptance_time_label')}: </Typography>
+                <Typography variant="body1" component="span">{displayCase.acceptance_date}</Typography>
+              </Box>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold', mr:1 }}>{t('case_detail_current_stage_label')}: </Typography>
+                <Chip size="small" label={displayCase.current_stage} color="primary" />
+              </Box>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold', mr:1 }}>{t('case_detail_status_label')}: </Typography>
+                <Chip size="small" label={caseDetail.status || t('case_detail_status_unknown')} color="secondary" />
+              </Box>
+              <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_details_label')}: </Typography>
+                <Typography variant="body1" component="span" sx={{whiteSpace: 'pre-wrap'}}>{displayCase.details}</Typography>
+              </Box>
+              
+              <Typography variant="h6" component="h3" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={1} mt={3}>
+                {t('case_detail_timeline_title')}
+              </Typography>
+              <List dense>
+                <ListItem><ListItemIcon sx={{minWidth: 20}}><SvgIcon fontSize="small"><path d={mdiCircleSmall} /></SvgIcon></ListItemIcon><ListItemText primary={t('case_detail_timeline_event1')} /></ListItem>
+                <ListItem><ListItemIcon sx={{minWidth: 20}}><SvgIcon fontSize="small"><path d={mdiCircleSmall} /></SvgIcon></ListItemIcon><ListItemText primary={t('case_detail_timeline_event2')} /></ListItem>
+                <ListItem><ListItemIcon sx={{minWidth: 20}}><SvgIcon fontSize="small"><path d={mdiCircleSmall} /></SvgIcon></ListItemIcon><ListItemText primary={t('case_detail_timeline_event3')} /></ListItem>
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
 
         {/* Filing Material & Actions Section */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
-          <h2 className="text-xl font-semibold text-gray-700 mb-4 border-b pb-2">{t('case_detail_filing_material_title')}</h2>
-          <div className="border rounded bg-gray-50 min-h-[200px] prose max-w-none editor-container">
-            <RichTextEditor
-              value={filingMaterialContent}
-              onChange={() => {}} // Read-only, so no actual change handling needed
-              readOnly={true}
-              placeholder={t('case_detail_filing_material_empty')}
-            />
-          </div>
-            <div className="mt-6 flex space-x-3">
-                <button className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors">
-                    {t('case_detail_actions_meeting_minutes_button')}
-                </button>
-                 <button className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 transition-colors">
-                    {t('case_detail_actions_change_status_button')}
-                </button>
-            </div>
-        </div>
-      </div>
-       <p className="mt-8 text-sm text-gray-500 text-center">
-        {t('case_detail_footer_info_1')}
-        {t('case_detail_footer_info_2')}
-      </p>
-    </div>
+        <Grid item xs={12} lg={8}>
+          <Card>
+            <CardContent>
+              <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
+                {t('case_detail_filing_material_title')}
+              </Typography>
+              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px', '& .ProseMirror': { backgroundColor: 'transparent', minHeight: '180px', p:1 } }}>
+                <RichTextEditor
+                  value={filingMaterialContent}
+                  onChange={() => {}} // Read-only, so no actual change handling needed
+                  readOnly={true}
+                  placeholder={t('case_detail_filing_material_empty')}
+                />
+              </Box>
+              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
+                <Button variant="contained" color="success" startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}>
+                  {t('case_detail_actions_meeting_minutes_button')}
+                </Button>
+                <Button variant="contained" color="warning" startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}>
+                  {t('case_detail_actions_change_status_button')}
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+      <Typography variant="caption" color="text.secondary" align="center" display="block" sx={{ mt: 3 }}>
+        {t('case_detail_footer_info_1')} {t('case_detail_footer_info_2')}
+      </Typography>
+    </Box>
   );
 };
 

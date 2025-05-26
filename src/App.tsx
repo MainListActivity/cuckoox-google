@@ -3,6 +3,8 @@ import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
 import {useAuth} from './contexts/AuthContext';
 import {useSurreal} from './contexts/SurrealProvider'; // ADDED
 import {useTranslation} from 'react-i18next'; // ADDED
+import { ThemeProvider } from '@mui/material/styles'; // ADDED
+import theme from './theme'; // ADDED
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import GlobalLoader from './components/GlobalLoader'; // ADDED
@@ -67,21 +69,24 @@ function App() {
     // Define routes that don't need the main layout (e.g., Login, OidcCallback)
     if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
         return (
-            <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
-                <Routes>
-                    <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
-                    <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
-                </Routes>
-            </Suspense>
+      <ThemeProvider theme={theme}> {/* ADDED */}
+        <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
+          <Routes>
+            <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
+            <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
+          </Routes>
+        </Suspense>
+      </ThemeProvider> {/* ADDED */}
         );
     }
 
   return (
-    <Layout>
-      <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
-        <Routes>
-          <Route path="/" element={<HomePage /> as ReactNode} />
-          <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
+    <ThemeProvider theme={theme}> {/* ADDED */}
+      <Layout>
+        <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
+          <Routes>
+            <Route path="/" element={<HomePage /> as ReactNode} />
+            <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
           <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
           <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
@@ -96,9 +101,10 @@ function App() {
           <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />
           <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} /> {/* ADDED */}
           <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </Suspense>
-    </Layout>
+          </Routes>
+        </Suspense>
+      </Layout>
+    </ThemeProvider> {/* ADDED */}
   );
 }
 

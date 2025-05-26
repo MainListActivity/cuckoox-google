@@ -10,6 +10,7 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // ADDED
 import { ThemeProvider } from './contexts/ThemeContext'; // ADDED
+import { StyledEngineProvider } from '@mui/material/styles'; // ADDED
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -42,13 +43,15 @@ root.render(
         // Let's assume autoConnect={true} behavior is default or managed by an effect in SurrealProvider.
         // If an explicit prop is needed, add it: autoConnect={true}
       >
-          <BrowserRouter>
-            <AuthProvider>
-            <ThemeProvider> {/* ADDED */}
-              <App />
-            </ThemeProvider> {/* ADDED */}
-            </AuthProvider>
-          </BrowserRouter>
+          <StyledEngineProvider injectFirst> {/* ADDED */}
+            <BrowserRouter>
+              <AuthProvider>
+              <ThemeProvider> {/* ADDED */}
+                <App />
+              </ThemeProvider> {/* ADDED */}
+              </AuthProvider>
+            </BrowserRouter>
+          </StyledEngineProvider> {/* ADDED */}
         </SurrealProvider>
       </QueryClientProvider> {/* ADDED */}
     </I18nextProvider>

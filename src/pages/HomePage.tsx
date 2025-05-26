@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import Button from '@mui/material/Button'; // ADDED
+import AccountCircleIcon from '@mui/icons-material/AccountCircle'; // ADDED
 
 const HomePage: React.FC = () => {
   const { isLoggedIn } = useAuth();
@@ -10,6 +12,7 @@ const HomePage: React.FC = () => {
       <p className="text-gray-600 mb-6">
         This is the central platform for managing bankruptcy cases, creditor information, claims, and more.
       </p>
+      <Button variant="contained" startIcon={<AccountCircleIcon />}>Test Button</Button> {/* ADDED */}
       {isLoggedIn ? (
         <div>
           <p className="mb-4">You are logged in. Navigate using the sidebar or go to your dashboard.</p>

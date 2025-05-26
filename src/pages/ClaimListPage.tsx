@@ -1,5 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  Box,
+  Typography,
+  Button,
+  TextField,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Chip,
+  Checkbox,
+  SvgIcon,
+} from '@mui/material';
+import { mdiMagnify, mdiPlusCircleOutline, mdiCloseCircleOutline, mdiPencil, mdiEyeOutline } from '@mdi/js';
 
 // Mock data, replace with API call relevant to a selected case
 const mockClaims = [
@@ -12,84 +29,134 @@ const ClaimListPage: React.FC = () => {
   // TODO: Fetch claims for the selected case from API
   // TODO: Implement claim creation, filtering, pagination, search
   // TODO: Implement "批量驳回"
+  const [selected, setSelected] = useState<readonly string[]>([]);
+
+  const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      const newSelecteds = mockClaims.map((n) => n.id);
+      setSelected(newSelecteds);
+      return;
+    }
+    setSelected([]);
+  };
+
+  const handleClick = (event: React.MouseEvent<unknown>, id: string) => {
+    const selectedIndex = selected.indexOf(id);
+    let newSelected: readonly string[] = [];
+    
+    if (selectedIndex === -1) {
+      newSelected = newSelected.concat(selected, id);
+    } else if (selectedIndex === 0) {
+      newSelected = newSelected.concat(selected.slice(1));
+    } else if (selectedIndex === selected.length - 1) {
+      newSelected = newSelected.concat(selected.slice(0, -1));
+    } else if (selectedIndex > 0) {
+      newSelected = newSelected.concat(
+        selected.slice(0, selectedIndex),
+        selected.slice(selectedIndex + 1),
+      );
+    }
+    setSelected(newSelected);
+  };
+  const isSelected = (id: string) => selected.indexOf(id) !== -1;
+
   return (
-    <div className="p-6">
-      <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
-        <h1 className="text-2xl font-semibold text-gray-800">债权申报与审核</h1>
-        <div className="flex items-center space-x-3">
-          <input 
-            type="text" 
-            placeholder="关键字搜索..."
-            className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-          />
-          <button className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
-            搜索
-          </button>
-        </div>
-        <div className="space-x-3">
-            <Link to="/claims/submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" component="h1" gutterBottom>债权申报与审核</Typography>
+
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <TextField size="small" variant="outlined" placeholder="关键字搜索..." />
+          <Button variant="outlined" startIcon={<SvgIcon><path d={mdiMagnify} /></SvgIcon>}>搜索</Button>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button variant="contained" color="primary" component={Link} to="/claims/submit" startIcon={<SvgIcon><path d={mdiPlusCircleOutline} /></SvgIcon>}>
             创建债权
-            </Link>
-            <button className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition-colors">
+          </Button>
+          <Button variant="outlined" color="error" startIcon={<SvgIcon><path d={mdiCloseCircleOutline} /></SvgIcon>} disabled={selected.length === 0}>
             批量驳回 (选中)
-            </button>
-        </div>
-      </div>
+          </Button>
+        </Box>
+      </Box>
       
-      <div className="bg-white shadow-md rounded-lg overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="px-2 py-3 text-left"><input type="checkbox" className="rounded"/></th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">债权人 (类别)</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">债权编号</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">主张债权总额</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">认定债权总额</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">审核状态</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">审核人</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">审核时间</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {mockClaims.map((claim) => (
-              <tr key={claim.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-2 py-4"><input type="checkbox" className="rounded"/></td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{claim.creditorName}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{claim.claim_number}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{claim.asserted_total.toLocaleString()}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{claim.approved_total !== null ? claim.approved_total.toLocaleString() : '-'}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    claim.audit_status === '部分通过' ? 'bg-yellow-100 text-yellow-800' :
-                    claim.audit_status === '已驳回' ? 'bg-red-100 text-red-800' :
-                    claim.audit_status === '待审核' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {claim.audit_status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{claim.auditor || '-'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{claim.audit_time || '-'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <Link to={`/claims/${claim.id}/review`} className="text-blue-600 hover:text-blue-800">
-                    {claim.audit_status === '待审核' ? '审核债权' : '查看详情'}
-                  </Link>
-                </td>
-              </tr>
-            ))}
-             {mockClaims.length === 0 && (
-               <tr>
-                <td colSpan={9} className="px-6 py-4 text-center text-sm text-gray-500">暂无债权数据</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-6 text-sm text-gray-500">
+      <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+        <TableContainer>
+          <Table stickyHeader>
+            <TableHead>
+              <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    color="primary"
+                    indeterminate={selected.length > 0 && selected.length < mockClaims.length}
+                    checked={mockClaims.length > 0 && selected.length === mockClaims.length}
+                    onChange={handleSelectAllClick}
+                    inputProps={{ 'aria-label': 'select all claims' }}
+                  />
+                </TableCell>
+                <TableCell>债权人 (类别)</TableCell>
+                <TableCell>债权编号</TableCell>
+                <TableCell align="right">主张债权总额</TableCell>
+                <TableCell align="right">认定债权总额</TableCell>
+                <TableCell>审核状态</TableCell>
+                <TableCell>审核人</TableCell>
+                <TableCell>审核时间</TableCell>
+                <TableCell>操作</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {mockClaims.length === 0 && (
+                <TableRow><TableCell colSpan={9} align="center"><Typography sx={{p:2}}>暂无债权数据</Typography></TableCell></TableRow>
+              )}
+              {mockClaims.map((claim) => {
+                const isItemSelected = isSelected(claim.id);
+                const labelId = `enhanced-table-checkbox-${claim.id}`;
+                let chipColor: "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" = "default";
+                if (claim.audit_status === '部分通过') chipColor = 'warning';
+                else if (claim.audit_status === '已驳回') chipColor = 'error';
+                else if (claim.audit_status === '待审核') chipColor = 'info';
+
+                return (
+                  <TableRow
+                    hover
+                    onClick={(event) => handleClick(event, claim.id)}
+                    role="checkbox"
+                    aria-checked={isItemSelected}
+                    tabIndex={-1}
+                    key={claim.id}
+                    selected={isItemSelected}
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <TableCell padding="checkbox"><Checkbox color="primary" checked={isItemSelected} inputProps={{ 'aria-labelledby': labelId }} /></TableCell>
+                    <TableCell component="th" id={labelId} scope="row">{claim.creditorName}</TableCell>
+                    <TableCell>{claim.claim_number}</TableCell>
+                    <TableCell align="right">{claim.asserted_total.toLocaleString()}</TableCell>
+                    <TableCell align="right">{claim.approved_total !== null ? claim.approved_total.toLocaleString() : '-'}</TableCell>
+                    <TableCell><Chip label={claim.audit_status} size="small" color={chipColor} /></TableCell>
+                    <TableCell>{claim.auditor || '-'}</TableCell>
+                    <TableCell>{claim.audit_time || '-'}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="small"
+                        component={Link}
+                        to={`/claims/${claim.id}/review`}
+                        startIcon={<SvgIcon><path d={claim.audit_status === '待审核' ? mdiPencil : mdiEyeOutline} /></SvgIcon>}
+                        onClick={(e) => e.stopPropagation()} // Prevent row click when clicking button
+                      >
+                        {claim.audit_status === '待审核' ? '审核债权' : '查看详情'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
         债权申报与审核页面。当案件进入债权申报阶段且用户有权限时，将自动进入此菜单。
         支持创建债权、批量驳回、全文检索、审核债权。附件材料将使用QuillJS进行实时在线编辑。
-      </p>
-    </div>
+      </Typography>
+    </Box>
   );
 };
 
