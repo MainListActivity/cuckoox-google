@@ -1,15 +1,15 @@
 :root {
-  --color-primary: #1976D2;        /* Blue Darken 1 */
-  --color-secondary: #78909C;      /* Blue Grey Lighten 1 */
-  --color-accent: #03A9F4;         /* Light Blue Base */
-  --color-background: #FAFAFA;      /* Grey Lighten 5 */
-  --color-surface: #FFFFFF;         /* White */
+  --color-primary: #009688;        /* Teal 500 */
+  --color-secondary: #00796B;      /* Teal 700 */
+  --color-accent: #009688;         /* Teal 500 */
+  --color-background: #f6f6f6;
+  --color-surface: #ffffff;         /* White */
   --color-error: #F44336;           /* Red Base */
   --color-warning: #FFC107;         /* Amber Base */
   --color-info: #2196F3;            /* Blue Base */
   --color-success: #4CAF50;         /* Green Base */
-  --color-text-primary: #212121;    /* Grey Darken 4 (for text on background/surface) */
-  --color-text-secondary: #757575;  /* Grey Base (for less prominent text) */
+  --color-text-primary: #212121;    /* grey[900] */
+  --color-text-secondary: #616161;  /* grey[700] */
   --color-text-on-primary: #FFFFFF;
   --color-text-on-secondary: #FFFFFF;
   --color-text-disabled: #BDBDBD;     /* Grey Lighten 1 */
@@ -25,10 +25,10 @@
 
 /* Global styles */
 body {
-  font-family: 'Roboto', sans-serif; /* Example: Using Roboto, common with Material Design */
+  font-family: 'Roboto', sans-serif;
   line-height: 1.6;
-  background-color: #f5f5f5; /* A light grey background common in Material apps */
-  color: #333;
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
   margin: 0; /* Ensure no default body margin */
 }
 
