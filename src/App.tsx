@@ -76,7 +76,7 @@ function App() {
             <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
           </Routes>
         </Suspense>
-      </ThemeProvider> {/* ADDED */}
+      </ThemeProvider>
         );
     }
 
@@ -104,7 +104,7 @@ function App() {
           </Routes>
         </Suspense>
       </Layout>
-    </ThemeProvider> {/* ADDED */}
+    </ThemeProvider>
   );
 }
 
