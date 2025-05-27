@@ -1,0 +1,224 @@
+
+ [x] **1. 全局功能与规则 (Global Functions and Rules)**
+    - [x] **Note:** All UI designs must be responsive across different computer resolutions and implemented using Tailwind CSS (via CDN `<link>`). Online vector icon libraries should be used for icons, and Unsplash for image links.
+    - [x] **1.1. 用户认证与授权 (User Authentication and Authorization)**
+        - [x] 1.1.1. **登录界面 (Login Interface):**
+            - [x] Design the primary login page.
+                - [x] *Note: Consider responsive layout. Default to dark mode.*
+            - [ ] Design UI for GitHub OIDC login flow.
+            - [ ] Design UI for SurrealDB Direct Login (Admin mode via `admin=true` URL parameter).
+        - [ ] 1.1.2. **案件选择与初始化 (Case Selection and Initialization):**
+            - [ ] Design user flow for `case=案件ID` URL parameter handling (permission check, case loading, error feedback for no permission).
+                - [ ] *Note: Ensure clear visual feedback for these states, responsive design.*
+            - [ ] Design user flow for loading last selected case from `surrealdb`.
+            - [ ] Design user flow for auto-selecting case if user is in only one case.
+            - [ ] Design user flow for redirecting to "案件管理" (Case Management) page for case selection if user is in multiple cases and no default is set.
+                - [ ] *Note: "案件管理" page for selection should adhere to general layout and responsive principles.*
+    - [ ] **1.2. 主应用布局与导航 (Main Application Layout and Navigation)**
+        - [ ] 1.2.1. Design the overall application layout.
+            - [ ] *Note: Adhere to `规范.md`: Left menu with prominent highlight color. Top AppBar with the same color as the main page content (blending in). Default to dark mode. Ensure responsiveness.*
+        - [ ] 1.2.2. Design dynamic rendering of the main menu based on user role and permissions.
+            - [ ] *Note: Menu items should clearly indicate selection, potentially using the "prominent highlight color".*
+        - [ ] 1.2.3. Design UI behavior for automatically selecting and opening the first accessible menu item after login/case selection.
+        - [ ] 1.2.4. Design UI for switching cases if a user is part of multiple cases (e.g., a global case switcher in the app bar or within the "案件管理" page).
+            - [ ] *Note: Case switcher UI should be unobtrusive and consistent with AppBar styling.*
+        - [ ] 1.2.5. **深色/亮色模式切换 (Dark/Light Mode Toggle):**
+            - [ ] Design the toggle switch UI element.
+            - [ ] *Note: Per `规范.md`, position in the top-right corner. Default mode is dark. Ensure all components and views correctly adapt to both modes.*
+    - [ ] **1.3. 通用视觉与交互 (General Visuals and Interactions)**
+        - [ ] 1.3.1. **图标使用 (Icon Usage):**
+            - [ ] *Note: Use icons from online vector icon libraries for all UI elements requiring icons (e.g., buttons, list actions, menu items).*
+        - [ ] 1.3.2. **图片使用 (Image Usage):**
+            - [ ] *Note: Where placeholder or decorative images are needed, use links from Unsplash.*
+        - [ ] 1.3.3. Design consistent display for loading states/spinners.
+            - [ ] *Note: Ensure visibility in both dark and light modes.*
+        - [ ] 1.3.4. Design consistent display for error messages.
+            - [ ] *Note: Ensure visibility and clarity in both dark and light modes.*
+        - [ ] 1.3.5. Design consistent display for success messages/notifications.
+            - [ ] *Note: Ensure visibility and clarity in both dark and light modes.*
+        - [ ] 1.3.6. **富文本编辑器 (QuillJS) - 通用设计:**
+            - [ ] Define a consistent UI style and feature set for `quilljs` instances.
+                - [ ] *Note: Ensure QuillJS interface is themable for dark/light modes. Image/file icons should be vector-based.*
+            - [ ] Design how embedded images (from MinIO, not Unsplash) are displayed and managed within the editor.
+            - [ ] Design how non-image file attachments are represented (e.g., icons, links) and the interaction for downloading them.
+
+- [ ] **2. 案件管理 (Case Management)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [ ] **2.1. 案件列表页面 (Case List Page)**
+        - [ ] 2.1.1. Design the layout for the case list table, including specified fields.
+            - [ ] *Note: Ensure table is responsive (e.g., horizontal scrolling on small screens or card layout).*
+        - [ ] 2.1.2. Design the toolbar with the "创建案件" (Create Case) button.
+        - [ ] 2.1.3. Design action buttons/links for each case in the list (e.g., View Details, Modify Status using vector icons).
+    - [ ] **2.2. 创建案件 (Create Case)**
+        - [ ] 2.2.1. Design the "创建案件" form/modal layout.
+            - [ ] *Note: Form elements should be styled for dark/light modes.*
+        - [ ] 2.2.2. Design input fields: 案件负责人 (user selector), 案件程序 (dropdown), 受理时间 (date picker).
+        - [ ] 2.2.3. Design conditional input fields for "破产" (Bankruptcy) procedure: 公告时间, 债权申报开始时间, 债权申报截止时间 (date pickers with default value logic and hint text).
+        - [ ] 2.2.4. Design feedback messages for successful case creation and error handling.
+    - [ ] **2.3. 案件详情页面 (Case Details Page)**
+        - [ ] 2.3.1. Design the two-column layout:
+            - [ ] Left fixed panel: Display basic case information and a timeline of key case dates.
+                - [ ] *Note: Timeline component should be responsive and adapt to dark/light modes.*
+            - [ ] Main area: Display "立案材料" (Case Filing Documents) using `quilljs` (read-only view).
+    - [ ] **2.4. 修改状态 (Modify Status)**
+        - [ ] 2.4.1. Design the UI for initiating status modification.
+        - [ ] 2.4.2. Design UI to present valid next statuses based on the current "程序进程" and defined state transitions.
+        - [ ] 2.4.3. Design input fields for required data upon status change.
+        - [ ] 2.4.4. Design UI for submitting "裁定重整公告" / "重整计划" using `quilljs` editor.
+            - [ ] *Note: QuillJS editor interface must be consistent with dark/light modes.*
+        - [ ] 2.4.5. Design user confirmation dialogs for status changes.
+    - [ ] **2.5. 会议纪要 (Meeting Minutes)**
+        - [ ] 2.5.1. Design the "填写会议纪要" button.
+        - [ ] 2.5.2. Design the `quilljs` editor interface for inputting and saving meeting minutes.
+            - [ ] *Note: Consistent QuillJS styling for dark/light modes.*
+    - [ ] **2.6. 访问控制 (Access Control)**
+        - [ ] 2.6.1. Design how read-only views are presented.
+        - [ ] 2.6.2. Design UI for menu items and action buttons dynamically shown/hidden, ensuring consistency with left menu highlight color for active/available items.
+
+- [ ] **3. 债权人管理 (Creditor Management)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [ ] **3.1. 债权人列表页面 (Creditor List Page)**
+        - [ ] 3.1.1. Design the overall page layout including search bar and toolbar with vector icons for actions.
+        - [ ] 3.1.2. Design toolbar buttons: "添加单个债权人", "批量导入债权人", "打印快递单号".
+        - [ ] 3.1.3. Design the table structure for the creditor list.
+            - [ ] *Note: Responsive table design.*
+    - [ ] **3.2. 添加单个债权人 (Add Single Creditor)**
+        - [ ] 3.2.1. Design the form/modal with specified fields.
+            - [ ] *Note: Dark/light mode styling for form elements.*
+    - [ ] **3.3. 批量导入债权人 (Batch Import Creditors)**
+        - [ ] 3.3.1. Design the UI for file upload.
+        - [ ] 3.3.2. Design the UI for downloading the template file.
+        - [ ] 3.3.3. Design feedback messages for import success/failure.
+    - [ ] **3.4. 打印快递单号 (Print Express Waybill Number)**
+        - [ ] 3.4.1. Design the interaction for selecting creditors (checkboxes).
+        - [ ] 3.4.2. Design the UI for generating the printable format or integration interface.
+    - [ ] **3.5. 自动导航 (Automatic Navigation)**
+        - [ ] 3.5.1. Design the user experience for automatic navigation to this module.
+
+- [ ] **4. 债权申报 (Claim Submission by Creditor)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. This module is creditor-facing, ensure clarity and ease of use.
+    - [ ] **4.1. 录入基本债权信息页面/表单 (Enter Basic Claim Information Page/Form)**
+        - [ ] 4.1.1. Design the "新增申报" button and form.
+            - [ ] *Note: Form elements styled for dark/light modes.*
+        - [ ] 4.1.2. Design the "保存并下一步（编辑附件）" button and workflow.
+    - [ ] **4.2. 编辑附件材料页面 (Edit Attachment Materials Page)**
+        - [ ] 4.2.1. Design the layout with `quilljs` editor.
+            - [ ] *Note: QuillJS dark/light mode consistency. Use vector icons for file type representation.*
+        - [ ] 4.2.2. Design display of basic claim information for reference.
+        - [ ] 4.2.3. Design action buttons.
+    - [ ] **4.3. 提交申报流程 (Claim Submission Flow)**
+        - [ ] 4.3.1. Design validation messages and success/failure feedback.
+        - [ ] 4.3.2. Design read-only view for submitted claims.
+    - [ ] **4.4. 债权列表 (债权人视角) (Claim List - Creditor View)**
+        - [ ] 4.4.1. Design the table layout.
+            - [ ] *Note: Responsive table.*
+        - [ ] 4.4.2. Design action buttons (View, Withdraw, Edit) with vector icons.
+    - [ ] **4.5. 访问控制 (Access Control)**
+        - [ ] 4.5.1. Design UI behavior for module accessibility based on case status.
+
+- [ ] **5. 债权审核 (Claim Review by Administrator)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [ ] **5.1. 债权列表 (管理人视角) (Claim List - Administrator View)**
+        - [ ] 5.1.1. Design the comprehensive table layout.
+            - [ ] *Note: Responsive table with potentially many columns.*
+        - [ ] 5.1.2. Design search and filter UI.
+    - [ ] **5.2. 管理人代报债权 (Administrator Files Claim)**
+        - [ ] 5.2.1. Design the "创建债权" button and subsequent form/QuillJS editor flow.
+            - [ ] *Note: Form/QuillJS dark/light mode.*
+    - [ ] **5.3. 批量驳回 (Batch Reject)**
+        - [ ] 5.3.1. Design checkbox selection and "批量驳回" button.
+        - [ ] 5.3.2. Design confirmation modal with rejection reason input.
+    - [ ] **5.4. 审核债权详情页面 (Claim Review Details Page)**
+        - [ ] 5.4.1. Design the two-column layout.
+            - [ ] *Note: QuillJS dark/light mode. Annotation tools should also be styled for both modes.*
+        - [ ] 5.4.2. Design commenting/annotation feature within `quilljs`.
+        - [ ] 5.4.3. Design UI for `quilljs` version history.
+    - [ ] **5.5. 审核操作 (Review Actions)**
+        - [ ] 5.5.1. Design floating "审核" button (vector icon).
+        - [ ] 5.5.2. Design the review modal/form.
+            - [ ] *Note: Form elements styled for dark/light modes.*
+        - [ ] 5.5.3. Design confirmation prompt.
+    - [ ] **5.6. 自动导航 (Automatic Navigation)**
+        - [ ] 5.6.1. Design UX for automatic navigation.
+
+- [ ] **6. 债权申报数据大屏 (Claim Submission Dashboard)**
+    - [ ] **Note:** This entire module is visual. Must be highly responsive, use Tailwind CSS, fully support dark/light modes (default dark), and use vector icons where appropriate. Charts should adapt themes.
+    - [ ] **6.1. 整体布局与设计 (Overall Layout and Design)**
+        - [ ] 6.1.1. Design the overall dashboard layout.
+            - [ ] *Note: Emphasize clarity and responsiveness across various screen sizes. Adhere to dark mode as default.*
+        - [ ] 6.1.2. Ensure dashboard is clearly linked to a specific, selected case.
+    - [ ] **6.2. 可视化组件设计 (Visualization Component Design)**
+        - [ ] 6.2.1. **核心指标卡片:** Design digital flipper style cards.
+            - [ ] *Note: Ensure high contrast and readability in both dark/light modes.*
+        - [ ] 6.2.2. **趋势图 / 构成图 / 审核进度图:** Design various chart types.
+            - [ ] *Note: Chart libraries used should support theming for dark/light modes. Colors should be chosen for clarity in both modes.*
+        - [ ] 6.2.3. **实时动态列表 / 用户在线分布图:** Design these components.
+        - [ ] 6.2.4. (Optional) Design map visualization.
+    - [ ] **6.3. 实时数据更新UX (Real-time Data Update UX)**
+        - [ ] 6.3.1. Design visual cues for real-time updates (smooth transitions, subtle highlights).
+            - [ ] *Note: Animations should be efficient and not degrade performance.*
+
+- [ ] **7. 在线会议 (Online Meetings)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [ ] **7.1. 会议列表页面 (Meeting List Page)**
+        - [ ] 7.1.1. Design the table layout.
+            - [ ] *Note: Responsive table.*
+        - [ ] 7.1.2. Design action buttons/toolbar (vector icons).
+    - [ ] **7.2. 安排与编辑会议 (Schedule and Edit Meetings)**
+        - [ ] 7.2.1. Design the scheduling/editing form.
+            - [ ] *Note: Form elements styled for dark/light modes.*
+        - [ ] 7.2.2. Design UI for cancelling a meeting.
+    - [ ] **7.3. 会议纪要 (Meeting Minutes)**
+        - [ ] 7.3.1. Ensure UI links to `quilljs` editor (styled for dark/light modes).
+    - [ ] **7.4. 会议记录与访问 (Meeting Records and Access)**
+        - [ ] 7.4.1. Design view for past meetings with search.
+        - [ ] 7.4.2. Design UI behavior for module access based on case status.
+
+- [ ] **8. 消息中心 (Message Center)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [ ] **8.1. 整体布局 (Overall Layout)**
+        - [ ] 8.1.1. Design a multi-column layout.
+            - [ ] *Note: Responsive layout for chat interfaces can be challenging; consider mobile-first or adaptive approaches.*
+    - [ ] **8.2. IM 聊天消息 (IM Chat Messages)**
+        - [ ] 8.2.1. Design UI for chats, unread counts, message input (text, image, file with vector icons).
+            - [ ] *Note: Chat bubbles and overall interface must theme well for dark/light modes.*
+    - [ ] **8.3. 系统提醒 (System Reminders)**
+        - [ ] 8.3.1. Design card-based UI for bot messages (vector icons in cards).
+        - [ ] 8.3.2. Design notifications for business operations.
+    - [ ] **8.4. 通知管理 (Notification Management)**
+        - [ ] 8.4.1. Design interactions for read/unread, filtering, deleting (vector icons for actions).
+
+- [ ] **9. 身份管理 (Role Management - Admin Function)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
+    - [ ] **9.1. 角色列表页面 (Role List Page)**
+        - [ ] 9.1.1. Design a table for roles.
+            - [ ] *Note: Responsive table.*
+        - [ ] 9.1.2. Design "创建角色" button.
+    - [ ] **9.2. 创建/编辑角色表单 (Create/Edit Role Form)**
+        - [ ] 9.2.1. Design form fields.
+        - [ ] 9.2.2. Design UI for assigning menu permissions (tree/checklist).
+            - [ ] *Note: Ensure clarity in dark/light modes for selection states.*
+        - [ ] 9.2.3. Design UI for assigning operation permissions.
+    - [ ] **9.3. 用户分配角色 (User Role Assignment)**
+        - [ ] 9.3.1. Design UI for associating users with roles.
+
+- [ ] **10. 审核状态管理 (Review Status Management - Admin Function)**
+    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
+    - [ ] **10.1. 状态列表页面 (Status List Page)**
+        - [ ] 10.1.1. Design a table for statuses.
+            - [ ] *Note: Responsive table.*
+        - [ ] 10.1.2. Design "添加状态" button.
+    - [ ] **10.2. 添加/编辑/删除状态表单 (Add/Edit/Delete Status Form)**
+        - [ ] 10.2.1. Design a simple form for managing status labels.
+            - [ ] *Note: Form elements styled for dark/light modes.*
+
+- [ ] **11. 非功能性需求相关的UI/UX考虑 (Non-functional UI/UX Considerations)**
+    - [ ] **Note:** These are overarching principles.
+    - [ ] **11.1. 易用性 (Usability)**
+        - [ ] 11.1.1. Ensure intuitive workflows and consistent UI patterns.
+            - [ ] *Note: Maintain consistency in terminology and iconography (vector icons).*
+        - [ ] 11.1.2. Provide clear visual cues and feedback.
+    - [ ] **11.2. 性能感知 (Performance Perception)**
+        - [ ] 11.2.1. Strategically use loading indicators (spinners, progress bars) styled for dark/light modes.
+    - [ ] **11.3. 响应式设计 (Responsive Design)**
+        - [ ] 11.3.1. **Note:** Reiterate that all designed views must be responsive across common desktop resolutions, implemented with Tailwind CSS. Test various screen sizes.
