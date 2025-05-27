@@ -94,51 +94,51 @@
     - [x] **3.5. 自动导航 (Automatic Navigation)**
         - [x] 3.5.1. Design the user experience for automatic navigation to this module.
 
-- [ ] **4. 债权申报 (Claim Submission by Creditor)**
-    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. This module is creditor-facing, ensure clarity and ease of use.
-    - [ ] **4.1. 录入基本债权信息页面/表单 (Enter Basic Claim Information Page/Form)**
-        - [ ] 4.1.1. Design the "新增申报" button and form.
-            - [ ] *Note: Form elements styled for dark/light modes.*
-        - [ ] 4.1.2. Design the "保存并下一步（编辑附件）" button and workflow.
-    - [ ] **4.2. 编辑附件材料页面 (Edit Attachment Materials Page)**
-        - [ ] 4.2.1. Design the layout with `quilljs` editor.
-            - [ ] *Note: QuillJS dark/light mode consistency. Use vector icons for file type representation.*
-        - [ ] 4.2.2. Design display of basic claim information for reference.
-        - [ ] 4.2.3. Design action buttons.
-    - [ ] **4.3. 提交申报流程 (Claim Submission Flow)**
-        - [ ] 4.3.1. Design validation messages and success/failure feedback.
-        - [ ] 4.3.2. Design read-only view for submitted claims.
-    - [ ] **4.4. 债权列表 (债权人视角) (Claim List - Creditor View)**
-        - [ ] 4.4.1. Design the table layout.
-            - [ ] *Note: Responsive table.*
-        - [ ] 4.4.2. Design action buttons (View, Withdraw, Edit) with vector icons.
-    - [ ] **4.5. 访问控制 (Access Control)**
-        - [ ] 4.5.1. Design UI behavior for module accessibility based on case status.
+- [x] **4. 债权申报 (Claim Submission by Creditor)**
+    - [x] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. This module is creditor-facing, ensure clarity and ease of use.
+    - [x] **4.1. 录入基本债权信息页面/表单 (Enter Basic Claim Information Page/Form)**
+        - [x] 4.1.1. Design the "新增申报" button and form.
+            - [x] *Note: Form elements styled for dark/light modes.*
+        - [x] 4.1.2. Design the "保存并下一步（编辑附件）" button and workflow.
+    - [x] **4.2. 编辑附件材料页面 (Edit Attachment Materials Page)**
+        - [x] 4.2.1. Design the layout with `quilljs` editor.
+            - [x] *Note: QuillJS dark/light mode consistency. Use vector icons for file type representation.*
+        - [x] 4.2.2. Design display of basic claim information for reference.
+        - [x] 4.2.3. Design action buttons.
+    - [x] **4.3. 提交申报流程 (Claim Submission Flow)**
+        - [x] 4.3.1. Design validation messages and success/failure feedback.
+        - [x] 4.3.2. Design read-only view for submitted claims.
+    - [x] **4.4. 债权列表 (债权人视角) (Claim List - Creditor View)**
+        - [x] 4.4.1. Design the table layout.
+            - [x] *Note: Responsive table.*
+        - [x] 4.4.2. Design action buttons (View, Withdraw, Edit) with vector icons.
+    - [x] **4.5. 访问控制 (Access Control)**
+        - [x] 4.5.1. Design UI behavior for module accessibility based on case status.
 
-- [ ] **5. 债权审核 (Claim Review by Administrator)**
-    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
-    - [ ] **5.1. 债权列表 (管理人视角) (Claim List - Administrator View)**
-        - [ ] 5.1.1. Design the comprehensive table layout.
-            - [ ] *Note: Responsive table with potentially many columns.*
-        - [ ] 5.1.2. Design search and filter UI.
-    - [ ] **5.2. 管理人代报债权 (Administrator Files Claim)**
-        - [ ] 5.2.1. Design the "创建债权" button and subsequent form/QuillJS editor flow.
-            - [ ] *Note: Form/QuillJS dark/light mode.*
-    - [ ] **5.3. 批量驳回 (Batch Reject)**
-        - [ ] 5.3.1. Design checkbox selection and "批量驳回" button.
-        - [ ] 5.3.2. Design confirmation modal with rejection reason input.
-    - [ ] **5.4. 审核债权详情页面 (Claim Review Details Page)**
-        - [ ] 5.4.1. Design the two-column layout.
-            - [ ] *Note: QuillJS dark/light mode. Annotation tools should also be styled for both modes.*
-        - [ ] 5.4.2. Design commenting/annotation feature within `quilljs`.
-        - [ ] 5.4.3. Design UI for `quilljs` version history.
-    - [ ] **5.5. 审核操作 (Review Actions)**
-        - [ ] 5.5.1. Design floating "审核" button (vector icon).
-        - [ ] 5.5.2. Design the review modal/form.
-            - [ ] *Note: Form elements styled for dark/light modes.*
-        - [ ] 5.5.3. Design confirmation prompt.
-    - [ ] **5.6. 自动导航 (Automatic Navigation)**
-        - [ ] 5.6.1. Design UX for automatic navigation.
+- [x] **5. 债权审核 (Claim Review by Administrator)**
+    - [x] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [x] **5.1. 债权列表 (管理人视角) (Claim List - Administrator View)**
+        - [x] 5.1.1. Design the comprehensive table layout.
+            - [x] *Note: Responsive table with potentially many columns.*
+        - [x] 5.1.2. Design search and filter UI.
+    - [x] **5.2. 管理人代报债权 (Administrator Files Claim)**
+        - [x] 5.2.1. Design the "创建债权" button and subsequent form/QuillJS editor flow.
+            - [x] *Note: Form/QuillJS dark/light mode.*
+    - [x] **5.3. 批量驳回 (Batch Reject)**
+        - [x] 5.3.1. Design checkbox selection and "批量驳回" button.
+        - [x] 5.3.2. Design confirmation modal with rejection reason input.
+    - [x] **5.4. 审核债权详情页面 (Claim Review Details Page)**
+        - [x] 5.4.1. Design the two-column layout.
+            - [x] *Note: QuillJS dark/light mode. Annotation tools should also be styled for both modes.*
+        - [x] 5.4.2. Design commenting/annotation feature within `quilljs`.
+        - [x] 5.4.3. Design UI for `quilljs` version history.
+    - [x] **5.5. 审核操作 (Review Actions)**
+        - [x] 5.5.1. Design floating "审核" button (vector icon).
+        - [ x] 5.5.2. Design the review modal/form.
+            - [x] *Note: Form elements styled for dark/light modes.*
+        - [x] 5.5.3. Design confirmation prompt.
+    - [x] **5.6. 自动导航 (Automatic Navigation)**
+        - [x] 5.6.1. Design UX for automatic navigation.
 
 - [ ] **6. 债权申报数据大屏 (Claim Submission Dashboard)**
     - [ ] **Note:** This entire module is visual. Must be highly responsive, use Tailwind CSS, fully support dark/light modes (default dark), and use vector icons where appropriate. Charts should adapt themes.
