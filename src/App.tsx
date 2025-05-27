@@ -8,6 +8,7 @@ import {useTranslation} from 'react-i18next';
 // import theme from './theme'; // This is likely MUI theme, not our custom one
 import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext'; // Import our ThemeProvider
 import { SnackbarProvider } from './contexts/SnackbarContext'; // Import SnackbarProvider
+import { CaseStatusProvider } from './contexts/CaseStatusContext'; // <-- ADDED
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import GlobalLoader from './components/GlobalLoader'; // ADDED
@@ -22,6 +23,12 @@ const CaseDetailPage = React.lazy(() => import('./pages/CaseDetailPage'));
 const CreditorListPage = React.lazy(() => import('./pages/CreditorListPage'));
 const ClaimListPage = React.lazy(() => import('./pages/ClaimListPage'));
 const ClaimSubmissionPage = React.lazy(() => import('./pages/ClaimSubmissionPage'));
+const ClaimAttachmentPage = React.lazy(() => import('./pages/ClaimAttachmentPage'));
+const SubmittedClaimDetailPage = React.lazy(() => import('./pages/SubmittedClaimDetailPage'));
+const MyClaimsPage = React.lazy(() => import('./pages/MyClaimsPage'));
+const AccessDeniedPage = React.lazy(() => import('./pages/AccessDeniedPage')); // <-- ADDED (for status)
+const AccessDeniedRolePage = React.lazy(() => import('./pages/AccessDeniedRolePage')); // <-- ADDED (for role)
+const CaseStatusToggler = React.lazy(() => import('./components/admin/CaseStatusToggler')); // <-- ADDED
 const ClaimReviewDetailPage = React.lazy(() => import('./pages/ClaimReviewDetailPage'));
 const ClaimDataDashboardPage = React.lazy(() => import('./pages/ClaimDataDashboardPage'));
 const OnlineMeetingPage = React.lazy(() => import('./pages/OnlineMeetingPage'));
@@ -72,44 +79,56 @@ function App() {
     // Define routes that don't need the main layout (e.g., Login, OidcCallback)
     if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
         return (
-      <CustomThemeProvider> {/* Use CustomThemeProvider */}
-        <SnackbarProvider> {/* Add SnackbarProvider */}
-          <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
-            <Routes>
-              <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
-              <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
-            </Routes>
-          </Suspense>
+      <CustomThemeProvider> 
+        <SnackbarProvider>
+          <CaseStatusProvider> {/* <-- ADDED WRAPPER */}
+            <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
+              <Routes>
+                <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
+                <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
+              </Routes>
+            </Suspense>
+          </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
         </SnackbarProvider>
       </CustomThemeProvider>
         );
     }
 
   return (
-    <CustomThemeProvider> {/* Use CustomThemeProvider */}
-      <SnackbarProvider> {/* Add SnackbarProvider */}
-        <Layout>
-          <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
-            <Routes>
-              <Route path="/" element={<HomePage /> as ReactNode} />
-              <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
-            <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/creditors" element={<ProtectedRoute><CreditorListPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/claims" element={<ProtectedRoute><ClaimListPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/claims/submit" element={<ProtectedRoute><ClaimSubmissionPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/claims/:id/review" element={<ProtectedRoute><ClaimReviewDetailPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/claim-dashboard" element={<ProtectedRoute><ClaimDataDashboardPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/online-meetings" element={<ProtectedRoute><OnlineMeetingPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/messages" element={<ProtectedRoute><MessageCenterPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />
-            <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
-            <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </Suspense>
-        </Layout>
+    <CustomThemeProvider> 
+      <SnackbarProvider>
+        <CaseStatusProvider> {/* <-- ADDED WRAPPER */}
+          <Layout>
+            <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
+              <Routes>
+                <Route path="/" element={<HomePage /> as ReactNode} />
+                <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
+              <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/creditors" element={<ProtectedRoute><CreditorListPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/claims" element={<ProtectedRoute><ClaimListPage /></ProtectedRoute> as ReactNode} />
+              {/* Claim Submission Module with Case Status Guard */}
+              <Route path="/claims/submit" element={<ProtectedRoute requiredCaseStatus="债权申报"><ClaimSubmissionPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/claim-attachment" element={<ProtectedRoute requiredCaseStatus="债权申报"><ClaimAttachmentPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/submitted-claim-detail" element={<ProtectedRoute requiredCaseStatus="债权申报"><SubmittedClaimDetailPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/my-claims" element={<ProtectedRoute requiredCaseStatus="债权申报"><MyClaimsPage /></ProtectedRoute> as ReactNode} />
+              {/* End Claim Submission Module */}
+              <Route path="/claims/:id/review" element={<ProtectedRoute><ClaimReviewDetailPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/claim-dashboard" element={<ProtectedRoute><ClaimDataDashboardPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/online-meetings" element={<ProtectedRoute><OnlineMeetingPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/messages" element={<ProtectedRoute><MessageCenterPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />
+              <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
+              <Route path="/admin/case-status-toggler" element={<ProtectedRoute requiredRole="admin"><CaseStatusToggler /></ProtectedRoute> as ReactNode} /> {/* <-- ADDED */}
+              <Route path="/access-denied-status" element={<AccessDeniedPage />} /> {/* <-- ADDED */}
+              <Route path="/access-denied-role" element={<AccessDeniedRolePage />} /> {/* <-- ADDED */}
+              <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
+          </Layout>
+        </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
       </SnackbarProvider>
     </CustomThemeProvider>
   );
