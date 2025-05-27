@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -8,16 +8,52 @@ import {
   ThemeProvider,
   createTheme,
   CssBaseline,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Divider,
 } from '@mui/material';
-import { teal, cyan, green, yellow, purple, grey } from '@mui/material/colors';
-import { alpha } from '@mui/material/styles';
+import { 
+  teal, cyan, green, yellow, purple, grey, blue, orange, red 
+} from '@mui/material/colors';
+import { alpha, useTheme } from '@mui/material/styles';
+import { PieChart, BarChart, LineChart } from '@mui/x-charts';
+import { 
+  FileCopyOutlined as FileCopyIcon, 
+  UpdateOutlined as UpdateIcon,
+  CheckCircleOutline as CheckCircleIcon,
+  CancelOutlined as CancelIcon,
+  InfoOutlined as InfoIcon,
+// HourglassEmptyOutlined as HourglassEmptyIcon,
+  // ReceiptLongOutlined as ReceiptLongIcon,
+  // AssignmentTurnedInOutlined as AssignmentTurnedInIcon,
+} from '@mui/icons-material';
+
+import { useAuth } from '../../contexts/AuthContext'; // Adjust path as per your project structure
+import { 
+  useLiveClaimCountForCase,
+  useLiveTotalClaimAmount,
+  useLiveApprovedClaimAmount,
+  useLivePendingClaimAmount,
+  useLiveApprovedClaimsCount,
+  useLivePendingClaimsCount,
+  useLiveUniqueClaimantsCount,
+  useLiveClaimsByStatusChartData,
+  useLiveUsersOnlineByRoleChartData,
+  useLiveDailyClaimsTrendChartData,
+  useLiveClaimsByNatureChartData,
+  useLiveRecentSubmissions,
+  useLiveRecentReviewActions,
+} from '../../hooks/useLiveDashboardData'; // Adjust path
 
 // Local Dark Theme Definition
 const localDarkTheme = createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: teal[300], light: teal[200] },
-    secondary: { main: cyan[400] },
+    primary: { main: teal[300], light: teal[200], dark: teal[400] },
+    secondary: { main: cyan[400], light: cyan[300], dark: cyan[500] },
+    warning: { light: yellow[500], main: yellow[700], dark: yellow[800] }, // Added warning color
     background: {
       default: '#121212',
       paper: '#1e1e1e',
@@ -27,24 +63,51 @@ const localDarkTheme = createTheme({
       secondary: grey[400],
       disabled: grey[600],
     },
-    statBlue: { main: cyan[400] },
+    statBlue: { main: cyan[400] }, // Keep cyan for consistency with current metrics
     statGreen: { main: green[400] },
     statYellow: { main: yellow[400] },
     statPurple: { main: purple[300] },
-    statRed: { main: yellow[700] }, // For rejected claims, if added
+    statRed: { main: red[400] }, 
+    chartBlue: { main: blue[400] },
+    chartGreen: { main: green[500] },
+    chartYellow: { main: yellow[500] },
+    chartOrange: { main: orange[400] },
+    chartPurple: { main: purple[400] },
+    chartRed: { main: red[500]},
+    info: { main: blue[300]}, 
   },
   typography: {
-    fontFamily: 'Roboto, sans-serif',
-    h1: { fontWeight: 700, letterSpacing: '0.05em', color: teal[200], fontSize: '2.5rem' }, // Adjusted size
-    h2: { fontWeight: 600, color: grey[300], fontSize: '1.25rem' }, // Card titles
-    h3: { fontWeight: 700, color: cyan[300], fontSize: '2rem' }, // Large numbers in cards
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h1: { fontWeight: 700, letterSpacing: '0.05em', color: teal[200], fontSize: '2.5rem' },
+    h2: { // For metric card titles
+      fontWeight: 500, 
+      color: grey[400], 
+      fontSize: '0.9rem', 
+      letterSpacing: '0.05em', 
+      textTransform: 'uppercase', 
+      opacity: 0.9 
+    }, 
+    h3: { // Original h3, can be reused or replaced if not needed elsewhere
+      fontWeight: 700, 
+      color: cyan[300], 
+      fontSize: '2rem' 
+    },
+    digitalMetric: { // For the large numbers in metric cards
+      fontFamily: '"Roboto Mono", monospace', // A more digital-looking font
+      fontWeight: 700,
+      fontSize: '2.75rem', // Increased size
+      lineHeight: 1.1,
+      letterSpacing: '0.03em',
+      // Example of a subtle glow, color should be dynamic
+      // textShadow: `0 0 8px ${alpha(cyan[300], 0.5)}`, 
+    },
     subtitle1: { color: grey[500], fontSize: '0.9rem' },
     body2: { fontSize: '0.8rem' },
   },
   components: {
     MuiCard: {
       styleOverrides: {
-        root: ({ theme }) => ({
+        root: ({ theme }) => ({ // Default card style
           border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
           transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
           '&:hover': {
@@ -57,24 +120,122 @@ const localDarkTheme = createTheme({
   },
 });
 
-const ClaimDataDashboardPage: React.FC = () => {
-  // TODO: Fetch real-time data from SurrealDB for the selected case
-  // TODO: Implement actual charts and visualizations
+// Common styles for the 7 metric cards
+const metricCardStyle = (theme: any, borderColorKey: string) => ({
+  borderWidth: '1px',
+  borderColor: theme.palette[borderColorKey]?.main || theme.palette.primary.main,
+  backgroundColor: alpha(theme.palette.background.paper, 0.6), // Darker, distinct panel
+  boxShadow: `inset 0 1px 2px ${alpha(theme.palette.common.black, 0.7)}, 0 1px 1px ${alpha(theme.palette.common.white, 0.05)}`,
+  borderRadius: theme.shape.borderRadius * 1.5, // Slightly more rounded
+  transition: theme.transitions.create(['transform', 'box-shadow', 'background-color'], {
+    duration: theme.transitions.duration.short,
+  }),
+  '&:hover': {
+    transform: 'scale(1.05)', // Slightly more pronounced hover
+    boxShadow: `inset 0 1px 3px ${alpha(theme.palette.common.black, 0.8)}, 0 4px 12px ${alpha(theme.palette[borderColorKey]?.main || theme.palette.primary.main, 0.4)}`,
+    backgroundColor: alpha(theme.palette.background.paper, 0.7),
+  },
+});
 
-  // Mock data for placeholders
-  const mockData = {
-    usersLoggedIn: { admin: 2, manager: 5, creditor_user: 50 },
-    claimsSubmitted: 120,
-    claimsApproved: 80,
-    claimsRejected: 15,
-    claimsPending: 25,
-    totalClaimAmount: 15000000,
-    approvedClaimAmount: 9500000,
-    pendingClaimAmount: 3000000,
-    creditorCount: 95,
+const metricCardContentStyle = {
+  textAlign: 'center',
+  py: 2.5, // Adjusted padding
+};
+
+const metricTitleStyle = (theme: any) => ({
+  color: theme.palette.text.secondary, // Using theme's h2 styling by default for color
+  // mb: 0.5, // Reduced margin bottom
+});
+
+const metricValueStyle = (theme: any, colorKey: string) => ({
+  color: theme.palette[colorKey]?.main || theme.palette.primary.main,
+  // Apply the digitalMetric typography variant
+  ...theme.typography.digitalMetric,
+  // Add a subtle text shadow for glow, using the specific color
+  textShadow: `0 0 6px ${alpha(theme.palette[colorKey]?.main || theme.palette.primary.main, 0.5)}`,
+});
+
+
+const ClaimDataDashboardPage: React.FC = () => {
+  const { user, selectedCaseId } = useAuth();
+  const theme = useTheme(); // Hook to access theme for chart colors
+
+  // Helper function to create state and effect for a metric
+  const useMetricState = <T,>(liveValue: T): [T, boolean, React.Dispatch<React.SetStateAction<boolean>>] => {
+    const [isUpdating, setIsUpdating] = useState(false);
+    const previousValueRef = React.useRef<T | null>(null);
+
+    useEffect(() => {
+      if (previousValueRef.current !== null && liveValue !== previousValueRef.current) {
+        setIsUpdating(true);
+        const timer = setTimeout(() => setIsUpdating(false), 700);
+        return () => clearTimeout(timer);
+      }
+      previousValueRef.current = liveValue;
+    }, [liveValue]);
+    return [liveValue, isUpdating, setIsUpdating];
+  };
+
+  // Live Data Hooks & Visual Cue States
+  const [liveTotalClaims, isTotalClaimsUpdating] = useMetricState(useLiveClaimCountForCase(selectedCaseId));
+  const [liveApprovedClaimsCount, isApprovedClaimsCountUpdating] = useMetricState(useLiveApprovedClaimsCount(selectedCaseId));
+  const [livePendingClaimsCount, isPendingClaimsCountUpdating] = useMetricState(useLivePendingClaimsCount(selectedCaseId));
+  const [liveUniqueClaimantsCount, isUniqueClaimantsCountUpdating] = useMetricState(useLiveUniqueClaimantsCount(selectedCaseId));
+  
+  const [liveTotalClaimAmount, isTotalClaimAmountUpdating] = useMetricState(useLiveTotalClaimAmount(selectedCaseId));
+  const [liveApprovedClaimAmount, isApprovedClaimAmountUpdating] = useMetricState(useLiveApprovedClaimAmount(selectedCaseId));
+  const [livePendingClaimAmount, isPendingClaimAmountUpdating] = useMetricState(useLivePendingClaimAmount(selectedCaseId));
+
+  // Live Data for Charts
+  const liveClaimsByStatusData = useLiveClaimsByStatusChartData(selectedCaseId);
+  const liveUsersOnlineByRoleData = useLiveUsersOnlineByRoleChartData(selectedCaseId); // Currently mock
+  const liveDailyClaimsTrendData = useLiveDailyClaimsTrendChartData(selectedCaseId);
+  const liveClaimsByNatureData = useLiveClaimsByNatureChartData(selectedCaseId);
+
+  // Live Data for Dynamic Lists
+  const listLimit = 5; // Define limit for recent items lists
+  const liveRecentSubmissions = useLiveRecentSubmissions(selectedCaseId, listLimit);
+  const liveRecentReviewActions = useLiveRecentReviewActions(selectedCaseId, listLimit);
+
+
+  // Mock data for placeholders (gradually replace these with live data or remove)
+  const mockData = { // Keep only what's truly mock or not yet live
+    usersLoggedIn: { admin: 2, manager: 5, creditor_user: 50 }, // Remains mock for now
+    claimsRejected: 15, // Placeholder - No live hook for this specific metric yet
+
+    // The following are now driven by live data hooks:
+    // claimsByStatus: [...] 
+    // usersOnlineByRole: [...] // This hook returns mock data but is called
+    // dailyClaimsTrend: [...]
+    // claimsByNature: [...]
+    // recentSubmissions: [...]
+    // recentReviewActions: [...]
   };
   // Assume AppBar height is 64px for minHeight calculation
   const appBarHeight = '64px';
+  // theme is already defined above
+
+  // Chart common properties
+  const chartCardMinHeight = 350; 
+  const chartMargin = { top: 10, right: 10, bottom: 30, left: 40 }; // Basic margin
+  const chartTitleVariant = "h5"; // Using h5 for chart titles for consistency
+
+  // List Card common properties
+  const listCardMinHeight = 300;
+  const listTitleVariant = "h5"; // Using h5 for list titles for consistency
+
+  // Common style for content cards (charts, lists, etc.)
+  const contentCardStyle = {
+    minHeight: listCardMinHeight, // Default, can be overridden by chartCardMinHeight for charts
+    display: 'flex',
+    flexDirection: 'column',
+    border: `1px solid ${alpha(theme.palette.primary.dark, 0.4)}`, // Subtle border
+    backgroundColor: alpha(theme.palette.background.paper, 0.7), // Slightly more transparent paper
+     boxShadow: `0 2px 8px ${alpha(theme.palette.common.black, 0.3)}`, // Softer shadow than metric cards
+    '&:hover': {
+        boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.2)}`,
+    }
+  };
 
 
   return (
@@ -82,88 +243,394 @@ const ClaimDataDashboardPage: React.FC = () => {
       <CssBaseline />
       <Box sx={{ p: 3, backgroundColor: 'background.default', color: 'text.primary', minHeight: `calc(100vh - ${appBarHeight})` }}>
         <Typography variant="h1" gutterBottom textAlign="center" mb={1}>债权申报数据大屏</Typography>
-        <Typography variant="subtitle1" textAlign="center" sx={{ mb: 5 }}>实时监控案件ID: [Selected Case ID] 的债权申报与审核动态</Typography>
+        <Typography variant="subtitle1" textAlign="center" sx={{ mb: 5, color: theme.palette.text.secondary }}>
+          {selectedCaseId 
+            ? `实时监控案件ID: ${selectedCaseId.replace(/^case:/, '')} 的债权申报与审核动态` 
+            : user 
+              ? "请从案件列表选择一个案件进行监控" 
+              : "请先登录并选择案件"}
+        </Typography>
 
+        {/* Metric Cards Grid */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
+          {/* Metric 1: Total Number of Claims (Live) */}
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{borderColor: 'statBlue.main'}}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前申请总笔数</Typography>
-                <Typography variant="h3" sx={{color: 'statBlue.main'}}>{mockData.claimsSubmitted}</Typography>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statBlue'), // Use theme directly as it's in scope
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], {
+                duration: theme.transitions.duration.short,
+              }),
+              borderColor: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
+              transform: isTotalClaimsUpdating ? 'scale(1.02)' : 'scale(1)', // Subtle overall card scale
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请总笔数</Typography>
+                <Typography 
+                  variant="digitalMetric" 
+                  sx={{
+                    ...metricValueStyle(theme, 'statBlue'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isTotalClaimsUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
+                    textShadow: isTotalClaimsUpdating 
+                      ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` 
+                      : `0 0 6px ${alpha(theme.palette.statBlue.main, 0.5)}`,
+                  }}
+                >
+                  {liveTotalClaims}
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
+          {/* Metric 2: Total Approved Claims (Live) */}
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{borderColor: 'statGreen.main'}}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前已审批总笔数</Typography>
-                <Typography variant="h3" sx={{color: 'statGreen.main'}}>{mockData.claimsApproved}</Typography>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statGreen'),
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isApprovedClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
+              transform: isApprovedClaimsCountUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前已审批总笔数</Typography>
+                <Typography variant="digitalMetric" sx={{
+                  ...metricValueStyle(theme, 'statGreen'),
+                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                  transform: isApprovedClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
+                  color: isApprovedClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
+                  textShadow: isApprovedClaimsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statGreen.main, 0.5)}`,
+                }}>
+                  {liveApprovedClaimsCount}
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
+          {/* Metric 3: Total Pending Claims (Live) */}
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{borderColor: 'statYellow.main'}}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前待审总笔数</Typography>
-                <Typography variant="h3" sx={{color: 'statYellow.main'}}>{mockData.claimsPending}</Typography>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statYellow'),
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isPendingClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
+              transform: isPendingClaimsCountUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前待审总笔数</Typography>
+                <Typography variant="digitalMetric" sx={{
+                  ...metricValueStyle(theme, 'statYellow'),
+                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                  transform: isPendingClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
+                  color: isPendingClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
+                  textShadow: isPendingClaimsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statYellow.main, 0.5)}`,
+                }}>
+                  {livePendingClaimsCount}
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
+          {/* Metric 4: Number of Unique Claimants (Live) */}
           <Grid item xs={12} sm={6} md={3}>
-            <Card sx={{borderColor: 'statPurple.main'}}>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前申请债权人数量</Typography>
-                <Typography variant="h3" sx={{color: 'statPurple.main'}}>{mockData.creditorCount}</Typography>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statPurple'),
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isUniqueClaimantsCountUpdating ? theme.palette.warning.light : theme.palette.statPurple.main,
+              transform: isUniqueClaimantsCountUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请债权人数量</Typography>
+                <Typography variant="digitalMetric" sx={{
+                  ...metricValueStyle(theme, 'statPurple'),
+                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                  transform: isUniqueClaimantsCountUpdating ? 'scale(1.1)' : 'scale(1)',
+                  color: isUniqueClaimantsCountUpdating ? theme.palette.warning.light : theme.palette.statPurple.main,
+                  textShadow: isUniqueClaimantsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statPurple.main, 0.5)}`,
+                }}>
+                  {liveUniqueClaimantsCount}
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
 
         <Grid container spacing={3} sx={{ mb: 4 }}>
+          {/* Metric 5: Total Claimed Amount (Live) */}
           <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前申请总金额</Typography>
-                <Typography variant="h3" sx={{color: 'statBlue.main'}}>{mockData.totalClaimAmount.toLocaleString()} 元</Typography>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statBlue'),
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isTotalClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
+              transform: isTotalClaimAmountUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请总金额</Typography>
+                <Typography variant="digitalMetric" sx={{
+                  ...metricValueStyle(theme, 'statBlue'),
+                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                  transform: isTotalClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
+                  color: isTotalClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
+                  textShadow: isTotalClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statBlue.main, 0.5)}`,
+                }}>
+                  {liveTotalClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
+          {/* Metric 6: Total Approved Amount (Live) */}
           <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前已审批总金额</Typography>
-                <Typography variant="h3" sx={{color: 'statGreen.main'}}>{mockData.approvedClaimAmount.toLocaleString()} 元</Typography>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statGreen'),
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isApprovedClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
+              transform: isApprovedClaimAmountUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前已审批总金额</Typography>
+                <Typography variant="digitalMetric" sx={{
+                  ...metricValueStyle(theme, 'statGreen'),
+                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                  transform: isApprovedClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
+                  color: isApprovedClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
+                  textShadow: isApprovedClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statGreen.main, 0.5)}`,
+                }}>
+                  {liveApprovedClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
+          {/* Metric 7: Total Pending Amount (Live) */}
           <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center' }}>
-                <Typography variant="h2" gutterBottom sx={{color: 'text.secondary'}}>当前待审总金额</Typography>
-                <Typography variant="h3" sx={{color: 'statYellow.main'}}>{mockData.pendingClaimAmount.toLocaleString()} 元</Typography>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statYellow'),
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isPendingClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
+              transform: isPendingClaimAmountUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前待审总金额</Typography>
+                <Typography variant="digitalMetric" sx={{
+                  ...metricValueStyle(theme, 'statYellow'),
+                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                  transform: isPendingClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
+                  color: isPendingClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
+                  textShadow: isPendingClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statYellow.main, 0.5)}`,
+                }}>
+                  {livePendingClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
         </Grid>
         
+        {/* Chart Grid */}
         <Grid container spacing={3}>
-          <Grid item xs={12} lg={6}>
-            <Card sx={{ minHeight: 300, display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="h5" component="h3" gutterBottom textAlign="center">债权状态分布 (Placeholder Chart)</Typography>
-                <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                  <Typography variant="body2" color="text.disabled">Chart: Approved vs. Pending vs. Rejected Claims</Typography>
+          {/* Review Progress Chart (Pie Chart) */}
+          <Grid item xs={12} md={6} lg={3}>
+            <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
+                <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
+                  债权状态分布
+                </Typography>
+                <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
+                  {liveClaimsByStatusData.length > 0 ? (
+                  <PieChart
+                    series={[{ 
+                      data: liveClaimsByStatusData, // Use live data
+                      highlightScope: { faded: 'global', highlighted: 'item' },
+                      faded: { innerRadius: 20, additionalRadius: -10, color: 'gray' },
+                      innerRadius: 30,
+                      outerRadius: 100,
+                      paddingAngle: 2,
+                      cornerRadius: 5,
+                    }]}
+                    slotProps={{ legend: { hidden: false, position: {vertical: 'bottom', horizontal: 'middle'}, labelStyle: {fontSize: 12, fill: theme.palette.text.secondary} } }}
+                    height={250} // Adjusted height
+                    // width prop is not strictly needed if parent Box controls size well
+                    sx={{ flexGrow: 1 }} 
+                  />
+                  ) : (
+                    <Typography variant="body2" color="text.disabled">暂无数据</Typography>
+                  )}
                 </Box>
               </CardContent>
             </Card>
           </Grid>
-          <Grid item xs={12} lg={6}>
-            <Card sx={{ minHeight: 300, display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="h5" component="h3" gutterBottom textAlign="center">用户活动 (Placeholder Chart)</Typography>
-                <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                  <Typography variant="body2" color="text.disabled">Chart: Logged-in users by role (Admin, Manager, Creditor)</Typography>
+
+          {/* User Online Distribution Chart (Bar Chart) - Currently Mock Data */}
+          <Grid item xs={12} md={6} lg={3}>
+            <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
+                <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
+                  用户在线分布 (模拟)
+                </Typography>
+                <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
+                  {liveUsersOnlineByRoleData.length > 0 ? (
+                  <BarChart
+                    dataset={liveUsersOnlineByRoleData} // Use live (mock) data
+                    xAxis={[{ scaleType: 'band', dataKey: 'role', label: '用户角色', labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary} }]}
+                    yAxis={[{ label: '在线数量', labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary} }]}
+                    series={[{ dataKey: 'count', label: '在线用户数', color: theme.palette.chartBlue.main }]} 
+                    layout="vertical" // Or "horizontal"
+                    height={250}
+                    margin={chartMargin}
+                    sx={{ flexGrow: 1 }}
+                    grid={{ horizontal: true, vertical: false, strokeDasharray: "5 5", strokeOpacity: 0.3 }}
+                    slotProps={{ legend: {hidden: true} }}
+                  />
+                  ) : (
+                    <Typography variant="body2" color="text.disabled">暂无数据</Typography>
+                  )}
                 </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Trend Chart (Daily Claims Count - Line Chart) */}
+          <Grid item xs={12} md={6} lg={3}>
+            <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
+                <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
+                  每日债权申报趋势 (笔数)
+                </Typography>
+                 <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
+                  {liveDailyClaimsTrendData.length > 0 ? (
+                  <LineChart
+                    xAxis={[{ 
+                        dataKey: 'date', 
+                        scaleType: 'band', 
+                        label: '日期 (月-日)',
+                        labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary}
+                    }]}
+                    yAxis={[{ label: '申报数量 (笔)', labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary} }]}
+                    dataset={liveDailyClaimsTrendData} // Use live data
+                    series={[
+                      { dataKey: 'count', label: '申报笔数', color: theme.palette.chartGreen.main, curve: "natural" },
+                    ]}
+                    height={250}
+                    margin={chartMargin}
+                    sx={{ flexGrow: 1 }}
+                    grid={{ horizontal: true, vertical: false, strokeDasharray: "5 5", strokeOpacity: 0.3 }}
+                    slotProps={{ legend: {hidden: true} }}
+                  />
+                  ) : (
+                    <Typography variant="body2" color="text.disabled">暂无数据</Typography>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Composition Chart (Claims by Nature - Pie Chart) */}
+          <Grid item xs={12} md={6} lg={3}>
+            <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
+              <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
+                <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
+                  债权性质构成
+                </Typography>
+                <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
+                  {liveClaimsByNatureData.length > 0 ? (
+                  <PieChart
+                    series={[{ 
+                        data: liveClaimsByNatureData, // Use live data
+                        highlightScope: { faded: 'global', highlighted: 'item' },
+                        faded: { innerRadius: 20, additionalRadius: -10, color: 'gray' },
+                        innerRadius: 30,
+                        outerRadius: 100,
+                        paddingAngle: 2,
+                        cornerRadius: 5,
+                    }]}
+                    slotProps={{ legend: { hidden: false, position: {vertical: 'bottom', horizontal: 'middle'}, labelStyle: {fontSize: 12, fill: theme.palette.text.secondary} } }}
+                    height={250}
+                    sx={{ flexGrow: 1 }}
+                  />
+                  ) : (
+                    <Typography variant="body2" color="text.disabled">暂无数据</Typography>
+                  )}
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Dynamic Lists Grid */}
+        <Grid container spacing={3} sx={{ mt: 1 }}> 
+          {/* Recently Submitted Claims List */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{...contentCardStyle, minHeight: listCardMinHeight }}>
+              <CardContent sx={{p:2, flexGrow:1, display:'flex', flexDirection:'column'}}>
+                <Typography variant={listTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1.5}}>
+                  最新债权提交动态
+                </Typography>
+                {liveRecentSubmissions && liveRecentSubmissions.length > 0 ? (
+                  <List sx={{ overflowY: 'auto', flexGrow: 1, maxHeight: listCardMinHeight - 60 /* approx title height + padding */ }}>
+                    {liveRecentSubmissions.map((item, index) => (
+                      <React.Fragment key={item.id}>
+                        <ListItem alignItems="flex-start">
+                          <ListItemIcon sx={{mr:1, mt:0.5, color: theme.palette.info.main }}>
+                            <FileCopyIcon /> 
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={`债权ID: ${item.claimId} - ${item.claimantName}`}
+                            secondary={
+                              <Typography component="span" variant="body2" color="text.secondary">
+                                金额: {item.amount.toLocaleString()} 元 - 时间: {item.time}
+                              </Typography>
+                            }
+                            primaryTypographyProps={{ color: 'text.primary', fontWeight: 'medium', fontSize: '0.95rem' }}
+                            secondaryTypographyProps={{ fontSize: '0.85rem' }}
+                          />
+                        </ListItem>
+                        {index < liveRecentSubmissions.length - 1 && <Divider variant="inset" component="li" sx={{borderColor: alpha(theme.palette.grey[700], 0.5)}} />}
+                      </React.Fragment>
+                    ))}
+                  </List>
+                ) : (
+                  <Box sx={{flexGrow:1, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                    <Typography variant="body1" color="text.secondary">暂无最新提交</Typography>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Recently Completed Review Actions List */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{...contentCardStyle, minHeight: listCardMinHeight }}>
+              <CardContent sx={{p:2, flexGrow:1, display:'flex', flexDirection:'column'}}>
+                <Typography variant={listTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1.5}}>
+                  最新审核动态
+                </Typography>
+                {liveRecentReviewActions && liveRecentReviewActions.length > 0 ? (
+                  <List sx={{ overflowY: 'auto', flexGrow: 1, maxHeight: listCardMinHeight - 60 }}>
+                    {liveRecentReviewActions.map((item, index) => (
+                      <React.Fragment key={item.id}>
+                        <ListItem alignItems="flex-start">
+                          <ListItemIcon sx={{mr:1, mt:0.5, 
+                            color: item.action === "审核通过" ? theme.palette.statGreen.main : 
+                                   item.action === "已驳回" ? theme.palette.statRed.main : 
+                                   theme.palette.statYellow.main // Default for other statuses like '补充材料'
+                          }}>
+                            {item.action === "审核通过" ? <CheckCircleIcon /> : 
+                             item.action === "已驳回" ? <CancelIcon /> : 
+                             <InfoIcon />}
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={`债权ID: ${item.claimId} - ${item.action}`}
+                            secondary={
+                              <Typography component="span" variant="body2" color="text.secondary">
+                                审核人: {item.reviewerName} - 确认金额: {item.reviewedAmount.toLocaleString()} 元 - 时间: {item.time}
+                              </Typography>
+                            }
+                            primaryTypographyProps={{ color: 'text.primary', fontWeight: 'medium', fontSize: '0.95rem' }}
+                            secondaryTypographyProps={{ fontSize: '0.85rem' }}
+                          />
+                        </ListItem>
+                        {index < liveRecentReviewActions.length - 1 && <Divider variant="inset" component="li" sx={{borderColor: alpha(theme.palette.grey[700], 0.5)}} />}
+                      </React.Fragment>
+                    ))}
+                  </List>
+                ) : (
+                  <Box sx={{flexGrow:1, display:'flex', alignItems:'center', justifyContent:'center'}}>
+                    <Typography variant="body1" color="text.secondary">暂无最新审核动态</Typography>
+                  </Box>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -171,8 +638,7 @@ const ClaimDataDashboardPage: React.FC = () => {
         
         <Typography variant="caption" color="text.secondary" textAlign="center" sx={{ mt: 5, display: 'block' }}>
           此数据大屏将关联到具体案件，通过SurrealDB实时消息监控债权申报和审核变化。
-          需要使用图表库（如Chart.js, Recharts, ECharts）来实现大气、美观、科技感十足的可视化效果。
-          当前为样式和布局占位。
+          图表库 `@mui/x-charts` 已用于基本可视化。实时动态列表已更新为动态数据。
         </Typography>
       </Box>
     </ThemeProvider>
