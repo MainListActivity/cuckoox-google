@@ -1,11 +1,20 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
+import { useTranslation } from 'react-i18next';
+import { useCaseStatus, CaseStatus } from '../contexts/CaseStatusContext';
+
+interface AutoNavigateConfig {
+  requiredRole: string;
+  requiredCaseStatus: CaseStatus;
+  targetPath: string;
+}
 
 interface ProtectedRouteProps {
   children: JSX.Element;
-  requiredRole?: string; // For role-based access control (RBAC)
+  requiredRole?: string; 
+  requiredCaseStatus?: CaseStatus;
+  autoNavigateConfig?: AutoNavigateConfig; // <-- ADDED
 }
 
 // Define routes that require a case to be selected to be accessible
@@ -39,20 +48,19 @@ const pathMatches = (path: string, patterns: string[]): boolean => {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
   const { 
     isLoggedIn, 
-    // user, // Not directly used here for redirection, but for hasRole
+    user, // Need user object for role in autoNavigateConfig
     hasRole, 
     selectedCaseId, 
-    isLoading: isAuthLoading, // Renamed for clarity
+    isLoading: isAuthLoading, 
     isCaseLoading 
   } = useAuth();
+  const { caseStatus } = useCaseStatus();
   const location = useLocation();
-  const { t } = useTranslation(); // <-- INITIALIZE T
+  const { t } = useTranslation();
 
   // 1. Authentication Check (Primary)
   if (isAuthLoading) {
-    // If main authentication is still loading, show a loading indicator or null
-    // This prevents premature redirects before auth state is known
-    return <div className="flex justify-center items-center min-h-screen">{t('authenticating')}</div>; // Or a proper spinner component
+    return <div className="flex justify-center items-center min-h-screen">{t('authenticating')}</div>;
   }
 
   if (!isLoggedIn) {
@@ -60,33 +68,41 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
   }
 
   // 2. Case Selection Check (Secondary, after login confirmed)
-  // Only proceed if authentication is done (isAuthLoading is false)
   if (
     pathMatches(location.pathname, routesRequiringCaseSelection) &&
     !selectedCaseId &&
-    location.pathname !== '/select-case' // Don't redirect if already on select-case
+    location.pathname !== '/select-case'
   ) {
     if (isCaseLoading) {
-      // If cases are still loading (e.g., user just logged in), show a loading indicator
       return <div className="flex justify-center items-center min-h-screen">{t('loading_case_info')}</div>;
     }
-    // If cases are loaded and still no selectedCaseId, then redirect
     return <Navigate to="/select-case" state={{ from: location }} replace />;
   }
   
-  // 3. Role-Based Access Control Check (Tertiary)
-  // Only proceed if auth is done, and if case selection is required, it's also done.
+  // 3. Auto-Navigation Logic (NEW - Placed before route-specific checks)
+  if (autoNavigateConfig && user) { // Ensure user object is available
+    if (
+      user.role === autoNavigateConfig.requiredRole &&
+      caseStatus === autoNavigateConfig.requiredCaseStatus &&
+      location.pathname !== autoNavigateConfig.targetPath
+    ) {
+      console.log(`Auto-navigating user with role '${user.role}' to '${autoNavigateConfig.targetPath}' due to case status '${caseStatus}'.`);
+      return <Navigate to={autoNavigateConfig.targetPath} replace />;
+    }
+  }
+  
+  // 4. Role-Based Access Control Check for the current route
   if (requiredRole && !hasRole(requiredRole)) {
-    // User is logged in, case selected (if needed), but doesn't have the required role
-    // Redirect to a 'Forbidden' page, or dashboard, or show an inline "access denied" message.
-    // For now, redirecting to dashboard (or a more appropriate page like '/unauthorized')
-    // Consider creating a dedicated '/unauthorized' page.
-    console.warn(`User does not have required role '${requiredRole}' for route '${location.pathname}'. Redirecting.`);
-    return <Navigate to="/dashboard" replace />; 
-    // Or: return <Navigate to="/unauthorized" state={{ requiredRole, attemptedPath: location.pathname }} replace />;
+    console.warn(`User with role '${user?.role}' does not have required role '${requiredRole}' for route '${location.pathname}'. Redirecting to /access-denied-role.`);
+    return <Navigate to="/access-denied-role" state={{ requiredRole, attemptedPath: location.pathname }} replace />;
   }
 
-  // If all checks pass, render the requested component
+  // 5. Case Status Check for the current route
+  if (requiredCaseStatus && caseStatus !== requiredCaseStatus) {
+    console.warn(`Access to route '${location.pathname}' denied. Current case status: '${caseStatus}'. Required: '${requiredCaseStatus}'. Redirecting to /access-denied-status.`);
+    return <Navigate to="/access-denied-status" state={{ requiredStatus: requiredCaseStatus, currentStatus: caseStatus, attemptedPath: location.pathname }} replace />;
+  }
+
   return children;
 };
 
