@@ -41,38 +41,38 @@
             - [x] Design how embedded images (from MinIO, not Unsplash) are displayed and managed within the editor.
             - [x] Design how non-image file attachments are represented (e.g., icons, links) and the interaction for downloading them.
 
-- [ ] **2. 案件管理 (Case Management)**
-    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
-    - [ ] **2.1. 案件列表页面 (Case List Page)**
-        - [ ] 2.1.1. Design the layout for the case list table, including specified fields.
-            - [ ] *Note: Ensure table is responsive (e.g., horizontal scrolling on small screens or card layout).*
-        - [ ] 2.1.2. Design the toolbar with the "创建案件" (Create Case) button.
-        - [ ] 2.1.3. Design action buttons/links for each case in the list (e.g., View Details, Modify Status using vector icons).
-    - [ ] **2.2. 创建案件 (Create Case)**
-        - [ ] 2.2.1. Design the "创建案件" form/modal layout.
-            - [ ] *Note: Form elements should be styled for dark/light modes.*
-        - [ ] 2.2.2. Design input fields: 案件负责人 (user selector), 案件程序 (dropdown), 受理时间 (date picker).
-        - [ ] 2.2.3. Design conditional input fields for "破产" (Bankruptcy) procedure: 公告时间, 债权申报开始时间, 债权申报截止时间 (date pickers with default value logic and hint text).
-        - [ ] 2.2.4. Design feedback messages for successful case creation and error handling.
-    - [ ] **2.3. 案件详情页面 (Case Details Page)**
-        - [ ] 2.3.1. Design the two-column layout:
-            - [ ] Left fixed panel: Display basic case information and a timeline of key case dates.
-                - [ ] *Note: Timeline component should be responsive and adapt to dark/light modes.*
-            - [ ] Main area: Display "立案材料" (Case Filing Documents) using `quilljs` (read-only view).
-    - [ ] **2.4. 修改状态 (Modify Status)**
-        - [ ] 2.4.1. Design the UI for initiating status modification.
-        - [ ] 2.4.2. Design UI to present valid next statuses based on the current "程序进程" and defined state transitions.
-        - [ ] 2.4.3. Design input fields for required data upon status change.
-        - [ ] 2.4.4. Design UI for submitting "裁定重整公告" / "重整计划" using `quilljs` editor.
-            - [ ] *Note: QuillJS editor interface must be consistent with dark/light modes.*
-        - [ ] 2.4.5. Design user confirmation dialogs for status changes.
-    - [ ] **2.5. 会议纪要 (Meeting Minutes)**
-        - [ ] 2.5.1. Design the "填写会议纪要" button.
-        - [ ] 2.5.2. Design the `quilljs` editor interface for inputting and saving meeting minutes.
-            - [ ] *Note: Consistent QuillJS styling for dark/light modes.*
-    - [ ] **2.6. 访问控制 (Access Control)**
-        - [ ] 2.6.1. Design how read-only views are presented.
-        - [ ] 2.6.2. Design UI for menu items and action buttons dynamically shown/hidden, ensuring consistency with left menu highlight color for active/available items.
+- [x] **2. 案件管理 (Case Management)**
+    - [x] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [x] **2.1. 案件列表页面 (Case List Page)**
+        - [x] 2.1.1. Design the layout for the case list table, including specified fields.
+            - [x] *Note: Ensure table is responsive (e.g., horizontal scrolling on small screens or card layout).*
+        - [x] 2.1.2. Design the toolbar with the "创建案件" (Create Case) button.
+        - [x] 2.1.3. Design action buttons/links for each case in the list (e.g., View Details, Modify Status using vector icons).
+    - [x] **2.2. 创建案件 (Create Case)**
+        - [x] 2.2.1. Design the "创建案件" form/modal layout.
+            - [x] *Note: Form elements should be styled for dark/light modes.*
+        - [x] 2.2.2. Design input fields: 案件负责人 (user selector), 案件程序 (dropdown), 受理时间 (date picker).
+        - [x] 2.2.3. Design conditional input fields for "破产" (Bankruptcy) procedure: 公告时间, 债权申报开始时间, 债权申报截止时间 (date pickers with default value logic and hint text).
+        - [x] 2.2.4. Design feedback messages for successful case creation and error handling.
+    - [x] **2.3. 案件详情页面 (Case Details Page)**
+        - [x] 2.3.1. Design the two-column layout:
+            - [x] Left fixed panel: Display basic case information and a timeline of key case dates.
+                - [x] *Note: Timeline component should be responsive and adapt to dark/light modes.*
+            - [x] Main area: Display "立案材料" (Case Filing Documents) using `quilljs` (read-only view).
+    - [x] **2.4. 修改状态 (Modify Status)**
+        - [x] 2.4.1. Design the UI for initiating status modification.
+        - [x] 2.4.2. Design UI to present valid next statuses based on the current "程序进程" and defined state transitions.
+        - [x] 2.4.3. Design input fields for required data upon status change.
+        - [x] 2.4.4. Design UI for submitting "裁定重整公告" / "重整计划" using `quilljs` editor.
+            - [x] *Note: QuillJS editor interface must be consistent with dark/light modes.*
+        - [x] 2.4.5. Design user confirmation dialogs for status changes.
+    - [x] **2.5. 会议纪要 (Meeting Minutes)**
+        - [x] 2.5.1. Design the "填写会议纪要" button.
+        - [x] 2.5.2. Design the `quilljs` editor interface for inputting and saving meeting minutes.
+            - [x] *Note: Consistent QuillJS styling for dark/light modes.*
+    - [x] **2.6. 访问控制 (Access Control)**
+        - [x] 2.6.1. Design how read-only views are presented.
+        - [x] 2.6.2. Design UI for menu items and action buttons dynamically shown/hidden, ensuring consistency with left menu highlight color for active/available items.
 
 - [ ] **3. 债权人管理 (Creditor Management)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.

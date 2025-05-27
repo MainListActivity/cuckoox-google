@@ -13,14 +13,22 @@ import {
   TableRow,
   Chip,
   SvgIcon,
+  Tooltip, // Added for icon buttons
+  IconButton, // Added for icon buttons
 } from '@mui/material';
-import { mdiPlusCircleOutline, mdiEyeOutline } from '@mdi/js';
+import { 
+  mdiPlusCircleOutline, 
+  mdiEyeOutline, 
+  mdiFileDocumentOutline, // Added icon
+  mdiFileEditOutline,   // Added icon
+  mdiCalendarEdit,      // Added icon
+} from '@mdi/js';
 
 // Mock data, replace with API call
 const mockCases = [
-  { id: 'case001', case_number: 'BK-2023-001', case_lead_name: 'Alice Manager', current_stage: '债权申报', acceptance_date: '2023-01-15' },
-  { id: 'case002', case_number: 'BK-2023-002', case_lead_name: 'Bob Admin', current_stage: '立案', acceptance_date: '2023-02-20' },
-  { id: 'case003', case_number: 'BK-2023-003', case_lead_name: 'Carol Handler', current_stage: '债权人第一次会议', acceptance_date: '2023-03-10' },
+  { id: 'case001', case_number: 'BK-2023-001', case_lead_name: 'Alice Manager', case_procedure: '破产清算', creator_name: '系统管理员', current_stage: '债权申报', acceptance_date: '2023-01-15' },
+  { id: 'case002', case_number: 'BK-2023-002', case_lead_name: 'Bob Admin', case_procedure: '破产和解', creator_name: '张三', current_stage: '立案', acceptance_date: '2023-02-20' },
+  { id: 'case003', case_number: 'BK-2023-003', case_lead_name: 'Carol Handler', case_procedure: '破产重整', creator_name: '李四', current_stage: '债权人第一次会议', acceptance_date: '2023-03-10' },
 ];
 
 const CaseListPage: React.FC = () => {
@@ -47,16 +55,18 @@ const CaseListPage: React.FC = () => {
             <TableHead>
               <TableRow>
                 <TableCell>案件编号</TableCell>
+                <TableCell>案件程序</TableCell>
                 <TableCell>案件负责人</TableCell>
+                <TableCell>创建人</TableCell>
                 <TableCell>受理时间</TableCell>
                 <TableCell>程序进程</TableCell>
-                <TableCell align="right">操作</TableCell> {/* Align actions to the right */}
+                <TableCell align="center">操作</TableCell> {/* Align actions to the right */}
               </TableRow>
             </TableHead>
             <TableBody>
               {mockCases.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={7} align="center"> {/* Updated colSpan */}
                     <Typography sx={{ p: 2 }}>暂无案件数据</Typography>
                   </TableCell>
                 </TableRow>
@@ -66,23 +76,37 @@ const CaseListPage: React.FC = () => {
                   <TableCell component="th" scope="row">
                     {caseItem.case_number}
                   </TableCell>
+                  <TableCell>{caseItem.case_procedure}</TableCell>
                   <TableCell>{caseItem.case_lead_name}</TableCell>
+                  <TableCell>{caseItem.creator_name}</TableCell>
                   <TableCell>{caseItem.acceptance_date}</TableCell>
                   <TableCell>
-                    <Chip label={caseItem.current_stage} color="primary" size="small" />
-                    {/* You can add logic here to change chip color based on stage */}
+                    <Chip label={caseItem.current_stage} variant="outlined" size="small" />
+                    {/* Using outlined for better theme adaptability. Color can be added conditionally if needed */}
                   </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      variant="outlined" // Or "text"
-                      size="small"
-                      component={Link}
-                      to={`/cases/${caseItem.id}`}
-                      startIcon={<SvgIcon><path d={mdiEyeOutline} /></SvgIcon>} // Optional icon
-                    >
-                      查看详情
-                    </Button>
-                    {/* Add other action buttons/icons here later */}
+                  <TableCell align="center" sx={{whiteSpace: 'nowrap'}}> {/* Center align and prevent wrapping */}
+                    <Tooltip title="查看详情">
+                      <IconButton component={Link} to={`/cases/${caseItem.id}`} size="small" color="primary">
+                        <SvgIcon fontSize="small"><path d={mdiEyeOutline} /></SvgIcon>
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="查看材料">
+                      <IconButton component={Link} to={`#`} size="small" color="secondary"> {/* Placeholder link */}
+                        <SvgIcon fontSize="small"><path d={mdiFileDocumentOutline} /></SvgIcon>
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="修改状态">
+                      <IconButton component={Link} to={`#`} size="small"> {/* Placeholder link */}
+                        <SvgIcon fontSize="small"><path d={mdiFileEditOutline} /></SvgIcon>
+                      </IconButton>
+                    </Tooltip>
+                    {caseItem.current_stage === '债权人第一次会议' && (
+                       <Tooltip title="会议纪要">
+                        <IconButton component={Link} to={`#`} size="small"> {/* Placeholder link */}
+                          <SvgIcon fontSize="small"><path d={mdiCalendarEdit} /></SvgIcon>
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
