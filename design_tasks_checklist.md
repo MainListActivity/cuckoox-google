@@ -157,21 +157,21 @@
         - [ ] 6.3.1. Design visual cues for real-time updates (smooth transitions, subtle highlights).
             - [ ] *Note: Animations should be efficient and not degrade performance.*
 
-- [ ] **7. 在线会议 (Online Meetings)**
-    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
-    - [ ] **7.1. 会议列表页面 (Meeting List Page)**
-        - [ ] 7.1.1. Design the table layout.
-            - [ ] *Note: Responsive table.*
-        - [ ] 7.1.2. Design action buttons/toolbar (vector icons).
-    - [ ] **7.2. 安排与编辑会议 (Schedule and Edit Meetings)**
-        - [ ] 7.2.1. Design the scheduling/editing form.
-            - [ ] *Note: Form elements styled for dark/light modes.*
-        - [ ] 7.2.2. Design UI for cancelling a meeting.
-    - [ ] **7.3. 会议纪要 (Meeting Minutes)**
-        - [ ] 7.3.1. Ensure UI links to `quilljs` editor (styled for dark/light modes).
-    - [ ] **7.4. 会议记录与访问 (Meeting Records and Access)**
-        - [ ] 7.4.1. Design view for past meetings with search.
-        - [ ] 7.4.2. Design UI behavior for module access based on case status.
+- [x] **7. 在线会议 (Online Meetings)**
+    - [x] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [x] **7.1. 会议列表页面 (Meeting List Page)**
+        - [x] 7.1.1. Design the table layout.
+            - [x] *Note: Responsive table.*
+        - [x] 7.1.2. Design action buttons/toolbar (vector icons).
+    - [x] **7.2. 安排与编辑会议 (Schedule and Edit Meetings)**
+        - [x] 7.2.1. Design the scheduling/editing form.
+            - [x] *Note: Form elements styled for dark/light modes.*
+        - [x] 7.2.2. Design UI for cancelling a meeting.
+    - [x] **7.3. 会议纪要 (Meeting Minutes)**
+        - [x] 7.3.1. Ensure UI links to `quilljs` editor (styled for dark/light modes).
+    - [x] **7.4. 会议记录与访问 (Meeting Records and Access)**
+        - [x] 7.4.1. Design view for past meetings with search.
+        - [x] 7.4.2. Design UI behavior for module access based on case status.
 
 - [ ] **8. 消息中心 (Message Center)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
