@@ -74,25 +74,25 @@
         - [x] 2.6.1. Design how read-only views are presented.
         - [x] 2.6.2. Design UI for menu items and action buttons dynamically shown/hidden, ensuring consistency with left menu highlight color for active/available items.
 
-- [ ] **3. 债权人管理 (Creditor Management)**
-    - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
-    - [ ] **3.1. 债权人列表页面 (Creditor List Page)**
-        - [ ] 3.1.1. Design the overall page layout including search bar and toolbar with vector icons for actions.
-        - [ ] 3.1.2. Design toolbar buttons: "添加单个债权人", "批量导入债权人", "打印快递单号".
-        - [ ] 3.1.3. Design the table structure for the creditor list.
-            - [ ] *Note: Responsive table design.*
-    - [ ] **3.2. 添加单个债权人 (Add Single Creditor)**
-        - [ ] 3.2.1. Design the form/modal with specified fields.
-            - [ ] *Note: Dark/light mode styling for form elements.*
-    - [ ] **3.3. 批量导入债权人 (Batch Import Creditors)**
-        - [ ] 3.3.1. Design the UI for file upload.
-        - [ ] 3.3.2. Design the UI for downloading the template file.
-        - [ ] 3.3.3. Design feedback messages for import success/failure.
-    - [ ] **3.4. 打印快递单号 (Print Express Waybill Number)**
-        - [ ] 3.4.1. Design the interaction for selecting creditors (checkboxes).
-        - [ ] 3.4.2. Design the UI for generating the printable format or integration interface.
-    - [ ] **3.5. 自动导航 (Automatic Navigation)**
-        - [ ] 3.5.1. Design the user experience for automatic navigation to this module.
+- [x] **3. 债权人管理 (Creditor Management)**
+    - [x] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+    - [x] **3.1. 债权人列表页面 (Creditor List Page)**
+        - [x] 3.1.1. Design the overall page layout including search bar and toolbar with vector icons for actions.
+        - [x] 3.1.2. Design toolbar buttons: "添加单个债权人", "批量导入债权人", "打印快递单号".
+        - [x] 3.1.3. Design the table structure for the creditor list.
+            - [x] *Note: Responsive table design.*
+    - [x] **3.2. 添加单个债权人 (Add Single Creditor)**
+        - [x] 3.2.1. Design the form/modal with specified fields.
+            - [x] *Note: Dark/light mode styling for form elements.*
+    - [x] **3.3. 批量导入债权人 (Batch Import Creditors)**
+        - [x] 3.3.1. Design the UI for file upload.
+        - [x] 3.3.2. Design the UI for downloading the template file.
+        - [x] 3.3.3. Design feedback messages for import success/failure.
+    - [x] **3.4. 打印快递单号 (Print Express Waybill Number)**
+        - [x] 3.4.1. Design the interaction for selecting creditors (checkboxes).
+        - [x] 3.4.2. Design the UI for generating the printable format or integration interface.
+    - [x] **3.5. 自动导航 (Automatic Navigation)**
+        - [x] 3.5.1. Design the user experience for automatic navigation to this module.
 
 - [ ] **4. 债权申报 (Claim Submission by Creditor)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. This module is creditor-facing, ensure clarity and ease of use.
