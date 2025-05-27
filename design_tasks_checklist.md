@@ -1,5 +1,4 @@
-
- [x] **1. 全局功能与规则 (Global Functions and Rules)**
+- [x] **1. 全局功能与规则 (Global Functions and Rules)**
     - [x] **Note:** All UI designs must be responsive across different computer resolutions and implemented using Tailwind CSS (via CDN `<link>`). Online vector icon libraries should be used for icons, and Unsplash for image links.
     - [x] **1.1. 用户认证与授权 (User Authentication and Authorization)**
         - [x] 1.1.1. **登录界面 (Login Interface):**
@@ -222,3 +221,4 @@
         - [ ] 11.2.1. Strategically use loading indicators (spinners, progress bars) styled for dark/light modes.
     - [ ] **11.3. 响应式设计 (Responsive Design)**
         - [ ] 11.3.1. **Note:** Reiterate that all designed views must be responsive across common desktop resolutions, implemented with Tailwind CSS. Test various screen sizes.
+
