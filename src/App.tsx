@@ -1,10 +1,13 @@
 import React, {Suspense, ReactNode} from 'react';
 import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
 import {useAuth} from './contexts/AuthContext';
-import {useSurreal} from './contexts/SurrealProvider'; // ADDED
-import {useTranslation} from 'react-i18next'; // ADDED
-import { ThemeProvider } from '@mui/material/styles'; // ADDED
-import theme from './theme'; // ADDED
+import {useSurreal} from './contexts/SurrealProvider';
+import {useTranslation} from 'react-i18next';
+// Remove MUI ThemeProvider, use our own from ThemeContext
+// import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'; 
+// import theme from './theme'; // This is likely MUI theme, not our custom one
+import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext'; // Import our ThemeProvider
+import { SnackbarProvider } from './contexts/SnackbarContext'; // Import SnackbarProvider
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import GlobalLoader from './components/GlobalLoader'; // ADDED
@@ -69,42 +72,46 @@ function App() {
     // Define routes that don't need the main layout (e.g., Login, OidcCallback)
     if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
         return (
-      <ThemeProvider theme={theme}> {/* ADDED */}
-        <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
-          <Routes>
-            <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
-            <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
-          </Routes>
-        </Suspense>
-      </ThemeProvider>
+      <CustomThemeProvider> {/* Use CustomThemeProvider */}
+        <SnackbarProvider> {/* Add SnackbarProvider */}
+          <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
+            <Routes>
+              <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
+              <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
+            </Routes>
+          </Suspense>
+        </SnackbarProvider>
+      </CustomThemeProvider>
         );
     }
 
   return (
-    <ThemeProvider theme={theme}> {/* ADDED */}
-      <Layout>
-        <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
-          <Routes>
-            <Route path="/" element={<HomePage /> as ReactNode} />
-            <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
-          <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/creditors" element={<ProtectedRoute><CreditorListPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/claims" element={<ProtectedRoute><ClaimListPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/claims/submit" element={<ProtectedRoute><ClaimSubmissionPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/claims/:id/review" element={<ProtectedRoute><ClaimReviewDetailPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/claim-dashboard" element={<ProtectedRoute><ClaimDataDashboardPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/online-meetings" element={<ProtectedRoute><OnlineMeetingPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/messages" element={<ProtectedRoute><MessageCenterPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />
-          <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} /> {/* ADDED */}
-          <Route path="*" element={<NotFoundPage />} />
-          </Routes>
-        </Suspense>
-      </Layout>
-    </ThemeProvider>
+    <CustomThemeProvider> {/* Use CustomThemeProvider */}
+      <SnackbarProvider> {/* Add SnackbarProvider */}
+        <Layout>
+          <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
+            <Routes>
+              <Route path="/" element={<HomePage /> as ReactNode} />
+              <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
+            <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/creditors" element={<ProtectedRoute><CreditorListPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/claims" element={<ProtectedRoute><ClaimListPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/claims/submit" element={<ProtectedRoute><ClaimSubmissionPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/claims/:id/review" element={<ProtectedRoute><ClaimReviewDetailPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/claim-dashboard" element={<ProtectedRoute><ClaimDataDashboardPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/online-meetings" element={<ProtectedRoute><OnlineMeetingPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/messages" element={<ProtectedRoute><MessageCenterPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />
+            <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
+            <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </Layout>
+      </SnackbarProvider>
+    </CustomThemeProvider>
   );
 }
 

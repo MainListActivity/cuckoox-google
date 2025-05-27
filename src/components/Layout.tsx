@@ -6,8 +6,9 @@ import {
   AppBar,
   Box,
   Button,
-  Drawer as MuiDrawer, // Renamed to avoid conflict with potential local 'Drawer' variable
+  Drawer as MuiDrawer,
   IconButton,
+  Switch, // Added Switch
   List,
   ListItemButton,
   ListItemIcon,
@@ -15,15 +16,18 @@ import {
   Toolbar,
   Typography,
   Divider,
-  useTheme,
+  // useTheme as useMuiTheme, // Renamed to avoid conflict with our useTheme
   styled,
-  Theme,
+  Theme as MuiTheme, // Renamed Mui Theme to avoid conflict
   CSSObject,
 } from '@mui/material';
 import SvgIcon from '@mui/material/SvgIcon';
+import { useTheme } from '../contexts/ThemeContext'; // Import our useTheme
 import {
   mdiMenu,
   mdiMenuOpen,
+  mdiWeatherSunny, // Added icons for theme toggle
+  mdiWeatherNight, // Added icons for theme toggle
   mdiViewDashboard,
   mdiBriefcase,
   mdiAccountGroup,
@@ -40,9 +44,9 @@ interface LayoutProps {
 }
 
 const drawerWidthOpen = 240; // theme.spacing(28) would be 224, using 240 for a bit more space
-const drawerWidthClosed = (theme: Theme) => theme.spacing(7); // MUI default is 7 for closed mini drawer
+const drawerWidthClosed = (theme: MuiTheme) => theme.spacing(7); // MUI default is 7 for closed mini drawer
 
-const openedMixin = (theme: Theme): CSSObject => ({
+const openedMixin = (theme: MuiTheme): CSSObject => ({
   width: drawerWidthOpen,
   transition: theme.transitions.create('width', {
     easing: theme.transitions.easing.sharp,
@@ -51,7 +55,7 @@ const openedMixin = (theme: Theme): CSSObject => ({
   overflowX: 'hidden',
 });
 
-const closedMixin = (theme: Theme): CSSObject => ({
+const closedMixin = (theme: MuiTheme): CSSObject => ({
   transition: theme.transitions.create('width', {
     easing: theme.transitions.easing.sharp,
     duration: theme.transitions.duration.leavingScreen,
@@ -82,7 +86,8 @@ const StyledDrawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== '
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { t } = useTranslation();
-  const theme = useTheme();
+  const muiTheme = useTheme(); // This is now our custom theme context
+  const { mode, toggleMode, currentTheme } = muiTheme; // Destructure mode and toggleMode
   const [drawerOpen, setDrawerOpen] = useState(true);
   const { user, logout, hasRole } = useAuth();
   const navigate = useNavigate();
@@ -107,10 +112,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <Box sx={{ display: 'flex' }}>
       <AppBar
         position="fixed"
-        sx={(theme) => ({ // Pass theme to sx to access palette
-          zIndex: theme.zIndex.drawer + 1,
-          background: `linear-gradient(to right, ${theme.palette.primary.light}, ${theme.palette.primary.main})`,
-        })}
+        sx={{ // Pass theme to sx to access palette
+          zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1, // Explicitly type theme here
+          background: `linear-gradient(to right, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`, // Using context theme
+        }}
       >
         <Toolbar>
           <IconButton
@@ -127,14 +132,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             CuckooX
           </Typography>
+          <IconButton onClick={toggleMode} color="inherit">
+            <SvgIcon>
+              <path d={mode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
+            </SvgIcon>
+          </IconButton>
+          <Switch
+            checked={mode === 'dark'}
+            onChange={toggleMode}
+            color="secondary" // Or any color that fits your theme
+          />
           {user && <Typography sx={{ mr: 2 }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
         </Toolbar>
       </AppBar>
 
       <StyledDrawer variant="permanent" open={drawerOpen}>
-        <Toolbar> {/* Necessary to make the content below app bar */}
-            {/* Could add a logo or title here if drawer is separate from AppBar */}
-        </Toolbar>
+        <Toolbar /> {/* Necessary to make the content below app bar */}
         <Divider />
         <List sx={{ flexGrow: 1 }}>
           {navItems.map((item) =>
@@ -175,10 +188,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             onClick={handleLogout}
             variant="contained"
-            color="secondary" // Or "error" or "primary" based on theme design
+            color="secondary" 
             fullWidth={drawerOpen}
-            sx={{
-                minWidth: drawerOpen ? 'auto' : theme.spacing(5), // Ensure button is small when drawer is closed
+            sx={(theme: MuiTheme) => ({ // Explicitly type theme here
+                minWidth: drawerOpen ? 'auto' : theme.spacing(5),
                 width: drawerOpen ? 'auto' : theme.spacing(5),
                 height: theme.spacing(5),
                 p: drawerOpen ? 1 : 0,
@@ -200,7 +213,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Box>
       </StyledDrawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: 'background.default' }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: currentTheme.colors.background }}>
         <Toolbar /> {/* This is important to offset content below the AppBar */}
         {children}
       </Box>

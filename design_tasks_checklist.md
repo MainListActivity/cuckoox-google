@@ -21,25 +21,25 @@
         - [ ] 1.2.3. Design UI behavior for automatically selecting and opening the first accessible menu item after login/case selection.
         - [ ] 1.2.4. Design UI for switching cases if a user is part of multiple cases (e.g., a global case switcher in the app bar or within the "案件管理" page).
             - [ ] *Note: Case switcher UI should be unobtrusive and consistent with AppBar styling.*
-        - [ ] 1.2.5. **深色/亮色模式切换 (Dark/Light Mode Toggle):**
-            - [ ] Design the toggle switch UI element.
-            - [ ] *Note: Per `规范.md`, position in the top-right corner. Default mode is dark. Ensure all components and views correctly adapt to both modes.*
-    - [ ] **1.3. 通用视觉与交互 (General Visuals and Interactions)**
-        - [ ] 1.3.1. **图标使用 (Icon Usage):**
-            - [ ] *Note: Use icons from online vector icon libraries for all UI elements requiring icons (e.g., buttons, list actions, menu items).*
-        - [ ] 1.3.2. **图片使用 (Image Usage):**
-            - [ ] *Note: Where placeholder or decorative images are needed, use links from Unsplash.*
-        - [ ] 1.3.3. Design consistent display for loading states/spinners.
-            - [ ] *Note: Ensure visibility in both dark and light modes.*
-        - [ ] 1.3.4. Design consistent display for error messages.
-            - [ ] *Note: Ensure visibility and clarity in both dark and light modes.*
-        - [ ] 1.3.5. Design consistent display for success messages/notifications.
-            - [ ] *Note: Ensure visibility and clarity in both dark and light modes.*
-        - [ ] 1.3.6. **富文本编辑器 (QuillJS) - 通用设计:**
-            - [ ] Define a consistent UI style and feature set for `quilljs` instances.
-                - [ ] *Note: Ensure QuillJS interface is themable for dark/light modes. Image/file icons should be vector-based.*
-            - [ ] Design how embedded images (from MinIO, not Unsplash) are displayed and managed within the editor.
-            - [ ] Design how non-image file attachments are represented (e.g., icons, links) and the interaction for downloading them.
+        - [x] 1.2.5. **深色/亮色模式切换 (Dark/Light Mode Toggle):**
+            - [x] Design the toggle switch UI element.
+            - [x] *Note: Per `规范.md`, position in the top-right corner. Default mode is dark. Ensure all components and views correctly adapt to both modes.*
+    - [x] **1.3. 通用视觉与交互 (General Visuals and Interactions)**
+        - [x] 1.3.1. **图标使用 (Icon Usage):**
+            - [x] *Note: Use icons from online vector icon libraries for all UI elements requiring icons (e.g., buttons, list actions, menu items).*
+        - [x] 1.3.2. **图片使用 (Image Usage):**
+            - [x] *Note: Where placeholder or decorative images are needed, use links from Unsplash.*
+        - [x] 1.3.3. Design consistent display for loading states/spinners.
+            - [x] *Note: Ensure visibility in both dark and light modes.*
+        - [x] 1.3.4. Design consistent display for error messages.
+            - [x] *Note: Ensure visibility and clarity in both dark and light modes.*
+        - [x] 1.3.5. Design consistent display for success messages/notifications.
+            - [x] *Note: Ensure visibility and clarity in both dark and light modes.*
+        - [x] 1.3.6. **富文本编辑器 (QuillJS) - 通用设计:**
+            - [x] Define a consistent UI style and feature set for `quilljs` instances.
+                - [x] *Note: Ensure QuillJS interface is themable for dark/light modes. Image/file icons should be vector-based.*
+            - [x] Design how embedded images (from MinIO, not Unsplash) are displayed and managed within the editor.
+            - [x] Design how non-image file attachments are represented (e.g., icons, links) and the interaction for downloading them.
 
 - [ ] **2. 案件管理 (Case Management)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.

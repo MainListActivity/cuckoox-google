@@ -17,7 +17,7 @@ const GlobalLoader: React.FC<GlobalLoaderProps> = ({ message }) => {
     .spinner {
       width: 50px; /* Spinner size */
       height: 50px; /* Spinner size */
-      border: 6px solid #f3f3f3; /* Light grey circle */
+      border: 6px solid var(--color-surface); /* Use theme variable for spinner track */
       border-top: 6px solid var(--color-primary); /* Use CSS variable */
       border-radius: 50%;
       animation: spin 1s linear infinite;
@@ -25,7 +25,7 @@ const GlobalLoader: React.FC<GlobalLoaderProps> = ({ message }) => {
     .loadingText {
       margin-top: 25px;
       font-size: 1.25em; /* Slightly larger text */
-      color: var(--color-text-primary); /* Use CSS variable */
+      color: var(--color-text-on-background); /* Use CSS variable for text on background */
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Nicer font */
     }
     @keyframes spin {

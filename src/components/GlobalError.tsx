@@ -32,7 +32,7 @@ const GlobalError: React.FC<GlobalErrorProps> = ({ title, message }) => {
     }
     .errorMessage {
       font-size: 1.1em;
-      color: var(--color-text-primary); /* Use CSS variable */
+      color: var(--color-text-on-surface); /* Use CSS variable for text on surface */
       line-height: 1.6;
     }
   `;

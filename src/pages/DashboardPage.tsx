@@ -9,10 +9,13 @@ import {
   List,
   ListItem,
   ListItemText,
+  Button, // Added Button
 } from '@mui/material';
+import { useSnackbar } from '../contexts/SnackbarContext'; // Added useSnackbar
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const { showSuccess } = useSnackbar(); // Added showSuccess
 
   // Placeholder data for stat cards
   const statCards = [
@@ -30,9 +33,17 @@ const DashboardPage: React.FC = () => {
 
   return (
     <Box sx={{ p: 0 }}> {/* Layout already provides padding, so set to 0 or adjust as needed */}
-      <Typography variant="h4" component="h1" gutterBottom>
-        Dashboard
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h4" component="h1">
+          Dashboard
+        </Typography>
+        <Button 
+          variant="contained" 
+          onClick={() => showSuccess('Test success message from Dashboard!')}
+        >
+          Show Snackbar
+        </Button>
+      </Box>
       {user && (
         <Typography variant="subtitle1" gutterBottom sx={{ mb: 3 }}>
           Welcome back, {user.name}!
