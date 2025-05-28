@@ -21,21 +21,21 @@ import RichTextEditor, { QuillDelta } from '../RichTextEditor'; // Assuming path
 import Delta from 'quill-delta';
 
 // Define valid case statuses - should match product documentation
-export type CaseStatus = 
-  | '立案' 
-  | '公告' 
-  | '债权申报' 
-  | '债权人第一次会议' 
-  | '破产清算' 
-  | '裁定重整' 
-  | '提交重整计划' 
-  | '延迟提交重整计划'
-  | '重整计划（草案）投票'
-  | '重整计划（草案）通过或未通过'
-  | '批准重整计划'
-  | '终止重整计划'
-  | '和解' 
-  | '结案';
+export type CaseStatus =
+    | '立案'
+    | '公告'
+    | '债权申报'
+    | '债权人第一次会议'
+    | '破产清算'
+    | '裁定重整'
+    | '提交重整计划'
+    | '延迟提交重整计划'
+    | '重整计划（草案）投票'
+    | '重整计划（草案）通过或未通过'
+    | '批准重整计划'
+    | '终止重整计划'
+    | '和解'
+    | '结案';
 
 // State transition map based on product documentation (section 3.1.4)
 const stateTransitions: Record<CaseStatus, CaseStatus[]> = {
@@ -61,7 +61,7 @@ const stateTransitions: Record<CaseStatus, CaseStatus[]> = {
   '结案': [], // Terminal state
 };
 
-// These statuses are from the provided code's CaseStatus type, 
+// These statuses are from the provided code's CaseStatus type,
 // but not all are in the product doc's state transition table as *current* states.
 // '重整计划（草案）投票'
 // '重整计划（草案）通过或未通过'
@@ -79,10 +79,10 @@ interface ModifyCaseStatusDialogProps {
 }
 
 const ModifyCaseStatusDialog: React.FC<ModifyCaseStatusDialogProps> = ({
-  open,
-  onClose,
-  currentCase,
-}) => {
+                                                                         open,
+                                                                         onClose,
+                                                                         currentCase,
+                                                                       }) => {
   const { t } = useTranslation();
   const { showSuccess } = useSnackbar(); // Added
   const [selectedNextStatus, setSelectedNextStatus] = useState<CaseStatus | ''>('');
@@ -110,8 +110,8 @@ const ModifyCaseStatusDialog: React.FC<ModifyCaseStatusDialogProps> = ({
         possibleStatuses = [...possibleStatuses, '结案'];
       }
       setAvailableNextStatuses(possibleStatuses);
-      setSelectedNextStatus(''); 
-      
+      setSelectedNextStatus('');
+
       // Reset all conditional fields
       setAnnouncementDate('');
       setClaimStartDate('');
@@ -182,12 +182,12 @@ const ModifyCaseStatusDialog: React.FC<ModifyCaseStatusDialogProps> = ({
       case '结案':
         submissionData.closingDate = closingDate; // Doc: "并需设置结案时间"
         break;
-      // Add other cases as per documentation if new transitions are added.
+        // Add other cases as per documentation if new transitions are added.
     }
 
     console.log("Submitting Case Status Update:", submissionData);
     showSuccess(t('modify_status_success_message', '案件状态已成功（模拟）更新！')); // Added success message
-    
+
     // TODO: Implement actual API call to update status and save data/documents
     onClose(); // Close dialog after submission
   };
@@ -198,95 +198,95 @@ const ModifyCaseStatusDialog: React.FC<ModifyCaseStatusDialogProps> = ({
     switch (selectedNextStatus) {
       case '公告':
         return (
-          <TextField
-            margin="dense"
-            id="announcementDate"
-            label={t('modify_status_announcement_date', '公告时间')}
-            type="date"
-            fullWidth
-            variant="outlined"
-            value={announcementDate}
-            onChange={(e) => setAnnouncementDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
+            <TextField
+                margin="dense"
+                id="announcementDate"
+                label={t('modify_status_announcement_date', '公告时间')}
+                type="date"
+                fullWidth
+                variant="outlined"
+                value={announcementDate}
+                onChange={(e) => setAnnouncementDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+            />
         );
       case '债权申报':
         return (
-          <TextField
-            margin="dense"
-            id="claimStartDate"
-            label={t('modify_status_claim_start_date', '债权申报开始时间')}
-            type="date"
-            fullWidth
-            variant="outlined"
-            value={claimStartDate}
-            onChange={(e) => setClaimStartDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
+            <TextField
+                margin="dense"
+                id="claimStartDate"
+                label={t('modify_status_claim_start_date', '债权申报开始时间')}
+                type="date"
+                fullWidth
+                variant="outlined"
+                value={claimStartDate}
+                onChange={(e) => setClaimStartDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+            />
         );
       case '债权人第一次会议': // Transitioning TO '债权人第一次会议'
         return (
-          <TextField
-            margin="dense"
-            id="claimEndDate" // This is the date for when claim submission (previous phase) ends
-            label={t('modify_status_claim_end_date', '债权申报截止时间')}
-            type="date"
-            fullWidth
-            variant="outlined"
-            value={claimEndDate}
-            onChange={(e) => setClaimEndDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
+            <TextField
+                margin="dense"
+                id="claimEndDate" // This is the date for when claim submission (previous phase) ends
+                label={t('modify_status_claim_end_date', '债权申报截止时间')}
+                type="date"
+                fullWidth
+                variant="outlined"
+                value={claimEndDate}
+                onChange={(e) => setClaimEndDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+            />
         );
       case '破产清算':
       case '裁定重整':
         if (currentCase.current_status === '债权人第一次会议') {
           return (
-            <>
-              <TextField
-                margin="dense"
-                id="firstCreditorMeetingDate"
-                label={t('modify_status_first_creditor_meeting_date', '债权人第一次会议时间')}
-                type="date"
-                fullWidth
-                variant="outlined"
-                value={firstCreditorMeetingDate}
-                onChange={(e) => setFirstCreditorMeetingDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                sx={{ mb: selectedNextStatus === '裁定重整' ? 2 : 0 }}
-              />
-              {selectedNextStatus === '裁定重整' && (
-                 <>
-                  <TextField
+              <>
+                <TextField
                     margin="dense"
-                    id="restructuringDecisionDate"
-                    label={t('modify_status_restructuring_decision_date', '裁定重整时间')}
+                    id="firstCreditorMeetingDate"
+                    label={t('modify_status_first_creditor_meeting_date', '债权人第一次会议时间')}
                     type="date"
                     fullWidth
                     variant="outlined"
-                    value={restructuringDecisionDate}
-                    onChange={(e) => setRestructuringDecisionDate(e.target.value)}
+                    value={firstCreditorMeetingDate}
+                    onChange={(e) => setFirstCreditorMeetingDate(e.target.value)}
                     InputLabelProps={{ shrink: true }}
-                    sx={{ mb: 2 }}
-                  />
-                  <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
-                    {t('modify_status_restructuring_announcement_doc', '裁定重整公告')}
-                  </Typography>
-                  <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
-                    <RichTextEditor
-                      value={restructuringAnnouncementDelta}
-                      onTextChange={(delta) => setRestructuringAnnouncementDelta(delta)}
-                      placeholder={t('modify_status_restructuring_announcement_placeholder', '请输入公告内容...')}
-                    />
-                  </Box>
-                </>
-              )}
-            </>
+                    sx={{ mb: selectedNextStatus === '裁定重整' ? 2 : 0 }}
+                />
+                {selectedNextStatus === '裁定重整' && (
+                    <>
+                      <TextField
+                          margin="dense"
+                          id="restructuringDecisionDate"
+                          label={t('modify_status_restructuring_decision_date', '裁定重整时间')}
+                          type="date"
+                          fullWidth
+                          variant="outlined"
+                          value={restructuringDecisionDate}
+                          onChange={(e) => setRestructuringDecisionDate(e.target.value)}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{ mb: 2 }}
+                      />
+                      <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
+                        {t('modify_status_restructuring_announcement_doc', '裁定重整公告')}
+                      </Typography>
+                      <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
+                        <RichTextEditor
+                            value={restructuringAnnouncementDelta}
+                            onTextChange={(delta) => setRestructuringAnnouncementDelta(delta)}
+                            placeholder={t('modify_status_restructuring_announcement_placeholder', '请输入公告内容...')}
+                        />
+                      </Box>
+                    </>
+                )}
+              </>
           );
         } else if (selectedNextStatus === '裁定重整') { // e.g. from '延迟提交重整计划' directly to '裁定重整' (if logic allows)
-            return (
-                <>
-                  <TextField
+          return (
+              <>
+                <TextField
                     margin="dense"
                     id="restructuringDecisionDate"
                     label={t('modify_status_restructuring_decision_date', '裁定重整时间')}
@@ -297,104 +297,104 @@ const ModifyCaseStatusDialog: React.FC<ModifyCaseStatusDialogProps> = ({
                     onChange={(e) => setRestructuringDecisionDate(e.target.value)}
                     InputLabelProps={{ shrink: true }}
                     sx={{ mb: 2 }}
-                  />
-                  <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
-                    {t('modify_status_restructuring_announcement_doc', '裁定重整公告')}
-                  </Typography>
-                  <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
-                    <RichTextEditor
+                />
+                <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
+                  {t('modify_status_restructuring_announcement_doc', '裁定重整公告')}
+                </Typography>
+                <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
+                  <RichTextEditor
                       value={restructuringAnnouncementDelta}
                       onTextChange={(delta) => setRestructuringAnnouncementDelta(delta)}
                       placeholder={t('modify_status_restructuring_announcement_placeholder', '请输入公告内容...')}
-                    />
-                  </Box>
-                </>
-            );
+                  />
+                </Box>
+              </>
+          );
         }
         return null; // Or other default fields if needed for '破产清算' from other states
-      // case '裁定重整': // This is now part of the above combined case
-      //   return (
-      //     <>
-      //       <TextField
-      //         margin="dense"
-      //         id="restructuringDecisionDate"
-      //         label={t('modify_status_restructuring_decision_date', '裁定重整时间')}
-      //         type="date"
-      //         fullWidth
-      //         variant="outlined"
-      //         value={restructuringDecisionDate}
-      //         onChange={(e) => setRestructuringDecisionDate(e.target.value)}
-      //         InputLabelProps={{ shrink: true }}
-      //         sx={{ mb: 2 }}
-      //       />
-      //       <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
-      //         {t('modify_status_restructuring_announcement_doc', '裁定重整公告')}
-      //       </Typography>
-      //       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
-      //         <RichTextEditor
-      //           value={restructuringAnnouncementDelta}
-      //           onTextChange={(delta) => setRestructuringAnnouncementDelta(delta)}
-      //           placeholder={t('modify_status_restructuring_announcement_placeholder', '请输入公告内容...')}
-      //         />
-      //       </Box>
-      //     </>
-      //   );
+        // case '裁定重整': // This is now part of the above combined case
+        //   return (
+        //     <>
+        //       <TextField
+        //         margin="dense"
+        //         id="restructuringDecisionDate"
+        //         label={t('modify_status_restructuring_decision_date', '裁定重整时间')}
+        //         type="date"
+        //         fullWidth
+        //         variant="outlined"
+        //         value={restructuringDecisionDate}
+        //         onChange={(e) => setRestructuringDecisionDate(e.target.value)}
+        //         InputLabelProps={{ shrink: true }}
+        //         sx={{ mb: 2 }}
+        //       />
+        //       <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
+        //         {t('modify_status_restructuring_announcement_doc', '裁定重整公告')}
+        //       </Typography>
+        //       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
+        //         <RichTextEditor
+        //           value={restructuringAnnouncementDelta}
+        //           onTextChange={(delta) => setRestructuringAnnouncementDelta(delta)}
+        //           placeholder={t('modify_status_restructuring_announcement_placeholder', '请输入公告内容...')}
+        //         />
+        //       </Box>
+        //     </>
+        //   );
       case '提交重整计划':
         return (
-          <>
-            <TextField
-              margin="dense"
-              id="planSubmissionDate"
-              label={t('modify_status_plan_submission_date', '重整计划提交时间')}
-              type="date"
-              fullWidth
-              variant="outlined"
-              value={planSubmissionDate}
-              onChange={(e) => setPlanSubmissionDate(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{ mb: 2 }}
-            />
-            <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
-              {t('modify_status_restructuring_plan_doc', '重整计划')}
-            </Typography>
-            <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
-              <RichTextEditor
-                value={restructuringPlanDelta}
-                onTextChange={(delta) => setRestructuringPlanDelta(delta)}
-                placeholder={t('modify_status_restructuring_plan_placeholder', '请输入计划内容...')}
+            <>
+              <TextField
+                  margin="dense"
+                  id="planSubmissionDate"
+                  label={t('modify_status_plan_submission_date', '重整计划提交时间')}
+                  type="date"
+                  fullWidth
+                  variant="outlined"
+                  value={planSubmissionDate}
+                  onChange={(e) => setPlanSubmissionDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ mb: 2 }}
               />
-            </Box>
-          </>
+              <Typography variant="subtitle2" gutterBottom sx={{mt:1}}>
+                {t('modify_status_restructuring_plan_doc', '重整计划')}
+              </Typography>
+              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px' }}>
+                <RichTextEditor
+                    value={restructuringPlanDelta}
+                    onTextChange={(delta) => setRestructuringPlanDelta(delta)}
+                    placeholder={t('modify_status_restructuring_plan_placeholder', '请输入计划内容...')}
+                />
+              </Box>
+            </>
         );
       case '延迟提交重整计划':
         return (
-          <TextField
-            margin="dense"
-            id="delayedPlanSubmissionDate"
-            label={t('modify_status_delayed_plan_date', '延迟提交重整计划时间')}
-            type="date"
-            fullWidth
-            variant="outlined"
-            value={delayedPlanSubmissionDate}
-            onChange={(e) => setDelayedPlanSubmissionDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
+            <TextField
+                margin="dense"
+                id="delayedPlanSubmissionDate"
+                label={t('modify_status_delayed_plan_date', '延迟提交重整计划时间')}
+                type="date"
+                fullWidth
+                variant="outlined"
+                value={delayedPlanSubmissionDate}
+                onChange={(e) => setDelayedPlanSubmissionDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+            />
         );
       case '债权人第二次会议': // No specific fields when transitioning TO this according to table.
         return null;
       case '结案':
-         return (
-          <TextField
-            margin="dense"
-            id="closingDate"
-            label={t('modify_status_closing_date', '结案时间')}
-            type="date"
-            fullWidth
-            variant="outlined"
-            value={closingDate}
-            onChange={(e) => setClosingDate(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-          />
+        return (
+            <TextField
+                margin="dense"
+                id="closingDate"
+                label={t('modify_status_closing_date', '结案时间')}
+                type="date"
+                fullWidth
+                variant="outlined"
+                value={closingDate}
+                onChange={(e) => setClosingDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+            />
         );
       default:
         return null;
@@ -402,59 +402,59 @@ const ModifyCaseStatusDialog: React.FC<ModifyCaseStatusDialogProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{t('modify_status_dialog_title', '修改案件状态')}</DialogTitle>
-      <DialogContent dividers>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'bold' }}>
-            {t('modify_status_current_status_label', '当前状态')}:{' '}
-          </Typography>
-          <Chip label={currentCase.current_status} color="primary" />
-        </Box>
-
-        <FormControl fullWidth margin="normal">
-          <InputLabel id="next-status-select-label">{t('modify_status_select_next_status_label', '选择新的状态')}</InputLabel>
-          <Select
-            labelId="next-status-select-label"
-            id="nextStatus"
-            value={selectedNextStatus}
-            label={t('modify_status_select_next_status_label', '选择新的状态')}
-            onChange={handleStatusChange}
-            disabled={availableNextStatuses.length === 0}
-          >
-            <MenuItem value="" disabled>
-              <em>{t('modify_status_select_placeholder', '请选择...')}</em>
-            </MenuItem>
-            {availableNextStatuses.map((status) => (
-              <MenuItem key={status} value={status}>
-                {t(`case_status_${status.toLowerCase().replace(/\s+/g, '_')}`, status)} 
-                {/* Assuming you have i18n keys like case_status_立案 */}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        {selectedNextStatus && (
-          <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={1}>
-            <Typography variant="h6" gutterBottom>
-              {t('modify_status_required_info_title', '所需信息')}
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <DialogTitle>{t('modify_status_dialog_title', '修改案件状态')}</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle1" component="span" sx={{ fontWeight: 'bold' }}>
+              {t('modify_status_current_status_label', '当前状态')}:{' '}
             </Typography>
-            {renderConditionalFields()}
+            <Chip label={currentCase.current_status} color="primary" />
           </Box>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>{t('cancel_button', '取消')}</Button>
-        <Button 
-          onClick={handleSubmit} 
-          variant="contained" 
-          color="primary"
-          disabled={!selectedNextStatus} // Disable if no next status is selected
-        >
-          {t('submit_button', '提交')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+
+          <FormControl fullWidth margin="normal">
+            <InputLabel id="next-status-select-label">{t('modify_status_select_next_status_label', '选择新的状态')}</InputLabel>
+            <Select
+                labelId="next-status-select-label"
+                id="nextStatus"
+                value={selectedNextStatus}
+                label={t('modify_status_select_next_status_label', '选择新的状态')}
+                onChange={handleStatusChange}
+                disabled={availableNextStatuses.length === 0}
+            >
+              <MenuItem value="" disabled>
+                <em>{t('modify_status_select_placeholder', '请选择...')}</em>
+              </MenuItem>
+              {availableNextStatuses.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {t(`case_status_${status.toLowerCase().replace(/\s+/g, '_')}`, status)}
+                    {/* Assuming you have i18n keys like case_status_立案 */}
+                  </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {selectedNextStatus && (
+              <Box mt={2} p={2} border={1} borderColor="divider" borderRadius={1}>
+                <Typography variant="h6" gutterBottom>
+                  {t('modify_status_required_info_title', '所需信息')}
+                </Typography>
+                {renderConditionalFields()}
+              </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>{t('cancel_button', '取消')}</Button>
+          <Button
+              onClick={handleSubmit}
+              variant="contained"
+              color="primary"
+              disabled={!selectedNextStatus} // Disable if no next status is selected
+          >
+            {t('submit_button', '提交')}
+          </Button>
+        </DialogActions>
+      </Dialog>
   );
 };
 

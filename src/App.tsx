@@ -39,6 +39,7 @@ const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
 const CaseSelectionPage = React.lazy(() => import('./pages/CaseSelectionPage'));
 const OidcCallbackPage = React.lazy(() => import('./pages/OidcCallbackPage')); // <-- IMPORT
 const CreateCasePage = React.lazy(() => import('./pages/CreateCasePage')); // <-- IMPORT
+const AdminCreateClaimAttachmentsPage = React.lazy(() => import('./pages/admin/AdminCreateClaimAttachmentsPage')); // <-- IMPORT
 
 
 function App() {
@@ -49,32 +50,32 @@ function App() {
     const navigate = useNavigate();
 
     useEffect(() => {
-      const processUrlCaseSelection = async () => {
-        if (auth.isLoggedIn && auth.userCases && auth.userCases.length > 0) {
-          const searchParams = new URLSearchParams(location.search);
-          const caseIdFromUrl = searchParams.get('case');
-  
-          if (caseIdFromUrl) {
-            if (auth.selectedCaseId !== caseIdFromUrl) {
-              console.log(`Attempting to select case from URL parameter: ${caseIdFromUrl}`);
-              // Ensure the caseIdFromUrl is valid for the user before attempting to select
-              // This check is technically redundant if auth.selectCase itself validates against userCases,
-              // but can be a good safeguard or optimization.
-              const isValidCase = auth.userCases.some(c => c.id.toString() === caseIdFromUrl);
-              if (isValidCase) {
-                await auth.selectCase(caseIdFromUrl);
-              } else {
-                console.warn(`Case ID ${caseIdFromUrl} from URL is not valid for the current user or userCases not loaded yet.`);
-              }
+        const processUrlCaseSelection = async () => {
+            if (auth.isLoggedIn && auth.userCases && auth.userCases.length > 0) {
+                const searchParams = new URLSearchParams(location.search);
+                const caseIdFromUrl = searchParams.get('case');
+
+                if (caseIdFromUrl) {
+                    if (auth.selectedCaseId !== caseIdFromUrl) {
+                        console.log(`Attempting to select case from URL parameter: ${caseIdFromUrl}`);
+                        // Ensure the caseIdFromUrl is valid for the user before attempting to select
+                        // This check is technically redundant if auth.selectCase itself validates against userCases,
+                        // but can be a good safeguard or optimization.
+                        const isValidCase = auth.userCases.some(c => c.id.toString() === caseIdFromUrl);
+                        if (isValidCase) {
+                            await auth.selectCase(caseIdFromUrl);
+                        } else {
+                            console.warn(`Case ID ${caseIdFromUrl} from URL is not valid for the current user or userCases not loaded yet.`);
+                        }
+                    }
+                    // Clean the 'case' parameter from the URL, regardless of whether selection happened or was needed
+                    searchParams.delete('case');
+                    navigate(`${location.pathname}?${searchParams.toString()}`, { replace: true, state: location.state });
+                }
             }
-            // Clean the 'case' parameter from the URL, regardless of whether selection happened or was needed
-            searchParams.delete('case');
-            navigate(`${location.pathname}?${searchParams.toString()}`, { replace: true, state: location.state });
-          }
-        }
-      };
-  
-      processUrlCaseSelection();
+        };
+
+        processUrlCaseSelection();
     }, [auth.isLoggedIn, auth.userCases, auth.selectCase, auth.selectedCaseId, location.search, location.pathname, navigate]);
 
     // Handle SurrealDB connection status
@@ -110,59 +111,63 @@ function App() {
     // Define routes that don't need the main layout (e.g., Login, OidcCallback)
     if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
         return (
-      <CustomThemeProvider>
-        <SnackbarProvider>
-          <CaseStatusProvider>
-            <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
-              <Routes>
-                <Route path="/login" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
-                <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
-              </Routes>
-            </Suspense>
-          </CaseStatusProvider>
-        </SnackbarProvider>
-      </CustomThemeProvider>
+            <CustomThemeProvider>
+                <SnackbarProvider>
+                    <CaseStatusProvider>
+                        <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
+                            <Routes>
+                                <Route path="/login" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
+                                <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
+                            </Routes>
+                        </Suspense>
+                    </CaseStatusProvider>
+                </SnackbarProvider>
+            </CustomThemeProvider>
         );
     }
 
-  return (
-    <CustomThemeProvider> 
-      <SnackbarProvider>
-        <CaseStatusProvider> {/* <-- ADDED WRAPPER */}
-          <Layout>
-            <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
-              <Routes>
-                <Route path="/" element={<HomePage /> as ReactNode} />
-                <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
-              <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/creditors" element={<ProtectedRoute><CreditorListPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/claims" element={<ProtectedRoute><ClaimListPage /></ProtectedRoute> as ReactNode} />
-              {/* Claim Submission Module with Case Status Guard */}
-              <Route path="/claims/submit" element={<ProtectedRoute requiredCaseStatus="债权申报"><ClaimSubmissionPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/claim-attachment" element={<ProtectedRoute requiredCaseStatus="债权申报"><ClaimAttachmentPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/submitted-claim-detail" element={<ProtectedRoute requiredCaseStatus="债权申报"><SubmittedClaimDetailPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/my-claims" element={<ProtectedRoute requiredCaseStatus="债权申报"><MyClaimsPage /></ProtectedRoute> as ReactNode} />
-              {/* End Claim Submission Module */}
-              <Route path="/claims/:id/review" element={<ProtectedRoute><ClaimReviewDetailPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/claim-dashboard" element={<ProtectedRoute><ClaimDataDashboardPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/online-meetings" element={<ProtectedRoute><OnlineMeetingPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/messages" element={<ProtectedRoute><MessageCenterPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />
-              <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
-              <Route path="/admin/case-status-toggler" element={<ProtectedRoute requiredRole="admin"><CaseStatusToggler /></ProtectedRoute> as ReactNode} /> {/* <-- ADDED */}
-              <Route path="/access-denied-status" element={<AccessDeniedPage />} /> {/* <-- ADDED */}
-              <Route path="/access-denied-role" element={<AccessDeniedRolePage />} /> {/* <-- ADDED */}
-              <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
-          </Layout>
-        </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
-      </SnackbarProvider>
-    </CustomThemeProvider>
-  );
+    return (
+        <CustomThemeProvider>
+            <SnackbarProvider>
+                <CaseStatusProvider> {/* <-- ADDED WRAPPER */}
+                    <Layout>
+                        <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
+                            <Routes>
+                                <Route path="/" element={<HomePage /> as ReactNode} />
+                                <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/creditors" element={<ProtectedRoute><CreditorListPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/claims" element={<ProtectedRoute><ClaimListPage /></ProtectedRoute> as ReactNode} />
+                                {/* Claim Submission Module with Case Status Guard */}
+                                <Route path="/claims/submit" element={<ProtectedRoute requiredCaseStatus="债权申报"><ClaimSubmissionPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/claim-attachment" element={<ProtectedRoute requiredCaseStatus="债权申报"><ClaimAttachmentPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/submitted-claim-detail" element={<ProtectedRoute requiredCaseStatus="债权申报"><SubmittedClaimDetailPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/my-claims" element={<ProtectedRoute requiredCaseStatus="债权申报"><MyClaimsPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/my-claims/:claimId/submitted" element={<ProtectedRoute requiredCaseStatus="债权申报"><SubmittedClaimDetailPage /></ProtectedRoute>} /> {/* Route for creditor viewing their submitted claim */}
+                                {/* End Claim Submission Module */}
+                                <Route path="/claims/:id/review" element={<ProtectedRoute><ClaimReviewDetailPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/claim-dashboard" element={<ProtectedRoute><ClaimDataDashboardPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/online-meetings" element={<ProtectedRoute><OnlineMeetingPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/messages" element={<ProtectedRoute><MessageCenterPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />
+                                {/* Admin specific claim creation routes */}
+                                <Route path="/admin/create-claim/:tempClaimId/attachments" element={<ProtectedRoute requiredRole="admin"><AdminCreateClaimAttachmentsPage /></ProtectedRoute>} />
+                                {/* End Admin specific claim creation routes */}
+                                <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/admin/case-status-toggler" element={<ProtectedRoute requiredRole="admin"><CaseStatusToggler /></ProtectedRoute> as ReactNode} /> {/* <-- ADDED */}
+                                <Route path="/access-denied-status" element={<AccessDeniedPage />} /> {/* <-- ADDED */}
+                                <Route path="/access-denied-role" element={<AccessDeniedRolePage />} /> {/* <-- ADDED */}
+                                <Route path="*" element={<NotFoundPage />} />
+                            </Routes>
+                        </Suspense>
+                    </Layout>
+                </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
+            </SnackbarProvider>
+        </CustomThemeProvider>
+    );
 }
 
 export default App;

@@ -1,7 +1,49 @@
+// STYLING: This page currently uses Tailwind CSS. Per 规范.md, consider migration to MUI components.
+// TODO: Access Control - This page should be accessible only to users with 'admin' or specific claim review roles.
+// TODO: Access Control - Data loaded should be verified against case access permissions.
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import RichTextEditor from '../../components/RichTextEditor';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Typography,
+  Button,
+  Grid,
+  Paper,
+  Container,
+  AppBar,
+  Toolbar,
+  Fab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Chip,
+  FormHelperText,
+  Link as MuiLink, // For external links if any
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+  CircularProgress,
+  Alert,
+  SvgIcon,
+} from '@mui/material';
+import {
+  mdiArrowLeft,
+  mdiPencilOutline, // For "开始审核" / "修改审核结果" FAB
+  mdiCheckDecagramOutline, // For "提交审核" button in modal
+  mdiCommentTextOutline, // For internal notes
+  mdiFileDocumentOutline, // For attachments
+} from '@mdi/js';
+import { useTranslation } from 'react-i18next';
+import RichTextEditor, { QuillDelta } from '../../components/RichTextEditor'; // Assuming QuillDelta is exported
 import { useSnackbar } from '../../contexts/SnackbarContext';
+import Delta from 'quill-delta'; // For initializing editor content
 
 // Define a type for the claim data structure for better type safety
 interface AssertedDetails {
@@ -12,7 +54,7 @@ interface AssertedDetails {
   other: number;
   total: number;
   briefDescription: string;
-  attachments_content: string;
+  attachments_content: QuillDelta; // Changed to QuillDelta
 }
 
 interface ApprovedDetails {
@@ -36,7 +78,7 @@ interface ClaimDataType {
   auditor: string;
   audit_time: string;
   reviewOpinion: string;
-  admin_attachments_content?: string; // Content from admin's supplemental RichTextEditor
+  admin_attachments_content?: QuillDelta; // Changed to QuillDelta
 }
 
 const initialMockClaimData: ClaimDataType = {
@@ -55,13 +97,21 @@ const initialMockClaimData: ClaimDataType = {
     other: 0,
     total: 150000,
     briefDescription: '合同编号 XYZ-2022，供应原材料A，款项逾期未付。',
-    attachments_content: `
-      <h2>附件材料说明</h2>
-      <p>这是债权人提交的关于债权 <strong>CL-2023-001</strong> 的详细说明和附件列表。</p>
-      <p>合同文件：<a href="#" target="_blank">Contract_XYZ-2022.pdf</a> (模拟链接)</p>
-      <p>相关发票：<a href="#" target="_blank">Invoice_INV001.pdf</a>, <a href="#" target="_blank">Invoice_INV002.pdf</a> (模拟链接)</p>
-      <p><em>请注意：以上链接均为模拟，实际应用中应指向真实文件。</em></p>
-    `
+    attachments_content: new Delta([
+      { insert: '附件材料说明\n', attributes: { header: 2 } },
+      { insert: '这是债权人提交的关于债权 ' },
+      { insert: 'CL-2023-001', attributes: { bold: true } },
+      { insert: ' 的详细说明和附件列表。\n' },
+      { insert: '合同文件：' },
+      { insert: 'Contract_XYZ-2022.pdf', attributes: { link: '#' } },
+      { insert: ' (模拟链接)\n' },
+      { insert: '相关发票：' },
+      { insert: 'Invoice_INV001.pdf', attributes: { link: '#' } },
+      { insert: ', ' },
+      { insert: 'Invoice_INV002.pdf', attributes: { link: '#' } },
+      { insert: ' (模拟链接)\n' },
+      { insert: '请注意：以上链接均为模拟，实际应用中应指向真实文件。\n', attributes: { italic: true } },
+    ])
   },
   approved_details: {
     nature: null,
@@ -69,311 +119,389 @@ const initialMockClaimData: ClaimDataType = {
     interest: null,
     other: null,
   },
-  audit_status: '待审核', 
-  auditor: '', 
-  audit_time: '', 
-  reviewOpinion: '', 
-  admin_attachments_content: '',
+  audit_status: '待审核',
+  auditor: '',
+  audit_time: '',
+  reviewOpinion: '',
+  admin_attachments_content: new Delta(),
 };
 
 
 const ClaimReviewDetailPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
+  const { id: claimIdFromParams } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
 
-  const [claimData, setClaimData] = useState<ClaimDataType>({ ...initialMockClaimData, id: id || initialMockClaimData.id });
+  // TODO: Fetch actual claim data based on claimIdFromParams
+  const [claimData, setClaimData] = useState<ClaimDataType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
 
   // Modal specific states
-  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
   const [modalApprovedNature, setModalApprovedNature] = useState<string>('');
-  const [modalApprovedPrincipal, setModalApprovedPrincipal] = useState<number | null>(null);
-  const [modalApprovedInterest, setModalApprovedInterest] = useState<number | null>(null);
-  const [modalApprovedOther, setModalApprovedOther] = useState<number | null>(null);
+  const [modalApprovedPrincipal, setModalApprovedPrincipal] = useState<string>(''); // Use string for TextField
+  const [modalApprovedInterest, setModalApprovedInterest] = useState<string>(''); // Use string for TextField
+  const [modalApprovedOther, setModalApprovedOther] = useState<string>(''); // Use string for TextField
   const [modalAuditStatus, setModalAuditStatus] = useState<ClaimDataType['audit_status'] | ''>('');
   const [modalReviewOpinion, setModalReviewOpinion] = useState<string>('');
-  const [modalAdminSupplementalAttachmentsContent, setModalAdminSupplementalAttachmentsContent] = useState<string>('');
+  const [modalAdminSupplementalAttachmentsContent, setModalAdminSupplementalAttachmentsContent] = useState<QuillDelta>(new Delta());
   const [modalErrors, setModalErrors] = useState<Record<string, string>>({});
-  
-  const [adminInternalNotes, setAdminInternalNotes] = useState(claimData.reviewOpinion || '');
 
-  const calculatedModalApprovedTotal = (modalApprovedPrincipal || 0) + (modalApprovedInterest || 0) + (modalApprovedOther || 0);
+  const [adminInternalNotes, setAdminInternalNotes] = useState<QuillDelta>(new Delta());
 
-  // Styling classes
-  const commonLabelClass = "block text-sm font-medium text-gray-700 dark:text-gray-300";
-  const commonValueClass = "mt-1 text-sm text-gray-900 dark:text-white";
-  const commonSectionTitleClass = "text-xl font-semibold text-gray-800 dark:text-white mb-4";
-  const commonInputClass = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-white dark:placeholder-gray-400";
-  const commonButtonClass = "inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-800";
-  const primaryButtonClass = `${commonButtonClass} text-white bg-blue-600 hover:bg-blue-700 focus:ring-blue-500`;
-  const outlineButtonClass = `${commonButtonClass} text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 focus:ring-indigo-500`;
-  const disabledButtonClass = `${commonButtonClass} text-gray-400 dark:text-gray-500 bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50`;
-  const errorTextClass = "mt-1 text-xs text-red-600 dark:text-red-400";
 
-  const formatCurrencyDisplay = (amount: number | null, currency: string) => {
-    if (amount === null) return '-';
+  useEffect(() => {
+    // Simulate fetching data
+    setLoading(true);
+    setTimeout(() => {
+      if (claimIdFromParams) {
+        setClaimData({ ...initialMockClaimData, id: claimIdFromParams, claim_number: `CL-${claimIdFromParams.slice(-5)}` });
+        setAdminInternalNotes(new Delta().insert(initialMockClaimData.reviewOpinion || '')); // Initialize internal notes
+      } else {
+        setError(t('claim_review_error_no_id', '未提供有效的债权ID。'));
+      }
+      setLoading(false);
+    }, 500);
+  }, [claimIdFromParams, t]);
+
+
+  const calculatedModalApprovedTotal =
+      (parseFloat(modalApprovedPrincipal) || 0) +
+      (parseFloat(modalApprovedInterest) || 0) +
+      (parseFloat(modalApprovedOther) || 0);
+
+
+  const formatCurrencyDisplay = (amount: number | null, currency: string = 'CNY') => {
+    if (amount === null || typeof amount === 'undefined') return '-';
     return `${amount.toLocaleString('zh-CN', { style: 'currency', currency: currency })}`;
   };
 
   const handleOpenAuditModal = () => {
+    if (!claimData) return;
     setModalErrors({});
     if (claimData.audit_status === '待审核' || claimData.approved_details.principal === null) {
-        setModalApprovedNature(claimData.asserted_details.nature);
-        setModalApprovedPrincipal(claimData.asserted_details.principal);
-        setModalApprovedInterest(claimData.asserted_details.interest);
-        setModalApprovedOther(claimData.asserted_details.other);
-        setModalAuditStatus(''); 
-        setModalReviewOpinion(''); 
-        setModalAdminSupplementalAttachmentsContent(''); 
+      setModalApprovedNature(claimData.asserted_details.nature);
+      setModalApprovedPrincipal(String(claimData.asserted_details.principal));
+      setModalApprovedInterest(String(claimData.asserted_details.interest));
+      setModalApprovedOther(String(claimData.asserted_details.other));
+      setModalAuditStatus('');
+      setModalReviewOpinion('');
+      setModalAdminSupplementalAttachmentsContent(new Delta());
     } else {
-        setModalApprovedNature(claimData.approved_details.nature || claimData.asserted_details.nature);
-        setModalApprovedPrincipal(claimData.approved_details.principal);
-        setModalApprovedInterest(claimData.approved_details.interest);
-        setModalApprovedOther(claimData.approved_details.other);
-        setModalAuditStatus(claimData.audit_status); 
-        setModalReviewOpinion(claimData.reviewOpinion);
-        setModalAdminSupplementalAttachmentsContent(claimData.admin_attachments_content || '');
+      setModalApprovedNature(claimData.approved_details.nature || claimData.asserted_details.nature);
+      setModalApprovedPrincipal(String(claimData.approved_details.principal ?? ''));
+      setModalApprovedInterest(String(claimData.approved_details.interest ?? ''));
+      setModalApprovedOther(String(claimData.approved_details.other ?? ''));
+      setModalAuditStatus(claimData.audit_status);
+      setModalReviewOpinion(claimData.reviewOpinion);
+      setModalAdminSupplementalAttachmentsContent(claimData.admin_attachments_content || new Delta());
     }
-    setShowAuditModal(true);
+    setAuditModalOpen(true);
   };
 
   const validateModalForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!modalApprovedNature) errors.modalApprovedNature = '审核认定债权性质不能为空。';
-    if (modalApprovedPrincipal === null || modalApprovedPrincipal < 0) errors.modalApprovedPrincipal = '审核认定本金不能为空且必须大于等于0。';
-    if (modalApprovedInterest === null || modalApprovedInterest < 0) errors.modalApprovedInterest = '审核认定利息不能为空且必须大于等于0。';
-    if (modalApprovedOther !== null && modalApprovedOther < 0) errors.modalApprovedOther = '审核认定其他费用必须大于等于0（如果填写）。';
-    if (!modalAuditStatus) errors.modalAuditStatus = '审核状态不能为空。';
-    if (!modalReviewOpinion.trim()) errors.modalReviewOpinion = '审核意见/备注不能为空。';
+    if (!modalApprovedNature) errors.modalApprovedNature = t('validation_required_approved_nature', '审核认定债权性质不能为空。');
+    if (!modalApprovedPrincipal.trim() || parseFloat(modalApprovedPrincipal) < 0) errors.modalApprovedPrincipal = t('validation_invalid_approved_principal', '审核认定本金不能为空且必须大于等于0。');
+    if (!modalApprovedInterest.trim() || parseFloat(modalApprovedInterest) < 0) errors.modalApprovedInterest = t('validation_invalid_approved_interest', '审核认定利息不能为空且必须大于等于0。');
+    if (modalApprovedOther.trim() && parseFloat(modalApprovedOther) < 0) errors.modalApprovedOther = t('validation_invalid_approved_other', '审核认定其他费用必须大于等于0（如果填写）。');
+    if (!modalAuditStatus) errors.modalAuditStatus = t('validation_required_audit_status', '审核状态不能为空。');
+    if (!modalReviewOpinion.trim()) errors.modalReviewOpinion = t('validation_required_review_opinion', '审核意见/备注不能为空。');
     setModalErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmitReview = () => {
-    if (!validateModalForm()) {
-      showSnackbar('请修正审核表单中的错误。', 'error');
+    if (!validateModalForm() || !claimData) {
+      showSnackbar(t('claim_review_error_form_invalid', '请修正审核表单中的错误。'), 'error');
       return;
     }
 
-    if (window.confirm(`请再次确认认定的债权金额及信息后提交。\n审核认定债权总额: ${formatCurrencyDisplay(calculatedModalApprovedTotal, claimData.asserted_details.currency)}`)) {
+    // Using MUI's Dialog for confirmation would be more consistent than window.confirm
+    // For now, keeping window.confirm as per original logic structure
+    if (window.confirm(t('claim_review_confirm_submission', '请再次确认认定的债权金额及信息后提交。\n审核认定债权总额: {{totalAmount}}', { totalAmount: formatCurrencyDisplay(calculatedModalApprovedTotal, claimData.asserted_details.currency) }))) {
       const updatedClaimData: ClaimDataType = {
         ...claimData,
         approved_details: {
           nature: modalApprovedNature,
-          principal: modalApprovedPrincipal,
-          interest: modalApprovedInterest,
-          other: modalApprovedOther,
+          principal: parseFloat(modalApprovedPrincipal) || 0,
+          interest: parseFloat(modalApprovedInterest) || 0,
+          other: parseFloat(modalApprovedOther) || 0,
         },
-        audit_status: modalAuditStatus as ClaimDataType['audit_status'], 
+        audit_status: modalAuditStatus as ClaimDataType['audit_status'],
         reviewOpinion: modalReviewOpinion,
         admin_attachments_content: modalAdminSupplementalAttachmentsContent,
-        auditor: 'CurrentAdminUser', 
-        audit_time: new Date().toISOString().split('T')[0], 
+        auditor: 'CurrentAdminUser', // TODO: Replace with actual admin user
+        audit_time: new Date().toISOString().split('T')[0],
       };
-      setClaimData(updatedClaimData); 
-      
-      showSnackbar('审核意见已提交 (模拟)', 'success');
-      setShowAuditModal(false);
-      // navigate('/admin/claims'); // Or current page to see updates
+      setClaimData(updatedClaimData);
+      setAdminInternalNotes(new Delta().insert(modalReviewOpinion)); // Update internal notes as well if it's tied to official opinion
+
+      showSnackbar(t('claim_review_submit_success_mock', '审核意见已提交 (模拟)'), 'success');
+      setAuditModalOpen(false);
     }
   };
 
-  // Effect to update adminInternalNotes if claimData.reviewOpinion changes (e.g., after submission)
-  useEffect(() => {
-    setAdminInternalNotes(claimData.reviewOpinion || '');
-  }, [claimData.reviewOpinion]);
+  const getStatusChipColor = (status: ClaimDataType['audit_status']): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
+    switch (status) {
+      case '待审核': return 'info';
+      case '部分通过': return 'warning';
+      case '已驳回': return 'error';
+      case '审核通过': return 'success';
+      case '要求补充材料': return 'secondary';
+      default: return 'default';
+    }
+  };
+
+  if (loading) {
+    return (
+        <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+          <CircularProgress />
+          <Typography sx={{ ml: 2 }}>{t('loading_claim_details', '加载债权详情中...')}</Typography>
+        </Container>
+    );
+  }
+
+  if (error) {
+    return (
+        <Container>
+          <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>
+        </Container>
+    );
+  }
+
+  if (!claimData) {
+    return (
+        <Container>
+          <Alert severity="warning" sx={{ mt: 2 }}>{t('claim_not_found', '未找到指定的债权信息。')}</Alert>
+        </Container>
+    );
+  }
+
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-100 dark:bg-gray-900 min-h-screen">
-      <div className="mb-4">
-        <Link to="/admin/claims" className="text-blue-600 hover:underline dark:text-blue-400 dark:hover:text-blue-300">&larr; 返回债权列表</Link>
-      </div>
-      <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-6">审核债权: {claimData.claim_number}</h1>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <AppBar position="sticky">
+          <Toolbar>
+            <IconButton edge="start" color="inherit" component={RouterLink} to="/admin/claims" aria-label="back to claims list" sx={{ mr: 2 }}>
+              <SvgIcon><path d={mdiArrowLeft} /></SvgIcon>
+            </IconButton>
+            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+              {t('claim_review_page_title', '审核债权')}: {claimData.claim_number}
+            </Typography>
+          </Toolbar>
+        </AppBar>
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Panel: Creditor's Submitted Information */}
-        <div className="lg:w-1/3 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-          <h2 className={commonSectionTitleClass}>债权人申报信息</h2>
-          <dl className="space-y-3">
-            <div><dt className={commonLabelClass}>债权人:</dt><dd className={commonValueClass}>{claimData.creditorName} ({claimData.creditorType})</dd></div>
-            <div><dt className={commonLabelClass}>{claimData.creditorType === '组织' ? '统一社会信用代码:' : '身份证号:'}</dt><dd className={commonValueClass}>{claimData.creditorId}</dd></div>
-            <div><dt className={commonLabelClass}>提交日期:</dt><dd className={commonValueClass}>{claimData.submissionDate}</dd></div>
-            <hr className="dark:border-gray-600"/>
-            <div><dt className={commonLabelClass}>联系人:</dt><dd className={commonValueClass}>{claimData.contact.name}</dd></div>
-            <div><dt className={commonLabelClass}>联系电话:</dt><dd className={commonValueClass}>{claimData.contact.phone}</dd></div>
-            <div><dt className={commonLabelClass}>联系邮箱:</dt><dd className={commonValueClass}>{claimData.contact.email || '-'}</dd></div>
-            <hr className="dark:border-gray-600"/>
-            <div><dt className={commonLabelClass}>主张债权性质:</dt><dd className={commonValueClass}>{claimData.asserted_details.nature}</dd></div>
-            <div><dt className={commonLabelClass}>币种:</dt><dd className={commonValueClass}>{claimData.asserted_details.currency}</dd></div>
-            <div><dt className={commonLabelClass}>主张本金:</dt><dd className={commonValueClass}>{formatCurrencyDisplay(claimData.asserted_details.principal, claimData.asserted_details.currency)}</dd></div>
-            <div><dt className={commonLabelClass}>主张利息:</dt><dd className={commonValueClass}>{formatCurrencyDisplay(claimData.asserted_details.interest, claimData.asserted_details.currency)}</dd></div>
-            <div><dt className={commonLabelClass}>主张其他费用:</dt><dd className={commonValueClass}>{formatCurrencyDisplay(claimData.asserted_details.other, claimData.asserted_details.currency)}</dd></div>
-            <div className="pt-2"><dt className={`${commonLabelClass} font-semibold`}>主张总金额:</dt><dd className={`${commonValueClass} font-semibold text-lg text-blue-600 dark:text-blue-400`}>{formatCurrencyDisplay(claimData.asserted_details.total, claimData.asserted_details.currency)}</dd></div>
-            {claimData.asserted_details.briefDescription && (
-                <div className="pt-2"><dt className={commonLabelClass}>简要说明:</dt><dd className={`${commonValueClass} whitespace-pre-wrap break-words`}>{claimData.asserted_details.briefDescription}</dd></div>
-            )}
-            <hr className="dark:border-gray-600"/>
-            <h3 className="text-md font-semibold text-gray-700 dark:text-gray-200 pt-2">当前审核状态</h3>
-            <div><dt className={commonLabelClass}>状态:</dt><dd className={commonValueClass}>{claimData.audit_status}</dd></div>
-            <div><dt className={commonLabelClass}>审核人:</dt><dd className={commonValueClass}>{claimData.auditor || '-'}</dd></div>
-            <div><dt className={commonLabelClass}>审核时间:</dt><dd className={commonValueClass}>{claimData.audit_time || '-'}</dd></div>
-            <div><dt className={commonLabelClass}>官方审核意见:</dt><dd className={`${commonValueClass} whitespace-pre-wrap break-words`}>{claimData.reviewOpinion || '-'}</dd></div>
-             {claimData.admin_attachments_content && (
-                <div className="pt-2">
-                    <dt className={commonLabelClass}>管理人补充材料:</dt>
-                    <dd className={`${commonValueClass} mt-1 p-2 border dark:border-gray-700 rounded-md max-h-48 overflow-y-auto prose prose-sm dark:prose-invert max-w-none`} dangerouslySetInnerHTML={{ __html: claimData.admin_attachments_content }} />
-                </div>
-            )}
-          </dl>
-        </div>
+        <Container maxWidth="xl" sx={{ flexGrow: 1, py: 3 }}>
+          <Grid container spacing={3}>
+            {/* Left Panel: Creditor's Submitted Information */}
+            <Grid item xs={12} lg={4}>
+              <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
+                <Typography variant="h5" gutterBottom>{t('creditor_submitted_info_title', '债权人申报信息')}</Typography>
+                <List dense>
+                  <ListItem><ListItemText primary={t('creditor_name_label', '债权人')} secondary={`${claimData.creditorName} (${claimData.creditorType})`} /></ListItem>
+                  <ListItem><ListItemText primary={claimData.creditorType === '组织' ? t('org_code_label', '统一社会信用代码') : t('id_number_label', '身份证号')} secondary={claimData.creditorId} /></ListItem>
+                  <ListItem><ListItemText primary={t('submission_date_label', '提交日期')} secondary={claimData.submissionDate} /></ListItem>
+                  <Divider sx={{ my: 1 }} />
+                  <ListItem><ListItemText primary={t('contact_person_label', '联系人')} secondary={claimData.contact.name} /></ListItem>
+                  <ListItem><ListItemText primary={t('contact_phone_label', '联系电话')} secondary={claimData.contact.phone} /></ListItem>
+                  <ListItem><ListItemText primary={t('contact_email_label', '联系邮箱')} secondary={claimData.contact.email || '-'} /></ListItem>
+                  <Divider sx={{ my: 1 }} />
+                  <ListItem><ListItemText primary={t('asserted_claim_nature_label', '主张债权性质')} secondary={claimData.asserted_details.nature} /></ListItem>
+                  <ListItem><ListItemText primary={t('currency_label', '币种')} secondary={claimData.asserted_details.currency} /></ListItem>
+                  <ListItem><ListItemText primary={t('asserted_principal_label', '主张本金')} secondary={formatCurrencyDisplay(claimData.asserted_details.principal, claimData.asserted_details.currency)} /></ListItem>
+                  <ListItem><ListItemText primary={t('asserted_interest_label', '主张利息')} secondary={formatCurrencyDisplay(claimData.asserted_details.interest, claimData.asserted_details.currency)} /></ListItem>
+                  <ListItem><ListItemText primary={t('asserted_other_fees_label', '主张其他费用')} secondary={formatCurrencyDisplay(claimData.asserted_details.other, claimData.asserted_details.currency)} /></ListItem>
+                  <ListItem>
+                    <ListItemText
+                        primary={<Typography variant="subtitle1" color="primary">{t('asserted_total_amount_label', '主张总金额')}</Typography>}
+                        secondary={<Typography variant="h6" color="primary">{formatCurrencyDisplay(claimData.asserted_details.total, claimData.asserted_details.currency)}</Typography>}
+                    />
+                  </ListItem>
+                  {claimData.asserted_details.briefDescription && (
+                      <ListItem sx={{flexDirection: 'column', alignItems: 'flex-start'}}><Typography variant="caption" color="text.secondary">{t('brief_description_label', '简要说明')}:</Typography> <Typography variant="body2" sx={{whiteSpace: 'pre-wrap'}}>{claimData.asserted_details.briefDescription}</Typography></ListItem>
+                  )}
+                  <Divider sx={{ my: 1 }} />
+                  <Typography variant="subtitle1" sx={{mt:1, ml:2}}>{t('current_audit_status_title', '当前审核状态')}</Typography>
+                  <ListItem><ListItemText primary={t('status_label', '状态')} secondary={<Chip label={claimData.audit_status} color={getStatusChipColor(claimData.audit_status)} size="small" />} /></ListItem>
+                  <ListItem><ListItemText primary={t('auditor_label', '审核人')} secondary={claimData.auditor || '-'} /></ListItem>
+                  <ListItem><ListItemText primary={t('audit_time_label', '审核时间')} secondary={claimData.audit_time || '-'} /></ListItem>
+                  <ListItem sx={{flexDirection: 'column', alignItems: 'flex-start'}}><Typography variant="caption" color="text.secondary">{t('official_review_opinion_label', '官方审核意见')}:</Typography> <Typography variant="body2" sx={{whiteSpace: 'pre-wrap'}}>{claimData.reviewOpinion || '-'}</Typography></ListItem>
+                  {claimData.admin_attachments_content && claimData.admin_attachments_content.length() > 0 && (
+                      <ListItem sx={{flexDirection: 'column', alignItems: 'flex-start'}}>
+                        <Typography variant="caption" color="text.secondary">{t('admin_supplemental_material_label', '管理人补充材料')}:</Typography>
+                        <Box sx={{ mt:1, p:1, border: '1px solid', borderColor: 'divider', borderRadius:1, width:'100%', maxHeight:150, overflowY:'auto'}}>
+                          <RichTextEditor value={claimData.admin_attachments_content} readOnly={true} />
+                        </Box>
+                      </ListItem>
+                  )}
+                </List>
+              </Paper>
+            </Grid>
 
-        {/* Right Panel: Attachments & Review Area */}
-        <div className="lg:w-2/3 space-y-6">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className={commonSectionTitleClass}>债权人提交的附件材料</h2>
-                    <button className={`${disabledButtonClass} text-xs`} disabled>
-                        查看历史版本 (未来功能)
-                    </button>
-                </div>
-                <div className="border border-gray-200 dark:border-gray-700 rounded-md min-h-[250px] p-1 bg-gray-50 dark:bg-gray-900">
+            {/* Right Panel: Attachments & Review Area */}
+            <Grid item xs={12} lg={8}>
+              <Stack spacing={3}>
+                <Paper elevation={3} sx={{ p: 2 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="h5">{t('creditor_submitted_attachments_title', '债权人提交的附件材料')}</Typography>
+                    <Button size="small" disabled>{t('view_history_button_placeholder', '查看历史版本 (未来功能)')}</Button>
+                  </Stack>
+                  <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 250, p: 1, bgcolor: 'action.hover' }}>
                     <RichTextEditor value={claimData.asserted_details.attachments_content} readOnly={true} />
-                </div>
-            </div>
-            
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <h2 className={commonSectionTitleClass}>管理员内部审核备注</h2>
-                <textarea
-                    rows={6}
-                    value={adminInternalNotes} 
-                    onChange={(e) => setAdminInternalNotes(e.target.value)}
-                    placeholder="输入内部审核备注，此内容对债权人不可见，且不会随审核意见提交..."
-                    className={`${commonInputClass} h-auto`}
-                ></textarea>
-                 <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">此备注仅为管理员内部记录，不作为官方审核意见的一部分。</p>
-            </div>
-        </div>
-      </div>
+                  </Box>
+                </Paper>
 
-      {/* Floating Audit Button */}
-      {!showAuditModal && ( 
-        <div className="fixed bottom-6 right-6 z-40">
-          <button
-            onClick={handleOpenAuditModal}
-            className={`${primaryButtonClass} px-6 py-3 rounded-full shadow-lg text-lg font-medium flex items-center`}
-          >
-             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            {claimData.audit_status === '待审核' ? '开始审核' : '修改审核结果'}
-          </button>
-        </div>
-      )}
+                <Paper elevation={3} sx={{ p: 2 }}>
+                  <Typography variant="h5" gutterBottom>{t('admin_internal_notes_title', '管理员内部审核备注')}</Typography>
+                  <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 200, p: 1 }}>
+                    <RichTextEditor
+                        value={adminInternalNotes}
+                        onChange={setAdminInternalNotes}
+                        placeholder={t('admin_internal_notes_placeholder', '输入内部审核备注，此内容对债权人不可见...')}
+                    />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{mt:1, display:'block'}}>{t('admin_internal_notes_disclaimer', '此备注仅为管理员内部记录，不作为官方审核意见的一部分。')}</Typography>
+                </Paper>
+              </Stack>
+            </Grid>
+          </Grid>
+        </Container>
 
-      {/* Audit Modal/Form */}
-      {showAuditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-in-out">
-          <div className="bg-white dark:bg-gray-800 p-6 sm:p-8 rounded-lg shadow-xl w-full max-w-3xl max-h-[95vh] overflow-y-auto transform transition-all duration-300 ease-in-out scale-100">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">填写审核意见与认定金额</h2>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                <div>
-                  <label htmlFor="modalApprovedNature" className={`${commonLabelClass} mb-1`}>审核认定债权性质*</label>
-                  <select id="modalApprovedNature" value={modalApprovedNature} 
-                    onChange={e => { setModalApprovedNature(e.target.value); setModalErrors(p => ({...p, modalApprovedNature: ''}));}} 
-                    required
-                    className={`${commonInputClass} ${modalErrors.modalApprovedNature ? 'border-red-500 dark:border-red-400' : ''}`}
+        {/* Floating Audit Button */}
+        {/* // TODO: Access Control - This button's visibility/enabled state should depend on user permissions and if the claim is in a reviewable state. */}
+        {!auditModalOpen && (
+            <Fab
+                color="primary"
+                aria-label="audit claim"
+                onClick={handleOpenAuditModal}
+                sx={{ position: 'fixed', bottom: 24, right: 24 }}
+            >
+              <SvgIcon><path d={mdiPencilOutline} /></SvgIcon>
+            </Fab>
+        )}
+
+        {/* Audit Modal/Form */}
+        <Dialog open={auditModalOpen} onClose={() => setAuditModalOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight: '90vh' } }}>
+          <DialogTitle>{t('fill_review_opinion_and_amount_title', '填写审核意见与认定金额')}</DialogTitle>
+          <DialogContent dividers>
+            <Grid container spacing={2} sx={{pt:1}}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth error={!!modalErrors.modalApprovedNature}>
+                  <InputLabel id="modalApprovedNature-label">{t('approved_claim_nature_label', '审核认定债权性质')}*</InputLabel>
+                  <Select
+                      labelId="modalApprovedNature-label"
+                      value={modalApprovedNature}
+                      label={t('approved_claim_nature_label', '审核认定债权性质') + "*"}
+                      onChange={e => { setModalApprovedNature(e.target.value); setModalErrors(p => ({...p, modalApprovedNature: ''}));}}
                   >
-                    <option value="">选择性质...</option>
-                    <option value="货款">货款</option>
-                    <option value="服务费">服务费</option>
-                    <option value="劳动报酬">劳动报酬</option>
-                    <option value="其他">其他</option>
-                  </select>
-                  {modalErrors.modalApprovedNature && <p className={errorTextClass}>{modalErrors.modalApprovedNature}</p>}
-                </div>
-                <div>
-                  <label htmlFor="modalAuditStatus" className={`${commonLabelClass} mb-1`}>审核状态*</label>
-                  <select id="modalAuditStatus" value={modalAuditStatus} 
-                    onChange={e => { setModalAuditStatus(e.target.value as ClaimDataType['audit_status'] | ''); setModalErrors(p => ({...p, modalAuditStatus: ''}));}} 
-                    required
-                    className={`${commonInputClass} ${modalErrors.modalAuditStatus ? 'border-red-500 dark:border-red-400' : ''}`}
+                    {/* TODO: Fetch from admin config */}
+                    <MenuItem value="货款">{t('claim_nature_goods_payment', '货款')}</MenuItem>
+                    <MenuItem value="服务费">{t('claim_nature_service_fee', '服务费')}</MenuItem>
+                    <MenuItem value="劳动报酬">{t('claim_nature_labor_remuneration', '劳动报酬')}</MenuItem>
+                    <MenuItem value="其他">{t('claim_nature_other', '其他')}</MenuItem>
+                  </Select>
+                  {modalErrors.modalApprovedNature && <FormHelperText>{modalErrors.modalApprovedNature}</FormHelperText>}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth error={!!modalErrors.modalAuditStatus}>
+                  <InputLabel id="modalAuditStatus-label">{t('audit_status_label', '审核状态')}*</InputLabel>
+                  <Select
+                      labelId="modalAuditStatus-label"
+                      value={modalAuditStatus}
+                      label={t('audit_status_label', '审核状态') + "*"}
+                      onChange={e => { setModalAuditStatus(e.target.value as ClaimDataType['audit_status'] | ''); setModalErrors(p => ({...p, modalAuditStatus: ''}));}}
                   >
-                    <option value="">选择状态...</option>
-                    <option value="审核通过">审核通过</option>
-                    <option value="部分通过">部分通过</option>
-                    <option value="已驳回">已驳回</option>
-                    <option value="要求补充材料">要求补充材料</option>
-                  </select>
-                  {modalErrors.modalAuditStatus && <p className={errorTextClass}>{modalErrors.modalAuditStatus}</p>}
-                </div>
-                <div>
-                  <label htmlFor="modalApprovedPrincipal" className={`${commonLabelClass} mb-1`}>审核认定本金 ({claimData.asserted_details.currency})*</label>
-                  <input type="number" id="modalApprovedPrincipal" value={modalApprovedPrincipal ?? ''} 
-                    onChange={e => { setModalApprovedPrincipal(parseFloat(e.target.value) || null); setModalErrors(p => ({...p, modalApprovedPrincipal: ''}));}} 
-                    required placeholder="0.00"
-                    className={`${commonInputClass} ${modalErrors.modalApprovedPrincipal ? 'border-red-500 dark:border-red-400' : ''}`}
+                    {/* TODO: Fetch from admin config */}
+                    <MenuItem value="审核通过">{t('status_approved', '审核通过')}</MenuItem>
+                    <MenuItem value="部分通过">{t('status_partially_approved', '部分通过')}</MenuItem>
+                    <MenuItem value="已驳回">{t('status_rejected', '已驳回')}</MenuItem>
+                    <MenuItem value="要求补充材料">{t('status_needs_supplement', '要求补充材料')}</MenuItem>
+                  </Select>
+                  {modalErrors.modalAuditStatus && <FormHelperText>{modalErrors.modalAuditStatus}</FormHelperText>}
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <TextField
+                    label={t('approved_principal_label', '审核认定本金') + ` (${claimData.asserted_details.currency})*`}
+                    type="number"
+                    fullWidth
+                    value={modalApprovedPrincipal}
+                    onChange={e => { setModalApprovedPrincipal(e.target.value); setModalErrors(p => ({...p, modalApprovedPrincipal: ''}));}}
+                    error={!!modalErrors.modalApprovedPrincipal}
+                    helperText={modalErrors.modalApprovedPrincipal}
+                    InputProps={{ inputProps: { min: 0 } }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={6} md={4}>
+                <TextField
+                    label={t('approved_interest_label', '审核认定利息') + ` (${claimData.asserted_details.currency})*`}
+                    type="number"
+                    fullWidth
+                    value={modalApprovedInterest}
+                    onChange={e => { setModalApprovedInterest(e.target.value); setModalErrors(p => ({...p, modalApprovedInterest: ''}));}}
+                    error={!!modalErrors.modalApprovedInterest}
+                    helperText={modalErrors.modalApprovedInterest}
+                    InputProps={{ inputProps: { min: 0 } }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={12} md={4}>
+                <TextField
+                    label={t('approved_other_fees_label', '审核认定其他费用') + ` (${claimData.asserted_details.currency})`}
+                    type="number"
+                    fullWidth
+                    value={modalApprovedOther}
+                    onChange={e => { setModalApprovedOther(e.target.value); setModalErrors(p => ({...p, modalApprovedOther: ''}));}}
+                    error={!!modalErrors.modalApprovedOther}
+                    helperText={modalErrors.modalApprovedOther}
+                    InputProps={{ inputProps: { min: 0 } }}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                    label={t('review_opinion_label', '审核意见/备注')}
+                    multiline
+                    rows={4}
+                    fullWidth
+                    value={modalReviewOpinion}
+                    onChange={e => { setModalReviewOpinion(e.target.value); setModalErrors(p => ({...p, modalReviewOpinion: ''}));}}
+                    error={!!modalErrors.modalReviewOpinion}
+                    helperText={modalErrors.modalReviewOpinion}
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" gutterBottom>{t('admin_supplemental_attachments_modal_label', '管理人补充附件材料 (可选)')}</Typography>
+                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 200, p:1 }}>
+                  <RichTextEditor
+                      value={modalAdminSupplementalAttachmentsContent}
+                      onChange={setModalAdminSupplementalAttachmentsContent}
                   />
-                  {modalErrors.modalApprovedPrincipal && <p className={errorTextClass}>{modalErrors.modalApprovedPrincipal}</p>}
-                </div>
-                <div>
-                  <label htmlFor="modalApprovedInterest" className={`${commonLabelClass} mb-1`}>审核认定利息 ({claimData.asserted_details.currency})*</label>
-                  <input type="number" id="modalApprovedInterest" value={modalApprovedInterest ?? ''} 
-                    onChange={e => { setModalApprovedInterest(parseFloat(e.target.value) || null); setModalErrors(p => ({...p, modalApprovedInterest: ''}));}} 
-                    required placeholder="0.00"
-                    className={`${commonInputClass} ${modalErrors.modalApprovedInterest ? 'border-red-500 dark:border-red-400' : ''}`}
-                  />
-                  {modalErrors.modalApprovedInterest && <p className={errorTextClass}>{modalErrors.modalApprovedInterest}</p>}
-                </div>
-                <div className="md:col-span-2">
-                  <label htmlFor="modalApprovedOther" className={`${commonLabelClass} mb-1`}>审核认定其他费用 ({claimData.asserted_details.currency})</label>
-                  <input type="number" id="modalApprovedOther" value={modalApprovedOther ?? ''} 
-                    onChange={e => { setModalApprovedOther(parseFloat(e.target.value) || null); setModalErrors(p => ({...p, modalApprovedOther: ''}));}} 
-                    placeholder="0.00"
-                    className={`${commonInputClass} ${modalErrors.modalApprovedOther ? 'border-red-500 dark:border-red-400' : ''}`}
-                  />
-                  {modalErrors.modalApprovedOther && <p className={errorTextClass}>{modalErrors.modalApprovedOther}</p>}
-                </div>
-              </div>
-              <div className="mt-4">
-                <label htmlFor="modalReviewOpinion" className={`${commonLabelClass} mb-1`}>审核意见/备注*</label>
-                <textarea id="modalReviewOpinion" value={modalReviewOpinion} 
-                  onChange={e => { setModalReviewOpinion(e.target.value); setModalErrors(p => ({...p, modalReviewOpinion: ''}));}} 
-                  rows={4} required placeholder="请输入官方审核意见和备注..."
-                  className={`${commonInputClass} h-auto ${modalErrors.modalReviewOpinion ? 'border-red-500 dark:border-red-400' : ''}`}
-                ></textarea>
-                {modalErrors.modalReviewOpinion && <p className={errorTextClass}>{modalErrors.modalReviewOpinion}</p>}
-              </div>
-              <div className="mt-4">
-                <label className={`${commonLabelClass} mb-1`}>管理人补充附件材料 (可选)</label>
-                <div className="border border-gray-300 dark:border-gray-600 rounded-md min-h-[200px] p-1 bg-white dark:bg-gray-900">
-                  <RichTextEditor 
-                    value={modalAdminSupplementalAttachmentsContent} 
-                    onChange={setModalAdminSupplementalAttachmentsContent} 
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="mt-6 text-right">
-                <p className="text-xl font-bold text-red-600 dark:text-red-400 mb-4">
-                审核认定债权总额: {formatCurrencyDisplay(calculatedModalApprovedTotal, claimData.asserted_details.currency)}
-                </p>
-            </div>
-            <div className="mt-8 flex flex-col sm:flex-row sm:justify-end sm:space-x-3 space-y-2 sm:space-y-0">
-              <button type="button" onClick={() => setShowAuditModal(false)}
-                className={`${outlineButtonClass} w-full sm:w-auto justify-center`}>
-                取消
-              </button>
-              <button type="button" onClick={handleSubmitReview}
-                className={`${primaryButtonClass} w-full sm:w-auto justify-center`}>
-                提交审核
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      <p className="mt-8 text-sm text-gray-500 dark:text-gray-400 text-center">
-        管理员审核页面。左侧为债权人申报信息，右侧为附件材料和内部审核备注。
-      </p>
-    </div>
+                </Box>
+              </Grid>
+            </Grid>
+            <Box sx={{mt:2, textAlign:'right'}}>
+              <Typography variant="h6" color="error">
+                {t('approved_total_amount_modal_label', '审核认定债权总额')}: {formatCurrencyDisplay(calculatedModalApprovedTotal, claimData.asserted_details.currency)}
+              </Typography>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{p: '16px 24px'}}>
+            <Button onClick={() => setAuditModalOpen(false)}>{t('cancel_button', '取消')}</Button>
+            {/* // TODO: Access Control - Ensure user has permission to submit/modify a claim review. */}
+            <Button onClick={handleSubmitReview} variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiCheckDecagramOutline}/></SvgIcon>}>
+              {t('submit_review_button', '提交审核')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Typography variant="caption" color="text.secondary" align="center" sx={{ display: 'block', mt: 4 }}>
+          {t('claim_review_footer_note', '管理员审核页面。左侧为债权人申报信息，右侧为附件材料和内部审核备注。')}
+        </Typography>
+      </Box>
   );
 };
 

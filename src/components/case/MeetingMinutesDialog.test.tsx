@@ -10,17 +10,17 @@ import Delta from 'quill-delta'; // Import Delta
 vi.mock('../RichTextEditor', () => ({
   __esModule: true,
   default: vi.fn(({ value, onChange, placeholder }) => ( // Changed onTextChange to onChange based on MeetingMinutesDialog
-    <textarea
-      data-testid="mocked-rich-text-editor"
-      placeholder={placeholder}
-      value={typeof value === 'string' ? value : JSON.stringify(value?.ops)}
-      onChange={(e) => {
-        const mockDelta = new Delta().insert(e.target.value); // Use new Delta()
-        if (onChange) {
-          onChange(mockDelta, mockDelta, 'user'); // Pass Delta, lastChangeDelta, source
-        }
-      }}
-    />
+      <textarea
+          data-testid="mocked-rich-text-editor"
+          placeholder={placeholder}
+          value={typeof value === 'string' ? value : JSON.stringify(value?.ops)}
+          onChange={(e) => {
+            const mockDelta = new Delta().insert(e.target.value); // Use new Delta()
+            if (onChange) {
+              onChange(mockDelta, mockDelta, 'user'); // Pass Delta, lastChangeDelta, source
+            }
+          }}
+      />
   )),
 }));
 
@@ -37,22 +37,22 @@ describe('MeetingMinutesDialog', () => {
   });
 
   const renderDialog = (
-    open = true,
-    onClose = vi.fn(),
-    onSave = vi.fn(),
-    existingMinutes?: QuillDelta | string
+      open = true,
+      onClose = vi.fn(),
+      onSave = vi.fn(),
+      existingMinutes?: QuillDelta | string
   ) => {
     return render(
-      <I18nextProvider i18n={i18n}>
-        <MeetingMinutesDialog
-          open={open}
-          onClose={onClose}
-          caseInfo={mockCaseInfo}
-          meetingTitle={mockMeetingTitle}
-          existingMinutes={existingMinutes}
-          onSave={onSave}
-        />
-      </I18nextProvider>
+        <I18nextProvider i18n={i18n}>
+          <MeetingMinutesDialog
+              open={open}
+              onClose={onClose}
+              caseInfo={mockCaseInfo}
+              meetingTitle={mockMeetingTitle}
+              existingMinutes={existingMinutes}
+              onSave={onSave}
+          />
+        </I18nextProvider>
     );
   };
 
@@ -96,12 +96,12 @@ describe('MeetingMinutesDialog', () => {
 
     const editor = screen.getByTestId('mocked-rich-text-editor');
     fireEvent.change(editor, { target: { value: 'Initial content has been modified.' } });
-    
+
     await waitFor(() => {
       expect(saveButton).not.toBeDisabled();
     });
   });
-  
+
   it('calls onSave with the correct content when save button is clicked', async () => {
     const handleSaveMock = vi.fn();
     renderDialog(true, vi.fn(), handleSaveMock);
@@ -115,14 +115,14 @@ describe('MeetingMinutesDialog', () => {
     fireEvent.click(saveButton);
 
     expect(handleSaveMock).toHaveBeenCalledTimes(1);
-    
+
     // Check the first argument (QuillDelta) passed to onSave
     const savedDelta = handleSaveMock.mock.calls[0][0] as QuillDelta;
     expect(savedDelta.ops).toEqual([{ insert: testContent }]);
-    
+
     // Check the second argument (meetingTitle)
     expect(handleSaveMock.mock.calls[0][1]).toBe(mockMeetingTitle);
-    
+
     // Check the third argument (caseId)
     expect(handleSaveMock.mock.calls[0][2]).toBe(mockCaseInfo.caseId);
   });
