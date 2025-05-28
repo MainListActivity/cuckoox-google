@@ -17,6 +17,18 @@ interface AppUser {
 }
 
 // Define Case and Role interfaces based on SurrealDB schema
+
+// START NavItemType definition
+export interface NavItemType {
+  id: string; // Unique identifier for the menu item
+  path: string;
+  labelKey: string; // Key for i18n translation
+  iconName: string; // String key to map to an MDI icon (e.g., 'mdiViewDashboard')
+  requiredRoles?: string[]; // Optional: roles that can see this specific item (for client-side mock filtering)
+  children?: NavItemType[]; // For future sub-menus
+}
+// END NavItemType definition
+
 export interface Case {
   id: RecordId; // e.g., case:xxxx
   name: string;
@@ -55,6 +67,10 @@ interface AuthContextType {
   selectCase: (caseId: string) => Promise<void>;
   hasRole: (roleName: string) => boolean;
   refreshUserCasesAndRoles: () => Promise<void>; // Exposed function to manually refresh
+
+  // Menu specific state and functions
+  navMenuItems: NavItemType[] | null;
+  isMenuLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,6 +86,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [userCases, setUserCases] = useState<Case[]>([]);
   const [currentUserCaseRoles, setCurrentUserCaseRoles] = useState<Role[]>([]);
   const [isCaseLoading, setIsCaseLoading] = useState<boolean>(false);
+  const [navMenuItems, setNavMenuItems] = useState<NavItemType[] | null>(null);
+  const [isMenuLoading, setIsMenuLoading] = useState<boolean>(false);
 
   useEffect(() => {
     const checkCurrentUser = async () => {
@@ -138,6 +156,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setCurrentUserCaseRoles([]);
       setSelectedCaseId(null);
       localStorage.removeItem('cuckoox-selectedCaseId');
+      setNavMenuItems([]); // Clear menu if no user
       return;
     }
     setIsCaseLoading(true);
@@ -172,19 +191,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const lastCaseId = currentAppUser.last_login_case_id;
       const previouslySelectedCaseId = localStorage.getItem('cuckoox-selectedCaseId');
       
-      let caseToSelect = null;
+      let caseToSelect: string | null = null;
+
       if (previouslySelectedCaseId && casesMap.has(previouslySelectedCaseId)) {
         caseToSelect = previouslySelectedCaseId;
       } else if (lastCaseId && casesMap.has(lastCaseId)) {
         caseToSelect = lastCaseId;
+      } else if (fetchedCases.length === 1 && fetchedCases[0].id) {
+        caseToSelect = fetchedCases[0].id.toString();
       }
 
       if (caseToSelect) {
-        await selectCaseInternal(caseToSelect, actualResults);
+        // Call selectCaseInternal - note: it's not async, so no await needed here
+        selectCaseInternal(caseToSelect, actualResults);
       } else {
         setCurrentUserCaseRoles([]);
         setSelectedCaseId(null);
         localStorage.removeItem('cuckoox-selectedCaseId');
+        setNavMenuItems([]); // Clear menu if no case is selected after loading
       }
 
     } catch (error) {
@@ -193,9 +217,47 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setCurrentUserCaseRoles([]);
       setSelectedCaseId(null);
       localStorage.removeItem('cuckoox-selectedCaseId');
+      setNavMenuItems([]); // Clear menu on error
     } finally {
       setIsCaseLoading(false);
     }
+  };
+
+  const fetchAndUpdateMenuPermissions = async (currentRoles: Role[]) => {
+    if (!currentRoles || currentRoles.length === 0) {
+      setNavMenuItems([]); // No roles, no menu items
+      return;
+    }
+    setIsMenuLoading(true);
+    console.log("Fetching menu permissions for roles:", currentRoles.map(r => r.name));
+
+    // ** MOCK IMPLEMENTATION - Replace with actual API call later **
+    const mockAllNavItems: NavItemType[] = [
+      { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard', requiredRoles: ['case_manager', 'admin', 'creditor_representative'] },
+      { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase', requiredRoles: ['case_manager', 'admin'] },
+      { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountGroup', requiredRoles: ['case_manager', 'admin'] },
+      { id: 'claims_list', path: '/claims', labelKey: 'nav_claim_management', iconName: 'mdiFileDocumentOutline', requiredRoles: ['case_manager', 'admin'] },
+      { id: 'my_claims', path: '/my-claims', labelKey: 'nav_my_claims', iconName: 'mdiFileDocumentSearchOutline', requiredRoles: ['creditor_representative'] },
+      { id: 'claims_submit', path: '/claims/submit', labelKey: 'nav_claim_submission', iconName: 'mdiFileUploadOutline', requiredRoles: ['creditor_representative'] },
+      { id: 'claim_dashboard', path: '/claim-dashboard', labelKey: 'nav_claim_dashboard', iconName: 'mdiChartBar', requiredRoles: ['case_manager', 'admin'] },
+      { id: 'online_meetings', path: '/online-meetings', labelKey: 'nav_online_meetings', iconName: 'mdiVideo', requiredRoles: ['case_manager', 'admin', 'creditor_representative'] },
+      { id: 'messages', path: '/messages', labelKey: 'nav_message_center', iconName: 'mdiMessageTextOutline', requiredRoles: ['case_manager', 'admin', 'creditor_representative'] },
+      { id: 'admin_home', path: '/admin', labelKey: 'nav_system_management', iconName: 'mdiCog', requiredRoles: ['admin'] },
+    ];
+
+    const userRoleNames = currentRoles.map(role => role.name);
+    const filteredNavItems = mockAllNavItems.filter(item => {
+      if (!item.requiredRoles || item.requiredRoles.length === 0) return true; // No specific roles required
+      return item.requiredRoles.some(requiredRole => userRoleNames.includes(requiredRole));
+    });
+    // End of Mock Implementation
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setNavMenuItems(filteredNavItems);
+    setIsMenuLoading(false);
+    console.log("Updated navMenuItems:", filteredNavItems);
   };
   
   // Internal helper to set roles based on a selected case ID and pre-fetched UserCaseRoleDetails
@@ -212,6 +274,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
     }
     setCurrentUserCaseRoles(rolesForSelectedCase);
+    fetchAndUpdateMenuPermissions(rolesForSelectedCase); // Call menu update
   };
 
   const selectCase = async (caseIdToSelect: string) => {
@@ -303,6 +366,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setSelectedCaseId(null);
       setUserCases([]);
       setCurrentUserCaseRoles([]);
+      setNavMenuItems([]); // Clear menu on logout
       localStorage.removeItem('cuckoox-isLoggedIn');
       localStorage.removeItem('cuckoox-user');
       localStorage.removeItem('cuckoox-selectedCaseId');
@@ -310,6 +374,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedCaseId && currentUserCaseRoles && currentUserCaseRoles.length > 0) {
+      fetchAndUpdateMenuPermissions(currentUserCaseRoles);
+    } else if (!selectedCaseId) {
+      setNavMenuItems([]); // Clear menu if no case is selected
+    }
+  }, [selectedCaseId, currentUserCaseRoles]); // Dependency: currentUserCaseRoles might need to be stringified or use its length if it's an array that changes reference. For simplicity, direct dependency is fine for now.
 
   const hasRole = (roleName: string): boolean => {
     if (roleName === 'admin') {
@@ -325,7 +397,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <AuthContext.Provider value={{ 
       isLoggedIn, user, oidcUser, setAuthState, logout, isLoading,
-      selectedCaseId, userCases, currentUserCaseRoles, isCaseLoading, selectCase, hasRole, refreshUserCasesAndRoles
+      selectedCaseId, userCases, currentUserCaseRoles, isCaseLoading, selectCase, hasRole, refreshUserCasesAndRoles,
+      navMenuItems, isMenuLoading // Expose new menu state
     }}>
       {children}
     </AuthContext.Provider>

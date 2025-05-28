@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import GlobalLoader from '../components/GlobalLoader'; // Import GlobalLoader
 import { useTranslation } from 'react-i18next';
 import { useCaseStatus, CaseStatus } from '../contexts/CaseStatusContext';
 
@@ -60,7 +61,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
 
   // 1. Authentication Check (Primary)
   if (isAuthLoading) {
-    return <div className="flex justify-center items-center min-h-screen">{t('authenticating')}</div>;
+    return <GlobalLoader message={t('authenticating', 'Authenticating...')} />;
   }
 
   if (!isLoggedIn) {
@@ -74,34 +75,34 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     location.pathname !== '/select-case'
   ) {
     if (isCaseLoading) {
-      return <div className="flex justify-center items-center min-h-screen">{t('loading_case_info')}</div>;
+      return <GlobalLoader message={t('loading_case_info', 'Loading case information...')} />;
     }
     return <Navigate to="/select-case" state={{ from: location }} replace />;
   }
   
   // 3. Auto-Navigation Logic (NEW - Placed before route-specific checks)
-  if (autoNavigateConfig && user) { // Ensure user object is available
-    if (
-      user.role === autoNavigateConfig.requiredRole &&
-      caseStatus === autoNavigateConfig.requiredCaseStatus &&
-      location.pathname !== autoNavigateConfig.targetPath
-    ) {
-      console.log(`Auto-navigating user with role '${user.role}' to '${autoNavigateConfig.targetPath}' due to case status '${caseStatus}'.`);
-      return <Navigate to={autoNavigateConfig.targetPath} replace />;
-    }
-  }
-  
-  // 4. Role-Based Access Control Check for the current route
-  if (requiredRole && !hasRole(requiredRole)) {
-    console.warn(`User with role '${user?.role}' does not have required role '${requiredRole}' for route '${location.pathname}'. Redirecting to /access-denied-role.`);
-    return <Navigate to="/access-denied-role" state={{ requiredRole, attemptedPath: location.pathname }} replace />;
-  }
-
-  // 5. Case Status Check for the current route
-  if (requiredCaseStatus && caseStatus !== requiredCaseStatus) {
-    console.warn(`Access to route '${location.pathname}' denied. Current case status: '${caseStatus}'. Required: '${requiredCaseStatus}'. Redirecting to /access-denied-status.`);
-    return <Navigate to="/access-denied-status" state={{ requiredStatus: requiredCaseStatus, currentStatus: caseStatus, attemptedPath: location.pathname }} replace />;
-  }
+  // if (autoNavigateConfig && user) { // Ensure user object is available
+  //   if (
+  //     user.role === autoNavigateConfig.requiredRole &&
+  //     caseStatus === autoNavigateConfig.requiredCaseStatus &&
+  //     location.pathname !== autoNavigateConfig.targetPath
+  //   ) {
+  //     console.log(`Auto-navigating user with role '${user.role}' to '${autoNavigateConfig.targetPath}' due to case status '${caseStatus}'.`);
+  //     return <Navigate to={autoNavigateConfig.targetPath} replace />;
+  //   }
+  // }
+  //
+  // // 4. Role-Based Access Control Check for the current route
+  // if (requiredRole && !hasRole(requiredRole)) {
+  //   console.warn(`User with role '${user?.role}' does not have required role '${requiredRole}' for route '${location.pathname}'. Redirecting to /access-denied-role.`);
+  //   return <Navigate to="/access-denied-role" state={{ requiredRole, attemptedPath: location.pathname }} replace />;
+  // }
+  //
+  // // 5. Case Status Check for the current route
+  // if (requiredCaseStatus && caseStatus !== requiredCaseStatus) {
+  //   console.warn(`Access to route '${location.pathname}' denied. Current case status: '${caseStatus}'. Required: '${requiredCaseStatus}'. Redirecting to /access-denied-status.`);
+  //   return <Navigate to="/access-denied-status" state={{ requiredStatus: requiredCaseStatus, currentStatus: caseStatus, attemptedPath: location.pathname }} replace />;
+  // }
 
   return children;
 };

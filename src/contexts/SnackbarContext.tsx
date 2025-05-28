@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import Snackbar from '@mui/material/Snackbar';
-import Alert, { AlertProps } from '@mui/material/Alert';
-import { useTheme } from './ThemeContext'; // To access current theme for styling if needed
+import Alert, { AlertProps, AlertColor } from '@mui/material/Alert'; // Import AlertColor
+// import { useTheme } from './ThemeContext'; // To access current theme for styling if needed
 
 interface SnackbarContextType {
   showSuccess: (message: string) => void;
+  showError: (message: string) => void;
+  showWarning: (message: string) => void;
+  showInfo: (message: string) => void;
 }
 
 const SnackbarContext = createContext<SnackbarContextType | undefined>(undefined);
@@ -16,10 +19,30 @@ interface SnackbarProviderProps {
 export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) => {
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
-  const { currentTheme } = useTheme(); // Get current theme
+  const [severity, setSeverity] = useState<AlertColor>('success'); // Add severity state
+  // const { currentTheme } = useTheme(); // Get current theme
 
   const showSuccess = (newMessage: string) => {
     setMessage(newMessage);
+    setSeverity('success');
+    setOpen(true);
+  };
+
+  const showError = (newMessage: string) => {
+    setMessage(newMessage);
+    setSeverity('error');
+    setOpen(true);
+  };
+
+  const showWarning = (newMessage: string) => {
+    setMessage(newMessage);
+    setSeverity('warning');
+    setOpen(true);
+  };
+
+  const showInfo = (newMessage: string) => {
+    setMessage(newMessage);
+    setSeverity('info');
     setOpen(true);
   };
 
@@ -43,7 +66,7 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
 
 
   return (
-    <SnackbarContext.Provider value={{ showSuccess }}>
+    <SnackbarContext.Provider value={{ showSuccess, showError, showWarning, showInfo }}>
       {children}
       <Snackbar
         open={open}
@@ -63,12 +86,12 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
         */}
         <AlertRef 
             onClose={handleClose} 
-            severity="success" 
+            severity={severity} // Use the state variable here
             sx={{ 
                 width: '100%',
-                // Ensuring the alert uses our theme's success colors
-                // backgroundColor: currentTheme.colors.success, // Example if direct styling is needed
-                // color: currentTheme.colors.textOnPrimary, // Example if direct styling is needed
+                // Ensuring the alert uses our theme's colors for corresponding severity
+                // Example: backgroundColor might be currentTheme.colors[severity] if structured that way
+                // Or rely on MUI's theme integration to handle palette colors for success, error, warning, info
             }}
         >
           {message}

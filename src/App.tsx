@@ -1,12 +1,12 @@
-import React, {Suspense, ReactNode} from 'react';
-import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
+import React, {Suspense, ReactNode, useEffect} from 'react';
+import {Routes, Route, Navigate, useLocation, useNavigate} from 'react-router-dom';
 import {useAuth} from './contexts/AuthContext';
 import {useSurreal} from './contexts/SurrealProvider';
 import {useTranslation} from 'react-i18next';
 // Remove MUI ThemeProvider, use our own from ThemeContext
 // import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'; 
 // import theme from './theme'; // This is likely MUI theme, not our custom one
-import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext'; // Import our ThemeProvider
+import { CustomThemeProvider } from './contexts/ThemeContext'; // Import our ThemeProvider
 import { SnackbarProvider } from './contexts/SnackbarContext'; // Import SnackbarProvider
 import { CaseStatusProvider } from './contexts/CaseStatusContext'; // <-- ADDED
 import Layout from './components/Layout';
@@ -42,16 +42,47 @@ const CreateCasePage = React.lazy(() => import('./pages/CreateCasePage')); // <-
 
 
 function App() {
-    const {isSuccess, isConnecting, isError, error: surrealError} = useSurreal(); // ADDED
-    const {t} = useTranslation(); // ADDED
-    const {isLoggedIn} = useAuth();
+    const {isSuccess, isConnecting, isError, error: surrealError} = useSurreal();
+    const {t} = useTranslation();
+    const auth = useAuth();
     const location = useLocation();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      const processUrlCaseSelection = async () => {
+        if (auth.isLoggedIn && auth.userCases && auth.userCases.length > 0) {
+          const searchParams = new URLSearchParams(location.search);
+          const caseIdFromUrl = searchParams.get('case');
+  
+          if (caseIdFromUrl) {
+            if (auth.selectedCaseId !== caseIdFromUrl) {
+              console.log(`Attempting to select case from URL parameter: ${caseIdFromUrl}`);
+              // Ensure the caseIdFromUrl is valid for the user before attempting to select
+              // This check is technically redundant if auth.selectCase itself validates against userCases,
+              // but can be a good safeguard or optimization.
+              const isValidCase = auth.userCases.some(c => c.id.toString() === caseIdFromUrl);
+              if (isValidCase) {
+                await auth.selectCase(caseIdFromUrl);
+              } else {
+                console.warn(`Case ID ${caseIdFromUrl} from URL is not valid for the current user or userCases not loaded yet.`);
+              }
+            }
+            // Clean the 'case' parameter from the URL, regardless of whether selection happened or was needed
+            searchParams.delete('case');
+            navigate(`${location.pathname}?${searchParams.toString()}`, { replace: true, state: location.state });
+          }
+        }
+      };
+  
+      processUrlCaseSelection();
+    }, [auth.isLoggedIn, auth.userCases, auth.selectCase, auth.selectedCaseId, location.search, location.pathname, navigate]);
 
     // Handle SurrealDB connection status
     if (isConnecting) {
         return <GlobalLoader message={t('loader.connectingMessage', 'Connecting to database...')}/>;
     }
 
+    // Use auth.isLoggedIn in the condition for rendering LoginPage
     if (isError) {
         return (
             <GlobalError
@@ -79,16 +110,16 @@ function App() {
     // Define routes that don't need the main layout (e.g., Login, OidcCallback)
     if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
         return (
-      <CustomThemeProvider> 
+      <CustomThemeProvider>
         <SnackbarProvider>
-          <CaseStatusProvider> {/* <-- ADDED WRAPPER */}
+          <CaseStatusProvider>
             <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
               <Routes>
-                <Route path="/login" element={isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
+                <Route path="/login" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
                 <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
               </Routes>
             </Suspense>
-          </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
+          </CaseStatusProvider>
         </SnackbarProvider>
       </CustomThemeProvider>
         );

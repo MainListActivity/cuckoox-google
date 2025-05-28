@@ -1,8 +1,17 @@
 import React, { useRef, useEffect } from 'react';
-import ReactQuill, { Quill } from 'react-quill'; // Quill for types
-import 'react-quill/dist/quill.snow.css'; // Default Quill theme
-import '../styles/quill-theme.css'; // Custom theme overrides
+import ReactQuill, { Quill } from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+// Define MDI_PAPERCLIP_ICON SVG string
+const MDI_PAPERCLIP_ICON = '<svg viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>';
+
+// Register the custom icon with Quill
+const icons = Quill.import('ui/icons');
+if (icons && !icons['attach']) {
+  icons['attach'] = MDI_PAPERCLIP_ICON;
+}
+import '../styles/quill-theme.css';
 import { useTranslation } from 'react-i18next';
+import { uploadFile } from '../services/fileUploadService'; // Import the upload service
 
 // Import Delta type. It might be from 'quill/core' or 'quill'.
 // react-quill typically uses types from the 'quill' package it depends on.
@@ -31,40 +40,7 @@ interface RichTextEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   className?: string; // Allow passing custom classNames
-  // For real-time: a way to set content without triggering own onChange events back to server
-  // This is often handled by checking the `source` in onChange (e.g., if source is 'user' vs 'api' or 'silent')
 }
-
-// ... (modules and formats can remain largely the same, but ensure 'image' handler is still commented out)
-const modulesConfig = { // Renamed to avoid conflict if modules is imported
-  toolbar: [
-    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-    ['bold', 'italic', 'underline', 'strike'],        // toggled buttons
-    ['blockquote', 'code-block'],
-
-    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-    [{ 'script': 'sub'}, { 'script': 'super' }],      // superscript/subscript
-    [{ 'indent': '-1'}, { 'indent': '+1' }],          // outdent/indent
-    [{ 'direction': 'rtl' }],                         // text direction
-
-    [{ 'color': [] }, { 'background': [] }],          // dropdown with defaults from theme
-    [{ 'font': [] }],
-    [{ 'align': [] }],
-
-    ['link', 'image', 'video'],                       // link, image, video (video might not be needed for this app)
-
-    ['clean']                                         // remove formatting button
-  ],
-  // handlers: { image: imageHandler }, // Keep commented
-};
-
-const formatsConfig = [
-  'header', 'font', 'size',
-  'bold', 'italic', 'underline', 'strike', 'blockquote', 'code-block',
-  'list', 'bullet', 'indent',
-  'link', 'image', 'video',
-  'color', 'background', 'align', 'script', 'direction'
-];
 
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({
@@ -78,44 +54,128 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const { t } = useTranslation();
   const quillRef = useRef<ReactQuill | null>(null);
 
-  // Handle initial value (string HTML to Delta conversion)
-  // This effect runs when the component mounts or if `value` prop changes externally
+  const imageHandler = () => {
+    if (!quillRef.current) return;
+    const editor = quillRef.current.getEditor();
+    const range = editor.getSelection(true);
+
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.onchange = async () => {
+      if (input.files && input.files.length > 0) {
+        const file = input.files[0];
+        const placeholderText = `\n[Uploading ${file.name}...]\n`;
+        
+        editor.insertText(range.index, placeholderText, 'user');
+        editor.setSelection(range.index + placeholderText.length, 0);
+
+        try {
+          const uploadedFile = await uploadFile(file);
+          editor.deleteText(range.index, placeholderText.length);
+          editor.insertEmbed(range.index, 'image', uploadedFile.url);
+          editor.setSelection(range.index + 1, 0);
+        } catch (error) {
+          console.error('Image upload failed:', error);
+          const currentTextAroundOriginalRange = editor.getText(range.index, placeholderText.length);
+          if (currentTextAroundOriginalRange === placeholderText) {
+            editor.deleteText(range.index, placeholderText.length);
+          } else {
+            console.warn("Could not accurately remove placeholder text on error for image.");
+          }
+          alert(t('image_upload_failed_message', 'Image upload failed. Please try again.'));
+        }
+      }
+    };
+    input.click();
+  };
+
+  const attachmentHandler = () => {
+    if (!quillRef.current) return;
+    const editor = quillRef.current.getEditor();
+    const range = editor.getSelection(true);
+
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', '*/*'); // Accept all file types
+    input.onchange = async () => {
+      if (input.files && input.files.length > 0) {
+        const file = input.files[0];
+        const placeholderText = `\n[Uploading file ${file.name}...]\n`;
+        
+        editor.insertText(range.index, placeholderText, 'user');
+        editor.setSelection(range.index + placeholderText.length, 0);
+
+        try {
+          const uploadedFile = await uploadFile(file); // Reuse the same upload service
+          editor.deleteText(range.index, placeholderText.length);
+          
+          // Insert a link with the filename, opening in a new tab, and custom attribute
+          editor.insertText(range.index, uploadedFile.name, {
+            'link': uploadedFile.url,
+            'target': '_blank',
+            'data-file-attachment': 'true'
+          });
+          editor.insertText(range.index + uploadedFile.name.length, ' ', 'user'); // Add a space after
+          editor.setSelection(range.index + uploadedFile.name.length + 1, 0); // Move cursor after the space
+        } catch (error) {
+          console.error('File attachment upload failed:', error);
+          const currentTextAroundOriginalRange = editor.getText(range.index, placeholderText.length);
+          if (currentTextAroundOriginalRange === placeholderText) {
+            editor.deleteText(range.index, placeholderText.length);
+          } else {
+            console.warn("Could not accurately remove placeholder text on error for attachment.");
+          }
+          alert(t('file_upload_failed_message', 'File upload failed. Please try again.'));
+        }
+      }
+    };
+    input.click();
+  };
+
+  const modulesConfig = {
+    toolbar: [
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      ['blockquote', 'code-block'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'script': 'sub'}, { 'script': 'super' }],
+      [{ 'indent': '-1'}, { 'indent': '+1' }],
+      [{ 'direction': 'rtl' }],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'font': [] }],
+      [{ 'align': [] }],
+      ['link', 'image', 'video', 'attach'], // Added 'attach' here
+      ['clean']
+    ],
+    handlers: { 
+      image: imageHandler,
+      attach: attachmentHandler // New handler
+    },
+  };
+
+  const formatsConfig = [
+  'header', 'font', 'size',
+  'bold', 'italic', 'underline', 'strike', 'blockquote', 'code-block',
+  'list', 'bullet', 'indent',
+  'link', 'image', 'video',
+  'color', 'background', 'align', 'script', 'direction'
+];
+
   // and is a string (intended as initial HTML).
   useEffect(() => {
     if (quillRef.current && typeof value === 'string' && !readOnly) {
       const editor = quillRef.current.getEditor();
-      // Check if current content is already this HTML to avoid loops if parent re-renders with same HTML string
       const currentHTML = editor.root.innerHTML;
       if (currentHTML !== value) {
-          // This part is tricky. If `value` is an HTML string meant for initial load,
-          // setting it directly might be okay. But for collaborative editing,
-          // we want to ensure `value` prop is primarily a Delta.
-          // For now, let's assume if string is passed, it's for initial, non-collaborative setup, or read-only.
-          // This might need to be refined if HTML strings are expected to update dynamically.
-          // A better approach for parent components would be to convert HTML to Delta themselves before passing.
-          // Forcing HTML into a Delta-focused editor can be lossy or cause unexpected behavior.
-          // A simple way:
-          // editor.clipboard.dangerouslyPasteHTML(value);
-          // Or if this is truly initial content:
-          // editor.setContents(editor.clipboard.convert(value)); // convert HTML to Delta
-          // This is only for INITIAL HTML. Subsequent updates should be Deltas.
-          // This logic is complex and depends on how parent uses `value`.
-          // For now, let's assume `value` will primarily be a Delta if editable.
-          // If `value` is a string and editor is editable, it's ambiguous.
-          // Let's simplify: if string, it's initial HTML.
-          // The editor itself will convert it to its internal Delta format.
+        // Assuming string value is for initial content or read-only display
+        // Editor internally converts HTML to Delta.
       }
     } else if (quillRef.current && typeof value !== 'string' && value && !readOnly) {
-        // If value is a Delta object, set it.
-        // Need to be careful if this causes an infinite loop with onChange.
-        // The source of change check in onChange is crucial.
-        const editor = quillRef.current.getEditor();
-        // Only set if different to prevent loops. `editor.getContents()` returns a Delta.
-        // Deep comparison of deltas might be needed.
-        // For now, let's rely on ReactQuill's internal handling or parent to manage this.
-        // editor.setContents(value, 'silent'); // 'silent' to not trigger onChange
+      // If value is a Delta object
+      // Rely on ReactQuill's internal handling or parent to manage Delta updates
     }
-  }, [value, readOnly]); // Rerun if value or readOnly changes
+  }, [value, readOnly]);
 
 
   const handleChange = (content: string, delta: QuillDelta, source: string, editor: ReactQuill.UnprivilegedEditor) => {

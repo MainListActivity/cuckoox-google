@@ -9,7 +9,7 @@ import './styles/main.css'; // Tailwind CSS and global styles
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // ADDED
-import { ThemeProvider } from './contexts/ThemeContext'; // ADDED
+import { CustomThemeProvider } from './contexts/ThemeContext'; // ADDED
 import { StyledEngineProvider } from '@mui/material/styles'; // ADDED
 
 const rootElement = document.getElementById('root');
@@ -46,9 +46,9 @@ root.render(
           <StyledEngineProvider injectFirst> {/* ADDED */}
             <BrowserRouter>
               <AuthProvider>
-              <ThemeProvider> {/* ADDED */}
+              <CustomThemeProvider> {/* ADDED */}
                 <App />
-              </ThemeProvider> {/* ADDED */}
+              </CustomThemeProvider> {/* ADDED */}
               </AuthProvider>
             </BrowserRouter>
           </StyledEngineProvider> {/* ADDED */}
