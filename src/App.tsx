@@ -6,7 +6,7 @@ import {useTranslation} from 'react-i18next';
 // Remove MUI ThemeProvider, use our own from ThemeContext
 // import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'; 
 // import theme from './theme'; // This is likely MUI theme, not our custom one
-import { ThemeProvider as CustomThemeProvider } from './contexts/ThemeContext'; // Import our ThemeProvider
+import { CustomThemeProvider } from './contexts/ThemeContext'; // Import our ThemeProvider
 import { SnackbarProvider } from './contexts/SnackbarContext'; // Import SnackbarProvider
 import { CaseStatusProvider } from './contexts/CaseStatusContext'; // <-- ADDED
 import Layout from './components/Layout';

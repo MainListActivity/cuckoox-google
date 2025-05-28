@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import Snackbar from '@mui/material/Snackbar';
 import Alert, { AlertProps, AlertColor } from '@mui/material/Alert'; // Import AlertColor
-import { useTheme } from './ThemeContext'; // To access current theme for styling if needed
+// import { useTheme } from './ThemeContext'; // To access current theme for styling if needed
 
 interface SnackbarContextType {
   showSuccess: (message: string) => void;
@@ -20,7 +20,7 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<AlertColor>('success'); // Add severity state
-  const { currentTheme } = useTheme(); // Get current theme
+  // const { currentTheme } = useTheme(); // Get current theme
 
   const showSuccess = (newMessage: string) => {
     setMessage(newMessage);

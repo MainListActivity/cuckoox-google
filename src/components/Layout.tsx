@@ -37,7 +37,7 @@ import {
   mdiMessageTextOutline,
   mdiCog,
   mdiLogout,
-  mdiFileDocumentSearchOutline, // Added
+  // mdiFileDocumentSearchOutline, // Added
   mdiFileUploadOutline, // Added
 } from '@mdi/js';
 
@@ -51,7 +51,7 @@ const iconMap: { [key: string]: string } = {
   'mdiVideo': mdiVideo,
   'mdiMessageTextOutline': mdiMessageTextOutline,
   'mdiCog': mdiCog,
-  'mdiFileDocumentSearchOutline': mdiFileDocumentSearchOutline,
+  // 'mdiFileDocumentSearchOutline': mdiFileDocumentSearchOutline,
   'mdiFileUploadOutline': mdiFileUploadOutline,
 };
 
@@ -103,7 +103,7 @@ const StyledDrawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== '
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { t } = useTranslation();
   const muiTheme = useTheme();
-  const { mode, toggleMode, currentTheme } = muiTheme;
+  const { themeMode, toggleThemeMode, muiTheme:currentTheme } = muiTheme;
   const [drawerOpen, setDrawerOpen] = useState(true);
   const { user, logout, navMenuItems, isMenuLoading } = useAuth(); // Get menu items and loading state
   const navigate = useNavigate();
@@ -121,7 +121,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         position="fixed"
         sx={{ // Pass theme to sx to access palette
           zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1, // Explicitly type theme here
-          background: `linear-gradient(to right, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`, // Using context theme
+          // background: `linear-gradient(to right, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`, // Using context theme
         }}
       >
         <Toolbar>
@@ -139,14 +139,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             CuckooX
           </Typography>
-          <IconButton onClick={toggleMode} color="inherit">
+          <IconButton onClick={toggleThemeMode} color="inherit">
             <SvgIcon>
-              <path d={mode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
+              <path d={themeMode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
             </SvgIcon>
           </IconButton>
           <Switch
-            checked={mode === 'dark'}
-            onChange={toggleMode}
+            checked={themeMode === 'dark'}
+            onChange={toggleThemeMode}
             color="secondary" // Or any color that fits your theme
           />
           {user && <Typography sx={{ mr: 2 }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
@@ -218,7 +218,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 width: drawerOpen ? 'auto' : theme.spacing(5),
                 height: theme.spacing(5),
                 p: drawerOpen ? 1 : 0,
-            }}
+            })}
             title={t('layout_logout_button')}
           >
             <ListItemIcon sx={{ 
@@ -236,7 +236,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Box>
       </StyledDrawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: currentTheme.colors.background }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 3, }}>
         <Toolbar /> {/* This is important to offset content below the AppBar */}
         {children}
       </Box>

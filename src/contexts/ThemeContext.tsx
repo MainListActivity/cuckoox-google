@@ -120,7 +120,7 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
 };
 
 // 4. Export useTheme hook
-export const useCustomTheme = () => { // Renamed to avoid conflict if there's another useTheme
+export const useTheme = () => { // Renamed to avoid conflict if there's another useTheme
   const context = useContext(ThemeContext);
   if (context === undefined) {
     throw new Error('useCustomTheme must be used within a CustomThemeProvider');
