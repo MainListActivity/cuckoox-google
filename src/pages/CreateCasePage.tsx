@@ -1,3 +1,4 @@
+// TODO: Access Control - Page access should be controlled via routing based on user permissions.
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -60,6 +61,11 @@ const CreateCasePage: React.FC = () => {
   const [announcementDate, setAnnouncementDate] = useState<string>('');
   const [claimStartDate, setClaimStartDate] = useState<string>('');
   const [claimEndDate, setClaimEndDate] = useState<string>('');
+
+  // State to track if dates are auto-calculated
+  const [isAnnouncementDateAuto, setIsAnnouncementDateAuto] = useState(true);
+  const [isClaimStartDateAuto, setIsClaimStartDateAuto] = useState(true);
+  const [isClaimEndDateAuto, setIsClaimEndDateAuto] = useState(true);
   
   const liveQueryRef = useRef<string | null>(null);
   
@@ -104,6 +110,47 @@ const CreateCasePage: React.FC = () => {
         setPageError(t('create_case_error_generic')); // Use new error state
     }
   }, [user, filingMaterialDocId, t, isEditorLoading, client]);
+
+  useEffect(() => {
+    if (!acceptanceDate) {
+      // If acceptance date is cleared, clear dependent dates and reset auto flags
+      setAnnouncementDate('');
+      setClaimStartDate('');
+      setClaimEndDate('');
+      setIsAnnouncementDateAuto(true);
+      setIsClaimStartDateAuto(true);
+      setIsClaimEndDateAuto(true);
+      return;
+    }
+
+    if (showBankruptcyFields && isAnnouncementDateAuto) {
+      const calculatedDate = addDays(acceptanceDate, 25);
+      setAnnouncementDate(calculatedDate);
+    }
+  }, [acceptanceDate, caseProcedure, showBankruptcyFields, isAnnouncementDateAuto]); // Removed t from deps
+
+  useEffect(() => {
+    if (!announcementDate || !showBankruptcyFields) {
+       // If announcement date is cleared (and it's a bankruptcy case), clear its dependents
+      if (showBankruptcyFields){
+        setClaimStartDate('');
+        setClaimEndDate('');
+        setIsClaimStartDateAuto(true);
+        setIsClaimEndDateAuto(true);
+      }
+      return;
+    }
+
+    if (isClaimStartDateAuto) {
+      const calculatedStartDate = addDays(announcementDate, 30);
+      setClaimStartDate(calculatedStartDate);
+    }
+    if (isClaimEndDateAuto) {
+      const calculatedEndDate = addMonths(announcementDate, 3);
+      setClaimEndDate(calculatedEndDate);
+    }
+  }, [announcementDate, caseProcedure, showBankruptcyFields, isClaimStartDateAuto, isClaimEndDateAuto]); // Removed t from deps
+
 
   useEffect(() => {
     if (!filingMaterialDocId || !user || !user.id) return;
@@ -249,6 +296,23 @@ const CreateCasePage: React.FC = () => {
     }
   };
 
+  // Helper function to add days to a date string (YYYY-MM-DD)
+  const addDays = (dateString: string, days: number): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0];
+  };
+
+  // Helper function to add months to a date string (YYYY-MM-DD)
+  const addMonths = (dateString: string, months: number): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    date.setMonth(date.getMonth() + months);
+    return date.toISOString().split('T')[0];
+  };
+
+
   if (isEditorLoading && !filingMaterialDocId && !pageError) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 200px)', p: 3 }}>
@@ -291,6 +355,7 @@ const CreateCasePage: React.FC = () => {
               />
             </Grid>
             <Grid item xs={12} sm={6}>
+              {/* // TODO: Replace with a proper user selection component (e.g., dropdown, autocomplete) */}
               <TextField
                 id="caseLead"
                 label={t('create_case_lead_label', '案件负责人')}
@@ -308,7 +373,14 @@ const CreateCasePage: React.FC = () => {
                   labelId="case-procedure-label"
                   id="caseProcedure"
                   value={caseProcedure}
-                  onChange={(e) => { setCaseProcedure(e.target.value as string); handleInputChange();}}
+                  onChange={(e) => { 
+                    setCaseProcedure(e.target.value as string); 
+                    handleInputChange();
+                    // Reset auto-calculation flags when procedure changes
+                    setIsAnnouncementDateAuto(true);
+                    setIsClaimStartDateAuto(true);
+                    setIsClaimEndDateAuto(true);
+                  }}
                   label={t('create_case_procedure_label', '案件程序')}
                 >
                   <MenuItem value="破产清算">{t('procedure_liquidation', '破产清算')}</MenuItem>
@@ -324,7 +396,19 @@ const CreateCasePage: React.FC = () => {
                 label={t('create_case_acceptance_date_label', '受理时间')}
                 type="date"
                 value={acceptanceDate}
-                onChange={(e) => { setAcceptanceDate(e.target.value); handleInputChange();}}
+                onChange={(e) => { 
+                  setAcceptanceDate(e.target.value); 
+                  handleInputChange();
+                  if (!e.target.value) { // If cleared
+                    setAnnouncementDate('');
+                    setClaimStartDate('');
+                    setClaimEndDate('');
+                  }
+                  // If user changes acceptanceDate, dependent dates should re-calculate if they were auto
+                  setIsAnnouncementDateAuto(true); 
+                  // setIsClaimStartDateAuto(true); // These will be handled by announcementDate's effect
+                  // setIsClaimEndDateAuto(true);
+                }}
                 fullWidth
                 variant="outlined"
                 InputLabelProps={{ shrink: true }}
@@ -340,7 +424,21 @@ const CreateCasePage: React.FC = () => {
                     label={t('create_case_announcement_date_label', '公告时间')}
                     type="date"
                     value={announcementDate}
-                    onChange={(e) => { setAnnouncementDate(e.target.value); handleInputChange();}}
+                    onChange={(e) => { 
+                      setAnnouncementDate(e.target.value); 
+                      setIsAnnouncementDateAuto(false); // User manually changed
+                      if (!e.target.value) { // If cleared
+                        setClaimStartDate('');
+                        setClaimEndDate('');
+                        setIsClaimStartDateAuto(true); // Reset auto flag for dependents
+                        setIsClaimEndDateAuto(true);  // Reset auto flag for dependents
+                      } else {
+                        // If user sets a date, allow dependents to auto-calculate based on this new date if they were auto
+                         setIsClaimStartDateAuto(true); 
+                         setIsClaimEndDateAuto(true);
+                      }
+                      handleInputChange();
+                    }}
                     fullWidth
                     variant="outlined"
                     InputLabelProps={{ shrink: true }}
@@ -353,11 +451,15 @@ const CreateCasePage: React.FC = () => {
                     label={t('create_case_claim_start_date_label', '债权申报开始时间')}
                     type="date"
                     value={claimStartDate}
-                    onChange={(e) => { setClaimStartDate(e.target.value); handleInputChange();}}
+                    onChange={(e) => { 
+                      setClaimStartDate(e.target.value); 
+                      setIsClaimStartDateAuto(false); // User manually changed
+                      handleInputChange();
+                    }}
                     fullWidth
                     variant="outlined"
                     InputLabelProps={{ shrink: true }}
-                    helperText={t('create_case_claim_start_date_hint', '最早发布受理破产申请公告之日30日')}
+                    helperText={t('create_case_claim_start_date_hint', '公告之日起不得少于30日')}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={4}>
@@ -366,11 +468,15 @@ const CreateCasePage: React.FC = () => {
                     label={t('create_case_claim_end_date_label', '债权申报截止时间')}
                     type="date"
                     value={claimEndDate}
-                    onChange={(e) => { setClaimEndDate(e.target.value); handleInputChange();}}
+                    onChange={(e) => { 
+                      setClaimEndDate(e.target.value); 
+                      setIsClaimEndDateAuto(false); // User manually changed
+                      handleInputChange();
+                    }}
                     fullWidth
                     variant="outlined"
                     InputLabelProps={{ shrink: true }}
-                    helperText={t('create_case_claim_end_date_hint', '最迟发布受理破产申请公告之日3个月')}
+                    helperText={t('create_case_claim_end_date_hint', '公告之日起不得超过3个月')}
                   />
                 </Grid>
               </>
@@ -380,7 +486,7 @@ const CreateCasePage: React.FC = () => {
           <Typography variant="h5" component="h2" gutterBottom sx={{ mt: 4, mb: 2 }}>
             {t('create_case_filing_material_title')}
           </Typography>
-          {isSaving && !pageError && ( // Only show saving indicator if no page error
+          {isSaving && !pageError && !isEditorLoading && ( // Only show saving indicator if no page error and editor is not loading
             <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', mb: 1 }}>
               <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />
               <Typography variant="caption">{t('saving_document')}</Typography>

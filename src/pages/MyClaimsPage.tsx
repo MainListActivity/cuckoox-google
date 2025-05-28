@@ -1,3 +1,7 @@
+// STYLING: This page currently uses Tailwind CSS. Per 规范.md, consider migration to MUI components.
+// TODO: Ensure routing for /my-claims/:claimId/submitted is set up in App.tsx to render SubmittedClaimDetailPage.tsx
+// TODO: Access Control - This page should only be accessible to users with a 'creditor' role.
+// TODO: Data - API should only return claims belonging to the logged-in creditor.
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from '../../contexts/SnackbarContext'; // Assuming path is correct
@@ -21,6 +25,8 @@ const MyClaimsPage: React.FC = () => {
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
 
+  // TODO: Fetch claims specific to the logged-in creditor from an API.
+  // For now, claimsData is used as a placeholder for all claims by this creditor.
   const claimsData: Claim[] = [
     { id: 'CLAIM-001', submissionDate: '2023-10-26', claimNature: '普通债权', totalAmount: 15000, currency: 'CNY', reviewStatus: '待审核', reviewOpinion: '' },
     { id: 'CLAIM-002', submissionDate: '2023-10-20', claimNature: '有财产担保债权', totalAmount: 125000, currency: 'CNY', reviewStatus: '审核通过', reviewOpinion: '符合要求' },
@@ -48,12 +54,14 @@ const MyClaimsPage: React.FC = () => {
       showSnackbar('只有“待审核”状态的债权才能撤回。', 'warning');
       return;
     }
-    console.log(`Withdraw claim: ${claimId}`);
+    console.log(`Withdraw claim ID: ${claimId}`);
     showSnackbar(`债权 ${claimId} 已成功撤回 (模拟)。`, 'success');
     // Here you might want to re-fetch data or update state if this were a real app
   };
 
+  // Workflow: Controls if a creditor can withdraw their claim.
   const isWithdrawDisabled = (status: Claim['reviewStatus']) => status !== '待审核';
+  // Workflow: Controls if a creditor can edit their claim.
   const isEditDisabled = (status: Claim['reviewStatus']) => !['已驳回', '需要补充'].includes(status);
 
 
@@ -106,7 +114,7 @@ const MyClaimsPage: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                       <button 
                         title="查看详情"
-                        onClick={() => navigate('/submitted-claim-detail')} // In real app: navigate(`/my-claims/${claim.id}`)
+                        onClick={() => navigate(`/my-claims/${claim.id}/submitted`)}
                         className={`${buttonBaseClass} text-blue-600 dark:text-blue-400 focus:ring-blue-500 ${enabledButtonClass}`}
                       >
                         <EyeIcon />
@@ -115,15 +123,15 @@ const MyClaimsPage: React.FC = () => {
                         title="撤回"
                         onClick={() => handleWithdraw(claim.id, claim.reviewStatus)}
                         className={`${buttonBaseClass} ${isWithdrawDisabled(claim.reviewStatus) ? `${disabledButtonClass} text-gray-400 dark:text-gray-600` : `text-yellow-600 dark:text-yellow-400 focus:ring-yellow-500 ${enabledButtonClass}`}`}
-                        // disabled={isWithdrawDisabled(claim.reviewStatus)} // Actual disable
+                        disabled={isWithdrawDisabled(claim.reviewStatus)} // Actual disable
                       >
                         <UndoIcon />
                       </button>
                       <button
                         title="编辑"
-                        onClick={() => navigate('/claims/submit')} // Corrected path, in real app: navigate(`/claims/submit/${claim.id}/edit`) or similar
+                        onClick={() => navigate(`/claims/submit/${claim.id}`)}
                         className={`${buttonBaseClass} ${isEditDisabled(claim.reviewStatus) ? `${disabledButtonClass} text-gray-400 dark:text-gray-600` : `text-green-600 dark:text-green-400 focus:ring-green-500 ${enabledButtonClass}`}`}
-                        // disabled={isEditDisabled(claim.reviewStatus)} // Actual disable
+                        disabled={isEditDisabled(claim.reviewStatus)} // Actual disable
                       >
                         <PencilIcon />
                       </button>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react'; // Ensured useState is imported
 import { useParams, Link } from 'react-router-dom';
 import { db } from '../lib/surreal'; // Corrected path
 import { RecordId } from 'surrealdb'; // For typing record IDs
@@ -20,32 +20,59 @@ import {
   ListItemIcon,
   SvgIcon,
 } from '@mui/material';
-import { 
-  Timeline, 
-  TimelineItem, 
-  TimelineSeparator, 
-  TimelineConnector, 
-  TimelineContent, 
+import {
+  Timeline,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineConnector,
+  TimelineContent,
   TimelineDot,
   TimelineOppositeContent, // Optional for aligning text opposite the dot
 } from '@mui/lab'; // Import Timeline components
-import { mdiArrowLeft, mdiBookOpenOutline, mdiSync, mdiGavel, mdiAccountGroup, mdiCalendarClock } from '@mdi/js'; // Added new icons for timeline
+import { 
+  mdiArrowLeft, 
+  mdiBookOpenOutline, 
+  mdiSync, 
+  mdiGavel, 
+  mdiAccountGroup, 
+  mdiCalendarClock,
+  mdiBank, // For closing_date
+  mdiFileSign, // For restructuring_decision_date, plan_submission_date
+  mdiCalendarAlert, // For delayed_plan_submission_date
+  mdiAccountMultiplePlus, // For first_creditor_meeting_date
+  mdiAccountMultipleCheck, // For second_creditor_meeting_date
+} from '@mdi/js'; // Added new icons for timeline
+
+// Import Dialogs
+import ModifyCaseStatusDialog, { CaseStatus } from '../../components/case/ModifyCaseStatusDialog'; // Corrected path
+import MeetingMinutesDialog, { QuillDelta } from '../../components/case/MeetingMinutesDialog'; // Corrected path and imported QuillDelta
+import { useSnackbar } from '../../contexts/SnackbarContext'; // Added for showSuccess
 
 // Define interfaces based on your SurrealDB schema
 interface Case {
   id: RecordId;
   name: string;
   case_number?: string;
-  details?: string; // Added from schema
-  status?: string; // Added from schema
-  admin_id?: RecordId; // Added from schema
-  created_at?: string; // Added from schema
-  updated_at?: string; // Added from schema
-  // Mock fields that might be added to schema later or sourced differently
-  case_lead_name?: string;
+  details?: string; 
+  status?: string; 
+  admin_id?: RecordId; 
+  created_at?: string; 
+  updated_at?: string; 
+  case_lead_name?: string; // Already present, but good to confirm
   acceptance_date?: string;
-  current_stage?: string;
+  announcement_date?: string; // Added as it's used in timeline
+  claim_start_date?: string; // Added as it's used in timeline
+  claim_end_date?: string; // Added as it's used in timeline
+  // New optional date fields for timeline
+  first_creditor_meeting_date?: string;
+  restructuring_decision_date?: string;
+  plan_submission_date?: string;
+  delayed_plan_submission_date?: string;
+  second_creditor_meeting_date?: string;
+  closing_date?: string;
   filing_material_doc_id?: RecordId | null;
+  // case_procedure is used by displayCase, ensure it's available
+  case_procedure?: string;
 }
 
 interface Document {
@@ -55,12 +82,54 @@ interface Document {
 }
 
 const CaseDetailPage: React.FC = () => {
-  const { t } = useTranslation(); // <-- INITIALIZE T
+  const { t } = useTranslation(); 
   const { id } = useParams<{ id: string }>();
   const [caseDetail, setCaseDetail] = useState<Case | null>(null);
-  const [filingMaterialContent, setFilingMaterialContent] = useState<string>(''); // Default to empty string
+  const [filingMaterialContent, setFilingMaterialContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const { showSuccess } = useSnackbar(); // Added for snackbar
+
+  // State for dialogs
+  const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
+  const [meetingMinutesOpen, setMeetingMinutesOpen] = useState(false);
+  const [currentMeetingTitle, setCurrentMeetingTitle] = useState<string>('');
+
+
+  // Handlers for dialogs
+  const handleOpenModifyStatus = () => {
+    if (caseDetail) {
+      setModifyStatusOpen(true);
+    }
+  };
+
+  const handleOpenMeetingMinutes = () => {
+    if (caseDetail) {
+      let title = '';
+      const currentStage = displayCase.current_stage; // Use displayCase as it's already processed
+      if (currentStage === '债权人第一次会议') {
+        title = t('first_creditors_meeting_minutes_title', '第一次债权人会议纪要');
+      } else if (currentStage === '债权人第二次会议') {
+        title = t('second_creditors_meeting_minutes_title', '第二次债权人会议纪要');
+      } else {
+        title = t('meeting_minutes_generic_title', '会议纪要');
+      }
+      setCurrentMeetingTitle(title);
+      setMeetingMinutesOpen(true);
+    }
+  };
+  
+  const handleSaveMeetingMinutes = (minutesDelta: QuillDelta, meetingTitle: string) => {
+    console.log('Saving Meeting Minutes:');
+    console.log('  caseId:', caseDetail?.id.toString());
+    console.log('  meetingTitle:', meetingTitle);
+    console.log('  minutesContent:', JSON.stringify(minutesDelta.ops));
+    
+    // TODO: Implement actual API call to save meeting minutes
+    showSuccess(t('meeting_minutes_save_success_mock', '会议纪要已（模拟）保存成功！'));
+    setMeetingMinutesOpen(false);
+  };
+
 
   useEffect(() => {
     if (!id) {
@@ -144,11 +213,19 @@ const CaseDetailPage: React.FC = () => {
 
   // Mock timeline data - replace with actual data from case or related records
   const timelineEvents = [
-    { date: displayCase.acceptance_date, title: t('timeline_event_case_accepted', '案件受理'), icon: mdiGavel, color: 'primary' },
-    ...(displayCase.announcement_date ? [{ date: displayCase.announcement_date, title: t('timeline_event_first_announcement', '首次公告'), icon: mdiCalendarClock, color: 'secondary' }] : []),
-    ...(displayCase.claim_start_date ? [{ date: displayCase.claim_start_date, title: t('timeline_event_claim_submission_start', '债权申报开始'), icon: mdiAccountGroup, color: 'info' }] : []),
-    // Add more events as needed
-  ].filter(event => event.date && event.date !== t('case_detail_date_unknown')); // Filter out events with unknown dates
+    { date: displayCase.acceptance_date, title: t('timeline_event_case_accepted', '案件受理'), icon: mdiGavel, color: 'primary' as const },
+    ...(displayCase.announcement_date ? [{ date: displayCase.announcement_date, title: t('timeline_event_first_announcement', '首次公告'), icon: mdiCalendarClock, color: 'secondary' as const }] : []),
+    ...(displayCase.claim_start_date ? [{ date: displayCase.claim_start_date, title: t('timeline_event_claim_submission_start', '债权申报开始'), icon: mdiAccountGroup, color: 'info' as const }] : []),
+    ...(displayCase.claim_end_date ? [{ date: displayCase.claim_end_date, title: t('timeline_event_claim_submission_end', '债权申报截止'), icon: mdiAccountGroup, color: 'warning' as const }] : []), // Added claim_end_date
+    ...(caseDetail?.first_creditor_meeting_date ? [{ date: caseDetail.first_creditor_meeting_date, title: t('timeline_event_first_creditor_meeting', '第一次债权人会议'), icon: mdiAccountMultiplePlus, color: 'success' as const }] : []),
+    ...(caseDetail?.restructuring_decision_date ? [{ date: caseDetail.restructuring_decision_date, title: t('timeline_event_restructuring_decision', '重整裁定'), icon: mdiFileSign, color: 'primary' as const }] : []),
+    ...(caseDetail?.plan_submission_date ? [{ date: caseDetail.plan_submission_date, title: t('timeline_event_plan_submission', '重整计划提交'), icon: mdiFileSign, color: 'secondary' as const }] : []),
+    ...(caseDetail?.delayed_plan_submission_date ? [{ date: caseDetail.delayed_plan_submission_date, title: t('timeline_event_delayed_plan_submission', '重整计划延期提交'), icon: mdiCalendarAlert, color: 'warning' as const }] : []),
+    ...(caseDetail?.second_creditor_meeting_date ? [{ date: caseDetail.second_creditor_meeting_date, title: t('timeline_event_second_creditor_meeting', '第二次债权人会议'), icon: mdiAccountMultipleCheck, color: 'success' as const }] : []),
+    ...(caseDetail?.closing_date ? [{ date: caseDetail.closing_date, title: t('timeline_event_closing_date', '案件办结'), icon: mdiBank, color: 'info' as const }] : []),
+  ]
+  .filter(event => event.date && event.date !== t('case_detail_date_unknown'))
+  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Sort chronologically
 
 
   return (
@@ -267,11 +344,25 @@ const CaseDetailPage: React.FC = () => {
                   placeholder={t('case_detail_filing_material_empty')}
                 />
               </Box>
-              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}> {/* Allow buttons to wrap */}
-                <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}>
-                  {t('case_detail_actions_meeting_minutes_button')}
-                </Button>
-                <Button variant="contained" color="secondary" startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}>
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                {/* // TODO: Access Control - Also check user permission for 'manage_meeting_minutes'. */}
+                { (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议') && (
+                  <Button 
+                    variant="contained" 
+                    color="primary" 
+                    startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
+                    onClick={handleOpenMeetingMinutes}
+                  >
+                    {t('case_detail_actions_meeting_minutes_button')}
+                  </Button>
+                )}
+                {/* // TODO: Access Control - Visibility and enabled state depend on user role and case status. */}
+                <Button 
+                  variant="contained" 
+                  color="secondary" 
+                  startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
+                  onClick={handleOpenModifyStatus}
+                >
                   {t('case_detail_actions_change_status_button')}
                 </Button>
               </Box>
@@ -279,6 +370,37 @@ const CaseDetailPage: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Dialogs */}
+      {caseDetail && (
+        <ModifyCaseStatusDialog
+          open={modifyStatusOpen}
+          onClose={() => setModifyStatusOpen(false)}
+          currentCase={{ 
+            id: caseDetail.id.toString(), 
+            current_status: displayCase.current_stage as CaseStatus,
+            // Pass other necessary fields if ModifyCaseStatusDialog requires them
+            // e.g. case_procedure: displayCase.case_procedure
+          }}
+          // onSave={handleSaveStatus} // You would need a save handler here
+        />
+      )}
+
+      {caseDetail && (
+        <MeetingMinutesDialog
+          open={meetingMinutesOpen}
+          onClose={() => setMeetingMinutesOpen(false)}
+          caseInfo={{ 
+            caseId: caseDetail.id.toString(), 
+            caseName: displayCase.name, // Use displayCase for consistency
+            // case_number: displayCase.case_number // if needed by dialog
+          }}
+          meetingTitle={currentMeetingTitle} // Use state for dynamic title
+          existingMinutes={new Delta()} // Placeholder, replace with actual fetched minutes if available
+          onSave={handleSaveMeetingMinutes}
+        />
+      )}
+
       <Typography variant="caption" color="text.secondary" align="center" display="block" sx={{ mt: 4, fontStyle: 'italic' }}>
         {t('case_detail_footer_info_1')} {t('case_detail_footer_info_2')}
       </Typography>

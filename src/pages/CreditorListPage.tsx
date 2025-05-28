@@ -1,4 +1,6 @@
-import React from 'react';
+// TODO: Automatic Navigation - Logic for navigating to this page when case status is '立案' should be handled in higher-level routing (e.g., App.tsx or ProtectedRoute.tsx).
+// TODO: Access Control - Page access to Creditor Management itself should be controlled via routing based on user permissions (e.g., has 'view_creditors' or a general case access permission).
+import React, { useState } from 'react'; // Changed to useState
 import {
   Box,
   Typography,
@@ -24,10 +26,14 @@ import {
   mdiPencilOutline, 
   mdiDeleteOutline, 
   mdiMagnify, // Added
-  mdiFileImportOutline, 
+  mdiFileImportOutline,
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
-import PrintWaybillsDialog from '../../components/creditor/PrintWaybillsDialog'; // Import the new dialog
+import { useSnackbar } from '../../contexts/SnackbarContext';
+import PrintWaybillsDialog from '../../components/creditor/PrintWaybillsDialog';
+// Changed CreditorData to CreditorFormData in import from AddCreditorDialog
+import AddCreditorDialog, { CreditorFormData } from '../../components/creditor/AddCreditorDialog'; 
+import BatchImportCreditorsDialog from '../../components/creditor/BatchImportCreditorsDialog';
 
 // Define Creditor type for clarity
 export interface Creditor {
@@ -41,7 +47,7 @@ export interface Creditor {
 }
 
 // Mock data, replace with API call relevant to a selected case
-const mockCreditors: Creditor[] = [
+const mockCreditorsInitialData: Creditor[] = [
   { id: 'cred001', type: '组织', name: 'Acme Corp', identifier: '91330100MA2XXXXX1A', contact_person_name: 'John Doe', contact_person_phone: '13800138000', address: '科技园路1号' },
   { id: 'cred002', type: '个人', name: 'Jane Smith', identifier: '33010019900101XXXX', contact_person_name: 'Jane Smith', contact_person_phone: '13900139000', address: '文三路202号' },
   { id: 'cred003', type: '组织', name: 'Beta LLC', identifier: '91330100MA2YYYYY2B', contact_person_name: 'Mike Johnson', contact_person_phone: '13700137000', address: '创新大道33号' },
@@ -49,17 +55,23 @@ const mockCreditors: Creditor[] = [
 
 const CreditorListPage: React.FC = () => {
   const { t } = useTranslation();
-  const [selectedCreditorIds, setSelectedCreditorIds] = React.useState<string[]>([]);
-  const [searchTerm, setSearchTerm] = React.useState<string>('');
-  const [printWaybillsDialogOpen, setPrintWaybillsDialogOpen] = React.useState<boolean>(false);
+  const { showSuccess } = useSnackbar(); // Added
+  const [creditors, setCreditors] = useState<Creditor[]>(mockCreditorsInitialData); // Make creditors stateful
+  const [selectedCreditorIds, setSelectedCreditorIds] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  
+  // Dialog states
+  const [printWaybillsDialogOpen, setPrintWaybillsDialogOpen] = useState<boolean>(false);
+  const [addCreditorOpen, setAddCreditorOpen] = useState<boolean>(false);
+  const [batchImportOpen, setBatchImportOpen] = useState<boolean>(false);
+  const [editingCreditor, setEditingCreditor] = useState<Creditor | null>(null);
+  const [isImporting, setIsImporting] = useState<boolean>(false); // Added for batch import loading state
 
   // TODO: Fetch creditors for the selected case from API
-  // TODO: Implement creditor creation, editing, filtering, pagination
-  // TODO: Implement "打印快递单号" functionality
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      const newSelecteds = filteredCreditors.map((n) => n.id); // Select all from filtered list
+      const newSelecteds = filteredCreditors.map((n) => n.id);
       setSelectedCreditorIds(newSelecteds);
       return;
     }
@@ -87,12 +99,12 @@ const CreditorListPage: React.FC = () => {
 
   const isSelected = (id: string) => selectedCreditorIds.indexOf(id) !== -1;
 
-  const filteredCreditors = mockCreditors.filter(creditor => 
+  const filteredCreditors = creditors.filter(creditor => // Use state variable 'creditors'
     creditor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     creditor.identifier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (creditor.contact_person_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || // Handle undefined
-    (creditor.contact_person_phone || '').includes(searchTerm) || // Handle undefined
-    (creditor.address?.toLowerCase() || '').includes(searchTerm.toLowerCase()) // Handle undefined
+    (creditor.contact_person_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+    (creditor.contact_person_phone || '').includes(searchTerm) ||
+    (creditor.address?.toLowerCase() || '').includes(searchTerm.toLowerCase())
   );
 
   const handleOpenPrintWaybillsDialog = () => {
@@ -100,8 +112,85 @@ const CreditorListPage: React.FC = () => {
       setPrintWaybillsDialogOpen(true);
     }
   };
+  
+  const creditorsToPrint: Creditor[] = creditors.filter(c => selectedCreditorIds.includes(c.id)); // Use state variable 'creditors'
 
-  const creditorsToPrint: Creditor[] = mockCreditors.filter(c => selectedCreditorIds.includes(c.id));
+  // Handlers for AddCreditorDialog
+  const handleOpenAddCreditorDialog = () => {
+    setEditingCreditor(null); // Ensure we are in "add" mode
+    setAddCreditorOpen(true);
+  };
+
+  const handleOpenEditCreditorDialog = (creditor: Creditor) => {
+    setEditingCreditor(creditor);
+    setAddCreditorOpen(true);
+  };
+  
+  const handleCloseAddCreditorDialog = () => {
+    setAddCreditorOpen(false);
+    setEditingCreditor(null); // Clean up editing state
+  };
+
+  const handleSaveCreditor = (dataToSave: CreditorFormData) => {
+    if (dataToSave.id) { // Editing existing creditor
+      setCreditors(prevCreditors => 
+        prevCreditors.map(c => 
+          c.id === dataToSave.id 
+          ? { 
+              ...c, // Spread existing fields
+              type: dataToSave.category as Creditor['type'], // Map back category to type
+              name: dataToSave.name,
+              identifier: dataToSave.identifier,
+              contact_person_name: dataToSave.contactPersonName,
+              contact_person_phone: dataToSave.contactInfo, // Map back contactInfo
+              address: dataToSave.address,
+            } 
+          : c
+        )
+      );
+      showSuccess(t('creditor_updated_success', '债权人已成功更新'));
+    } else { // Adding new creditor
+      const newCreditor: Creditor = {
+        id: `cred${Date.now()}`,
+        type: dataToSave.category as Creditor['type'],
+        name: dataToSave.name,
+        identifier: dataToSave.identifier,
+        contact_person_name: dataToSave.contactPersonName,
+        contact_person_phone: dataToSave.contactInfo,
+        address: dataToSave.address,
+      };
+      setCreditors(prevCreditors => [newCreditor, ...prevCreditors]);
+      showSuccess(t('creditor_added_success', '债权人已成功添加'));
+    }
+    handleCloseAddCreditorDialog(); // Close and reset editingCreditor
+  };
+
+  // Handlers for BatchImportCreditorsDialog
+  const handleOpenBatchImportDialog = () => {
+    setBatchImportOpen(true);
+  };
+
+  const handleImportCreditors = (file: File) => {
+    setIsImporting(true);
+    console.log(`Simulating processing of file: ${file.name}`);
+    // Simulate reading and processing file content
+    // In a real scenario, you'd use a library like PapaParse for CSV or SheetJS for XLSX
+    
+    // Simulate adding a couple of mock creditors from the file
+    const mockImportedCreditors: Creditor[] = [
+      { id: `cred${Date.now()}-1`, type: '组织', name: '进口公司X', identifier: 'IMPORT-X123', contact_person_name: '进口联系人A', contact_person_phone: '1310000000X', address: '进口地址X' },
+      { id: `cred${Date.now()}-2`, type: '个人', name: '进口个人Y', identifier: 'IMPORT-Y456', contact_person_name: '进口个人Y', contact_person_phone: '1320000000Y', address: '进口地址Y' },
+    ];
+
+    // Simulate delay for processing
+    setTimeout(() => {
+      setCreditors(prevCreditors => [...prevCreditors, ...mockImportedCreditors]);
+      showSuccess(t('creditors_imported_success_mock', `成功模拟导入 ${mockImportedCreditors.length} 位债权人！`));
+      setBatchImportOpen(false);
+      setIsImporting(false);
+    }, 1500); // Simulate 1.5 seconds import time
+  };
+
 
   return (
     <Box sx={{ p: 3 }}>
@@ -124,13 +213,16 @@ const CreditorListPage: React.FC = () => {
           sx={{ minWidth: '300px', flexGrow: { xs:1, sm: 0.5, md:0.3 } }} // Responsive grow
         />
         <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', gap:1}}> {/* Allow buttons to wrap and add gap */}
-          <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiAccountPlusOutline} /></SvgIcon>}>
+          {/* // TODO: Access Control - This button should be visible/enabled based on user role (e.g., has 'create_creditor' permission). */}
+          <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiAccountPlusOutline} /></SvgIcon>} onClick={handleOpenAddCreditorDialog}>
             {t('add_single_creditor_button', '添加单个债权人')}
           </Button>
-          <Button variant="outlined" color="secondary" startIcon={<SvgIcon><path d={mdiFileImportOutline} /></SvgIcon>}>
+          {/* // TODO: Access Control - This button should be visible/enabled based on user role (e.g., has 'import_creditors' permission). */}
+          <Button variant="outlined" color="secondary" startIcon={<SvgIcon><path d={mdiFileImportOutline} /></SvgIcon>} onClick={handleOpenBatchImportDialog}>
             {t('batch_import_creditors_button', '批量导入债权人')}
           </Button>
-          <Button 
+          {/* // TODO: Access Control - This button should be visible/enabled based on user role (e.g., has 'print_waybills' permission). */}
+          <Button
             variant="contained" 
             color="secondary" 
             startIcon={<SvgIcon><path d={mdiPrinterOutline} /></SvgIcon>}
@@ -199,14 +291,35 @@ const CreditorListPage: React.FC = () => {
                     <TableCell>{creditor.contact_person_phone}</TableCell>
                     <TableCell>{creditor.address}</TableCell>
                     <TableCell align="center">
-                      <Stack direction="row" spacing={0} justifyContent="center"> {/* Reduced spacing for compact layout */}
+                      <Stack direction="row" spacing={0} justifyContent="center">
+                        {/* // TODO: Access Control - This button's visibility/enabled state should depend on user role (e.g., has 'edit_creditor' permission). */}
                         <Tooltip title={t('edit_creditor_tooltip', '编辑')}>
-                          <IconButton color="primary" size="small" aria-label="edit creditor" onClick={(e) => {e.stopPropagation(); /* TODO: Add edit logic */ }}>
+                          <IconButton 
+                            color="primary" 
+                            size="small" 
+                            aria-label="edit creditor" 
+                            onClick={(e) => {
+                              e.stopPropagation(); 
+                              handleOpenEditCreditorDialog(creditor);
+                            }}
+                          >
                             <SvgIcon fontSize="small"><path d={mdiPencilOutline} /></SvgIcon>
                           </IconButton>
                         </Tooltip>
+                        {/* // TODO: Access Control - This button's visibility/enabled state should depend on user role (e.g., has 'delete_creditor' permission). */}
                         <Tooltip title={t('delete_creditor_tooltip', '删除')}>
-                          <IconButton color="error" size="small" aria-label="delete creditor" onClick={(e) => {e.stopPropagation(); /* TODO: Add delete logic */ }}>
+                          <IconButton 
+                            color="error" 
+                            size="small" 
+                            aria-label="delete creditor" 
+                            onClick={(e) => {
+                              e.stopPropagation(); 
+                              // TODO: Implement delete logic, perhaps with a confirmation dialog
+                              console.log("TODO: Implement delete creditor", creditor.id); 
+                              // Example: setCreditors(prev => prev.filter(c => c.id !== creditor.id));
+                              // showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
+                            }}
+                          >
                             <SvgIcon fontSize="small"><path d={mdiDeleteOutline} /></SvgIcon>
                           </IconButton>
                         </Tooltip>
@@ -218,6 +331,7 @@ const CreditorListPage: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        {/* TODO: Implement Pagination Controls here */}
       </Paper>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
         {t('creditor_list_footer_note_1', '债权人管理页面。当案件处于立案阶段且用户有权限时，将自动进入此菜单。')}
@@ -228,6 +342,18 @@ const CreditorListPage: React.FC = () => {
         open={printWaybillsDialogOpen}
         onClose={() => setPrintWaybillsDialogOpen(false)}
         selectedCreditors={creditorsToPrint}
+      />
+      <AddCreditorDialog
+        open={addCreditorOpen}
+        onClose={handleCloseAddCreditorDialog}
+        onSave={handleSaveCreditor}
+        existingCreditor={editingCreditor}
+      />
+      <BatchImportCreditorsDialog
+        open={batchImportOpen}
+        onClose={() => setBatchImportOpen(false)}
+        onImport={handleImportCreditors}
+        isImporting={isImporting} // Pass isImporting state
       />
     </Box>
   );
