@@ -186,21 +186,21 @@ This checklist outlines the development tasks required to build the CuckooX plat
 
 ## 7. 在线会议 (Online Meetings)
 
-- [ ] **Access Control (`OnlineMeetingPage.tsx` - Design tasks 7.4.2):**
-    - [ ] Ensure module accessibility based on case status and user role.
-- [ ] **Meeting List Page (`OnlineMeetingPage.tsx` - Design tasks 7.1.x):**
-    - [ ] Implement responsive table for meeting list (名称, 类型, 时间, 状态, 链接, 纪要).
-    - [ ] Implement toolbar with "安排新会议" button (vector icons).
-    - [ ] Connect to API for meeting data.
-- [ ] **Schedule/Edit Meetings (modal or new page - Design tasks 7.2.x):**
-    - [ ] Implement form for scheduling/editing meetings (名称, 类型, 时间, 参会人员, 议程, 会议链接).
-    - [ ] Implement UI for cancelling meetings.
-    - [ ] Handle API submission.
-- [ ] **Meeting Minutes (link to `QuillJS` editor - Design tasks 7.3.x):**
-    - [ ] Ensure link navigates to `QuillJS` editor for creating/viewing minutes associated with the meeting.
-- [ ] **Meeting Records & Search (in `OnlineMeetingPage.tsx` - Design tasks 7.4.1):**
-    - [ ] Implement view for past meetings.
-    - [ ] Implement search functionality (name, time).
+- [x] **Access Control (`OnlineMeetingPage.tsx` - Design tasks 7.4.2):**
+    - [x] Ensure module accessibility based on case status and user role.
+- [x] **Meeting List Page (`OnlineMeetingPage.tsx` - Design tasks 7.1.x):**
+    - [x] Implement responsive table for meeting list (名称, 类型, 时间, 状态, 链接, 纪要).
+    - [x] Implement toolbar with "安排新会议" button (vector icons).
+    - [x] Connect to API for meeting data. (Utilizes `useLiveMeetings` for SurrealDB).
+- [x] **Schedule/Edit Meetings (modal or new page - Design tasks 7.2.x):**
+    - [x] Implement form for scheduling/editing meetings (名称, 类型, 时间, 参会人员, 议程, 会议链接). (Attendee selection via Autocomplete added. Note: `useCaseParticipants` hook uses placeholder DB queries).
+    - [x] Implement UI for cancelling meetings.
+    - [x] Handle API submission. (Uses direct SurrealDB client calls).
+- [x] **Meeting Minutes (link to `QuillJS` editor - Design tasks 7.3.x):**
+    - [x] Ensure link navigates to `QuillJS` editor for creating/viewing minutes associated with the meeting. (Uses `MeetingMinutesDialog.tsx`).
+- [x] **Meeting Records & Search (in `OnlineMeetingPage.tsx` - Design tasks 7.4.1):**
+    - [x] Implement view for past meetings. (Implicit in main list via status).
+    - [x] Implement search functionality (name, time). (Enhanced with date range filter).
 
 ## 8. 消息中心 (Message Center)
 
