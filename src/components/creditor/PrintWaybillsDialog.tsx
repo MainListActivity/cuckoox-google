@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSnackbar } from '../../contexts/SnackbarContext'; // Added for showSuccess
 import {
   Dialog,
   DialogTitle,
@@ -27,10 +28,21 @@ const PrintWaybillsDialog: React.FC<PrintWaybillsDialogProps> = ({
   selectedCreditors,
 }) => {
   const { t } = useTranslation();
+  const { showSuccess } = useSnackbar(); // Added
 
   const handleConfirmPrint = () => {
-    const creditorNames = selectedCreditors.map(c => c.name).join(', ');
-    console.log(t('print_waybills_log_message', 'Confirmed printing waybills for: {{names}}', { names: creditorNames }));
+    const waybillData = selectedCreditors.map(creditor => (
+      `--- Waybill ---
+      To: ${creditor.name}
+      Address: ${creditor.address}
+      Contact: ${creditor.contact_person_name}, ${creditor.contact_person_phone}
+      ID: ${creditor.identifier}
+      ---------------`
+    )).join('\n\n');
+
+    console.log("--- Mock Printing Waybills ---");
+    console.log(waybillData);
+    showSuccess(t('waybills_mock_printed_success', '快递单已（模拟）生成到控制台'));
     // In a real scenario, trigger backend process here
     onClose();
   };

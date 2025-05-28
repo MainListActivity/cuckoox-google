@@ -15,47 +15,65 @@ import {
   Alert,
 } from '@mui/material';
 
-export interface CreditorData {
-  category: '组织' | '个人' | '';
-  name: string;
-  identifier: string; // ID/Org Code
-  contactPersonName: string;
-  contactInfo: string;
-  address: string;
-}
+// Using Creditor type from CreditorListPage for consistency
+// Assuming Creditor type includes an 'id'
+import { Creditor } from '../../pages/CreditorListPage'; // Adjust path if necessary
+
+export type CreditorFormData = Omit<Creditor, 'id'> & { id?: string }; // Use Omit to make id optional for form data
 
 interface AddCreditorDialogProps {
   open: boolean;
   onClose: () => void;
-  onSave: (creditorData: CreditorData) => void;
+  onSave: (creditorData: CreditorFormData) => void;
+  existingCreditor?: Creditor | null; // Changed type to Creditor
 }
 
 const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
   open,
   onClose,
   onSave,
+  existingCreditor,
 }) => {
   const { t } = useTranslation();
 
-  const initialCreditorData: CreditorData = {
-    category: '',
+  const initialCreditorFormData: CreditorFormData = {
+    category: '', // Assuming category is part of Creditor or make it compatible
     name: '',
     identifier: '',
-    contactPersonName: '',
-    contactInfo: '',
+    contactPersonName: '', // Renamed from contact_person_name for form state
+    contactInfo: '', // Renamed from contact_person_phone for form state
     address: '',
+    // id is optional and will be present for existing creditors
+  };
+  
+  // Map Creditor to CreditorFormData
+  const mapCreditorToFormData = (creditor: Creditor | null | undefined): CreditorFormData => {
+    if (!creditor) return initialCreditorFormData;
+    return {
+      id: creditor.id,
+      category: creditor.type || '', // Map 'type' to 'category'
+      name: creditor.name,
+      identifier: creditor.identifier,
+      contactPersonName: creditor.contact_person_name,
+      contactInfo: creditor.contact_person_phone, // Map 'contact_person_phone' to 'contactInfo'
+      address: creditor.address,
+    };
   };
 
-  const [creditorData, setCreditorData] = useState<CreditorData>(initialCreditorData);
+
+  const [creditorData, setCreditorData] = useState<CreditorFormData>(initialCreditorFormData);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Reset form when dialog opens
     if (open) {
-      setCreditorData(initialCreditorData);
+      if (existingCreditor) {
+        setCreditorData(mapCreditorToFormData(existingCreditor));
+      } else {
+        setCreditorData(initialCreditorFormData);
+      }
       setFormError(null);
     }
-  }, [open]);
+  }, [open, existingCreditor]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>) => {
     const { name, value } = event.target;
@@ -63,13 +81,12 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
       ...prevData,
       [name as string]: value,
     }));
-    if (formError) setFormError(null); // Clear error on input change
+    if (formError) setFormError(null);
   };
   
-  // Handle Select change specifically as its event structure is different
   const handleSelectChange = (event: React.ChangeEvent<{ name?: string; value: unknown }>) => {
-    const name = event.target.name as keyof CreditorData;
-    const value = event.target.value;
+    const name = event.target.name as keyof CreditorFormData;
+    const value = event.target.value as CreditorFormData['category']; // Ensure type for category
      setCreditorData((prevData) => ({
       ...prevData,
       [name]: value,
@@ -77,31 +94,35 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
     if (formError) setFormError(null);
   };
 
-
-  const isSaveDisabled = () => {
-    return !creditorData.category || !creditorData.name.trim() || !creditorData.identifier.trim();
-    // Add more validation as needed, e.g., contactPersonName for '组织'
+  const validateForm = () => {
+    if (!creditorData.category || !creditorData.name.trim() || !creditorData.identifier.trim()) {
+      setFormError(t('add_creditor_error_required_fields', '请填写所有必填字段：类别、名称和ID。'));
+      return false;
+    }
+    // Add more specific validations if needed, e.g., identifier format based on category
+    return true;
   };
+
 
   const handleSave = () => {
-    if (isSaveDisabled()) {
-        setFormError(t('add_creditor_error_required_fields', '请填写所有必填字段：类别、名称和ID。'));
-        return;
+    if (!validateForm()) {
+      return;
     }
-    setFormError(null);
     onSave(creditorData);
-    // Parent component should handle closing the dialog on successful save
-    // onClose(); // Optionally close here, or let parent decide
   };
+  
+  const dialogTitle = existingCreditor 
+    ? t('edit_single_creditor_dialog_title', '编辑债权人') 
+    : t('add_single_creditor_dialog_title', '添加单个债权人');
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{t('add_single_creditor_dialog_title', '添加单个债权人')}</DialogTitle>
+      <DialogTitle>{dialogTitle}</DialogTitle>
       <DialogContent dividers>
         {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
-        <Grid container spacing={2}>
+        <Grid container spacing={2} sx={{pt:1}}> {/* Added padding top for better spacing with error alert */}
           <Grid item xs={12} sm={6}>
-            <FormControl fullWidth variant="outlined" required>
+            <FormControl fullWidth variant="outlined" required error={formError && !creditorData.category ? true : undefined}>
               <InputLabel id="category-select-label">{t('creditor_form_category_label', '类别')}</InputLabel>
               <Select
                 labelId="category-select-label"
@@ -112,8 +133,8 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
                 label={t('creditor_form_category_label', '类别')}
               >
                 <MenuItem value="" disabled><em>{t('select_placeholder', '请选择...')}</em></MenuItem>
-                <MenuItem value="组织">{t('creditor_category_organization', '组织')}</MenuItem>
-                <MenuItem value="个人">{t('creditor_category_individual', '个人')}</MenuItem>
+                <MenuItem value="组织">{t('creditor_category_organization', '组织')}</MenuItem> {/* Ensure these values match Creditor['type'] */}
+                <MenuItem value="个人">{t('creditor_category_individual', '个人')}</MenuItem> {/* Ensure these values match Creditor['type'] */}
               </Select>
             </FormControl>
           </Grid>

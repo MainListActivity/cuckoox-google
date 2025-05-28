@@ -21,8 +21,8 @@ interface BatchImportCreditorsDialogProps {
   isImporting?: boolean; // Optional prop to indicate import is in progress
 }
 
-// Placeholder for template file path
-const TEMPLATE_FILE_URL = '/templates/creditor_import_template.xlsx'; // Replace with actual path
+// Updated template file path to CSV
+const TEMPLATE_FILE_URL = '/templates/creditor_import_template.csv'; 
 
 const BatchImportCreditorsDialog: React.FC<BatchImportCreditorsDialogProps> = ({
   open,
@@ -72,10 +72,10 @@ const BatchImportCreditorsDialog: React.FC<BatchImportCreditorsDialogProps> = ({
             startIcon={<SvgIcon><path d={mdiFileDownloadOutline} /></SvgIcon>}
             sx={{textTransform: 'none'}}
           >
-            {t('download_import_template_button', '下载导入模板 (.xlsx)')}
+            {t('download_import_template_button_csv', '下载导入模板 (.csv)')}
           </Button>
           <Typography variant="caption" display="block" color="text.secondary" sx={{mt:0.5}}>
-            {t('batch_import_template_note', '请使用此模板准备您的债权人数据。')}
+            {t('batch_import_template_note_csv', '请使用此CSV模板准备您的债权人数据。')}
           </Typography>
         </Box>
 
