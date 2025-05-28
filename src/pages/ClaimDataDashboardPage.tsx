@@ -5,17 +5,16 @@ import {
   Grid,
   Card,
   CardContent,
-  ThemeProvider,
-  createTheme,
   CssBaseline,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
   Divider,
+  Skeleton, // Import Skeleton
 } from '@mui/material';
 import { 
-  teal, cyan, green, yellow, purple, grey, blue, orange, red 
+  teal, cyan, green, yellow, purple, grey, blue, orange, red
 } from '@mui/material/colors';
 import { alpha, useTheme } from '@mui/material/styles';
 import { PieChart, BarChart, LineChart } from '@mui/x-charts';
@@ -39,6 +38,8 @@ import {
   useLiveApprovedClaimsCount,
   useLivePendingClaimsCount,
   useLiveUniqueClaimantsCount,
+  useLiveTodaysSubmissionsCount, // Import new hook
+  useLiveTodaysReviewedClaimsCount, // Import new hook
   useLiveClaimsByStatusChartData,
   useLiveUsersOnlineByRoleChartData,
   useLiveDailyClaimsTrendChartData,
@@ -47,80 +48,8 @@ import {
   useLiveRecentReviewActions,
 } from '../../hooks/useLiveDashboardData'; // Adjust path
 
-// Local Dark Theme Definition
-const localDarkTheme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: { main: teal[300], light: teal[200], dark: teal[400] },
-    secondary: { main: cyan[400], light: cyan[300], dark: cyan[500] },
-    warning: { light: yellow[500], main: yellow[700], dark: yellow[800] }, // Added warning color
-    background: {
-      default: '#121212',
-      paper: '#1e1e1e',
-    },
-    text: {
-      primary: '#ffffff',
-      secondary: grey[400],
-      disabled: grey[600],
-    },
-    statBlue: { main: cyan[400] }, // Keep cyan for consistency with current metrics
-    statGreen: { main: green[400] },
-    statYellow: { main: yellow[400] },
-    statPurple: { main: purple[300] },
-    statRed: { main: red[400] }, 
-    chartBlue: { main: blue[400] },
-    chartGreen: { main: green[500] },
-    chartYellow: { main: yellow[500] },
-    chartOrange: { main: orange[400] },
-    chartPurple: { main: purple[400] },
-    chartRed: { main: red[500]},
-    info: { main: blue[300]}, 
-  },
-  typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h1: { fontWeight: 700, letterSpacing: '0.05em', color: teal[200], fontSize: '2.5rem' },
-    h2: { // For metric card titles
-      fontWeight: 500, 
-      color: grey[400], 
-      fontSize: '0.9rem', 
-      letterSpacing: '0.05em', 
-      textTransform: 'uppercase', 
-      opacity: 0.9 
-    }, 
-    h3: { // Original h3, can be reused or replaced if not needed elsewhere
-      fontWeight: 700, 
-      color: cyan[300], 
-      fontSize: '2rem' 
-    },
-    digitalMetric: { // For the large numbers in metric cards
-      fontFamily: '"Roboto Mono", monospace', // A more digital-looking font
-      fontWeight: 700,
-      fontSize: '2.75rem', // Increased size
-      lineHeight: 1.1,
-      letterSpacing: '0.03em',
-      // Example of a subtle glow, color should be dynamic
-      // textShadow: `0 0 8px ${alpha(cyan[300], 0.5)}`, 
-    },
-    subtitle1: { color: grey[500], fontSize: '0.9rem' },
-    body2: { fontSize: '0.8rem' },
-  },
-  components: {
-    MuiCard: {
-      styleOverrides: {
-        root: ({ theme }) => ({ // Default card style
-          border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
-          transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-          '&:hover': {
-            transform: 'scale(1.03)',
-            boxShadow: `0px 8px 20px ${alpha(theme.palette.primary.main, 0.25)}`,
-          },
-        }),
-      },
-    },
-  },
-});
-
 // Common styles for the 7 metric cards
+// The `theme` parameter will now be the global theme
 const metricCardStyle = (theme: any, borderColorKey: string) => ({
   borderWidth: '1px',
   borderColor: theme.palette[borderColorKey]?.main || theme.palette.primary.main,
@@ -160,42 +89,60 @@ const ClaimDataDashboardPage: React.FC = () => {
   const { user, selectedCaseId } = useAuth();
   const theme = useTheme(); // Hook to access theme for chart colors
 
-  // Helper function to create state and effect for a metric
-  const useMetricState = <T,>(liveValue: T): [T, boolean, React.Dispatch<React.SetStateAction<boolean>>] => {
+  // Helper function to create state and effect for a metric (for the "updating" visual cue)
+  const useIsUpdatingState = <T,>(currentData: T): [boolean, React.Dispatch<React.SetStateAction<boolean>>] => {
     const [isUpdating, setIsUpdating] = useState(false);
-    const previousValueRef = React.useRef<T | null>(null);
+    const previousDataRef = React.useRef<T | null>(null);
 
     useEffect(() => {
-      if (previousValueRef.current !== null && liveValue !== previousValueRef.current) {
+      if (previousDataRef.current !== null && JSON.stringify(currentData) !== JSON.stringify(previousDataRef.current)) {
         setIsUpdating(true);
-        const timer = setTimeout(() => setIsUpdating(false), 700);
+        const timer = setTimeout(() => setIsUpdating(false), 700); // Duration of the visual cue
         return () => clearTimeout(timer);
       }
-      previousValueRef.current = liveValue;
-    }, [liveValue]);
-    return [liveValue, isUpdating, setIsUpdating];
+      previousDataRef.current = currentData;
+    }, [currentData]);
+    return [isUpdating, setIsUpdating];
   };
 
   // Live Data Hooks & Visual Cue States
-  const [liveTotalClaims, isTotalClaimsUpdating] = useMetricState(useLiveClaimCountForCase(selectedCaseId));
-  const [liveApprovedClaimsCount, isApprovedClaimsCountUpdating] = useMetricState(useLiveApprovedClaimsCount(selectedCaseId));
-  const [livePendingClaimsCount, isPendingClaimsCountUpdating] = useMetricState(useLivePendingClaimsCount(selectedCaseId));
-  const [liveUniqueClaimantsCount, isUniqueClaimantsCountUpdating] = useMetricState(useLiveUniqueClaimantsCount(selectedCaseId));
+  const { data: liveTotalClaims, isLoading: isTotalClaimsLoading } = useLiveClaimCountForCase(selectedCaseId);
+  const [isTotalClaimsUpdating] = useIsUpdatingState(liveTotalClaims);
+
+  const { data: liveApprovedClaimsCount, isLoading: isApprovedClaimsCountLoading } = useLiveApprovedClaimsCount(selectedCaseId);
+  const [isApprovedClaimsCountUpdating] = useIsUpdatingState(liveApprovedClaimsCount);
+
+  const { data: livePendingClaimsCount, isLoading: isPendingClaimsCountLoading } = useLivePendingClaimsCount(selectedCaseId);
+  const [isPendingClaimsCountUpdating] = useIsUpdatingState(livePendingClaimsCount);
+
+  const { data: liveUniqueClaimantsCount, isLoading: isUniqueClaimantsCountLoading } = useLiveUniqueClaimantsCount(selectedCaseId);
+  const [isUniqueClaimantsCountUpdating] = useIsUpdatingState(liveUniqueClaimantsCount);
+
+  const { data: liveTodaysSubmissionsCount, isLoading: isTodaysSubmissionsLoading } = useLiveTodaysSubmissionsCount(selectedCaseId);
+  const [isTodaysSubmissionsUpdating] = useIsUpdatingState(liveTodaysSubmissionsCount);
+
+  const { data: liveTodaysReviewedClaimsCount, isLoading: isTodaysReviewedLoading } = useLiveTodaysReviewedClaimsCount(selectedCaseId);
+  const [isTodaysReviewedUpdating] = useIsUpdatingState(liveTodaysReviewedClaimsCount);
   
-  const [liveTotalClaimAmount, isTotalClaimAmountUpdating] = useMetricState(useLiveTotalClaimAmount(selectedCaseId));
-  const [liveApprovedClaimAmount, isApprovedClaimAmountUpdating] = useMetricState(useLiveApprovedClaimAmount(selectedCaseId));
-  const [livePendingClaimAmount, isPendingClaimAmountUpdating] = useMetricState(useLivePendingClaimAmount(selectedCaseId));
+  const { data: liveTotalClaimAmount, isLoading: isTotalClaimAmountLoading } = useLiveTotalClaimAmount(selectedCaseId);
+  const [isTotalClaimAmountUpdating] = useIsUpdatingState(liveTotalClaimAmount);
 
-  // Live Data for Charts
-  const liveClaimsByStatusData = useLiveClaimsByStatusChartData(selectedCaseId);
-  const liveUsersOnlineByRoleData = useLiveUsersOnlineByRoleChartData(selectedCaseId); // Currently mock
-  const liveDailyClaimsTrendData = useLiveDailyClaimsTrendChartData(selectedCaseId);
-  const liveClaimsByNatureData = useLiveClaimsByNatureChartData(selectedCaseId);
+  const { data: liveApprovedClaimAmount, isLoading: isApprovedClaimAmountLoading } = useLiveApprovedClaimAmount(selectedCaseId);
+  const [isApprovedClaimAmountUpdating] = useIsUpdatingState(liveApprovedClaimAmount);
 
-  // Live Data for Dynamic Lists
-  const listLimit = 5; // Define limit for recent items lists
-  const liveRecentSubmissions = useLiveRecentSubmissions(selectedCaseId, listLimit);
-  const liveRecentReviewActions = useLiveRecentReviewActions(selectedCaseId, listLimit);
+  const { data: livePendingClaimAmount, isLoading: isPendingClaimAmountLoading } = useLivePendingClaimAmount(selectedCaseId);
+  const [isPendingClaimAmountUpdating] = useIsUpdatingState(livePendingClaimAmount);
+
+  // Live Data for Charts - Destructure data and isLoading
+  const { data: liveClaimsByStatusData, isLoading: isClaimsByStatusLoading } = useLiveClaimsByStatusChartData(selectedCaseId);
+  const { data: liveUsersOnlineByRoleData, isLoading: isUsersOnlineLoading } = useLiveUsersOnlineByRoleChartData(selectedCaseId);
+  const { data: liveDailyClaimsTrendData, isLoading: isDailyClaimsTrendLoading } = useLiveDailyClaimsTrendChartData(selectedCaseId);
+  const { data: liveClaimsByNatureData, isLoading: isClaimsByNatureLoading } = useLiveClaimsByNatureChartData(selectedCaseId);
+
+  // Live Data for Dynamic Lists - Destructure data and isLoading
+  const listLimit = 5; 
+  const { data: liveRecentSubmissions, isLoading: isRecentSubmissionsLoading } = useLiveRecentSubmissions(selectedCaseId, listLimit);
+  const { data: liveRecentReviewActions, isLoading: isRecentReviewsLoading } = useLiveRecentReviewActions(selectedCaseId, listLimit);
 
 
   // Mock data for placeholders (gradually replace these with live data or remove)
@@ -213,7 +160,7 @@ const ClaimDataDashboardPage: React.FC = () => {
   };
   // Assume AppBar height is 64px for minHeight calculation
   const appBarHeight = '64px';
-  // theme is already defined above
+  // The `theme` variable obtained from `useTheme()` will now be the global theme.
 
   // Chart common properties
   const chartCardMinHeight = 350; 
@@ -239,10 +186,10 @@ const ClaimDataDashboardPage: React.FC = () => {
 
 
   return (
-    <ThemeProvider theme={localDarkTheme}>
-      <CssBaseline />
-      <Box sx={{ p: 3, backgroundColor: 'background.default', color: 'text.primary', minHeight: `calc(100vh - ${appBarHeight})` }}>
-        <Typography variant="h1" gutterBottom textAlign="center" mb={1}>债权申报数据大屏</Typography>
+    // <ThemeProvider theme={localDarkTheme}> // Removed ThemeProvider
+      <Box sx={{ p: 3, backgroundColor: theme.palette.background.default, color: theme.palette.text.primary, minHeight: `calc(100vh - ${appBarHeight})` }}>
+        <CssBaseline /> {/* Ensure CssBaseline is still applied, typically done at a higher level but good for standalone too */}
+        <Typography variant="h1" gutterBottom textAlign="center" mb={1} sx={{ color: theme.palette.primary.main }}>债权申报数据大屏</Typography>
         <Typography variant="subtitle1" textAlign="center" sx={{ mb: 5, color: theme.palette.text.secondary }}>
           {selectedCaseId 
             ? `实时监控案件ID: ${selectedCaseId.replace(/^case:/, '')} 的债权申报与审核动态` 
@@ -251,38 +198,94 @@ const ClaimDataDashboardPage: React.FC = () => {
               : "请先登录并选择案件"}
         </Typography>
 
-        {/* Metric Cards Grid */}
+        {/* Metric Cards Grid - Row 1 (New Metrics + First Two Original) */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
-          {/* Metric 1: Total Number of Claims (Live) */}
+          {/* Metric: Today's Submissions Count */}
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{
-              ...metricCardStyle(theme, 'statBlue'), // Use theme directly as it's in scope
-              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], {
-                duration: theme.transitions.duration.short,
-              }),
-              borderColor: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
-              transform: isTotalClaimsUpdating ? 'scale(1.02)' : 'scale(1)', // Subtle overall card scale
+              ...metricCardStyle(theme, 'statOrange'), 
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || theme.palette.orange[400], // Fallback if statOrange not in theme
+              transform: isTodaysSubmissionsUpdating ? 'scale(1.02)' : 'scale(1)',
             }}>
               <CardContent sx={metricCardContentStyle}>
-                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请总笔数</Typography>
-                <Typography 
-                  variant="digitalMetric" 
-                  sx={{
-                    ...metricValueStyle(theme, 'statBlue'),
-                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
-                    transform: isTotalClaimsUpdating ? 'scale(1.1)' : 'scale(1)',
-                    color: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
-                    textShadow: isTotalClaimsUpdating 
-                      ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` 
-                      : `0 0 6px ${alpha(theme.palette.statBlue.main, 0.5)}`,
-                  }}
-                >
-                  {liveTotalClaims}
-                </Typography>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>今日提交笔数</Typography>
+                {isTodaysSubmissionsLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography 
+                    variant="digitalMetric" 
+                    sx={{
+                      ...metricValueStyle(theme, 'statOrange'),
+                      transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                      transform: isTodaysSubmissionsUpdating ? 'scale(1.1)' : 'scale(1)',
+                      color: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || theme.palette.orange[400],
+                      textShadow: isTodaysSubmissionsUpdating 
+                        ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` 
+                        : `0 0 6px ${alpha(theme.palette.statOrange?.main || theme.palette.orange[400], 0.5)}`,
+                    }}
+                  >
+                    {liveTodaysSubmissionsCount}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
-          {/* Metric 2: Total Approved Claims (Live) */}
+
+          {/* Metric: Today's Reviewed Claims Count */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statRed'), 
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || theme.palette.red[400], // Fallback if statRed not in theme
+              transform: isTodaysReviewedUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>今日审核笔数</Typography>
+                {isTodaysReviewedLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography variant="digitalMetric" sx={{
+                    ...metricValueStyle(theme, 'statRed'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isTodaysReviewedUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || theme.palette.red[400],
+                    textShadow: isTodaysReviewedUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statRed?.main || theme.palette.red[400], 0.5)}`,
+                  }}>
+                    {liveTodaysReviewedClaimsCount}
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Metric 1: Total Number of Claims (Live) - Now 3rd item in this row */}
+          <Grid item xs={12} sm={6} md={3}>
+            <Card sx={{
+              ...metricCardStyle(theme, 'statBlue'), 
+              transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
+              borderColor: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
+              transform: isTotalClaimsUpdating ? 'scale(1.02)' : 'scale(1)',
+            }}>
+              <CardContent sx={metricCardContentStyle}>
+                <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请总笔数</Typography>
+                {isTotalClaimsLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography 
+                    variant="digitalMetric" 
+                    sx={{
+                      ...metricValueStyle(theme, 'statBlue'),
+                      transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                      transform: isTotalClaimsUpdating ? 'scale(1.1)' : 'scale(1)',
+                      color: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
+                      textShadow: isTotalClaimsUpdating 
+                        ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` 
+                        : `0 0 6px ${alpha(theme.palette.statBlue.main, 0.5)}`,
+                    }}
+                  >
+                    {liveTotalClaims}
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Metric 2: Total Approved Claims (Live) - Now 4th item in this row */}
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{
               ...metricCardStyle(theme, 'statGreen'),
@@ -292,18 +295,24 @@ const ClaimDataDashboardPage: React.FC = () => {
             }}>
               <CardContent sx={metricCardContentStyle}>
                 <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前已审批总笔数</Typography>
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statGreen'),
-                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
-                  transform: isApprovedClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isApprovedClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
-                  textShadow: isApprovedClaimsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statGreen.main, 0.5)}`,
-                }}>
-                  {liveApprovedClaimsCount}
-                </Typography>
+                {isApprovedClaimsCountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography variant="digitalMetric" sx={{
+                    ...metricValueStyle(theme, 'statGreen'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isApprovedClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isApprovedClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
+                    textShadow: isApprovedClaimsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statGreen.main, 0.5)}`,
+                  }}>
+                    {liveApprovedClaimsCount}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
+        </Grid>
+        
+        {/* Metric Cards Grid - Row 2 (Remaining Original Metrics) */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
           {/* Metric 3: Total Pending Claims (Live) */}
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{
@@ -314,18 +323,21 @@ const ClaimDataDashboardPage: React.FC = () => {
             }}>
               <CardContent sx={metricCardContentStyle}>
                 <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前待审总笔数</Typography>
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statYellow'),
-                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
-                  transform: isPendingClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isPendingClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
-                  textShadow: isPendingClaimsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statYellow.main, 0.5)}`,
-                }}>
-                  {livePendingClaimsCount}
-                </Typography>
+                {isPendingClaimsCountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography variant="digitalMetric" sx={{
+                    ...metricValueStyle(theme, 'statYellow'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isPendingClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isPendingClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
+                    textShadow: isPendingClaimsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statYellow.main, 0.5)}`,
+                  }}>
+                    {livePendingClaimsCount}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
+
           {/* Metric 4: Number of Unique Claimants (Live) */}
           <Grid item xs={12} sm={6} md={3}>
             <Card sx={{
@@ -336,15 +348,17 @@ const ClaimDataDashboardPage: React.FC = () => {
             }}>
               <CardContent sx={metricCardContentStyle}>
                 <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请债权人数量</Typography>
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statPurple'),
-                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
-                  transform: isUniqueClaimantsCountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isUniqueClaimantsCountUpdating ? theme.palette.warning.light : theme.palette.statPurple.main,
-                  textShadow: isUniqueClaimantsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statPurple.main, 0.5)}`,
-                }}>
-                  {liveUniqueClaimantsCount}
-                </Typography>
+                {isUniqueClaimantsCountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography variant="digitalMetric" sx={{
+                    ...metricValueStyle(theme, 'statPurple'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isUniqueClaimantsCountUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isUniqueClaimantsCountUpdating ? theme.palette.warning.light : theme.palette.statPurple.main,
+                    textShadow: isUniqueClaimantsCountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statPurple.main, 0.5)}`,
+                  }}>
+                    {liveUniqueClaimantsCount}
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -361,15 +375,17 @@ const ClaimDataDashboardPage: React.FC = () => {
             }}>
               <CardContent sx={metricCardContentStyle}>
                 <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请总金额</Typography>
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statBlue'),
-                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
-                  transform: isTotalClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isTotalClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
-                  textShadow: isTotalClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statBlue.main, 0.5)}`,
-                }}>
-                  {liveTotalClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
-                </Typography>
+                {isTotalClaimAmountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography variant="digitalMetric" sx={{
+                    ...metricValueStyle(theme, 'statBlue'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isTotalClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isTotalClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
+                    textShadow: isTotalClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statBlue.main, 0.5)}`,
+                  }}>
+                    {liveTotalClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -383,15 +399,17 @@ const ClaimDataDashboardPage: React.FC = () => {
             }}>
               <CardContent sx={metricCardContentStyle}>
                 <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前已审批总金额</Typography>
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statGreen'),
-                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
-                  transform: isApprovedClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isApprovedClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
-                  textShadow: isApprovedClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statGreen.main, 0.5)}`,
-                }}>
-                  {liveApprovedClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
-                </Typography>
+                {isApprovedClaimAmountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography variant="digitalMetric" sx={{
+                    ...metricValueStyle(theme, 'statGreen'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isApprovedClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isApprovedClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
+                    textShadow: isApprovedClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statGreen.main, 0.5)}`,
+                  }}>
+                    {liveApprovedClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -405,14 +423,15 @@ const ClaimDataDashboardPage: React.FC = () => {
             }}>
               <CardContent sx={metricCardContentStyle}>
                 <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前待审总金额</Typography>
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statYellow'),
-                  transition: 'transform 0.3s ease-in-out, color 0.3s linear',
-                  transform: isPendingClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isPendingClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
-                  textShadow: isPendingClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statYellow.main, 0.5)}`,
-                }}>
-                  {livePendingClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                {isPendingClaimAmountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
+                  <Typography variant="digitalMetric" sx={{
+                    ...metricValueStyle(theme, 'statYellow'),
+                    transition: 'transform 0.3s ease-in-out, color 0.3s linear',
+                    transform: isPendingClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
+                    color: isPendingClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
+                    textShadow: isPendingClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statYellow.main, 0.5)}`,
+                  }}>
+                    {livePendingClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
                 </Typography>
               </CardContent>
             </Card>
@@ -429,10 +448,12 @@ const ClaimDataDashboardPage: React.FC = () => {
                   债权状态分布
                 </Typography>
                 <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
-                  {liveClaimsByStatusData.length > 0 ? (
+                  {isClaimsByStatusLoading ? (
+                    <Skeleton variant="rectangular" width="100%" height={chartCardMinHeight - 80} sx={{alignSelf: 'center', mx: 'auto'}}/>
+                  ) : liveClaimsByStatusData.length > 0 ? (
                   <PieChart
                     series={[{ 
-                      data: liveClaimsByStatusData, // Use live data
+                      data: liveClaimsByStatusData,
                       highlightScope: { faded: 'global', highlighted: 'item' },
                       faded: { innerRadius: 20, additionalRadius: -10, color: 'gray' },
                       innerRadius: 30,
@@ -458,15 +479,17 @@ const ClaimDataDashboardPage: React.FC = () => {
             <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
               <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
                 <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
-                  用户在线分布 (模拟)
+                  用户在线分布
                 </Typography>
                 <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
-                  {liveUsersOnlineByRoleData.length > 0 ? (
+                  {isUsersOnlineLoading ? (
+                    <Skeleton variant="rectangular" width="100%" height={chartCardMinHeight - 80} sx={{alignSelf: 'center', mx: 'auto'}}/>
+                  ) : liveUsersOnlineByRoleData.length > 0 ? (
                   <BarChart
-                    dataset={liveUsersOnlineByRoleData} // Use live (mock) data
+                    dataset={liveUsersOnlineByRoleData}
                     xAxis={[{ scaleType: 'band', dataKey: 'role', label: '用户角色', labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary} }]}
                     yAxis={[{ label: '在线数量', labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary} }]}
-                    series={[{ dataKey: 'count', label: '在线用户数', color: theme.palette.chartBlue.main }]} 
+                    series={[{ dataKey: 'count', label: '在线用户数' }]} // Color will be taken from data point
                     layout="vertical" // Or "horizontal"
                     height={250}
                     margin={chartMargin}
@@ -490,7 +513,9 @@ const ClaimDataDashboardPage: React.FC = () => {
                   每日债权申报趋势 (笔数)
                 </Typography>
                  <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
-                  {liveDailyClaimsTrendData.length > 0 ? (
+                  {isDailyClaimsTrendLoading ? (
+                    <Skeleton variant="rectangular" width="100%" height={chartCardMinHeight - 80} sx={{alignSelf: 'center', mx: 'auto'}}/>
+                  ) : liveDailyClaimsTrendData.length > 0 ? (
                   <LineChart
                     xAxis={[{ 
                         dataKey: 'date', 
@@ -499,9 +524,9 @@ const ClaimDataDashboardPage: React.FC = () => {
                         labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary}
                     }]}
                     yAxis={[{ label: '申报数量 (笔)', labelStyle: {fill: theme.palette.text.secondary}, tickLabelStyle: {fill: theme.palette.text.secondary} }]}
-                    dataset={liveDailyClaimsTrendData} // Use live data
+                    dataset={liveDailyClaimsTrendData}
                     series={[
-                      { dataKey: 'count', label: '申报笔数', color: theme.palette.chartGreen.main, curve: "natural" },
+                      { dataKey: 'count', label: '申报笔数', color: theme.palette.chartGreen.main, curve: "catmullRom" }, // Using catmullRom for smoother curve
                     ]}
                     height={250}
                     margin={chartMargin}
@@ -525,10 +550,12 @@ const ClaimDataDashboardPage: React.FC = () => {
                   债权性质构成
                 </Typography>
                 <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, mt:1 }}>
-                  {liveClaimsByNatureData.length > 0 ? (
+                  {isClaimsByNatureLoading ? (
+                    <Skeleton variant="rectangular" width="100%" height={chartCardMinHeight - 80} sx={{alignSelf: 'center', mx: 'auto'}}/>
+                  ) : liveClaimsByNatureData.length > 0 ? (
                   <PieChart
                     series={[{ 
-                        data: liveClaimsByNatureData, // Use live data
+                        data: liveClaimsByNatureData,
                         highlightScope: { faded: 'global', highlighted: 'item' },
                         faded: { innerRadius: 20, additionalRadius: -10, color: 'gray' },
                         innerRadius: 30,
@@ -558,7 +585,14 @@ const ClaimDataDashboardPage: React.FC = () => {
                 <Typography variant={listTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1.5}}>
                   最新债权提交动态
                 </Typography>
-                {liveRecentSubmissions && liveRecentSubmissions.length > 0 ? (
+                {isRecentSubmissionsLoading ? (
+                  <Box sx={{flexGrow: 1, display:'flex', flexDirection: 'column', justifyContent:'center', px:1}}>
+                    <Skeleton variant="text" height={40} />
+                    <Skeleton variant="text" height={40} />
+                    <Skeleton variant="text" height={40} />
+                    <Skeleton variant="text" height={40} />
+                  </Box>
+                ) : liveRecentSubmissions && liveRecentSubmissions.length > 0 ? (
                   <List sx={{ overflowY: 'auto', flexGrow: 1, maxHeight: listCardMinHeight - 60 /* approx title height + padding */ }}>
                     {liveRecentSubmissions.map((item, index) => (
                       <React.Fragment key={item.id}>
@@ -597,7 +631,14 @@ const ClaimDataDashboardPage: React.FC = () => {
                 <Typography variant={listTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1.5}}>
                   最新审核动态
                 </Typography>
-                {liveRecentReviewActions && liveRecentReviewActions.length > 0 ? (
+                 {isRecentReviewsLoading ? (
+                  <Box sx={{flexGrow: 1, display:'flex', flexDirection: 'column', justifyContent:'center', px:1}}>
+                    <Skeleton variant="text" height={40} />
+                    <Skeleton variant="text" height={40} />
+                    <Skeleton variant="text" height={40} />
+                    <Skeleton variant="text" height={40} />
+                  </Box>
+                ) : liveRecentReviewActions && liveRecentReviewActions.length > 0 ? (
                   <List sx={{ overflowY: 'auto', flexGrow: 1, maxHeight: listCardMinHeight - 60 }}>
                     {liveRecentReviewActions.map((item, index) => (
                       <React.Fragment key={item.id}>
@@ -641,7 +682,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           图表库 `@mui/x-charts` 已用于基本可视化。实时动态列表已更新为动态数据。
         </Typography>
       </Box>
-    </ThemeProvider>
+    // </ThemeProvider> // Removed ThemeProvider
   );
 };
 

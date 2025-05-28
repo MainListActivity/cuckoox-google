@@ -20,6 +20,9 @@ interface DistinctCountResult {
 }
 
 // --- Chart Data Point Types ---
+// Import grey for default colors
+import { grey } from '@mui/material/colors';
+
 export interface PieChartDataPoint {
   id: string | number; // Unique ID for the slice
   value: number;
@@ -92,37 +95,45 @@ function createLiveMetricHook<TResultType, TDataType>(
   metricQueryFn: (caseId: string, limit?: number) => string, // Now a function to generate query
   parseResult: (queryResult: any, caseId: string | null, limit?: number) => TDataType, // eslint-disable-line @typescript-eslint/no-explicit-any
   defaultValue: TDataType,
-  debugName: string = "metric" 
+  debugName: string = "metric"
 ) {
+  // Define the return type for the hook
+  type LiveMetricReturn = {
+    data: TDataType;
+    isLoading: boolean;
+    error: any | null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  };
+
   // The hook itself can now accept additional parameters like 'limit'
-  return function useLiveMetric(caseId: string | null, limit?: number): TDataType {
+  return function useLiveMetric(caseId: string | null, limit?: number): LiveMetricReturn {
     const { client, isConnected } = useSurrealClient();
     const [metricValue, setMetricValue] = useState<TDataType>(defaultValue);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
     const liveQueryIdRef = useRef<string | null>(null);
 
     const fetchMetric = useCallback(async (currentCaseId: string) => {
       if (!client || !isConnected) {
         // console.warn(`Surreal client not connected, skipping fetch for ${debugName}.`);
+        // Don't set isLoading to false here, as connection might recover
         return;
       }
+      setIsLoading(true); // Set loading true at the beginning of a fetch attempt
       try {
         const finalQuery = metricQueryFn(currentCaseId, limit); // Generate query with limit
-        // console.log(`Fetching ${debugName} for case_id: ${currentCaseId} with query: ${finalQuery}`);
-        // Parameters for the query now need to include caseId and potentially limit if the query string uses $limit
-        const queryParams: { [key: string]: string | number | undefined } = { caseId: currentCaseId };
-        if (limit !== undefined && finalQuery.includes('$limit')) { // Only add if $limit is in query
-            queryParams.limit = limit;
+        const queryParams: { [key: string]: string | number } = { caseId: currentCaseId };
+        // Ensure limit is passed if $limit is in the query string.
+        // The hook caller should provide a sensible default for limit if necessary for the query.
+        if (finalQuery.includes('$limit')) {
+          queryParams.limit = limit || 5; // Default limit to 5 if not provided but query expects it
         }
 
         const result = await client.query<[TResultType[]]>(finalQuery, queryParams);
-        // console.log(`Raw ${debugName} result for ${currentCaseId}:`, result);
         
         if (result && result[0] && result[0].result) {
-            const parsed = parseResult(result[0].result, currentCaseId, limit); // Pass limit to parser
+            const parsed = parseResult(result[0].result, currentCaseId, limit);
             setMetricValue(parsed);
         } else {
-            // console.log(`No ${debugName} data found for ${currentCaseId} for ${debugName}, setting to default.`);
             setMetricValue(defaultValue);
         }
         setError(null);
@@ -130,13 +141,16 @@ function createLiveMetricHook<TResultType, TDataType>(
         console.error(`Error fetching ${debugName} for ${currentCaseId}:`, e);
         setError(e);
         setMetricValue(defaultValue); // Reset on error
+      } finally {
+        setIsLoading(false); // Set loading false after fetch attempt (success or error)
       }
     }, [client, isConnected, parseResult, defaultValue, debugName, metricQueryFn, limit]);
 
     useEffect(() => {
       if (!client || !isConnected || !caseId) {
         setMetricValue(defaultValue);
-        if (liveQueryIdRef.current) {
+        setIsLoading(false); // Not connected or no caseId, so not loading.
+        if (liveQueryIdRef.current && client && client.isConnected) { // Check client.isConnected before calling kill
           client.kill(liveQueryIdRef.current).then(() => {
             liveQueryIdRef.current = null;
           }).catch(killError => {
@@ -148,31 +162,42 @@ function createLiveMetricHook<TResultType, TDataType>(
 
       fetchMetric(caseId); // Initial fetch
 
+      // Setup live query (only if not already set up or if caseId changes, handled by useEffect dependencies)
       const setupLiveQuery = async () => {
         if (liveQueryIdRef.current) { // Kill previous if caseId or other key params change
           try {
-            await client.kill(liveQueryIdRef.current);
+            if (client && client.isConnected) await client.kill(liveQueryIdRef.current);
             liveQueryIdRef.current = null;
           } catch (killError) {
-            console.error(`Error killing previous live query ${liveQueryIdRef.current} for ${debugName}:`, killError);
+            // console.error(`Error killing previous live query ${liveQueryIdRef.current} for ${debugName}:`, killError);
           }
         }
+        
+        // Determine the live query based on debugName or a new parameter if more granularity is needed.
+        // For now, all hooks use the 'claim' table for live updates, except user_activity which is commented.
+        let liveSelectQuery = `LIVE SELECT * FROM claim WHERE case_id = $caseId;`;
+        // Example: if (debugName === "UsersOnlineByRoleChartData") {
+        //   liveSelectQuery = `LIVE SELECT * FROM user_activity WHERE case_id = $caseId;`;
+        // }
+        
         try {
-          const liveSelectQuery = `LIVE SELECT * FROM claim WHERE case_id = '${caseId}';`;
-          const queryResponse = await client.query<[{result: string}]>(liveSelectQuery);
+          const queryResponse = await client.query<[{result: string}]>(liveSelectQuery, { caseId });
           const qid = queryResponse && queryResponse[0] && queryResponse[0].result;
 
           if (qid && typeof qid === 'string') {
             liveQueryIdRef.current = qid;
             client.listenLive(liveQueryIdRef.current, (_action, _data) => {
-              fetchMetric(caseId); // Re-fetch the specific metric
+              // Re-fetch the specific metric without setting isLoading to true again,
+              // as this is a background update.
+              // Or, we could have a separate state for "isUpdating". For now, direct fetch.
+              fetchMetric(caseId); 
             });
           } else {
-            console.error(`Failed to get live query ID from LIVE SELECT for ${debugName}. Response:`, queryResponse);
+            // console.error(`Failed to get live query ID from LIVE SELECT for ${debugName}. Response:`, queryResponse);
           }
         } catch (e) {
-          console.error(`Error setting up live query for ${debugName}:`, e);
-          setError(e);
+          // console.error(`Error setting up live query for ${debugName}:`, e);
+          // setError(e); // Avoid setting global error for live query setup issues if main data loaded
         }
       };
 
@@ -182,21 +207,14 @@ function createLiveMetricHook<TResultType, TDataType>(
         if (liveQueryIdRef.current && client && client.isConnected) {
           client.kill(liveQueryIdRef.current).then(() => {
             liveQueryIdRef.current = null;
-          }).catch(killError => {
-            console.error(`Error killing live query ${liveQueryIdRef.current} for ${debugName} on cleanup:`, killError);
+          }).catch(_killError => {
+            // console.error(`Error killing live query ${liveQueryIdRef.current} for ${debugName} on cleanup:`, killError);
           });
         }
       };
-    // Ensure 'limit' is in the dependency array if it affects fetchMetric or setupLiveQuery
-    }, [client, isConnected, caseId, fetchMetric, defaultValue, debugName, limit]); 
+    }, [client, isConnected, caseId, fetchMetric, defaultValue, debugName, limit]);
 
-    if (error) {
-        // console.log(`useLiveMetric (${debugName}) rendering with error, value:`, metricValue);
-    } else {
-        // console.log(`useLiveMetric (${debugName}) rendering, value:`, metricValue);
-    }
-
-    return metricValue;
+    return { data: metricValue, isLoading, error };
   };
 }
 
@@ -258,17 +276,45 @@ export const useLiveUniqueClaimantsCount = createLiveMetricHook<DistinctCountRes
   "UniqueClaimantsCount"
 );
 
+// 8. useLiveTodaysSubmissionsCount
+export const useLiveTodaysSubmissionsCount = createLiveMetricHook<CountResult, number>(
+  (_caseId, _limit) => `
+    SELECT count() 
+    FROM claim 
+    WHERE case_id = $caseId AND string::slice(created_at, 0, 10) = string::slice(time::now(), 0, 10) 
+    GROUP ALL;
+  `,
+  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+  0,
+  "TodaysSubmissionsCount"
+);
+
+// 9. useLiveTodaysReviewedClaimsCount
+export const useLiveTodaysReviewedClaimsCount = createLiveMetricHook<CountResult, number>(
+  (_caseId, _limit) => `
+    SELECT count() 
+    FROM claim 
+    WHERE case_id = $caseId AND reviewed_at IS NOT NULL AND string::slice(reviewed_at, 0, 10) = string::slice(time::now(), 0, 10) 
+    GROUP ALL;
+  `,
+  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+  0,
+  "TodaysReviewedClaimsCount"
+);
+
 
 // --- Hooks for Chart Data ---
 
-// 8. useLiveClaimsByStatusChartData
+// Renumbering subsequent hooks for clarity in comments/logs if needed
+// Original 8. useLiveClaimsByStatusChartData becomes 10.
+// 10. useLiveClaimsByStatusChartData 
 const statusColorMap: { [key: string]: string } = {
   '审核通过': green[400],
   '待审': yellow[400],
   '已驳回': muiRed[400],
   '补充材料': orange[400],
 };
-const defaultStatusColor = grey[500];
+const defaultStatusColor = grey[500]; // Already imported grey
 
 export const useLiveClaimsByStatusChartData = createLiveMetricHook<GroupedCountResult[], PieChartDataPoint[]>(
   (_caseId, _limit) => "SELECT status, count() AS count FROM claim WHERE case_id = $caseId GROUP BY status;",
@@ -285,20 +331,63 @@ export const useLiveClaimsByStatusChartData = createLiveMetricHook<GroupedCountR
   "ClaimsByStatusChartData"
 );
 
-// 9. useLiveUsersOnlineByRoleChartData
-const mockUsersOnlineByRole: BarChartDataPoint[] = [
-    { role: '管理人', count: 5, color: teal[300] },
-    { role: '债权人', count: 50, color: cyan[400] },
-    { role: '管理员', count: 2, color: purple[300] },
-];
-export const useLiveUsersOnlineByRoleChartData = createLiveMetricHook<BarChartDataPoint[], BarChartDataPoint[]>(
-  (_caseId, _limit) => "SELECT 1;", // Dummy query
-  (_results: [], _caseId, _limit) => mockUsersOnlineByRole,
-  mockUsersOnlineByRole,
+// Original 9. useLiveUsersOnlineByRoleChartData becomes 11.
+// 11. useLiveUsersOnlineByRoleChartData
+
+// Define a color map for roles
+const roleColorMap: { [key: string]: string } = {
+  '管理人': teal[400],    // Manager
+  '债权人': cyan[500],    // Creditor
+  '管理员': purple[400],  // Admin
+  // Add other roles as needed
+};
+const defaultRoleColor = grey[500]; // Fallback color
+
+// Assumed structure for the raw query result from user_activity
+interface UserActivityByRoleResult {
+  role: string;
+  count: number;
+}
+
+export const useLiveUsersOnlineByRoleChartData = createLiveMetricHook<UserActivityByRoleResult[], BarChartDataPoint[]>(
+  // metricQueryFn: Generates the SurrealQL query.
+  // This is a PLACEHOLDER query. Actual table name and fields need to be confirmed.
+  // Assumption: 'user_activity' table with 'role', 'case_id', and 'last_seen' fields.
+  // Users are considered online if 'last_seen' was within the last 5 minutes.
+  // IMPORTANT: The live refresh for this hook currently depends on changes to the `claim` table
+  // due to the generic `createLiveMetricHook`'s live query setup. Ideally, it should listen
+  // to changes in the `user_activity` table for accurate real-time updates.
+  (_caseId, _limit) => `
+    SELECT 
+      role, 
+      count() AS count 
+    FROM user_activity 
+    WHERE 
+      case_id = $caseId AND 
+      last_seen > (time::now() - 5m) 
+    GROUP BY role;
+  `,
+  // parseResult: Transforms the query result into BarChartDataPoint[]
+  (results: UserActivityByRoleResult[], _caseId, _limit) => {
+    if (!results || results.length === 0) {
+      // Return an empty array or specific data if no users are online or query fails
+      // For example, to show 'No data' on the chart, the chart component itself should handle empty data.
+      return []; 
+    }
+    return results.map(item => ({
+      role: item.role || '未知角色', // Fallback for undefined role
+      count: item.count,
+      color: roleColorMap[item.role] || defaultRoleColor, // Use mapped color or default
+    }));
+  },
+  // defaultValue: Initial or fallback value
+  [], // Start with empty data, chart should handle this gracefully
+  // debugName
   "UsersOnlineByRoleChartData"
 );
 
-// 10. useLiveDailyClaimsTrendChartData
+// Original 10. useLiveDailyClaimsTrendChartData becomes 12.
+// 12. useLiveDailyClaimsTrendChartData
 export const useLiveDailyClaimsTrendChartData = createLiveMetricHook<GroupedCountResult[], LineChartDataPoint[]>(
   (_caseId, _limit) => "SELECT string::slice(created_at, 0, 10) AS day, count() AS count FROM claim WHERE case_id = $caseId GROUP BY day ORDER BY day ASC;",
   (results: GroupedCountResult[], _caseId, _limit) => {
@@ -312,7 +401,8 @@ export const useLiveDailyClaimsTrendChartData = createLiveMetricHook<GroupedCoun
   "DailyClaimsTrendChartData"
 );
 
-// 11. useLiveClaimsByNatureChartData
+// Original 11. useLiveClaimsByNatureChartData becomes 13.
+// 13. useLiveClaimsByNatureChartData
 const natureColorMap: { [key: string]: string } = {
   '普通债权': blue[400],
   '有财产担保债权': green[500],
@@ -340,9 +430,16 @@ export const useLiveClaimsByNatureChartData = createLiveMetricHook<GroupedCountR
 
 // --- Hooks for Dynamic List Data ---
 
-// 12. useLiveRecentSubmissions
+// Original 12. useLiveRecentSubmissions becomes 14.
+// 14. useLiveRecentSubmissions
 export const useLiveRecentSubmissions = createLiveMetricHook<RawRecentSubmission[], RecentSubmissionItem[]>(
-  (caseId, limit) => `SELECT id, claim_id, claimant_name, amount, created_at FROM claim WHERE case_id = '${caseId}' ORDER BY created_at DESC LIMIT ${limit || 5};`,
+  (_caseId, _limit) => `
+    SELECT id, claim_id, claimant_name, amount, created_at 
+    FROM claim 
+    WHERE case_id = $caseId 
+    ORDER BY created_at DESC 
+    LIMIT $limit;
+  `,
   (results: RawRecentSubmission[], _caseId, _limit) => {
     if (!results) return [];
     return results.map(item => ({
@@ -358,9 +455,16 @@ export const useLiveRecentSubmissions = createLiveMetricHook<RawRecentSubmission
   "RecentSubmissions"
 );
 
-// 13. useLiveRecentReviewActions
+// Original 13. useLiveRecentReviewActions becomes 15.
+// 15. useLiveRecentReviewActions
 export const useLiveRecentReviewActions = createLiveMetricHook<RawRecentReviewAction[], RecentReviewActionItem[]>(
-  (caseId, limit) => `SELECT id, claim_id, status, reviewed_by, approved_amount, reviewed_at FROM claim WHERE case_id = '${caseId}' AND reviewed_at IS NOT NULL ORDER BY reviewed_at DESC LIMIT ${limit || 5};`,
+  (_caseId, _limit) => `
+    SELECT id, claim_id, status, reviewed_by, approved_amount, reviewed_at 
+    FROM claim 
+    WHERE case_id = $caseId AND reviewed_at IS NOT NULL 
+    ORDER BY reviewed_at DESC 
+    LIMIT $limit;
+  `,
   (results: RawRecentReviewAction[], _caseId, _limit) => {
     if (!results) return [];
     return results.map(item => ({
