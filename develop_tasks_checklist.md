@@ -1,48 +1,45 @@
 # Developer Checklist: 破产案件全生命周期管理平台
 
-This checklist outlines the development tasks required to build the CuckooX platform. It is based on `product.md`, `designChecklist.md`, and `specification.md`.
+This checklist outlines the development tasks required to build the CuckooX platform. It is based on `product.md`, `design_tasks_checklist.md`, and `规范.md`.
 
 ## 0. Global Setup & Core Infrastructure
 
 - [ ] **Project Setup & Configuration:**
-    - [ ] Verify and update dependencies in `package.json` if necessary (e.g., consider adding MUI if a decision is made to use it globally, as per `specification.md`).
+    - [ ] Verify and update dependencies in `package.json` if necessary (e.g., consider adding MUI if a decision is made to use it globally, as per `规范.md`).
     - [ ] Configure ESLint and Prettier for code quality and consistency.
-    - [ ] Set up environment variables management (`.env` files for API keys, etc., noting `process.env.API_KEY` is a hard requirement for GenAI SDK).
-- [ ] **UI Core (as per `specification.md` & `designChecklist.md`):**
-    - [ ] Implement global Tailwind CSS setup (confirm if PostCSS current setup is final, or if CDN `<link>` is required).
-    - [ ] Define base Tailwind configuration (colors - Material Teal family, primary background `#f6f6f6`, fonts - Roboto).
+    - [ ] Set up environment variables management (`.env` files).
+- [ ] **UI Core (as per `规范.md` & `design_tasks_checklist.md`):**
+    - [ ] 安装（如果需要）并使用MUI组件 (colors - Material Teal family, primary background `#f6f6f6`, fonts - Roboto).
     - [ ] Implement Dark/Light mode toggle functionality (top-right corner) and ensure all components support it. Default to dark mode.
         - [ ] Create a theme context or utility for managing and applying modes.
     - [ ] Integrate Material Icons (already linked in `index.html`). Ensure consistent usage.
     - [ ] **MUI Integration Strategy:**
-        - [ ] Clarify the extent of MUI usage. The `specification.md` mentions "使用MUI作为UI组件". Current code primarily uses custom Tailwind components.
-        - [ ] If MUI is to be used, plan for its installation and setup.
-        - [ ] Decide if existing components will be refactored to MUI or if MUI will be used for new components only. Add tasks accordingly.
+        - [ ] 全局使用MUI作为UI组件.
 - [ ] **Routing:**
     - [ ] Review and confirm existing routing setup in `App.tsx` covers all planned pages.
     - [ ] Implement lazy loading for all page components (already partially done).
 - [ ] **State Management:**
-    - [ ] Evaluate if `AuthContext` is sufficient or if a more comprehensive global state solution (e.g., Zustand, Redux Toolkit) is needed for complex features like real-time updates or shared data across modules. For now, proceed with Context API.
-- [ ] **Authentication & Authorization Core (`AuthContext.tsx`, `ProtectedRoute.tsx`):**
-    - [ ] **GitHub OIDC Login:**
-        - [ ] Implement frontend logic to interact with Quarkus OIDC backend for GitHub login. (Design task 1.1.1)
-        - [ ] Handle callback from OIDC and store user session/token securely.
-    - [ ] **SurrealDB Direct Login (Admin Mode):**
-        - [ ] Implement UI and logic for admin login form when `admin=true` URL parameter is present. (Design task 1.1.1)
-    - [ ] **Case Selection Logic (as per `product.md 2.1.1` & `designChecklist.md 1.1.2`):**
-        - [ ] Enhance `AuthContext` or a new `CaseContext` to manage selected case ID.
-        - [ ] Implement logic to handle `case=案件ID` from URL (check permissions, load case).
-        - [ ] Implement logic to load last selected case from `localStorage` (or SurrealDB if backend stores this preference).
-        - [ ] Implement auto-selection if user is in only one case.
-        - [ ] Implement redirect to `/select-case` (CaseSelectionPage) if multiple cases and no selection. (The `CaseSelectionPage.tsx` already exists and provides a good base).
-    - [ ] **Role-Based Access Control (RBAC):**
-        - [ ] Ensure `AuthContext` (`user.role`, `hasRole`) robustly supports role checks.
-        - [ ] `ProtectedRoute.tsx`: Enhance to handle dynamic menu rendering based on roles/permissions fetched after login/case selection (as per `product.md 2.1.1`).
+    - [ ] 使用全局状态管理 (e.g., Zustand, Redux Toolkit)，需要保证用户登录状态持久化，刷新页面或暂时离开后能回到页面继续工作
+- [x] **Authentication & Authorization Core (`AuthContext.tsx`, `ProtectedRoute.tsx`):**
+    - [x] **GitHub OIDC Login:**
+        - [x] Implement frontend logic to interact with Quarkus OIDC backend for GitHub login. (Design task 1.1.1)
+        - [x] Handle callback from OIDC and store user session/token securely.
+    - [x] **SurrealDB Direct Login (Admin Mode):**
+        - [x] Implement UI and logic for admin login form when `admin=true` URL parameter is present. (Design task 1.1.1)
+    - [x] **Case Selection Logic (as per `product.md 2.1.1` & `design_tasks_checklist.md 1.1.2`):**
+        - [x] Enhance `AuthContext` or a new `CaseContext` to manage selected case ID.
+        - [x] Implement logic to handle `case=案件ID` from URL (check permissions, load case).
+        - [x] Implement logic to load last selected case from `localStorage` (or SurrealDB if backend stores this preference).
+        - [x] Implement auto-selection if user is in only one case.
+        - [x] Implement redirect to `/select-case` (CaseSelectionPage) if multiple cases and no selection. (The `CaseSelectionPage.tsx` already exists and provides a good base).
+    - [x] **Role-Based Access Control (RBAC):**
+        - [x] Ensure `AuthContext` (`user.role`, `hasRole`) robustly supports role checks.
+        - [x] `ProtectedRoute.tsx`: Enhance to handle dynamic menu rendering based on roles/permissions fetched after login/case selection (as per `product.md 2.1.1`).
 - [ ] **Global Components:**
     - [ ] **Loading States:** Develop consistent loading indicators/spinners (visible in dark/light modes). (Design task 1.3.3)
     - [ ] **Error Handling:** Develop consistent error message components/toasts. (Design task 1.3.4)
     - [ ] **Success Notifications:** Develop consistent success message components/toasts. (Design task 1.3.5)
-- [ ] **QuillJS Integration (as per `designChecklist.md 1.3.6`):**
+- [ ] **QuillJS Integration (as per `design_tasks_checklist.md 1.3.6`):**
     - [ ] Develop a reusable `QuillEditor` component.
     - [ ] Style QuillJS interface for dark/light modes.
     - [ ] Implement image uploads to MinIO via backend, and display in editor.
@@ -51,17 +48,17 @@ This checklist outlines the development tasks required to build the CuckooX plat
 
 ## 1. Main Application Layout & Navigation (`Layout.tsx`)
 
-- [ ] **Layout Structure (as per `specification.md` & `designChecklist.md 1.2.1`):**
+- [ ] **Layout Structure (as per `规范.md` & `design_tasks_checklist.md 1.2.1`):**
     - [ ] Refine `Layout.tsx` to strictly follow design:
         - [ ] Left sidebar: Prominent highlight color (Teal family) for active/selected items.
         - [ ] Top AppBar: Same color as main page content (`#f6f6f6` for light mode, corresponding dark mode color), blending in.
     - [ ] Ensure layout is fully responsive.
-- [ ] **Dynamic Menu Rendering (as per `designChecklist.md 1.2.2`):**
+- [ ] **Dynamic Menu Rendering (as per `design_tasks_checklist.md 1.2.2`):**
     - [ ] Fetch user's menu permissions after login/case selection.
     - [ ] Dynamically render `navItems` in `Layout.tsx` based on fetched permissions.
-- [ ] **Automatic Menu Selection (as per `designChecklist.md 1.2.3`):**
+- [ ] **Automatic Menu Selection (as per `design_tasks_checklist.md 1.2.3`):**
     - [ ] Implement logic to auto-navigate to the first accessible menu item after login/case selection.
-- [ ] **Global Case Switcher (as per `designChecklist.md 1.2.4`):**
+- [ ] **Global Case Switcher (as per `design_tasks_checklist.md 1.2.4`):**
     - [ ] If a user is part of multiple cases, design and implement a case switcher UI (e.g., in AppBar or profile menu).
     - [ ] This should update the selected case in `AuthContext` (or `CaseContext`) and potentially re-fetch case-specific data/permissions.
 
@@ -69,7 +66,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
 
 - [ ] **Case List Page (`CaseListPage.tsx` - Design tasks 2.1.x):**
     - [ ] Implement responsive table/card layout for case list.
-    - [ ] Style with Tailwind, ensure dark/light mode.
+    - [ ] Style with MUI, ensure dark/light mode.
     - [ ] Integrate vector icons for actions (View Details, Modify Status).
     - [ ] Implement "创建案件" (Create Case) button functionality.
     - [ ] Connect to API for fetching case list (mock or real).
@@ -104,7 +101,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
     - [ ] Toolbar buttons: "添加单个债权人", "批量导入债权人", "打印快递单号".
     - [ ] Implement responsive table for creditor list.
     - [ ] Connect to API for fetching/managing creditors for the selected case.
-    - [ ] Implement automatic navigation to this module if case is "立案" and user has permission (as per `product.md 3.2.2` & `designChecklist.md 3.5.1`).
+    - [ ] Implement automatic navigation to this module if case is "立案" and user has permission (as per `product.md 3.2.2` & `design_tasks_checklist.md 3.5.1`).
 - [ ] **Add Single Creditor (modal or new page - Design tasks 3.2.x):**
     - [ ] Implement form with specified fields (类别, 名称, ID, 联系人, 地址 etc.).
     - [ ] Implement validation and API submission.
@@ -118,7 +115,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
 
 ## 4. 债权申报 (Claim Submission by Creditor) - Creditor Facing
 
-- [ ] **Access Control (as per `product.md 3.3.2` & `designChecklist.md 4.5.1`):**
+- [ ] **Access Control (as per `product.md 3.3.2` & `design_tasks_checklist.md 4.5.1`):**
     - [ ] Ensure module is accessible only during "债权申报" stage for creditor roles.
 - [ ] **Create/Edit Basic Claim Info (`ClaimSubmissionPage.tsx` - Design tasks 4.1.x):**
     - [ ] Implement "新增申报" button and form for basic claim details (性质, 本金, 利息, etc.).
@@ -139,7 +136,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
 
 ## 5. 债权审核 (Claim Review by Administrator) - Administrator Facing
 
-- [ ] **Access Control & Auto-Navigation (as per `product.md 3.4.2` & `designChecklist.md 5.6.1`):**
+- [ ] **Access Control & Auto-Navigation (as per `product.md 3.4.2` & `design_tasks_checklist.md 5.6.1`):**
     - [ ] Ensure module is accessible during "债权申报" stage for admin/manager roles.
     - [ ] Implement automatic navigation if conditions met.
 - [ ] **Administrator's Claim List (`ClaimListPage.tsx` - Design tasks 5.1.x):**
@@ -176,7 +173,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
     - [ ] Clearly indicate the currently selected case for which data is displayed.
     - [ ] Connect to SurrealDB (via backend API) for real-time data.
 - [ ] **Visualization Components (Design tasks 6.2.x):**
-    - [ ] **Charting Library:** Select and integrate a charting library (e.g., Recharts, Chart.js) that supports Tailwind styling and dark/light themes.
+    - [ ] **Charting Library:** Select and integrate a charting library (@mui/x-charts) that supports MUI styling and dark/light themes.
     - [ ] Implement Core Metric Cards (digital flipper style).
     - [ ] Implement Trend Charts (line/bar for daily/weekly submissions).
     - [ ] Implement Composition Charts (pie/ring for claim nature/status).
@@ -242,7 +239,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
 
 ## 10. Non-Functional Requirements & Polish
 
-- [ ] **Unit Testing (as per `specification.md`):**
+- [ ] **Unit Testing (as per `规范.md`):**
     - [ ] Write unit tests for all critical components, utility functions, and business logic.
     - [ ] Aim for reasonable test coverage.
 - [ ] **E2E Testing (Optional, but recommended):**
@@ -268,7 +265,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
 - [ ] **Final UI/UX Review:**
     - [ ] Thoroughly test all UI interactions in both dark and light modes.
     - [ ] Verify responsiveness on various screen sizes.
-    - [ ] Ensure consistency with `specification.md` design rules (colors, icons, layout principles).
-    - [ ] Check for adherence to `designChecklist.md` items.
+    - [ ] Ensure consistency with `规范.md` design rules (colors, icons, layout principles).
+    - [ ] Check for adherence to `design_tasks_checklist.md` items.
 
 This developer checklist should provide a comprehensive guide for the development process. Remember to break down these tasks further into smaller, manageable units during sprint planning.
