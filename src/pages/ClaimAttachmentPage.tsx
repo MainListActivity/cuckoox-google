@@ -1,29 +1,34 @@
+// STYLING: This page currently uses Tailwind CSS. Per 规范.md, consider migration to MUI components.
+// TODO: Access Control - This page should only be accessible to users with a 'creditor' role.
+// TODO: Access Control - Verify this claimId belongs to the logged-in creditor.
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import RichTextEditor from '../../components/RichTextEditor'; // Adjusted path
+import { useNavigate, useParams } from 'react-router-dom'; // Added useParams
+import RichTextEditor, { QuillDelta } from '../../components/RichTextEditor'; // Adjusted path, imported QuillDelta
 import { useSnackbar } from '../../contexts/SnackbarContext'; // Assuming path is correct
+import Delta from 'quill-delta'; // Import Delta
 
 const ClaimAttachmentPage: React.FC = () => {
   const navigate = useNavigate();
+  const { claimId } = useParams<{ claimId: string }>(); // Get claimId from URL
   const { showSnackbar } = useSnackbar();
-  const [editorContent, setEditorContent] = useState('');
+  const [editorContent, setEditorContent] = useState<QuillDelta>(new Delta()); // Initialize with Delta
 
   // Placeholder claim data - in a real app, this would come from state or API
   const placeholderClaimData = {
-    id: 'CLAIM-2023-00789',
-    totalAmount: '¥10,560.00',
-    currency: 'CNY',
-    nature: '普通债权',
+    // id: 'CLAIM-2023-00789', // Replaced by claimId from URL
+    totalAmount: '¥10,560.00', // TODO: Fetch based on claimId
+    currency: 'CNY', // TODO: Fetch based on claimId
+    nature: '普通债权', // TODO: Fetch based on claimId
   };
 
   const handleSaveDraft = () => {
     // Simulate API call
     const isSuccess = Math.random() > 0.1; // 90% success rate
     if (isSuccess) {
-      console.log('Saving draft with content:', editorContent);
+      console.log(`Saving draft for claim ID: ${claimId} with content:`, JSON.stringify(editorContent.ops));
       showSnackbar('草稿已成功保存。', 'success');
     } else {
-      console.error('Failed to save draft.');
+      console.error(`Failed to save draft for claim ID: ${claimId}.`);
       showSnackbar('保存草稿失败，请稍后重试。', 'error');
     }
   };
@@ -32,13 +37,11 @@ const ClaimAttachmentPage: React.FC = () => {
     // Simulate API call
     const isSuccess = Math.random() > 0.1; // 90% success rate
     if (isSuccess) {
-      console.log('Submitting claim with content:', editorContent);
+      console.log(`Submitting claim ID: ${claimId} with content:`, JSON.stringify(editorContent.ops));
       showSnackbar('债权申报已成功提交。', 'success');
-      // Potentially navigate to a success page or claims list
-      // For now, let's navigate to a placeholder submitted detail page
-      navigate('/submitted-claim-detail'); 
+      navigate(`/my-claims/${claimId}/submitted`); 
     } else {
-      console.error('Failed to submit claim.');
+      console.error(`Failed to submit claim ID: ${claimId}.`);
       showSnackbar('提交申报失败，请检查网络或稍后重试。', 'error');
     }
   };
@@ -58,8 +61,9 @@ const ClaimAttachmentPage: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
             <span className={commonLabelClassName}>申报ID:</span>
-            <span className={commonValueClassName}>{placeholderClaimData.id}</span>
+            <span className={commonValueClassName}>{claimId}</span>
           </div>
+          {/* TODO: Fetch and display actual basic claim info based on claimId: ${claimId} */}
           <div>
             <span className={commonLabelClassName}>债权性质:</span>
             <span className={commonValueClassName}>{placeholderClaimData.nature}</span>
@@ -82,7 +86,8 @@ const ClaimAttachmentPage: React.FC = () => {
           We ensure the container around it fits the page's theme.
         */}
         <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden">
-           {/* MinIO integration is assumed to be handled within RichTextEditor */}
+          {/* // TODO: Configure RichTextEditor for image uploads to MinIO (via backend service). */}
+          {/* // TODO: Configure RichTextEditor for other file attachments (links/icons, via backend service). */}
           <RichTextEditor value={editorContent} onChange={setEditorContent} />
         </div>
         <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -94,7 +99,7 @@ const ClaimAttachmentPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 mt-6 border-t border-gray-200 dark:border-gray-700">
         <button 
           type="button" 
-          onClick={() => navigate('/claims/submit')} // Corrected path
+          onClick={() => navigate(`/claims/submit/${claimId}`)}
           className={`${buttonBaseClass} border border-gray-300 dark:border-gray-500 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:ring-indigo-500`}
         >
           返回修改基本信息
@@ -113,6 +118,7 @@ const ClaimAttachmentPage: React.FC = () => {
         >
           提交申报
         </button>
+        {/* // TODO: Workflow - After submission, the claim should become read-only for the creditor unless explicitly rejected by an admin. */}
       </div>
     </div>
   );

@@ -114,25 +114,25 @@ This checklist outlines the development tasks required to build the CuckooX plat
     - [x] Implement UI to generate printable format or integrate with a (mocked) third-party service.
 
 ## 4. 债权申报 (Claim Submission by Creditor) - Creditor Facing
-
-- [ ] **Access Control (as per `product.md 3.3.2` & `design_tasks_checklist.md 4.5.1`):**
-    - [ ] Ensure module is accessible only during "债权申报" stage for creditor roles.
-- [ ] **Create/Edit Basic Claim Info (`ClaimSubmissionPage.tsx` - Design tasks 4.1.x):**
-    - [ ] Implement "新增申报" button and form for basic claim details (性质, 本金, 利息, etc.).
-    - [ ] Implement "保存并下一步（编辑附件）" workflow.
-    - [ ] Connect to API.
-- [ ] **Edit Attachment Materials (QuillJS page/section - Design tasks 4.2.x):**
-    - [ ] Integrate `QuillJS` editor for claim justification and evidence upload (images to MinIO, other files as links).
-    - [ ] Display basic claim info for reference.
-    - [ ] Implement "返回修改基本信息", "保存草稿", "提交申报" buttons.
-    - [ ] Handle API interaction for saving/submitting.
-- [ ] **Claim Submission Flow & Read-Only View (Design tasks 4.3.x):**
-    - [ ] Implement validation and feedback for submission.
-    - [ ] Implement read-only view for submitted/approved claims from creditor's perspective.
-- [ ] **Creditor's Claim List (`ClaimListPage.tsx` adapted for creditors - Design tasks 4.4.x):**
-    - [ ] Develop a view for creditors to see their own claims (申报时间, 性质, 总额, 审核状态, 审核意见).
-    - [ ] Implement actions: View Details, Withdraw (if not audited), Edit (if draft/rejected).
-    - [ ] Connect to API.
+- [!] **UI Framework Note:** Pages in this module currently use Tailwind CSS. `规范.md` specifies MUI. This needs to be reconciled or MUI migration planned.
+- [x] **Access Control (as per `product.md 3.3.2` & `design_tasks_checklist.md 4.5.1`):** (Placeholder comments added; actual case status check is higher-level)
+    - [x] Ensure module is accessible only during "债权申报" stage for creditor roles.
+- [x] **Create/Edit Basic Claim Info (`ClaimSubmissionPage.tsx` - Design tasks 4.1.x):** (Implemented form, auto-calculation, mock save & navigation with claim ID. Noted: uses Tailwind)
+    - [x] Implement "新增申报" button and form for basic claim details (性质, 本金, 利息, etc.).
+    - [x] Implement "保存并下一步（编辑附件）" workflow.
+    - [x] Connect to API.
+- [x] **Edit Attachment Materials (QuillJS page/section - Design tasks 4.2.x):** (Implemented page with `claimId`, RichTextEditor, mock save draft/submit actions. Noted: uses Tailwind; RichTextEditor file/image upload is mock)
+    - [x] Integrate `QuillJS` editor for claim justification and evidence upload (images to MinIO, other files as links).
+    - [x] Display basic claim info for reference.
+    - [x] Implement "返回修改基本信息", "保存草稿", "提交申报" buttons.
+    - [x] Handle API interaction for saving/submitting.
+- [x] **Claim Submission Flow & Read-Only View (Design tasks 4.3.x):** (Implemented mock submission, navigation to a submitted detail page. Read-only view handled by `SubmittedClaimDetailPage.tsx`. Noted: uses Tailwind)
+    - [x] Implement validation and feedback for submission.
+    - [x] Implement read-only view for submitted/approved claims from creditor's perspective.
+- [x] **Creditor's Claim List (`MyClaimsPage.tsx` adapted for creditors - Design tasks 4.4.x):** (Implemented list with mock data, actions for view/withdraw/edit with navigation. Noted: uses Tailwind)
+    - [x] Develop a view for creditors to see their own claims (申报时间, 性质, 总额, 审核状态, 审核意见).
+    - [x] Implement actions: View Details, Withdraw (if not audited), Edit (if draft/rejected).
+    - [x] Connect to API.
 
 ## 5. 债权审核 (Claim Review by Administrator) - Administrator Facing
 

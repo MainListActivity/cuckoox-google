@@ -1,18 +1,18 @@
+// STYLING: This page currently uses Tailwind CSS. Per 规范.md, consider migration to MUI components.
+// TODO: Access Control - This page should only be accessible to users with a 'creditor' role.
+// TODO: Access Control - Module access (new submission) should typically be conditional on Case Status being '债权申报'. This check might be done in higher-level routing.
+// TODO: Access Control - If loaded with a claimId (for editing): Verify this claimId belongs to the logged-in creditor and is in an editable status ('草稿', '已驳回', '需要补充').
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from '../../contexts/SnackbarContext'; // Assuming path is correct
+// TODO: import { useAuth } from '../../contexts/AuthContext'; // To get logged-in creditor info
 
 const ClaimSubmissionPage: React.FC = () => {
   const navigate = useNavigate();
   const { showSnackbar } = useSnackbar();
-  // Form state
-  // New state for Creditor and Contact Info
-  const [creditorType, setCreditorType] = useState('organization');
-  const [creditorName, setCreditorName] = useState('');
-  const [creditorId, setCreditorId] = useState(''); // TIN or National ID
-  const [contactName, setContactName] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
+  // const { user } = useAuth(); // TODO: Use this to get creditor details
 
+  // Form state
   const [claimNature, setClaimNature] = useState('普通债权');
   const [principal, setPrincipal] = useState('');
   const [interest, setInterest] = useState('');
@@ -21,9 +21,6 @@ const ClaimSubmissionPage: React.FC = () => {
   const [currency, setCurrency] = useState('CNY');
   const [briefDescription, setBriefDescription] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Dynamic ID label based on creditor type
-  const creditorIdLabel = creditorType === 'organization' ? '统一社会信用代码' : '身份证号';
 
   // Calculate total amount
   useEffect(() => {
@@ -35,14 +32,7 @@ const ClaimSubmissionPage: React.FC = () => {
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    // Creditor Info Validation
-    if (!creditorType) newErrors.creditorType = '债权人类别不能为空';
-    if (!creditorName) newErrors.creditorName = '债权人姓名/名称不能为空';
-    if (!creditorId) newErrors.creditorId = `${creditorIdLabel}不能为空`;
-    // Contact Info Validation
-    if (!contactName) newErrors.contactName = '联系人姓名不能为空';
-    if (!contactPhone) newErrors.contactPhone = '联系方式不能为空';
-    // Existing Claim Info Validation
+    // Claim Info Validation
     if (!claimNature) newErrors.claimNature = '债权性质不能为空';
     if (!principal) {
       newErrors.principal = '本金不能为空';
@@ -61,13 +51,23 @@ const ClaimSubmissionPage: React.FC = () => {
       showSnackbar('请修正表单中的错误。', 'error');
       return;
     }
+    
+    const mockClaimId = `CLAIM-${Date.now()}`;
     // TODO: submit data to API
     console.log({
-      creditorType, creditorName, creditorId, contactName, contactPhone, // New fields
-      claimNature, principal, interest, otherFees, totalAmount, currency, briefDescription
+      claimId: mockClaimId, // Added mock claim ID
+      claimNature, 
+      principal, 
+      interest, 
+      otherFees, 
+      totalAmount, 
+      currency, 
+      briefDescription
+      // TODO: Add logged-in creditor's ID from AuthContext when submitting
+      // creditorId: user?.id 
     });
     showSnackbar('债权基本信息已保存。', 'success');
-    navigate('/claim-attachment'); 
+    navigate(`/claim-attachment/${mockClaimId}`); 
   };
 
   const commonInputClassName = "mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white";
@@ -76,90 +76,23 @@ const ClaimSubmissionPage: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-lg shadow min-h-screen">
-      <h1 className="text-2xl font-semibold text-gray-800 dark:text-white mb-6">创建债权申报 (管理员代报)</h1>
+      <h1 className="text-2xl font-semibold text-gray-800 dark:text-white mb-6">填写债权基本信息</h1>
+      
+      {/* TODO: Display logged-in creditor's information here from AuthContext */}
+      {/* <div className="mb-6 p-4 border rounded-md bg-gray-50 dark:bg-gray-700/50">
+        <h2 className="text-lg font-medium text-gray-700 dark:text-gray-200 mb-3">申报人信息 (自动带入)</h2>
+        <p>名称: [Logged In Creditor Name]</p>
+        <p>ID: [Logged In Creditor ID]</p>
+      </div> */}
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Creditor Information Section */}
-        <fieldset className="border p-4 rounded-md dark:border-gray-600">
-          <legend className="text-lg font-medium text-gray-700 dark:text-gray-200 px-2">债权人信息</legend>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 mt-4">
-            <div>
-              <label htmlFor="creditorType" className={commonLabelClassName}>类别 <span className="text-red-500">*</span></label>
-              <select 
-                id="creditorType" 
-                value={creditorType} 
-                onChange={e => { setCreditorType(e.target.value); setErrors(prev => ({...prev, creditorType: '', creditorId: ''})); }} 
-                required
-                className={`${commonInputClassName} ${errors.creditorType ? 'border-red-500 dark:border-red-400' : ''}`}
-              >
-                <option value="organization">组织</option>
-                <option value="individual">个人</option>
-              </select>
-              {errors.creditorType && <p className={errorTextClassName}>{errors.creditorType}</p>}
-            </div>
-            <div>
-              <label htmlFor="creditorName" className={commonLabelClassName}>姓名/名称 <span className="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                id="creditorName" 
-                value={creditorName} 
-                onChange={e => { setCreditorName(e.target.value); setErrors(prev => ({...prev, creditorName: ''})); }} 
-                required 
-                className={`${commonInputClassName} ${errors.creditorName ? 'border-red-500 dark:border-red-400' : ''}`}
-              />
-              {errors.creditorName && <p className={errorTextClassName}>{errors.creditorName}</p>}
-            </div>
-            <div>
-              <label htmlFor="creditorId" className={commonLabelClassName}>{creditorIdLabel} <span className="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                id="creditorId" 
-                value={creditorId} 
-                onChange={e => { setCreditorId(e.target.value); setErrors(prev => ({...prev, creditorId: ''})); }} 
-                required 
-                className={`${commonInputClassName} ${errors.creditorId ? 'border-red-500 dark:border-red-400' : ''}`}
-              />
-              {errors.creditorId && <p className={errorTextClassName}>{errors.creditorId}</p>}
-            </div>
-          </div>
-        </fieldset>
-
-        {/* Contact Information Section */}
-        <fieldset className="border p-4 rounded-md dark:border-gray-600">
-          <legend className="text-lg font-medium text-gray-700 dark:text-gray-200 px-2">联系人信息</legend>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mt-4">
-            <div>
-              <label htmlFor="contactName" className={commonLabelClassName}>联系人姓名 <span className="text-red-500">*</span></label>
-              <input 
-                type="text" 
-                id="contactName" 
-                value={contactName} 
-                onChange={e => { setContactName(e.target.value); setErrors(prev => ({...prev, contactName: ''})); }} 
-                required 
-                className={`${commonInputClassName} ${errors.contactName ? 'border-red-500 dark:border-red-400' : ''}`}
-              />
-              {errors.contactName && <p className={errorTextClassName}>{errors.contactName}</p>}
-            </div>
-            <div>
-              <label htmlFor="contactPhone" className={commonLabelClassName}>联系方式 <span className="text-red-500">*</span></label>
-              <input 
-                type="text" // Using text to allow various formats (phone/email)
-                id="contactPhone" 
-                value={contactPhone} 
-                onChange={e => { setContactPhone(e.target.value); setErrors(prev => ({...prev, contactPhone: ''})); }} 
-                required 
-                className={`${commonInputClassName} ${errors.contactPhone ? 'border-red-500 dark:border-red-400' : ''}`}
-              />
-              {errors.contactPhone && <p className={errorTextClassName}>{errors.contactPhone}</p>}
-            </div>
-          </div>
-        </fieldset>
-
         {/* Basic Claim Information Section */}
         <fieldset className="border p-4 rounded-md dark:border-gray-600">
           <legend className="text-lg font-medium text-gray-700 dark:text-gray-200 px-2">债权基本信息</legend>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mt-4">
             <div>
               <label htmlFor="claimNature" className={commonLabelClassName}>债权性质 <span className="text-red-500">*</span></label>
+              {/* TODO: Fetch claim nature options from backend (admin configured) */}
               <select 
                 id="claimNature" 
                 value={claimNature} 
