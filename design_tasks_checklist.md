@@ -176,16 +176,16 @@
 - [ ] **8. 消息中心 (Message Center)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
     - [ ] **8.1. 整体布局 (Overall Layout)**
-        - [ ] 8.1.1. Design a multi-column layout.
+        - [x] 8.1.1. Design a multi-column layout.
             - [ ] *Note: Responsive layout for chat interfaces can be challenging; consider mobile-first or adaptive approaches.*
     - [ ] **8.2. IM 聊天消息 (IM Chat Messages)**
-        - [ ] 8.2.1. Design UI for chats, unread counts, message input (text, image, file with vector icons).
+        - [x] 8.2.1. Design UI for chats, unread counts, message input (text, image, file with vector icons).
             - [ ] *Note: Chat bubbles and overall interface must theme well for dark/light modes.*
     - [ ] **8.3. 系统提醒 (System Reminders)**
-        - [ ] 8.3.1. Design card-based UI for bot messages (vector icons in cards).
-        - [ ] 8.3.2. Design notifications for business operations.
+        - [x] 8.3.1. Design card-based UI for bot messages (vector icons in cards).
+        - [x] 8.3.2. Design notifications for business operations.
     - [ ] **8.4. 通知管理 (Notification Management)**
-        - [ ] 8.4.1. Design interactions for read/unread, filtering, deleting (vector icons for actions).
+        - [x] 8.4.1. Design interactions for read/unread, filtering, deleting (vector icons for actions).
 
 - [ ] **9. 身份管理 (Role Management - Admin Function)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
