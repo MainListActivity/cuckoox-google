@@ -43,18 +43,29 @@ const updateCssVariables = (theme: MuiTheme) => {
 
 
   // Accent color - using secondary for now, could be customized
-  root.style.setProperty('--color-accent', theme.palette.secondary.main); 
+  root.style.setProperty('--color-accent', theme.palette.secondary.main);
 
-  // Hint text - using text.secondary as a common choice
-  root.style.setProperty('--color-text-hint', theme.palette.text.secondary);
+  // Specific variables for Quill editor theme
+  root.style.setProperty('--color-primary-dark', theme.palette.primary.dark);
+  root.style.setProperty('--color-action-hover', theme.palette.action.hover);
+  root.style.setProperty('--color-action-selected', theme.palette.action.selected);
+  root.style.setProperty('--color-background-disabled', theme.palette.action.disabledBackground);
 
   // Border colors - these are often context-dependent or shades of grey
   if (mode === 'light') {
     root.style.setProperty('--color-border-light', grey[300]); // Lighter border for light mode
     root.style.setProperty('--color-border-dark', grey[400]);  // Darker border for light mode (e.g., for dividers)
+    root.style.setProperty('--color-text-hint', grey[500]); // Specific hint text for Quill (like #aaa)
+    root.style.setProperty('--color-background-disabled-light', grey[100]); // Lighter than disabledBackground
+    root.style.setProperty('--color-border-disabled', grey[400]); 
+    root.style.setProperty('--color-text-disabled-hint', grey[400]); // Lighter than text.disabled
   } else {
     root.style.setProperty('--color-border-light', grey[700]); // Lighter border for dark mode
     root.style.setProperty('--color-border-dark', grey[600]);  // Darker border for dark mode
+    root.style.setProperty('--color-text-hint', grey[600]); // Specific hint text for Quill
+    root.style.setProperty('--color-background-disabled-light', grey[800]); // Lighter than disabledBackground
+    root.style.setProperty('--color-border-disabled', grey[700]);
+    root.style.setProperty('--color-text-disabled-hint', grey[700]); // Lighter than text.disabled
   }
   
   // Ensure all Tailwind variables are covered. From tailwind.config.js:

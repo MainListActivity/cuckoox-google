@@ -1,6 +1,6 @@
 import React, { useState, ReactNode } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, NavItemType } from '../contexts/AuthContext'; // Import NavItemType
 import { useTranslation } from 'react-i18next';
 import {
   AppBar,
@@ -16,13 +16,13 @@ import {
   Toolbar,
   Typography,
   Divider,
-  // useTheme as useMuiTheme, // Renamed to avoid conflict with our useTheme
+  CircularProgress, // Added for loading indicator
   styled,
-  Theme as MuiTheme, // Renamed Mui Theme to avoid conflict
+  Theme as MuiTheme,
   CSSObject,
 } from '@mui/material';
 import SvgIcon from '@mui/material/SvgIcon';
-import { useTheme } from '../contexts/ThemeContext'; // Import our useTheme
+import { useTheme } from '../contexts/ThemeContext';
 import {
   mdiMenu,
   mdiMenuOpen,
@@ -37,13 +37,29 @@ import {
   mdiMessageTextOutline,
   mdiCog,
   mdiLogout,
+  mdiFileDocumentSearchOutline, // Added
+  mdiFileUploadOutline, // Added
 } from '@mdi/js';
+
+// Icon map for dynamic menu items
+const iconMap: { [key: string]: string } = {
+  'mdiViewDashboard': mdiViewDashboard,
+  'mdiBriefcase': mdiBriefcase,
+  'mdiAccountGroup': mdiAccountGroup,
+  'mdiFileDocumentOutline': mdiFileDocumentOutline,
+  'mdiChartBar': mdiChartBar,
+  'mdiVideo': mdiVideo,
+  'mdiMessageTextOutline': mdiMessageTextOutline,
+  'mdiCog': mdiCog,
+  'mdiFileDocumentSearchOutline': mdiFileDocumentSearchOutline,
+  'mdiFileUploadOutline': mdiFileUploadOutline,
+};
 
 interface LayoutProps {
   children: ReactNode;
 }
 
-const drawerWidthOpen = 240; // theme.spacing(28) would be 224, using 240 for a bit more space
+const drawerWidthOpen = 240;
 const drawerWidthClosed = (theme: MuiTheme) => theme.spacing(7); // MUI default is 7 for closed mini drawer
 
 const openedMixin = (theme: MuiTheme): CSSObject => ({
@@ -86,10 +102,10 @@ const StyledDrawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== '
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { t } = useTranslation();
-  const muiTheme = useTheme(); // This is now our custom theme context
-  const { mode, toggleMode, currentTheme } = muiTheme; // Destructure mode and toggleMode
+  const muiTheme = useTheme();
+  const { mode, toggleMode, currentTheme } = muiTheme;
   const [drawerOpen, setDrawerOpen] = useState(true);
-  const { user, logout, hasRole } = useAuth();
+  const { user, logout, navMenuItems, isMenuLoading } = useAuth(); // Get menu items and loading state
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -97,16 +113,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
-  const navItems = [
-    { path: '/dashboard', label: t('nav_dashboard'), icon: mdiViewDashboard, mdi: true },
-    { path: '/cases', label: t('nav_case_management'), icon: mdiBriefcase, mdi: true },
-    { path: '/creditors', label: t('nav_creditor_management'), icon: mdiAccountGroup, mdi: true },
-    { path: '/claims', label: t('nav_claim_management'), icon: mdiFileDocumentOutline, mdi: true },
-    { path: '/claim-dashboard', label: t('nav_claim_dashboard'), icon: mdiChartBar, mdi: true },
-    { path: '/online-meetings', label: t('nav_online_meetings'), icon: mdiVideo, mdi: true },
-    { path: '/messages', label: t('nav_message_center'), icon: mdiMessageTextOutline, mdi: true },
-    { path: '/admin', label: t('nav_system_management'), icon: mdiCog, adminOnly: true, mdi: true },
-  ];
+  // Hardcoded navItems is now removed
 
   return (
     <Box sx={{ display: 'flex' }}>
@@ -150,10 +157,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <Toolbar /> {/* Necessary to make the content below app bar */}
         <Divider />
         <List sx={{ flexGrow: 1 }}>
-          {navItems.map((item) =>
-            (!item.adminOnly || (item.adminOnly && hasRole('admin'))) && (
+          {isMenuLoading ? (
+            <ListItemButton sx={{ justifyContent: drawerOpen ? 'initial' : 'center', px: 2.5 }}>
+              <ListItemIcon sx={{ minWidth: 0, mr: drawerOpen ? 3 : 'auto', justifyContent: 'center' }}>
+                <CircularProgress size={24} />
+              </ListItemIcon>
+              {drawerOpen && <ListItemText primary={t('loading_menu', 'Loading menu...')} />}
+            </ListItemButton>
+          ) : navMenuItems && navMenuItems.length > 0 ? (
+            navMenuItems.map((item: NavItemType) => (
               <ListItemButton
-                key={item.path}
+                key={item.id}
                 component={RouterLink}
                 to={item.path}
                 sx={{
@@ -161,7 +175,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   justifyContent: drawerOpen ? 'initial' : 'center',
                   px: 2.5,
                 }}
-                title={item.label}
+                title={t(item.labelKey)}
               >
                 <ListItemIcon
                   sx={{
@@ -170,11 +184,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     justifyContent: 'center',
                   }}
                 >
-                  {item.mdi && <SvgIcon><path d={item.icon} /></SvgIcon>}
+                  {iconMap[item.iconName] ? (
+                    <SvgIcon><path d={iconMap[item.iconName]} /></SvgIcon>
+                  ) : null} {/* Render nothing if icon not found, or a default icon */}
                 </ListItemIcon>
-                <ListItemText primary={item.label} sx={{ opacity: drawerOpen ? 1 : 0 }} />
+                <ListItemText primary={t(item.labelKey)} sx={{ opacity: drawerOpen ? 1 : 0 }} />
               </ListItemButton>
-            )
+            ))
+          ) : (
+            <ListItemButton sx={{ justifyContent: drawerOpen ? 'initial' : 'center', px: 2.5 }}>
+              <ListItemText 
+                primary={t('no_menu_items', 'No accessible items')} 
+                sx={{ opacity: drawerOpen ? 1 : 0 , textAlign: drawerOpen? 'left' : 'center' }} 
+              />
+            </ListItemButton>
           )}
         </List>
         <Divider />

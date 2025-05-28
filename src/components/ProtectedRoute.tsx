@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import GlobalLoader from '../components/GlobalLoader'; // Import GlobalLoader
 import { useTranslation } from 'react-i18next';
 import { useCaseStatus, CaseStatus } from '../contexts/CaseStatusContext';
 
@@ -60,7 +61,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
 
   // 1. Authentication Check (Primary)
   if (isAuthLoading) {
-    return <div className="flex justify-center items-center min-h-screen">{t('authenticating')}</div>;
+    return <GlobalLoader message={t('authenticating', 'Authenticating...')} />;
   }
 
   if (!isLoggedIn) {
@@ -74,7 +75,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     location.pathname !== '/select-case'
   ) {
     if (isCaseLoading) {
-      return <div className="flex justify-center items-center min-h-screen">{t('loading_case_info')}</div>;
+      return <GlobalLoader message={t('loading_case_info', 'Loading case information...')} />;
     }
     return <Navigate to="/select-case" state={{ from: location }} replace />;
   }
