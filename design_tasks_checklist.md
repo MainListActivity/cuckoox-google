@@ -176,49 +176,49 @@
 - [ ] **8. 消息中心 (Message Center)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
     - [ ] **8.1. 整体布局 (Overall Layout)**
-        - [ ] 8.1.1. Design a multi-column layout.
+        - [x] 8.1.1. Design a multi-column layout.
             - [ ] *Note: Responsive layout for chat interfaces can be challenging; consider mobile-first or adaptive approaches.*
     - [ ] **8.2. IM 聊天消息 (IM Chat Messages)**
-        - [ ] 8.2.1. Design UI for chats, unread counts, message input (text, image, file with vector icons).
+        - [x] 8.2.1. Design UI for chats, unread counts, message input (text, image, file with vector icons).
             - [ ] *Note: Chat bubbles and overall interface must theme well for dark/light modes.*
     - [ ] **8.3. 系统提醒 (System Reminders)**
-        - [ ] 8.3.1. Design card-based UI for bot messages (vector icons in cards).
-        - [ ] 8.3.2. Design notifications for business operations.
+        - [x] 8.3.1. Design card-based UI for bot messages (vector icons in cards).
+        - [x] 8.3.2. Design notifications for business operations.
     - [ ] **8.4. 通知管理 (Notification Management)**
-        - [ ] 8.4.1. Design interactions for read/unread, filtering, deleting (vector icons for actions).
+        - [x] 8.4.1. Design interactions for read/unread, filtering, deleting (vector icons for actions).
 
 - [ ] **9. 身份管理 (Role Management - Admin Function)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
     - [ ] **9.1. 角色列表页面 (Role List Page)**
-        - [ ] 9.1.1. Design a table for roles.
+        - [x] 9.1.1. Design a table for roles.
             - [ ] *Note: Responsive table.*
-        - [ ] 9.1.2. Design "创建角色" button.
+        - [x] 9.1.2. Design "创建角色" button.
     - [ ] **9.2. 创建/编辑角色表单 (Create/Edit Role Form)**
-        - [ ] 9.2.1. Design form fields.
-        - [ ] 9.2.2. Design UI for assigning menu permissions (tree/checklist).
+        - [x] 9.2.1. Design form fields.
+        - [x] 9.2.2. Design UI for assigning menu permissions (tree/checklist).
             - [ ] *Note: Ensure clarity in dark/light modes for selection states.*
-        - [ ] 9.2.3. Design UI for assigning operation permissions.
+        - [x] 9.2.3. Design UI for assigning operation permissions.
     - [ ] **9.3. 用户分配角色 (User Role Assignment)**
-        - [ ] 9.3.1. Design UI for associating users with roles.
+        - [x] 9.3.1. Design UI for associating users with roles.
 
 - [ ] **10. 审核状态管理 (Review Status Management - Admin Function)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
     - [ ] **10.1. 状态列表页面 (Status List Page)**
-        - [ ] 10.1.1. Design a table for statuses.
+        - [x] 10.1.1. Design a table for statuses.
             - [ ] *Note: Responsive table.*
-        - [ ] 10.1.2. Design "添加状态" button.
+        - [x] 10.1.2. Design "添加状态" button.
     - [ ] **10.2. 添加/编辑/删除状态表单 (Add/Edit/Delete Status Form)**
-        - [ ] 10.2.1. Design a simple form for managing status labels.
+        - [x] 10.2.1. Design a simple form for managing status labels.
             - [ ] *Note: Form elements styled for dark/light modes.*
 
 - [ ] **11. 非功能性需求相关的UI/UX考虑 (Non-functional UI/UX Considerations)**
     - [ ] **Note:** These are overarching principles.
     - [ ] **11.1. 易用性 (Usability)**
-        - [ ] 11.1.1. Ensure intuitive workflows and consistent UI patterns.
+        - [x] 11.1.1. Ensure intuitive workflows and consistent UI patterns.
             - [ ] *Note: Maintain consistency in terminology and iconography (vector icons).*
-        - [ ] 11.1.2. Provide clear visual cues and feedback.
+        - [x] 11.1.2. Provide clear visual cues and feedback.
     - [ ] **11.2. 性能感知 (Performance Perception)**
-        - [ ] 11.2.1. Strategically use loading indicators (spinners, progress bars) styled for dark/light modes.
+        - [x] 11.2.1. Strategically use loading indicators (spinners, progress bars) styled for dark/light modes.
     - [ ] **11.3. 响应式设计 (Responsive Design)**
-        - [ ] 11.3.1. **Note:** Reiterate that all designed views must be responsive across common desktop resolutions, implemented with Tailwind CSS. Test various screen sizes.
+        - [x] 11.3.1. **Note:** Reiterate that all designed views must be responsive across common desktop resolutions, implemented with Tailwind CSS. Test various screen sizes.
 
