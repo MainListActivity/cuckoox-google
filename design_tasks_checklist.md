@@ -214,11 +214,11 @@
 - [ ] **11. 非功能性需求相关的UI/UX考虑 (Non-functional UI/UX Considerations)**
     - [ ] **Note:** These are overarching principles.
     - [ ] **11.1. 易用性 (Usability)**
-        - [ ] 11.1.1. Ensure intuitive workflows and consistent UI patterns.
+        - [x] 11.1.1. Ensure intuitive workflows and consistent UI patterns.
             - [ ] *Note: Maintain consistency in terminology and iconography (vector icons).*
-        - [ ] 11.1.2. Provide clear visual cues and feedback.
+        - [x] 11.1.2. Provide clear visual cues and feedback.
     - [ ] **11.2. 性能感知 (Performance Perception)**
-        - [ ] 11.2.1. Strategically use loading indicators (spinners, progress bars) styled for dark/light modes.
+        - [x] 11.2.1. Strategically use loading indicators (spinners, progress bars) styled for dark/light modes.
     - [ ] **11.3. 响应式设计 (Responsive Design)**
-        - [ ] 11.3.1. **Note:** Reiterate that all designed views must be responsive across common desktop resolutions, implemented with Tailwind CSS. Test various screen sizes.
+        - [x] 11.3.1. **Note:** Reiterate that all designed views must be responsive across common desktop resolutions, implemented with Tailwind CSS. Test various screen sizes.
 
