@@ -190,16 +190,16 @@
 - [ ] **9. 身份管理 (Role Management - Admin Function)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
     - [ ] **9.1. 角色列表页面 (Role List Page)**
-        - [ ] 9.1.1. Design a table for roles.
+        - [x] 9.1.1. Design a table for roles.
             - [ ] *Note: Responsive table.*
-        - [ ] 9.1.2. Design "创建角色" button.
+        - [x] 9.1.2. Design "创建角色" button.
     - [ ] **9.2. 创建/编辑角色表单 (Create/Edit Role Form)**
-        - [ ] 9.2.1. Design form fields.
-        - [ ] 9.2.2. Design UI for assigning menu permissions (tree/checklist).
+        - [x] 9.2.1. Design form fields.
+        - [x] 9.2.2. Design UI for assigning menu permissions (tree/checklist).
             - [ ] *Note: Ensure clarity in dark/light modes for selection states.*
-        - [ ] 9.2.3. Design UI for assigning operation permissions.
+        - [x] 9.2.3. Design UI for assigning operation permissions.
     - [ ] **9.3. 用户分配角色 (User Role Assignment)**
-        - [ ] 9.3.1. Design UI for associating users with roles.
+        - [x] 9.3.1. Design UI for associating users with roles.
 
 - [ ] **10. 审核状态管理 (Review Status Management - Admin Function)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
