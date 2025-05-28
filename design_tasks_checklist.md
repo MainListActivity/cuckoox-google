@@ -204,11 +204,11 @@
 - [ ] **10. 审核状态管理 (Review Status Management - Admin Function)**
     - [ ] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons. Typically an admin-only area.
     - [ ] **10.1. 状态列表页面 (Status List Page)**
-        - [ ] 10.1.1. Design a table for statuses.
+        - [x] 10.1.1. Design a table for statuses.
             - [ ] *Note: Responsive table.*
-        - [ ] 10.1.2. Design "添加状态" button.
+        - [x] 10.1.2. Design "添加状态" button.
     - [ ] **10.2. 添加/编辑/删除状态表单 (Add/Edit/Delete Status Form)**
-        - [ ] 10.2.1. Design a simple form for managing status labels.
+        - [x] 10.2.1. Design a simple form for managing status labels.
             - [ ] *Note: Form elements styled for dark/light modes.*
 
 - [ ] **11. 非功能性需求相关的UI/UX考虑 (Non-functional UI/UX Considerations)**
