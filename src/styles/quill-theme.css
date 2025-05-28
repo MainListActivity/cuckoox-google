@@ -1,0 +1,220 @@
+/* src/styles/quill-theme.css */
+
+/* General Styling for Toolbar and Container */
+.ql-toolbar {
+  background-color: var(--color-surface, #fff); /* Default to white if var not defined */
+  border: 1px solid var(--color-border-light, #ccc); /* Default border */
+  border-radius: 4px 4px 0 0;
+  padding: 8px;
+}
+
+.ql-container {
+  border: 1px solid var(--color-border-light, #ccc);
+  border-top: 0; /* Toolbar has bottom border, container has top border creating double line if not removed */
+  border-radius: 0 0 4px 4px;
+}
+
+/* Editor Area Styling */
+.ql-editor {
+  background-color: var(--color-background, #f9f9f9); /* Default background */
+  color: var(--color-text-on-background, #333); /* Default text color */
+  min-height: 200px;
+  padding: 12px;
+  line-height: 1.6;
+}
+
+/* Placeholder Text Styling */
+.ql-editor.ql-blank::before {
+  color: var(--color-text-hint, #aaa); /* Default hint color */
+  font-style: normal; /* Quill's default is italic, make it normal */
+  left: 12px; /* Align with padding */
+  right: 12px; /* Align with padding */
+}
+
+/* Toolbar Buttons, Icons, and Pickers */
+
+/* Default state for icons (stroke and fill) */
+.ql-snow .ql-stroke {
+  stroke: var(--color-text-secondary, #555); /* Default icon stroke */
+}
+.ql-snow .ql-fill {
+  fill: var(--color-text-secondary, #555); /* Default icon fill */
+}
+
+/* Text color for picker labels (e.g., "Normal" for header) */
+.ql-snow .ql-picker-label {
+  color: var(--color-text-secondary, #555);
+}
+
+/* Toolbar buttons general styling */
+.ql-snow .ql-toolbar button,
+.ql-snow.ql-toolbar button {
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+/* Hover state for toolbar buttons */
+.ql-snow .ql-toolbar button:hover,
+.ql-snow.ql-toolbar button:hover {
+  background-color: var(--color-action-hover, #f0f0f0); /* Default hover background */
+}
+.ql-snow .ql-toolbar button:hover .ql-stroke,
+.ql-snow.ql-toolbar button:hover .ql-stroke {
+  stroke: var(--color-primary, #007bff); /* Default primary color */
+}
+.ql-snow .ql-toolbar button:hover .ql-fill,
+.ql-snow.ql-toolbar button:hover .ql-fill {
+  fill: var(--color-primary, #007bff);
+}
+.ql-snow .ql-toolbar button:hover .ql-picker-label,
+.ql-snow.ql-toolbar button:hover .ql-picker-label {
+    color: var(--color-primary, #007bff);
+}
+
+
+/* Active state for toolbar buttons (e.g., when 'bold' is toggled) */
+.ql-snow .ql-toolbar button.ql-active,
+.ql-snow.ql-toolbar button.ql-active {
+  background-color: var(--color-action-selected, #e0e0e0); /* Default active background */
+}
+.ql-snow .ql-toolbar button.ql-active .ql-stroke,
+.ql-snow.ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--color-primary, #007bff);
+}
+.ql-snow .ql-toolbar button.ql-active .ql-fill,
+.ql-snow.ql-toolbar button.ql-active .ql-fill {
+  fill: var(--color-primary, #007bff);
+}
+.ql-snow .ql-toolbar button.ql-active .ql-picker-label,
+.ql-snow.ql-toolbar button.ql-active .ql-picker-label {
+    color: var(--color-primary, #007bff);
+}
+
+
+/* Dropdown/Picker Options Styling */
+.ql-snow .ql-picker-options {
+  background-color: var(--color-surface, #fff);
+  border: 1px solid var(--color-border-dark, #aaa); /* Slightly darker border for popups */
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  padding: 4px 0;
+}
+
+.ql-snow .ql-picker-options .ql-picker-item {
+  color: var(--color-text-secondary, #555);
+  padding: 6px 12px;
+}
+
+.ql-snow .ql-picker-options .ql-picker-item:hover {
+  color: var(--color-primary, #007bff);
+  background-color: var(--color-action-hover, #f0f0f0);
+}
+
+/* Specific picker item active state (e.g., selected font or header) */
+.ql-snow .ql-picker-options .ql-picker-item.ql-selected,
+.ql-snow .ql-picker-options .ql-picker-item[data-value].ql-selected { /* For items with data-value */
+    color: var(--color-primary, #007bff);
+    background-color: var(--color-action-selected, #e0e0e0) !important; /* Important needed to override Quill's inline style */
+}
+
+
+/* Read-only State Styling */
+/* Quill adds .ql-disabled to the root element when readOnly is true */
+.ql-disabled .ql-toolbar {
+  background-color: var(--color-background-disabled-light, #f5f5f5); /* Lighter disabled bg for toolbar */
+  opacity: 0.7;
+}
+
+.ql-disabled .ql-container {
+  border-color: var(--color-border-disabled, #ddd); /* Lighter border for disabled */
+}
+
+.ql-disabled .ql-editor {
+  background-color: var(--color-background-disabled, #efefef); /* Default disabled editor bg */
+  color: var(--color-text-disabled, #777); /* Default disabled text color */
+}
+
+.ql-disabled .ql-editor.ql-blank::before {
+  color: var(--color-text-disabled-hint, #bbb); /* Lighter placeholder for disabled */
+}
+
+/* Link styling within editor */
+.ql-editor a {
+  color: var(--color-primary, #007bff); /* Use primary color for links */
+  text-decoration: underline;
+}
+
+.ql-editor a:hover {
+  color: var(--color-primary-dark, #0056b3); /* Darken on hover, assuming var(--color-primary-dark) exists */
+  text-decoration: underline;
+}
+
+/* Responsive Images (This might be better in a global CSS file if not already there) */
+.ql-editor img {
+  max-width: 100%;
+  height: auto;
+  display: block; /* Helps with spacing */
+  margin: 0.5em 0; /* Some vertical spacing */
+  border-radius: 4px; /* Optional: slightly rounded corners for images */
+}
+
+/* Additional CSS Variables that might be needed in ThemeContext.tsx for the above styles:
+   (These are suggestions, actual names and values depend on the theme structure)
+   --color-border-light: (e.g., #ccc or a lighter grey)
+   --color-border-dark: (e.g., #aaa or a darker grey for popups)
+   --color-text-hint: (e.g., #aaa)
+   --color-action-hover: (e.g., a light grey for hover states on buttons/items)
+   --color-action-selected: (e.g., a slightly darker grey for selected/active states)
+   --color-background-disabled: (e.g., #efefef)
+   --color-background-disabled-light: (e.g., #f5f5f5, for toolbar in disabled state)
+   --color-border-disabled: (e.g., #ddd)
+   --color-text-disabled: (e.g., #777)
+   --color-text-disabled-hint: (e.g., #bbb)
+   --color-primary-dark: (e.g., a darker shade of the primary color for link hover)
+*/
+
+/* Ensure toolbar doesn't get too small on narrow screens if items wrap */
+.ql-toolbar {
+    display: flex;
+    flex-wrap: wrap; /* Allow toolbar items to wrap */
+    gap: 4px; /* Add some gap between wrapped groups */
+}
+
+/* Adjust spacing for toolbar groups */
+.ql-snow .ql-formats {
+    margin-right: 8px; /* Default is 15px, reduce a bit */
+}
+
+/* Fix for color picker and background picker svgs being too large or misaligned */
+.ql-snow .ql-color-picker .ql-picker-label svg,
+.ql-snow .ql-background-picker .ql-picker-label svg {
+    width: 100%; /* Make the SVG take the full width of its container */
+    height: 100%;
+    margin-top: 0; /* Reset any margin that might be causing misalignment */
+}
+.ql-snow .ql-picker.ql-color-picker .ql-picker-label,
+.ql-snow .ql-picker.ql-background-picker .ql-picker-label {
+    width: 18px; /* Ensure the label container has a defined size */
+    height: 18px;
+    padding: 2px; /* Add some padding if the SVG is too close to the border */
+    box-sizing: border-box;
+}
+
+/* Ensure the 'underline' part of the color picker label is visible */
+.ql-snow .ql-color-picker .ql-picker-label[value]::before {
+    line-height: 1; /* Adjust line height to make the underline visible */
+}
+
+/* Ensure dropdowns in toolbar don't overflow on very small screens */
+.ql-snow .ql-picker {
+    max-width: 100px; /* Example, adjust as needed */
+}
+.ql-snow .ql-picker.ql-header .ql-picker-label,
+.ql-snow .ql-picker.ql-font .ql-picker-label {
+    max-width: 80px; /* Allow more space for font/header names */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+```

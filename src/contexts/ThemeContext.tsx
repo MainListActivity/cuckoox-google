@@ -26,11 +26,13 @@ export interface ThemeColors {
 export interface Theme {
   name: string;
   colors: ThemeColors;
+  type: 'dark' | 'light';
 }
 
 // Illustrative Hex Codes (aim for Material Design consistency)
 export const CUCKOO_BLUE_THEME: Theme = {
   name: "Cuckoo Blue",
+  type: 'light',
   colors: {
     primary: '#1976D2', // Blue 700
     secondary: '#FFC107', // Amber 500
@@ -51,6 +53,7 @@ export const CUCKOO_BLUE_THEME: Theme = {
 
 export const FOREST_GREEN_THEME: Theme = {
   name: "Forest Green",
+  type: 'light',
   colors: {
     primary: '#388E3C', // Green 700
     secondary: '#FF9800', // Orange 500
@@ -71,6 +74,7 @@ export const FOREST_GREEN_THEME: Theme = {
 
 export const INDIGO_NIGHT_THEME: Theme = {
   name: "Indigo Night",
+  type: 'dark',
   colors: {
     primary: '#303F9F', // Indigo 700
     secondary: '#FF4081', // Pink A200
@@ -90,7 +94,7 @@ export const INDIGO_NIGHT_THEME: Theme = {
 };
 
 export const AVAILABLE_THEMES: Theme[] = [CUCKOO_BLUE_THEME, FOREST_GREEN_THEME, INDIGO_NIGHT_THEME];
-export const DEFAULT_THEME_NAME = CUCKOO_BLUE_THEME.name;
+export const DEFAULT_THEME_NAME = INDIGO_NIGHT_THEME.name; // Changed default to Indigo Night
 
 // 2. Create ThemeContext
 interface ThemeContextType {
@@ -98,6 +102,8 @@ interface ThemeContextType {
   availableThemes: Theme[];
   setCurrentThemeByName: (themeName: string) => void;
   isLoadingTheme: boolean;
+  mode: 'dark' | 'light';
+  toggleMode: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -115,6 +121,7 @@ interface CaseWithTheme extends Case {
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [currentThemeName, setCurrentThemeName] = useState<string>(DEFAULT_THEME_NAME);
   const [isLoadingTheme, setIsLoadingTheme] = useState<boolean>(true);
+  const [mode, setMode] = useState<'dark' | 'light'>('dark'); // Added mode state
   const { selectedCaseId, userCases, isLoggedIn } = useAuth();
   const client = useSurrealClient();
 
@@ -134,7 +141,11 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     let isMounted = true;
     const loadAndApplyTheme = async () => {
       setIsLoadingTheme(true);
-      let themeNameToApply = DEFAULT_THEME_NAME;
+      let themeNameToApply = DEFAULT_THEME_NAME; // Default to Indigo Night
+      let initialMode = 'dark'; // Default mode
+
+      // Check localStorage for persisted mode preference
+      const persistedMode = localStorage.getItem('themeMode') as 'dark' | 'light' | null;
 
       if (isLoggedIn && selectedCaseId && client) {
         try {
@@ -148,55 +159,74 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
             const fullCaseData = await client.select<CaseWithTheme>(selectedCaseId);
             if (fullCaseData && fullCaseData.selected_theme_name) {
               themeNameToApply = fullCaseData.selected_theme_name;
+            } else {
+              // If no theme on case, default to INDIGO_NIGHT_THEME
+              themeNameToApply = INDIGO_NIGHT_THEME.name;
             }
           }
         } catch (error) {
           console.error("Error fetching case theme:", error);
-          // Fallback to default if there's an error
-          themeNameToApply = DEFAULT_THEME_NAME;
+          themeNameToApply = INDIGO_NIGHT_THEME.name; // Fallback to Indigo Night
         }
-      } else if (!isLoggedIn) {
-        // If user is not logged in (e.g. on login page), use default theme
-        themeNameToApply = DEFAULT_THEME_NAME;
+      } else if (persistedMode && !selectedCaseId) { // Prioritize localStorage if no case selected
+        themeNameToApply = persistedMode === 'dark' ? INDIGO_NIGHT_THEME.name : CUCKOO_BLUE_THEME.name;
+        initialMode = persistedMode;
+      } else {
+        // For not logged in or no specific case, default to Indigo Night
+        themeNameToApply = INDIGO_NIGHT_THEME.name;
+        initialMode = INDIGO_NIGHT_THEME.type; // Set mode based on Indigo Night's type
       }
-      // If selectedCaseId is null (e.g. case selection page before selection), default theme is already set
-
-      const themeToSet = AVAILABLE_THEMES.find(t => t.name === themeNameToApply) || 
-                         AVAILABLE_THEMES.find(t => t.name === DEFAULT_THEME_NAME) || 
-                         CUCKOO_BLUE_THEME; // Absolute fallback
+      
+      const themeToSet = AVAILABLE_THEMES.find(t => t.name === themeNameToApply) ||
+                         INDIGO_NIGHT_THEME; // Ensure Indigo Night is a fallback
 
       if (isMounted) {
         setCurrentThemeName(themeToSet.name);
         applyTheme(themeToSet);
+        setMode(themeToSet.type); // Set mode based on the theme's type
+        if (persistedMode && themeToSet.type !== persistedMode && !selectedCaseId) {
+          // If there was a persisted mode but the loaded theme (e.g. default) doesn't match, update localStorage
+           localStorage.setItem('themeMode', themeToSet.type);
+        } else if (!persistedMode) {
+            localStorage.setItem('themeMode', themeToSet.type); // Persist initial mode
+        }
         setIsLoadingTheme(false);
       }
     };
 
     loadAndApplyTheme();
     return () => { isMounted = false; };
-  }, [selectedCaseId, userCases, client, isLoggedIn]); // Add isLoggedIn
+  }, [selectedCaseId, userCases, client, isLoggedIn]);
 
   const handleSetCurrentThemeByName = (themeName: string) => {
     const themeToSet = AVAILABLE_THEMES.find(t => t.name === themeName);
     if (themeToSet) {
       setCurrentThemeName(themeToSet.name);
       applyTheme(themeToSet);
+      setMode(themeToSet.type); // Also update mode when theme is set by name
       // Note: Saving to DB is handled by Admin UI/Case settings page.
-      // This function only changes the theme for the current session locally.
     } else {
       console.warn(`Theme "${themeName}" not found. Applying default theme.`);
-      const defaultTheme = AVAILABLE_THEMES.find(t => t.name === DEFAULT_THEME_NAME) || CUCKOO_BLUE_THEME;
+      const defaultTheme = INDIGO_NIGHT_THEME; // Fallback to Indigo Night
       setCurrentThemeName(defaultTheme.name);
       applyTheme(defaultTheme);
+      setMode(defaultTheme.type);
     }
   };
 
-  const currentTheme = AVAILABLE_THEMES.find(t => t.name === currentThemeName) || 
-                       AVAILABLE_THEMES.find(t => t.name === DEFAULT_THEME_NAME) || 
-                       CUCKOO_BLUE_THEME; // Absolute fallback
+  const toggleMode = () => {
+    const newMode = mode === 'light' ? 'dark' : 'light';
+    const themeToApply = newMode === 'dark' ? INDIGO_NIGHT_THEME : CUCKOO_BLUE_THEME;
+    // We call handleSetCurrentThemeByName because it already applies the theme and sets the mode.
+    handleSetCurrentThemeByName(themeToApply.name); 
+    localStorage.setItem('themeMode', newMode);
+  };
+
+  const currentTheme = AVAILABLE_THEMES.find(t => t.name === currentThemeName) ||
+                       INDIGO_NIGHT_THEME; // Absolute fallback to Indigo Night
 
   return (
-    <ThemeContext.Provider value={{ currentTheme, availableThemes: AVAILABLE_THEMES, setCurrentThemeByName: handleSetCurrentThemeByName, isLoadingTheme }}>
+    <ThemeContext.Provider value={{ currentTheme, availableThemes: AVAILABLE_THEMES, setCurrentThemeByName: handleSetCurrentThemeByName, isLoadingTheme, mode, toggleMode }}>
       {children}
     </ThemeContext.Provider>
   );

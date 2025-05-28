@@ -20,7 +20,16 @@ import {
   ListItemIcon,
   SvgIcon,
 } from '@mui/material';
-import { mdiArrowLeft, mdiCircleSmall, mdiBookOpenOutline, mdiSync } from '@mdi/js';
+import { 
+  Timeline, 
+  TimelineItem, 
+  TimelineSeparator, 
+  TimelineConnector, 
+  TimelineContent, 
+  TimelineDot,
+  TimelineOppositeContent, // Optional for aligning text opposite the dot
+} from '@mui/lab'; // Import Timeline components
+import { mdiArrowLeft, mdiBookOpenOutline, mdiSync, mdiGavel, mdiAccountGroup, mdiCalendarClock } from '@mdi/js'; // Added new icons for timeline
 
 // Define interfaces based on your SurrealDB schema
 interface Case {
@@ -121,12 +130,26 @@ const CaseDetailPage: React.FC = () => {
     name: caseDetail.name || t('case_detail_unnamed_case'),
     case_number: caseDetail.case_number || `BK-N/A-${caseDetail.id.toString().slice(caseDetail.id.toString().indexOf(':') + 1).slice(-4)}`,
     id: caseDetail.id.toString(),
-    case_lead_name: caseDetail.case_lead_name || t('case_detail_to_be_assigned'),
-    acceptance_date: caseDetail.acceptance_date || t('case_detail_date_unknown'),
-    current_stage: caseDetail.current_stage || caseDetail.status || t('case_detail_stage_unknown'),
+    // Use actual fields from schema, fallback to placeholders if needed for displayCase
+    case_lead_name: (caseDetail as any).case_lead || t('case_detail_to_be_assigned'), // Assuming case_lead might be on schema
+    acceptance_date: (caseDetail as any).acceptance_date || t('case_detail_date_unknown'),
+    announcement_date: (caseDetail as any).announcement_date, // Will be undefined if not set
+    claim_start_date: (caseDetail as any).claim_start_date,
+    claim_end_date: (caseDetail as any).claim_end_date,
+    case_procedure: (caseDetail as any).case_procedure || t('case_detail_procedure_unknown'),
+    current_stage: caseDetail.status || t('case_detail_stage_unknown'), // Using status as current_stage
     filing_materials_status: filingMaterialContent ? t('case_detail_content_loaded') : t('case_detail_no_filing_material'),
     details: caseDetail.details || t('case_detail_no_details')
   };
+
+  // Mock timeline data - replace with actual data from case or related records
+  const timelineEvents = [
+    { date: displayCase.acceptance_date, title: t('timeline_event_case_accepted', '案件受理'), icon: mdiGavel, color: 'primary' },
+    ...(displayCase.announcement_date ? [{ date: displayCase.announcement_date, title: t('timeline_event_first_announcement', '首次公告'), icon: mdiCalendarClock, color: 'secondary' }] : []),
+    ...(displayCase.claim_start_date ? [{ date: displayCase.claim_start_date, title: t('timeline_event_claim_submission_start', '债权申报开始'), icon: mdiAccountGroup, color: 'info' }] : []),
+    // Add more events as needed
+  ].filter(event => event.date && event.date !== t('case_detail_date_unknown')); // Filter out events with unknown dates
+
 
   return (
     <Box sx={{ p: 3 }}>
@@ -141,9 +164,9 @@ const CaseDetailPage: React.FC = () => {
       </Typography>
 
       <Grid container spacing={3}>
-        {/* Basic Info Section */}
+        {/* Left Column: Basic Info & Timeline */}
         <Grid item xs={12} lg={4}>
-          <Card>
+          <Card sx={{ mb: 3 }}> {/* Basic Info Card */}
             <CardContent>
               <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
                 {t('case_detail_basic_info_title')}
@@ -153,58 +176,102 @@ const CaseDetailPage: React.FC = () => {
                 <Typography variant="body1" component="span">{displayCase.name}</Typography>
               </Box>
               <Box sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_procedure_label', '案件程序')}: </Typography>
+                <Typography variant="body1" component="span">{displayCase.case_procedure}</Typography>
+              </Box>
+              <Box sx={{ mb: 1.5 }}>
                 <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_lead_label')}: </Typography>
                 <Typography variant="body1" component="span">{displayCase.case_lead_name}</Typography>
               </Box>
               <Box sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_acceptance_time_label')}: </Typography>
-                <Typography variant="body1" component="span">{displayCase.acceptance_date}</Typography>
-              </Box>
-              <Box sx={{ mb: 1.5 }}>
                 <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold', mr:1 }}>{t('case_detail_current_stage_label')}: </Typography>
-                <Chip size="small" label={displayCase.current_stage} color="primary" />
-              </Box>
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold', mr:1 }}>{t('case_detail_status_label')}: </Typography>
-                <Chip size="small" label={caseDetail.status || t('case_detail_status_unknown')} color="secondary" />
+                <Chip size="small" label={displayCase.current_stage} color="primary" variant="outlined" />
               </Box>
               <Box sx={{ mb: 1.5 }}>
                 <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_details_label')}: </Typography>
                 <Typography variant="body1" component="span" sx={{whiteSpace: 'pre-wrap'}}>{displayCase.details}</Typography>
               </Box>
-              
-              <Typography variant="h6" component="h3" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={1} mt={3}>
-                {t('case_detail_timeline_title')}
+            </CardContent>
+          </Card>
+
+          <Card> {/* Timeline Card */}
+            <CardContent>
+              <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
+                {t('case_detail_timeline_title_key_dates', '关键时间点')}
               </Typography>
-              <List dense>
-                <ListItem><ListItemIcon sx={{minWidth: 20}}><SvgIcon fontSize="small"><path d={mdiCircleSmall} /></SvgIcon></ListItemIcon><ListItemText primary={t('case_detail_timeline_event1')} /></ListItem>
-                <ListItem><ListItemIcon sx={{minWidth: 20}}><SvgIcon fontSize="small"><path d={mdiCircleSmall} /></SvgIcon></ListItemIcon><ListItemText primary={t('case_detail_timeline_event2')} /></ListItem>
-                <ListItem><ListItemIcon sx={{minWidth: 20}}><SvgIcon fontSize="small"><path d={mdiCircleSmall} /></SvgIcon></ListItemIcon><ListItemText primary={t('case_detail_timeline_event3')} /></ListItem>
-              </List>
+              {timelineEvents.length > 0 ? (
+                <Timeline position="right" sx={{ // Changed to "right" to avoid opposite content overlap issues on small screens
+                  // Remove padding to use full width
+                  '& .MuiTimelineItem-root:before': {
+                    flex: 0,
+                    padding: 0,
+                  },
+                }}>
+                  {timelineEvents.map((event, index) => (
+                    <TimelineItem key={index}>
+                      <TimelineOppositeContent sx={{ display: { xs: 'none', sm: 'block' }, m: 'auto 0' }} align="right" variant="body2" color="text.secondary">
+                        {event.date}
+                      </TimelineOppositeContent>
+                      <TimelineSeparator>
+                        <TimelineConnector sx={{ bgcolor: `${event.color}.main` }}/>
+                        <TimelineDot color={event.color as "primary" | "secondary" | "error" | "info" | "success" | "warning" | "grey"} variant="outlined">
+                           <SvgIcon fontSize="small"><path d={event.icon} /></SvgIcon>
+                        </TimelineDot>
+                        {index < timelineEvents.length - 1 && <TimelineConnector sx={{ bgcolor: `${event.color}.main` }}/>}
+                      </TimelineSeparator>
+                      <TimelineContent sx={{ py: '12px', px: 2 }}>
+                        <Typography variant="h6" component="span">{event.title}</Typography>
+                        <Typography sx={{ display: { xs: 'block', sm: 'none' } }} color="text.secondary">{event.date}</Typography>
+                      </TimelineContent>
+                    </TimelineItem>
+                  ))}
+                </Timeline>
+              ) : (
+                <Typography variant="body2" color="text.secondary">{t('case_detail_no_timeline_events', '暂无关键时间点记录')}</Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Filing Material & Actions Section */}
+        {/* Right Column: Filing Material & Actions */}
         <Grid item xs={12} lg={8}>
-          <Card>
-            <CardContent>
+          <Card sx={{height: '100%'}}> {/* Ensure card takes full height of grid item */}
+            <CardContent sx={{display: 'flex', flexDirection: 'column', height: '100%'}}>
               <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
                 {t('case_detail_filing_material_title')}
               </Typography>
-              <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 1, minHeight: '200px', '& .ProseMirror': { backgroundColor: 'transparent', minHeight: '180px', p:1 } }}>
+              <Box sx={{ 
+                  border: 1, 
+                  borderColor: 'divider', 
+                  borderRadius: 1, 
+                  p: 1, 
+                  flexGrow: 1, // Allow editor to grow
+                  minHeight: '300px', // Minimum height for editor area
+                  display: 'flex', // To make RichTextEditor fill this box
+                  flexDirection: 'column',
+                  '& .ql-container.ql-snow': { // Target Quill's container
+                    flexGrow: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                  },
+                  '& .ql-editor': { // Target Quill's editor area
+                    flexGrow: 1,
+                    overflowY: 'auto', // Add scroll to editor if content overflows
+                    p: 1, // Ensure padding inside editor
+                  },
+                  '& .ProseMirror': { backgroundColor: 'transparent', minHeight: '100%', p:1 } 
+                }}>
                 <RichTextEditor
                   value={filingMaterialContent}
-                  onChange={() => {}} // Read-only, so no actual change handling needed
                   readOnly={true}
                   placeholder={t('case_detail_filing_material_empty')}
                 />
               </Box>
-              <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
-                <Button variant="contained" color="success" startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}>
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}> {/* Allow buttons to wrap */}
+                <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}>
                   {t('case_detail_actions_meeting_minutes_button')}
                 </Button>
-                <Button variant="contained" color="warning" startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}>
+                <Button variant="contained" color="secondary" startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}>
                   {t('case_detail_actions_change_status_button')}
                 </Button>
               </Box>
@@ -212,7 +279,7 @@ const CaseDetailPage: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
-      <Typography variant="caption" color="text.secondary" align="center" display="block" sx={{ mt: 3 }}>
+      <Typography variant="caption" color="text.secondary" align="center" display="block" sx={{ mt: 4, fontStyle: 'italic' }}>
         {t('case_detail_footer_info_1')} {t('case_detail_footer_info_2')}
       </Typography>
     </Box>

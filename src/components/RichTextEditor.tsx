@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import ReactQuill, { Quill } from 'react-quill'; // Quill for types
-import 'react-quill/dist/quill.snow.css';
+import 'react-quill/dist/quill.snow.css'; // Default Quill theme
+import '../styles/quill-theme.css'; // Custom theme overrides
 import { useTranslation } from 'react-i18next';
 
 // Import Delta type. It might be from 'quill/core' or 'quill'.
@@ -148,7 +149,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       placeholder={placeholder || t('richtexteditor_placeholder')}
       readOnly={readOnly}
       className={className}
-      style={{ backgroundColor: readOnly ? '#f8f9fa' : 'white' }}
+      // style={{ backgroundColor: readOnly ? '#f8f9fa' : 'white' }} // Removed hardcoded style
     />
   );
 };
