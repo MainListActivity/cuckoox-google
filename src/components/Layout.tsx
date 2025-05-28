@@ -1,6 +1,6 @@
-import React, { useState, ReactNode } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { useAuth, NavItemType } from '../contexts/AuthContext'; // Import NavItemType
+import React, { useState, ReactNode, useEffect, useRef } from 'react'; // Added useEffect, useRef
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'; // Added useLocation
+import { useAuth, NavItemType } from '../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import {
   AppBar,
@@ -8,18 +8,21 @@ import {
   Button,
   Drawer as MuiDrawer,
   IconButton,
-  Switch, // Added Switch
+  Switch,
   List,
   ListItemButton,
+  Menu, // Added Menu
+  MenuItem, // Added MenuItem
   ListItemIcon,
   ListItemText,
   Toolbar,
   Typography,
   Divider,
-  CircularProgress, // Added for loading indicator
+  CircularProgress,
   styled,
   Theme as MuiTheme,
   CSSObject,
+  alpha, // Added alpha
 } from '@mui/material';
 import SvgIcon from '@mui/material/SvgIcon';
 import { useTheme } from '../contexts/ThemeContext';
@@ -37,21 +40,22 @@ import {
   mdiMessageTextOutline,
   mdiCog,
   mdiLogout,
-  // mdiFileDocumentSearchOutline, // Added
-  mdiFileUploadOutline, // Added
+  mdiTextBoxMultipleOutline,
+  mdiFileUploadOutline,
+  mdiBriefcaseSearchOutline, // Added for case switcher
 } from '@mdi/js';
 
 // Icon map for dynamic menu items
 const iconMap: { [key: string]: string } = {
   'mdiViewDashboard': mdiViewDashboard,
-  'mdiBriefcase': mdiBriefcase,
-  'mdiAccountGroup': mdiAccountGroup,
-  'mdiFileDocumentOutline': mdiFileDocumentOutline,
-  'mdiChartBar': mdiChartBar,
+  'mdiBriefcase': mdiBriefcase, // This is also used for the case switcher icon for consistency if desired
+  'mdiAccountGroup': mdiAccountGroup, // Example icon
+  'mdiFileDocumentOutline': mdiFileDocumentOutline, // Example icon
+  'mdiChartBar': mdiChartBar, // Example icon
   'mdiVideo': mdiVideo,
   'mdiMessageTextOutline': mdiMessageTextOutline,
   'mdiCog': mdiCog,
-  // 'mdiFileDocumentSearchOutline': mdiFileDocumentSearchOutline,
+  'mdiFileDocumentSearchOutline': mdiTextBoxMultipleOutline,
   'mdiFileUploadOutline': mdiFileUploadOutline,
 };
 
@@ -105,8 +109,50 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const muiTheme = useTheme();
   const { themeMode, toggleThemeMode, muiTheme:currentTheme } = muiTheme;
   const [drawerOpen, setDrawerOpen] = useState(true);
-  const { user, logout, navMenuItems, isMenuLoading } = useAuth(); // Get menu items and loading state
+  const { user, logout, navMenuItems, isMenuLoading, selectedCaseId, userCases, selectCase } = useAuth(); // Added userCases, selectCase
   const navigate = useNavigate();
+  const location = useLocation();
+  const hasAutoNavigatedRef = useRef(false);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null); // State for Menu anchor
+
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleCaseSelect = async (caseId: string) => {
+    if (caseId !== selectedCaseId) {
+      await selectCase(caseId);
+      // Auto-navigation logic in another useEffect will handle redirection if needed
+      // Resetting hasAutoNavigatedRef is handled by the selectedCaseId dependency in its own useEffect
+    }
+    handleClose();
+  };
+
+  useEffect(() => {
+    hasAutoNavigatedRef.current = false;
+  }, [selectedCaseId]);
+
+  useEffect(() => {
+    if (!isMenuLoading && navMenuItems && navMenuItems.length > 0 && !hasAutoNavigatedRef.current) {
+      const firstItemPath = navMenuItems[0].path;
+      // Only navigate if currently at a root/generic path and it's not the target,
+      // or if on select-case (though ideally should not happen if menu is loaded).
+      // This prevents redirecting if user is already on a valid, specific page.
+      if (firstItemPath && (location.pathname === '/' || location.pathname === '/dashboard' || location.pathname === '/select-case') && location.pathname !== firstItemPath) {
+        console.log(`Auto-navigating to first menu item: ${firstItemPath}`);
+        navigate(firstItemPath, { replace: true });
+        hasAutoNavigatedRef.current = true;
+      } else if (firstItemPath && location.pathname === firstItemPath) {
+        // If already on the first item path, still mark as navigated to prevent future attempts for this load.
+        hasAutoNavigatedRef.current = true;
+      }
+    }
+  }, [isMenuLoading, navMenuItems, location.pathname, navigate, selectedCaseId]);
+
 
   const handleLogout = () => {
     logout();
@@ -119,14 +165,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <Box sx={{ display: 'flex' }}>
       <AppBar
         position="fixed"
-        sx={{ // Pass theme to sx to access palette
-          zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1, // Explicitly type theme here
-          // background: `linear-gradient(to right, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`, // Using context theme
+        sx={{
+          zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1,
+          // background: `linear-gradient(to right, ${currentTheme.palette.primary.main}, ${currentTheme.colors.secondary})`, // Using context theme
         }}
       >
         <Toolbar>
           <IconButton
-            color="inherit"
             aria-label="open drawer"
             onClick={() => setDrawerOpen(!drawerOpen)}
             edge="start"
@@ -139,7 +184,44 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             CuckooX
           </Typography>
-          <IconButton onClick={toggleThemeMode} color="inherit">
+
+          {/* Case Switcher Button and Menu */}
+          {userCases && userCases.length > 1 && (
+            <>
+              <Button
+                id="case-switcher-button"
+                aria-controls={anchorEl ? 'case-switcher-menu' : undefined}
+                aria-haspopup="true"
+                aria-expanded={anchorEl ? 'true' : undefined}
+                onClick={handleClick}
+                color="inherit" // Inherits textPrimary from AppBar's context or explicit color
+                sx={{ textTransform: 'none' }}
+                startIcon={<SvgIcon><path d={mdiBriefcaseSearchOutline} /></SvgIcon>}
+              >
+                {selectedCaseId ? userCases.find(c => c.id.toString() === selectedCaseId)?.name : t('select_case_button', 'Select Case')}
+              </Button>
+              <Menu
+                id="case-switcher-menu"
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleClose}
+                MenuListProps={{ 'aria-labelledby': 'case-switcher-button' }}
+              >
+                {userCases.map((caseItem) => (
+                  <MenuItem
+                    key={caseItem.id.toString()}
+                    selected={caseItem.id.toString() === selectedCaseId}
+                    onClick={() => handleCaseSelect(caseItem.id.toString())}
+                  >
+                    {caseItem.name || caseItem.case_number || caseItem.id.toString()}
+                  </MenuItem>
+                ))}
+              </Menu>
+            </>
+          )}
+          {/* End Case Switcher */}
+
+          <IconButton onClick={toggleThemeMode} sx={{ color: currentTheme.palette.primary.main }}>
             <SvgIcon>
               <path d={themeMode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
             </SvgIcon>
@@ -147,9 +229,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Switch
             checked={themeMode === 'dark'}
             onChange={toggleThemeMode}
-            color="secondary" // Or any color that fits your theme
+            color="secondary"
           />
-          {user && <Typography sx={{ mr: 2 }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
+          {user && <Typography sx={{ mr: 2, color: currentTheme.palette.primary.main }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
         </Toolbar>
       </AppBar>
 
@@ -168,12 +250,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             navMenuItems.map((item: NavItemType) => (
               <ListItemButton
                 key={item.id}
-                component={RouterLink}
+                component={NavLink} // Changed to NavLink
                 to={item.path}
+                end={item.path === '/dashboard' || item.path === '/'} // Added end prop
                 sx={{
                   minHeight: 48,
                   justifyContent: drawerOpen ? 'initial' : 'center',
                   px: 2.5,
+                  '&.active': {
+                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.2),
+                    color: currentTheme.palette.primary.main,
+                    '& .MuiSvgIcon-root': {
+                      color: currentTheme.palette.primary.main,
+                    },
+                  },
+                  '&:hover': {
+                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.1),
+                  },
                 }}
                 title={t(item.labelKey)}
               >
@@ -182,11 +275,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     minWidth: 0,
                     mr: drawerOpen ? 3 : 'auto',
                     justifyContent: 'center',
+                    // Active state for icon color is handled by parent's sx '&.active .MuiSvgIcon-root'
                   }}
                 >
                   {iconMap[item.iconName] ? (
                     <SvgIcon><path d={iconMap[item.iconName]} /></SvgIcon>
-                  ) : null} {/* Render nothing if icon not found, or a default icon */}
+                  ) : null}
                 </ListItemIcon>
                 <ListItemText primary={t(item.labelKey)} sx={{ opacity: drawerOpen ? 1 : 0 }} />
               </ListItemButton>
@@ -236,7 +330,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Box>
       </StyledDrawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, }}>
+      <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: currentTheme.palette.background.default }}>
         <Toolbar /> {/* This is important to offset content below the AppBar */}
         {children}
       </Box>
