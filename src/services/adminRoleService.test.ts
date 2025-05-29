@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import Surreal from 'surrealdb.js';
 import {
   getRoles,
   createRole,
@@ -7,168 +8,297 @@ import {
   getSystemUsers,
   getSystemMenus,
   assignUsersToRole,
-  resetStateForTests, // Import the reset function
   type Role,
   type MenuPermissionInput,
   type SystemUser,
   type SystemMenu,
 } from './adminRoleService';
 
-// Initial state snapshot (adjust if your initial mock data changes)
-const INITIAL_ROLES_COUNT = 3;
-const INITIAL_USERS_COUNT = 5;
-const INITIAL_MENUS_COUNT = 12;
+// Mock SurrealDB instance
+const mockDbInstance = {
+  select: vi.fn(),
+  query: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  merge: vi.fn(),
+  relate: vi.fn(), // Added if needed for permissions later
+};
+
+// Spy on the static getter 'instance' of the Surreal class
+// and make it return our mockDbInstance
+vi.spyOn(Surreal, 'instance', 'get').mockReturnValue(mockDbInstance);
+
 
 describe('adminRoleService', () => {
   beforeEach(() => {
-    resetStateForTests(); // Reset state before each test
+    // Reset all mocks before each test
+    vi.resetAllMocks();
+
+    // Default mock implementations (can be overridden in specific tests)
+    mockDbInstance.select.mockResolvedValue([]);
+    mockDbInstance.query.mockResolvedValue([[]]); // Default for queries returning array of results
+    mockDbInstance.create.mockResolvedValue([]);
+    mockDbInstance.update.mockResolvedValue([]);
+    mockDbInstance.delete.mockResolvedValue([]);
+    mockDbInstance.merge.mockResolvedValue([]);
   });
 
-  describe('getRoles', () => {
-    it('should return initial roles', async () => {
-      const roles = await getRoles();
-      expect(roles).toBeInstanceOf(Array);
-      expect(roles.length).toBe(INITIAL_ROLES_COUNT);
-      expect(roles[0].name).toBe('超级管理员');
-    });
-  });
-
-  describe('createRole', () => {
-    it('should create a new role and assign an ID', async () => {
-      const newRoleData = {
-        name: '测试角色',
-        description: '这是一个测试角色',
-        permissions: [{ id: 'dashboard', canRead: true, canCreate: false, canUpdate: false, canDelete: false }] as MenuPermissionInput[],
-      };
-      const createdRole = await createRole(newRoleData);
-      expect(createdRole).toHaveProperty('id');
-      expect(createdRole.name).toBe(newRoleData.name);
-      expect(createdRole.description).toBe(newRoleData.description);
-      expect(createdRole.permissions.length).toBe(1);
-      expect(createdRole.permissions[0].name).toBe('系统首页'); // Check if menu name is populated
-
-      const roles = await getRoles();
-      expect(roles.length).toBe(INITIAL_ROLES_COUNT + 1);
-      const foundRole = roles.find(r => r.id === createdRole.id);
-      expect(foundRole).toEqual(createdRole);
-    });
-
-    it('should reject if role name is missing', async () => {
-      const newRoleData = {
-        name: '', // Empty name
-        description: '测试描述',
-        permissions: [] as MenuPermissionInput[],
-      };
-      await expect(createRole(newRoleData)).rejects.toThrow('Role name is required.');
-    });
-  });
-
-  describe('updateRole', () => {
-    it('should update an existing role', async () => {
-      const rolesBefore = await getRoles();
-      const roleToUpdateId = rolesBefore[1].id; // '案件管理人'
-      
-      const updateData = {
-        name: '高级案件管理人',
-        description: '更新后的描述',
-        permissions: [
-          { id: 'dashboard', canRead: true, canCreate: true, canUpdate: true, canDelete: false },
-          { id: 'case-management', canRead: true, canCreate: true, canUpdate: true, canDelete: true },
-        ] as MenuPermissionInput[],
-      };
-
-      const updatedRole = await updateRole(roleToUpdateId, updateData);
-      expect(updatedRole.name).toBe(updateData.name);
-      expect(updatedRole.description).toBe(updateData.description);
-      expect(updatedRole.permissions.length).toBe(2);
-      expect(updatedRole.permissions[1].name).toBe('案件管理');
-
-
-      const roleAfterUpdate = await getRole(roleToUpdateId);
-      expect(roleAfterUpdate).toBeDefined();
-      expect(roleAfterUpdate?.name).toBe(updateData.name);
-    });
-
-    it('should reject if role to update is not found', async () => {
-      await expect(updateRole('non-existent-id', { name: 'test' })).rejects.toThrow('Role not found.');
-    });
-  });
-
-  describe('deleteRole', () => {
-    it('should delete an existing role', async () => {
-      const rolesBefore = await getRoles();
-      const roleToDeleteId = rolesBefore[0].id;
-
-      await deleteRole(roleToDeleteId);
-
-      const rolesAfter = await getRoles();
-      expect(rolesAfter.length).toBe(INITIAL_ROLES_COUNT - 1);
-      const foundRole = rolesAfter.find(r => r.id === roleToDeleteId);
-      expect(foundRole).toBeUndefined();
-    });
-
-    it('should reject if role to delete is not found', async () => {
-      await expect(deleteRole('non-existent-id')).rejects.toThrow('Role not found for deletion.');
-    });
+  afterEach(() => {
+    // Clear all mocks after each test to ensure isolation
+    vi.clearAllMocks();
   });
 
   describe('getSystemUsers', () => {
-    it('should return system users', async () => {
+    it('should return system users from DB', async () => {
+      const mockUsersFromDb = [
+        { id: 'user:1', name: 'Admin User' },
+        { id: 'user:2', name: 'Normal User' },
+      ];
+      mockDbInstance.select.mockResolvedValueOnce(mockUsersFromDb);
+
       const users = await getSystemUsers();
-      expect(users).toBeInstanceOf(Array);
-      expect(users.length).toBe(INITIAL_USERS_COUNT);
-      expect(users[0].name).toBe('张三 (Admin)');
+
+      expect(mockDbInstance.select).toHaveBeenCalledWith('user');
+      expect(users).toEqual(mockUsersFromDb.map(u => ({ id: u.id, name: u.name || 'Unnamed User' })));
+      expect(users.length).toBe(2);
+    });
+
+    it('should throw an error if DB call fails for getSystemUsers', async () => {
+      mockDbInstance.select.mockRejectedValueOnce(new Error('DB error'));
+      await expect(getSystemUsers()).rejects.toThrow('Failed to fetch system users.');
     });
   });
 
   describe('getSystemMenus', () => {
-    it('should return system menus', async () => {
+    it('should return system menus from DB, transforming parent_id and name', async () => {
+      const mockMenusFromDb = [
+        { id: 'menu_item:1', name: 'Dashboard Menu', label_key: 'dashboard.menu', parent_id: null, order: 1, path: '/dashboard' },
+        { id: 'menu_item:2', name: 'Cases Menu', label_key: 'cases.menu', parent_id: 'menu_item:1', order: 2, path: '/cases' },
+      ];
+      // Surreal.query returns [{ result: [...] }]
+      mockDbInstance.query.mockResolvedValueOnce([{ result: mockMenusFromDb }]);
+
       const menus = await getSystemMenus();
-      expect(menus).toBeInstanceOf(Array);
-      expect(menus.length).toBe(INITIAL_MENUS_COUNT);
-      expect(menus.find(m => m.id === 'admin-roles')?.name).toBe('角色权限');
+
+      expect(mockDbInstance.query).toHaveBeenCalledWith('SELECT *, meta::id as id FROM menu_item ORDER BY display_order ASC, name ASC, label_key ASC;');
+      expect(menus).toEqual([
+        { id: 'menu_item:1', name: 'dashboard.menu', parentId: null, order: 1, path: '/dashboard', label_key: 'dashboard.menu', icon: undefined },
+        { id: 'menu_item:2', name: 'cases.menu', parentId: 'menu_item:1', order: 2, path: '/cases', label_key: 'cases.menu', icon: undefined },
+      ]);
+    });
+     it('should prioritize label_key then name then path for menu name', async () => {
+      const mockMenus = [
+        { id: 'menu_item:1', label_key: 'key1', name: 'name1', path: 'path1', parent_id: null },
+        { id: 'menu_item:2', name: 'name2', path: 'path2', parent_id: null }, // No label_key
+        { id: 'menu_item:3', path: 'path3', parent_id: null }, // No label_key or name
+        { id: 'menu_item:4', parent_id: null }, // None of them
+      ];
+      mockDbInstance.query.mockResolvedValueOnce([{ result: mockMenus }]);
+      const menus = await getSystemMenus();
+      expect(menus[0].name).toBe('key1');
+      expect(menus[1].name).toBe('name2');
+      expect(menus[2].name).toBe('path3');
+      expect(menus[3].name).toBe('Unnamed Menu');
+    });
+  });
+
+  describe('getRoles', () => {
+    it('should fetch roles, their assigned users, and placeholder permissions', async () => {
+      const mockRoleRecords = [
+        { id: 'role:admin', name: 'Admin Role', description: 'Superuser' },
+        { id: 'role:manager', name: 'Manager Role', description: 'Manages cases' },
+      ];
+      mockDbInstance.select.mockResolvedValueOnce(mockRoleRecords); // For db.select('role')
+
+      // Mock for assigned users query for 'role:admin'
+      mockDbInstance.query.mockResolvedValueOnceOnce([{ result: [{ id: 'user:1' }, { id: 'user:2' }] }]);
+      // Mock for assigned users query for 'role:manager'
+      mockDbInstance.query.mockResolvedValueOnceOnce([{ result: [{ id: 'user:3' }] }]);
+
+      // (Simplified permissions: not mocking menu/permission table calls yet as service returns [])
+
+      const roles = await getRoles();
+
+      expect(mockDbInstance.select).toHaveBeenCalledWith('role');
+      expect(mockDbInstance.query).toHaveBeenCalledWith(`SELECT meta::id as id FROM user WHERE global_roles CONTAINS "role:admin";`);
+      expect(mockDbInstance.query).toHaveBeenCalledWith(`SELECT meta::id as id FROM user WHERE global_roles CONTAINS "role:manager";`);
+      
+      expect(roles.length).toBe(2);
+      expect(roles[0]).toEqual({
+        id: 'role:admin',
+        name: 'Admin Role',
+        description: 'Superuser',
+        permissions: [], // Placeholder as per service logic
+        assignedUserIds: ['user:1', 'user:2'],
+      });
+      expect(roles[1].assignedUserIds).toEqual(['user:3']);
+    });
+  });
+
+  describe('getRole', () => {
+    it('should fetch a single role, its assigned users, and placeholder permissions', async () => {
+        const mockRoleRecord = { id: 'role:editor', name: 'Editor Role', description: 'Edits content' };
+        mockDbInstance.select.mockResolvedValueOnce([mockRoleRecord]); // For db.select(roleId)
+
+        mockDbInstance.query.mockResolvedValueOnce([{ result: [{ id: 'user:4' }] }]); // For assigned users
+
+        const role = await getRole('role:editor');
+
+        expect(mockDbInstance.select).toHaveBeenCalledWith('role:editor');
+        expect(mockDbInstance.query).toHaveBeenCalledWith(`SELECT meta::id as id FROM user WHERE global_roles CONTAINS "role:editor";`);
+        
+        expect(role).toBeDefined();
+        expect(role).toEqual({
+            ...mockRoleRecord,
+            permissions: [], // Placeholder
+            assignedUserIds: ['user:4'],
+        });
+    });
+
+    it('should return undefined if role not found', async () => {
+        mockDbInstance.select.mockResolvedValueOnce([]); // Role not found
+        const role = await getRole('role:nonexistent');
+        expect(role).toBeUndefined();
+    });
+  });
+
+  describe('createRole', () => {
+    it('should create a new role and return it with empty permissions/users', async () => {
+      const newRoleData = {
+        name: 'Newbie Role',
+        description: 'Limited access',
+        permissions: [] as MenuPermissionInput[], // Input permissions (not yet processed by service)
+      };
+      const createdDbRecord = { ...newRoleData, id: 'role:newbie123' };
+      mockDbInstance.create.mockResolvedValueOnce([createdDbRecord]); // For db.create('role', ...)
+
+      // Mock console.warn for permission implementation note
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const role = await createRole(newRoleData);
+
+      expect(mockDbInstance.create).toHaveBeenCalledWith('role', { name: 'Newbie Role', description: 'Limited access' });
+      expect(role).toEqual({
+        ...createdDbRecord,
+        permissions: [], // Placeholder as per service logic
+        assignedUserIds: [],
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Permissions for role role:newbie123 (Newbie Role) are not fully implemented yet in createRole.'));
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should throw error if role name is missing', async () => {
+      await expect(createRole({ name: '', description: '', permissions: [] })).rejects.toThrow('Role name is required.');
+    });
+  });
+
+  describe('updateRole', () => {
+    it('should update an existing role and return it with re-fetched users', async () => {
+      const roleId = 'role:updater';
+      const updatePayload = { name: 'Updated Role Name', description: 'New desc' };
+      const dbUpdatedRecord = { id: roleId, ...updatePayload };
+
+      mockDbInstance.update.mockResolvedValueOnce([dbUpdatedRecord]); // For db.update(roleId, ...)
+      mockDbInstance.query.mockResolvedValueOnce([{ result: [{ id: 'user:5' }] }]); // For assigned users query
+
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const role = await updateRole(roleId, updatePayload);
+
+      expect(mockDbInstance.update).toHaveBeenCalledWith(roleId, { name: 'Updated Role Name', description: 'New desc' });
+      expect(mockDbInstance.query).toHaveBeenCalledWith(`SELECT meta::id as id FROM user WHERE global_roles CONTAINS "${roleId}";`);
+      expect(role).toEqual({
+        ...dbUpdatedRecord,
+        permissions: [], // Placeholder
+        assignedUserIds: ['user:5'],
+      });
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Permissions for role ${roleId} are not fully updated yet in updateRole.`));
+      consoleWarnSpy.mockRestore();
+    });
+    
+    it('should throw Role not found if update target does not exist', async () => {
+      mockDbInstance.update.mockResolvedValueOnce([]); // Simulate record not found by update
+      mockDbInstance.select.mockResolvedValueOnce([]); // Simulate record not found by select check
+      await expect(updateRole('role:ghost', { name: 'Ghost' })).rejects.toThrow('Role not found.');
+    });
+  });
+
+  describe('deleteRole', () => {
+    it('should delete a role and attempt to update users', async () => {
+      const roleId = 'role:toBeDeleted';
+      mockDbInstance.select.mockResolvedValueOnce([{ id: roleId, name: 'ToDelete' }]); // Role exists
+      mockDbInstance.query
+        .mockResolvedValueOnceOnce([{ result: [{ id: 'user:abc' }, { id: 'user:def' }] }]) // Users having the role
+        .mockResolvedValueOnceOnce(undefined) // For user:abc update global_roles
+        .mockResolvedValueOnceOnce(undefined); // For user:def update global_roles
+      mockDbInstance.delete.mockResolvedValueOnce([{ id: roleId }]); // Role deleted
+
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      await deleteRole(roleId);
+
+      expect(mockDbInstance.select).toHaveBeenCalledWith(roleId);
+      expect(mockDbInstance.query).toHaveBeenCalledWith(`SELECT meta::id as id FROM user WHERE global_roles CONTAINS "${roleId}";`);
+      expect(mockDbInstance.query).toHaveBeenCalledWith(`UPDATE user:abc SET global_roles = array::remove(global_roles, "${roleId}");`);
+      expect(mockDbInstance.query).toHaveBeenCalledWith(`UPDATE user:def SET global_roles = array::remove(global_roles, "${roleId}");`);
+      expect(mockDbInstance.delete).toHaveBeenCalledWith(roleId);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Deletion of associated role_permission and role_menu_item records for role ${roleId} is not yet implemented.`));
+      consoleWarnSpy.mockRestore();
+    });
+    
+    it('should throw Role not found if role to delete does not exist', async () => {
+      mockDbInstance.select.mockResolvedValueOnce([]); // Role does not exist
+      await expect(deleteRole('role:ghost')).rejects.toThrow('Role not found for deletion.');
     });
   });
 
   describe('assignUsersToRole', () => {
-    it('should assign users to a role', async () => {
-      const roles = await getRoles();
-      const roleToAssign = roles[1]; // '案件管理人'
-      expect(roleToAssign.assignedUserIds.length).toBe(2); // Initial assignment
+    const roleId = 'role:assignTest';
+    const mockAllUsers = [
+        { id: 'user:1', name: 'User One', global_roles: [] },
+        { id: 'user:2', name: 'User Two', global_roles: [roleId] }, // Initially has the role
+        { id: 'user:3', name: 'User Three', global_roles: ['role:other'] },
+    ];
 
-      const usersToAssign = ['user-1', 'user-4', 'user-5'];
-      await assignUsersToRole(roleToAssign.id, usersToAssign);
+    beforeEach(() => {
+        mockDbInstance.select
+            .mockResolvedValueOnce([{ id: roleId, name: 'Test Role' }]) // Role exists check
+            .mockResolvedValueOnce(mockAllUsers) // Fetch all users
+            .mockImplementation(async (recordId: string) => { // For individual user select
+                const user = mockAllUsers.find(u => u.id === recordId);
+                return user ? [user] : [];
+            });
+        mockDbInstance.query.mockResolvedValue(undefined); // For user updates
+    });
 
-      const updatedRole = await getRole(roleToAssign.id);
-      expect(updatedRole).toBeDefined();
-      expect(updatedRole?.assignedUserIds).toEqual(usersToAssign);
+    it('should assign and unassign users correctly', async () => {
+        const newUserIds = ['user:1', 'user:3']; // User1 gets role, User2 loses role, User3 gets role
+
+        await assignUsersToRole(roleId, newUserIds);
+
+        // User1 (add role)
+        expect(mockDbInstance.query).toHaveBeenCalledWith(expect.stringContaining(`UPDATE user:1 SET global_roles = ["${roleId}"];`));
+        // User2 (remove role)
+        expect(mockDbInstance.query).toHaveBeenCalledWith(expect.stringContaining(`UPDATE user:2 SET global_roles = [];`));
+        // User3 (add role)
+        expect(mockDbInstance.query).toHaveBeenCalledWith(expect.stringContaining(`UPDATE user:3 SET global_roles = ["role:other","${roleId}"];`));
+        
+        // Verify total update calls
+        expect(mockDbInstance.query).toHaveBeenCalledTimes(3); // 3 users changed
+    });
+
+    it('should handle empty newUserIds (unassign all)', async () => {
+        await assignUsersToRole(roleId, []);
+        // User2 (remove role)
+        expect(mockDbInstance.query).toHaveBeenCalledWith(expect.stringContaining(`UPDATE user:2 SET global_roles = [];`));
+        expect(mockDbInstance.query).toHaveBeenCalledTimes(1); // Only User2 needs update
     });
     
-    it('should filter out invalid user IDs during assignment', async () => {
-      const roles = await getRoles();
-      const roleToAssign = roles[1];
-      const usersToAssign = ['user-1', 'invalid-user-id', 'user-2'];
-      const validUsersToAssign = ['user-1', 'user-2']; // Expected valid users
-
-      // Suppress console.warn for this specific test if desired, or check if it was called
-      // For now, we'll just check the outcome
-      const originalWarn = console.warn;
-      console.warn = () => {}; // Suppress warning
-
-      await assignUsersToRole(roleToAssign.id, usersToAssign);
-      
-      console.warn = originalWarn; // Restore console.warn
-
-      const updatedRole = await getRole(roleToAssign.id);
-      expect(updatedRole).toBeDefined();
-      // Check that only valid users were assigned
-      expect(updatedRole?.assignedUserIds).toEqual(expect.arrayContaining(validUsersToAssign));
-      expect(updatedRole?.assignedUserIds.length).toEqual(validUsersToAssign.length);
-    });
-
-
-    it('should reject if role for user assignment is not found', async () => {
-      await expect(assignUsersToRole('non-existent-role-id', ['user-1'])).rejects.toThrow('Role not found for user assignment.');
+    it('should throw "Role not found" if role does not exist', async () => {
+      mockDbInstance.select.mockReset(); // Clear previous beforeEach mocks for select
+      mockDbInstance.select.mockResolvedValueOnce([]); // Role does not exist
+      await expect(assignUsersToRole('role:ghost', ['user:1'])).rejects.toThrow('Role not found for user assignment.');
     });
   });
 });

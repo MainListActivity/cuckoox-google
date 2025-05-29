@@ -1,112 +1,196 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import Surreal from 'surrealdb.js';
 import {
   getReviewStatuses,
   createReviewStatus,
   updateReviewStatus,
   deleteReviewStatus,
-  resetStateForTests, // Import the reset function
   type ReviewStatus,
 } from './adminReviewStatusService';
 
-// Initial state snapshot
-const INITIAL_STATUSES_COUNT = 5;
+// Mock SurrealDB instance
+const mockDbInstance = {
+  select: vi.fn(),
+  query: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
+  merge: vi.fn(),
+};
+
+// Spy on the static getter 'instance' of the Surreal class
+vi.spyOn(Surreal, 'instance', 'get').mockReturnValue(mockDbInstance);
+
+// Helper to simulate DB records for claim_review_status_definition
+const createDbStatusRecord = (id: string, label: string, description: string, is_active = true, display_order = 0) => ({
+  id: `claim_review_status_definition:${id}`,
+  name: label, // DB uses 'name' for 'label'
+  description,
+  is_active,
+  display_order,
+});
 
 describe('adminReviewStatusService', () => {
   beforeEach(() => {
-    resetStateForTests(); // Reset state before each test
+    vi.resetAllMocks();
+    // Default mock implementations
+    mockDbInstance.query.mockResolvedValue([[]]);
+    mockDbInstance.create.mockResolvedValue([]);
+    mockDbInstance.merge.mockResolvedValue([]);
+    mockDbInstance.delete.mockResolvedValue([]);
+    mockDbInstance.select.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
   });
 
   describe('getReviewStatuses', () => {
-    it('should return initial review statuses', async () => {
+    it('should return review statuses from DB, ordered and transformed', async () => {
+      const mockDbData = [
+        createDbStatusRecord('s1', '待审核', 'Pending review', true, 1),
+        createDbStatusRecord('s2', '审核通过', 'Approved', true, 0),
+      ];
+      mockDbInstance.query.mockResolvedValueOnce([{ result: [mockDbData[1], mockDbData[0]] }]); // Simulate DB ordering
+
       const statuses = await getReviewStatuses();
-      expect(statuses).toBeInstanceOf(Array);
-      expect(statuses.length).toBe(INITIAL_STATUSES_COUNT);
-      expect(statuses[0].label).toBe('待审核');
+
+      expect(mockDbInstance.query).toHaveBeenCalledWith(
+        "SELECT id, name, description, is_active, display_order FROM claim_review_status_definition ORDER BY display_order ASC, name ASC;"
+      );
+      expect(statuses.length).toBe(2);
+      expect(statuses[0]).toEqual(expect.objectContaining({ id: mockDbData[1].id, label: '审核通过', display_order: 0 }));
+      expect(statuses[1]).toEqual(expect.objectContaining({ id: mockDbData[0].id, label: '待审核', display_order: 1 }));
+    });
+     it('should return empty array if DB query returns no results', async () => {
+      mockDbInstance.query.mockResolvedValueOnce([{ result: [] }]);
+      const statuses = await getReviewStatuses();
+      expect(statuses).toEqual([]);
     });
   });
 
   describe('createReviewStatus', () => {
-    it('should create a new review status and assign an ID', async () => {
-      const newStatusData = {
-        label: '测试状态',
-        description: '这是一个测试状态的描述。',
-      };
-      const createdStatus = await createReviewStatus(newStatusData);
-      expect(createdStatus).toHaveProperty('id');
-      expect(createdStatus.label).toBe(newStatusData.label);
-      expect(createdStatus.description).toBe(newStatusData.description);
+    it('should create a new review status, checking for uniqueness and transforming response', async () => {
+      const newStatusData = { label: '新状态', description: 'New status desc' };
+      const dbRecordId = 'claim_review_status_definition:new1';
+      const createdDbRecord = createDbStatusRecord('new1', newStatusData.label, newStatusData.description);
+      
+      mockDbInstance.query.mockResolvedValueOnce([{ result: [] }]); // For uniqueness check (no existing)
+      mockDbInstance.create.mockResolvedValueOnce([createdDbRecord]); // For db.create
 
-      const statuses = await getReviewStatuses();
-      expect(statuses.length).toBe(INITIAL_STATUSES_COUNT + 1);
-      const foundStatus = statuses.find(s => s.id === createdStatus.id);
-      expect(foundStatus).toEqual(createdStatus);
+      const status = await createReviewStatus(newStatusData);
+
+      expect(mockDbInstance.query).toHaveBeenCalledWith(
+        `SELECT id FROM claim_review_status_definition WHERE name = $name;`,
+        { name: newStatusData.label }
+      );
+      expect(mockDbInstance.create).toHaveBeenCalledWith('claim_review_status_definition', {
+        name: newStatusData.label,
+        description: newStatusData.description,
+        is_active: true, // Default
+        display_order: 0, // Default
+      });
+      expect(status).toEqual({
+        id: dbRecordId,
+        label: newStatusData.label,
+        description: newStatusData.description,
+        is_active: true,
+        display_order: 0,
+      });
     });
 
-    it('should reject if status label is missing', async () => {
-      const newStatusData = {
-        label: '', // Empty label
-        description: '测试描述',
-      };
-      await expect(createReviewStatus(newStatusData)).rejects.toThrow('Review status label is required.');
+    it('should throw error if status label is missing', async () => {
+      await expect(createReviewStatus({ label: '', description: 'desc' })).rejects.toThrow('Review status label is required.');
     });
 
-    it('should reject if status label already exists', async () => {
-      const existingStatus = (await getReviewStatuses())[0];
-      const newStatusData = {
-        label: existingStatus.label, // Duplicate label
-        description: '测试描述',
-      };
-      await expect(createReviewStatus(newStatusData)).rejects.toThrow(`Review status with label "${existingStatus.label}" already exists.`);
+    it('should throw error if status label (name) already exists', async () => {
+      const newStatusData = { label: '已存在', description: 'desc' };
+      mockDbInstance.query.mockResolvedValueOnce([{ result: [{ id: 'claim_review_status_definition:existing1' }] }]); // Uniqueness check fails
+
+      await expect(createReviewStatus(newStatusData)).rejects.toThrow(`Review status with label "${newStatusData.label}" already exists.`);
     });
   });
 
   describe('updateReviewStatus', () => {
-    it('should update an existing review status', async () => {
-      const statusesBefore = await getReviewStatuses();
-      const statusToUpdateId = statusesBefore[1].id; // '审核通过'
-      
-      const updateData = {
-        label: '完全审核通过',
-        description: '更新后的描述，表示已完全通过。',
-      };
+    const statusId = 'claim_review_status_definition:sUpd1';
+    it('should update an existing review status and transform response', async () => {
+      const updateData = { label: 'Updated Label', description: 'Updated desc', is_active: false };
+      const mergedDbRecord = createDbStatusRecord('sUpd1', updateData.label, updateData.description, false, 0);
 
-      const updatedStatus = await updateReviewStatus(statusToUpdateId, updateData);
-      expect(updatedStatus.label).toBe(updateData.label);
-      expect(updatedStatus.description).toBe(updateData.description);
+      mockDbInstance.query.mockResolvedValueOnce([{ result: [] }]); // Uniqueness check (if label changes)
+      mockDbInstance.merge.mockResolvedValueOnce([mergedDbRecord]);
 
-      const statusAfterUpdate = (await getReviewStatuses()).find(s => s.id === statusToUpdateId);
-      expect(statusAfterUpdate).toBeDefined();
-      expect(statusAfterUpdate?.label).toBe(updateData.label);
-    });
+      const status = await updateReviewStatus(statusId, updateData);
 
-    it('should reject if status to update is not found', async () => {
-      await expect(updateReviewStatus('non-existent-id', { label: 'test' })).rejects.toThrow('Review status not found.');
+      expect(mockDbInstance.query).toHaveBeenCalledWith(
+        `SELECT id FROM claim_review_status_definition WHERE name = $name AND id != $id;`,
+        { name: updateData.label, id: statusId }
+      );
+      expect(mockDbInstance.merge).toHaveBeenCalledWith(statusId, {
+        name: updateData.label,
+        description: updateData.description,
+        is_active: false,
+      });
+      expect(status).toEqual({
+        id: statusId,
+        label: updateData.label,
+        description: updateData.description,
+        is_active: false,
+        display_order: 0, // from createDbStatusRecord mock structure
+      });
     });
     
-    it('should reject if updated label already exists for another status', async () => {
-      const statuses = await getReviewStatuses();
-      const statusToUpdateId = statuses[0].id; // '待审核'
-      const existingLabelForOther = statuses[1].label; // '审核通过'
+    it('should return current record if update payload is empty', async () => {
+      const currentDbRecord = createDbStatusRecord('sUpd1', 'Current Label', 'Current Desc');
+      mockDbInstance.select.mockResolvedValueOnce([currentDbRecord]);
 
-      await expect(updateReviewStatus(statusToUpdateId, { label: existingLabelForOther })).rejects.toThrow(`Review status with label "${existingLabelForOther}" already exists.`);
+      const status = await updateReviewStatus(statusId, {}); // Empty update data
+
+      expect(mockDbInstance.select).toHaveBeenCalledWith(statusId);
+      expect(mockDbInstance.merge).not.toHaveBeenCalled();
+      expect(status.label).toBe('Current Label');
+    });
+
+    it('should throw "Review status not found" if record does not exist for update', async () => {
+      mockDbInstance.merge.mockResolvedValueOnce([]); // Simulate record not found by merge
+      mockDbInstance.select.mockResolvedValueOnce([]); // Simulate record not found by select check
+      await expect(updateReviewStatus('claim_review_status_definition:ghost', { label: 'Ghost' })).rejects.toThrow('Review status not found.');
+    });
+    
+    it('should throw error if updated label (name) conflicts with another status', async () => {
+      const updateData = { label: 'Conflicting Label' };
+      mockDbInstance.query.mockResolvedValueOnce([{ result: [{ id: 'claim_review_status_definition:otherExisting' }] }]); // Uniqueness check fails
+      
+      await expect(updateReviewStatus(statusId, updateData)).rejects.toThrow(`Review status with label "${updateData.label}" already exists.`);
     });
   });
 
   describe('deleteReviewStatus', () => {
+    const statusId = 'claim_review_status_definition:sDel1';
     it('should delete an existing review status', async () => {
-      const statusesBefore = await getReviewStatuses();
-      const statusToDeleteId = statusesBefore[0].id;
+      const deletedRecord = createDbStatusRecord('sDel1', 'Deleted', 'Will be gone');
+      mockDbInstance.delete.mockResolvedValueOnce([deletedRecord]); // Simulate successful deletion
 
-      await deleteReviewStatus(statusToDeleteId);
-
-      const statusesAfter = await getReviewStatuses();
-      expect(statusesAfter.length).toBe(INITIAL_STATUSES_COUNT - 1);
-      const foundStatus = statusesAfter.find(s => s.id === statusToDeleteId);
-      expect(foundStatus).toBeUndefined();
+      await deleteReviewStatus(statusId);
+      expect(mockDbInstance.delete).toHaveBeenCalledWith(statusId);
     });
 
-    it('should reject if status to delete is not found', async () => {
-      await expect(deleteReviewStatus('non-existent-id')).rejects.toThrow('Review status not found for deletion.');
+    it('should not throw if status to delete is not found (idempotent)', async () => {
+      mockDbInstance.delete.mockResolvedValueOnce([]); // Simulate record not found
+      
+      // Spy on console.warn
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      await expect(deleteReviewStatus(statusId)).resolves.toBeUndefined();
+      expect(mockDbInstance.delete).toHaveBeenCalledWith(statusId);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(`Review status ${statusId} not found for deletion or already deleted.`);
+      
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should throw error if DB call fails for deleteReviewStatus', async () => {
+      mockDbInstance.delete.mockRejectedValueOnce(new Error('DB error'));
+      await expect(deleteReviewStatus(statusId)).rejects.toThrow(`Failed to delete review status ${statusId}.`);
     });
   });
 });
