@@ -15,14 +15,13 @@ import {
   mdiBellRingOutline,
   mdiCogOutline,
 } from '@mdi/js'; // Using @mdi/js for path data
-import { Link as RouterLink } from 'react-router-dom'; // Import RouterLink
 
 const adminSections = [
-  { title: '用户管理', description: '管理系统用户账户、分配全局角色。', buttonText: '管理用户', icon: mdiAccountGroupOutline, color: 'primary' as const, link: '#' }, 
-  { title: '身份与权限管理', description: '定义用户身份（角色）及其可操作的菜单和功能权限。', buttonText: '管理身份权限', icon: mdiSecurity, color: 'success' as const, link: '#' }, 
-  { title: '审核状态维护', description: '配置债权审核时可选的审核状态列表。', buttonText: '维护审核状态', icon: mdiPlaylistCheck, color: 'warning' as const, link: '#'}, 
-  { title: '案件通知规则', description: '配置案件机器人基于案件阶段发送通知的规则和模板。', buttonText: '配置通知规则', icon: mdiBellRingOutline, color: 'info' as const, link: '/admin/notification-rules' },
-  { title: '系统配置', description: '管理系统级参数，如数据库连接（概念性）、OIDC客户端设置等。', buttonText: '系统配置', icon: mdiCogOutline, color: 'error' as const, link: '#' },
+  { title: '用户管理', description: '管理系统用户账户、分配全局角色。', buttonText: '管理用户', icon: mdiAccountGroupOutline, color: 'primary' as const },
+  { title: '身份与权限管理', description: '定义用户身份（角色）及其可操作的菜单和功能权限。', buttonText: '管理身份权限', icon: mdiSecurity, color: 'success' as const },
+  { title: '审核状态维护', description: '配置债权审核时可选的审核状态列表。', buttonText: '维护审核状态', icon: mdiPlaylistCheck, color: 'warning' as const },
+  { title: '案件通知规则', description: '配置案件机器人基于案件阶段发送通知的规则和模板。', buttonText: '配置通知规则', icon: mdiBellRingOutline, color: 'info' as const },
+  { title: '系统配置', description: '管理系统级参数，如数据库连接（概念性）、OIDC客户端设置等。', buttonText: '系统配置', icon: mdiCogOutline, color: 'error' as const },
 ];
 
 const AdminPage: React.FC = () => {
@@ -54,15 +53,7 @@ const AdminPage: React.FC = () => {
                 </Typography>
               </CardContent>
               <Box sx={{ p: 2, pt: 0 }}>
-                <Button 
-                  variant="contained" 
-                  size="medium" 
-                  color={section.color} 
-                  fullWidth
-                  component={section.link && section.link !== '#' ? RouterLink : 'button'}
-                  to={section.link && section.link !== '#' ? section.link : undefined}
-                  disabled={!section.link || section.link === '#'}
-                >
+                <Button variant="contained" size="medium" color={section.color} fullWidth>
                   {section.buttonText}
                 </Button>
               </Box>

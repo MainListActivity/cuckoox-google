@@ -40,7 +40,6 @@ const CaseSelectionPage = React.lazy(() => import('./pages/CaseSelectionPage'));
 const OidcCallbackPage = React.lazy(() => import('./pages/OidcCallbackPage')); // <-- IMPORT
 const CreateCasePage = React.lazy(() => import('./pages/CreateCasePage')); // <-- IMPORT
 const AdminCreateClaimAttachmentsPage = React.lazy(() => import('./pages/admin/AdminCreateClaimAttachmentsPage')); // <-- IMPORT
-const NotificationRuleManagementPage = React.lazy(() => import('./pages/admin/NotificationRuleManagementPage')); // <-- IMPORT
 
 
 function App() {
@@ -159,7 +158,6 @@ function App() {
                                 {/* End Admin specific claim creation routes */}
                                 <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/admin/case-status-toggler" element={<ProtectedRoute requiredRole="admin"><CaseStatusToggler /></ProtectedRoute> as ReactNode} /> {/* <-- ADDED */}
-                                <Route path="/admin/notification-rules" element={<ProtectedRoute requiredRole="admin"><NotificationRuleManagementPage /></ProtectedRoute>} />
                                 <Route path="/access-denied-status" element={<AccessDeniedPage />} /> {/* <-- ADDED */}
                                 <Route path="/access-denied-role" element={<AccessDeniedRolePage />} /> {/* <-- ADDED */}
                                 <Route path="*" element={<NotFoundPage />} />

@@ -19,7 +19,6 @@ DEFINE FIELD email ON user TYPE option<string> ASSERT $value = NONE OR is::email
 DEFINE FIELD created_at ON user TYPE datetime VALUE $before OR time::now();
 DEFINE FIELD updated_at ON user TYPE datetime VALUE time::now();
 DEFINE FIELD last_login_case_id ON user TYPE option<record<case>>;
-DEFINE FIELD global_roles ON user TYPE option<array<record<role>>>;
 
 -- Define Cases Table
 DEFINE TABLE case SCHEMAFULL
@@ -279,27 +278,6 @@ DEFINE FIELD menu_item_id ON role_menu_item TYPE record<menu_item>;
 DEFINE FIELD assigned_at ON role_menu_item TYPE datetime VALUE time::now();
 DEFINE INDEX role_menu_item_idx ON role_menu_item COLUMNS role_id, menu_item_id UNIQUE;
 
--- Define Notification Rule Table
-DEFINE TABLE notification_rule SCHEMAFULL
-  PERMISSIONS
-    FOR select WHERE $auth.roles CONTAINS 'admin'
-    FOR create, update, delete WHERE $auth.roles CONTAINS 'admin';
-
-DEFINE FIELD name ON notification_rule TYPE string;
-DEFINE FIELD description ON notification_rule TYPE option<string>;
-DEFINE FIELD caseStatusTrigger ON notification_rule TYPE string; -- e.g., '立案', '公告'
-DEFINE FIELD timingCondition ON notification_rule TYPE object (
-    caseDateField TYPE string, -- e.g., 'acceptance_date', 'announcement_date'
-    offsetDays TYPE option<int>,
-    comparisonOperator TYPE option<string> ASSERT $value IN [NONE, '<=', '>=', '=='],
-    comparisonValue TYPE option<int>,
-    triggerType TYPE string ASSERT $value IN ['on_status_change', 'daily_check_offset_from_date']
-);
-DEFINE FIELD frequencyDescription ON notification_rule TYPE string; -- e.g., "每天上午10点"
-DEFINE FIELD messageTemplate ON notification_rule TYPE string; -- e.g., "距离最迟公告时间仅有 {x} 天"
-DEFINE FIELD isEnabled ON notification_rule TYPE bool DEFAULT true;
-DEFINE FIELD created_at ON notification_rule TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON notification_rule TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
 
 -- Define Case Bot Subscription Table
 DEFINE TABLE case_bot_subscription SCHEMAFULL

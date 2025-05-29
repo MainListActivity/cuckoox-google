@@ -34,39 +34,35 @@ export interface RoleData {
   permissions: MenuPermission[];
 }
 
-import { SystemMenu } from '../../../services/adminRoleService'; // Import SystemMenu
-
 // Props for the Dialog component
 interface CreateEditRoleDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (roleData: RoleData) => void;
   initialData?: RoleData | null;
-  systemMenus: SystemMenu[]; // Add systemMenus as a prop
 }
 
 // Mock system menu structure
 // In a real app, this would likely come from a config or API
-// const systemMenus = [
-//   { id: 'menu_case_management', name: '案件管理', parentId: null },
-//   { id: 'menu_creditor_management', name: '债权人管理', parentId: null },
-//   { id: 'menu_claim_submission', name: '债权申报(债权人)', parentId: null },
-//   { id: 'menu_claim_review', name: '债权审核(管理人)', parentId: null },
-//   { id: 'menu_dashboard', name: '数据大屏', parentId: null },
-//   { id: 'menu_meetings', name: '在线会议', parentId: null },
-//   { id: 'menu_message_center', name: '消息中心', parentId: null },
-//   { id: 'menu_message_center_chat', name: '聊天功能', parentId: 'menu_message_center' }, // Example child
-//   { id: 'menu_message_center_settings', name: '消息设置', parentId: 'menu_message_center' }, // Example child
-//   { id: 'menu_admin_role_management', name: '身份管理(后台)', parentId: null },
-//   { id: 'menu_admin_status_management', name: '审核状态管理(后台)', parentId: null },
-// ];
+const systemMenus = [
+  { id: 'menu_case_management', name: '案件管理', parentId: null },
+  { id: 'menu_creditor_management', name: '债权人管理', parentId: null },
+  { id: 'menu_claim_submission', name: '债权申报(债权人)', parentId: null },
+  { id: 'menu_claim_review', name: '债权审核(管理人)', parentId: null },
+  { id: 'menu_dashboard', name: '数据大屏', parentId: null },
+  { id: 'menu_meetings', name: '在线会议', parentId: null },
+  { id: 'menu_message_center', name: '消息中心', parentId: null },
+  { id: 'menu_message_center_chat', name: '聊天功能', parentId: 'menu_message_center' }, // Example child
+  { id: 'menu_message_center_settings', name: '消息设置', parentId: 'menu_message_center' }, // Example child
+  { id: 'menu_admin_role_management', name: '身份管理(后台)', parentId: null },
+  { id: 'menu_admin_status_management', name: '审核状态管理(后台)', parentId: null },
+];
 
 const CreateEditRoleDialog: React.FC<CreateEditRoleDialogProps> = ({
   open,
   onClose,
   onSave,
   initialData,
-  systemMenus, // Destructure systemMenus from props
 }) => {
   const theme = useTheme();
   const [roleName, setRoleName] = useState('');
@@ -74,9 +70,9 @@ const CreateEditRoleDialog: React.FC<CreateEditRoleDialogProps> = ({
   const [permissions, setPermissions] = useState<MenuPermission[]>([]);
   const [nameError, setNameError] = useState('');
 
-  // Initialize permissions state based on systemMenus prop
-  const initializePermissions = (menus: SystemMenu[]) => {
-    return menus.map(menu => ({
+  // Initialize permissions state based on systemMenus
+  const initializePermissions = () => {
+    return systemMenus.map(menu => ({
       id: menu.id,
       name: menu.name,
       canRead: false,
@@ -91,7 +87,7 @@ const CreateEditRoleDialog: React.FC<CreateEditRoleDialogProps> = ({
       if (initialData) {
         setRoleName(initialData.name);
         setDescription(initialData.description);
-        // Merge initialData.permissions with a full list from systemMenus prop
+        // Merge initialData.permissions with a full list from systemMenus
         // to ensure all system menus are represented and defaults are applied
         const initialPermsMap = new Map(initialData.permissions.map(p => [p.id, p]));
         setPermissions(systemMenus.map(menu => ({
@@ -102,11 +98,11 @@ const CreateEditRoleDialog: React.FC<CreateEditRoleDialogProps> = ({
       } else {
         setRoleName('');
         setDescription('');
-        setPermissions(initializePermissions(systemMenus)); // Pass systemMenus prop
+        setPermissions(initializePermissions());
       }
       setNameError(''); // Clear previous errors
     }
-  }, [open, initialData, systemMenus]); // Add systemMenus to dependency array
+  }, [open, initialData]);
 
 
   const handlePermissionChange = (menuId: string, permissionType: keyof Omit<MenuPermission, 'id' | 'name'>, checked: boolean) => {
@@ -154,7 +150,7 @@ const CreateEditRoleDialog: React.FC<CreateEditRoleDialogProps> = ({
 
   const isEditing = initialData != null;
 
-  const renderMenuNode = (menu: SystemMenu, level: number = 0) => { // Use SystemMenu type
+  const renderMenuNode = (menu: typeof systemMenus[0], level: number = 0) => {
     const currentPermission = permissions.find(p => p.id === menu.id) || { 
         id: menu.id, name: menu.name, canRead: false, canCreate: false, canUpdate: false, canDelete: false 
     };
