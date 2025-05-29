@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -11,54 +11,67 @@ import {
   TableRow,
   Paper,
   IconButton,
-  Toolbar, 
+  Toolbar,
   Tooltip,
   useTheme,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
-// Import AddEditStatusDialog and its StatusData type
 import AddEditStatusDialog, { StatusData } from '../../components/admin/review_statuses/AddEditStatusDialog';
-// Import ConfirmDeleteDialog
 import ConfirmDeleteDialog from '../../components/common/ConfirmDeleteDialog';
 
-// ReviewStatus interface now uses StatusData structure directly
-interface ReviewStatus extends StatusData {
-  // id is already optional in StatusData, label and description are required
-}
+import {
+  ReviewStatus,
+  getReviewStatuses,
+  createReviewStatus,
+  updateReviewStatus,
+  deleteReviewStatus,
+} from '../../services/adminReviewStatusService';
 
-const initialMockReviewStatuses: ReviewStatus[] = [
-  { id: 's1', label: '审核通过', description: '债权已完全审核通过, 无任何疑问或需要补充的材料。符合所有法定及程序要求。' },
-  { id: 's2', label: '信息不全驳回', description: '因提交的核心信息不完整或关键字段缺失而被驳回。债权人需核对并补全信息后重新提交。' },
-  { id: 's3', label: '要求补充材料', description: '当前提交材料不足以支撑债权主张, 需要债权人补充额外证明文件或详细说明。' },
-  { id: 's4', label: '待审核', description: '债权申报已提交, 等待管理人进行初步审核。此为默认初始状态。'},
-  { id: 's5', label: '审核中', description: '管理人正在对债权材料进行详细审查与核实。'},
-  { id: 's6', label: '部分通过', description: '债权的部分金额或内容得到认可, 另一部分可能存在争议或未被确认。'},
-];
 
 const ReviewStatusManagementPage: React.FC = () => {
   const theme = useTheme();
-  const [reviewStatuses, setReviewStatuses] = useState<ReviewStatus[]>(initialMockReviewStatuses);
-  
+  const [reviewStatuses, setReviewStatuses] = useState<ReviewStatus[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [editingStatusData, setEditingStatusData] = useState<StatusData | null>(null);
 
-  // State for Delete Confirmation Dialog
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deletingStatusId, setDeletingStatusId] = useState<string | null>(null);
 
+  const fetchStatuses = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const statuses = await getReviewStatuses();
+      setReviewStatuses(statuses);
+    } catch (err) {
+      console.error("Failed to fetch review statuses:", err);
+      setError(`获取审核状态失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStatuses();
+  }, [fetchStatuses]);
 
   const handleOpenCreateStatusDialog = () => {
-    setEditingStatusData(null); 
+    setEditingStatusData(null);
     setIsStatusDialogOpen(true);
   };
 
   const handleOpenEditStatusDialog = (statusId: string) => {
     const statusToEdit = reviewStatuses.find(status => status.id === statusId);
     if (statusToEdit) {
-      setEditingStatusData(statusToEdit);
+      setEditingStatusData(statusToEdit); // StatusData is compatible with ReviewStatus
       setIsStatusDialogOpen(true);
     }
   };
@@ -68,24 +81,28 @@ const ReviewStatusManagementPage: React.FC = () => {
     setEditingStatusData(null);
   }, []);
 
-  const handleSaveStatus = useCallback((statusData: StatusData) => {
-    setReviewStatuses(prevStatuses => {
-      if (statusData.id) { 
-        return prevStatuses.map(status => 
-          status.id === statusData.id ? { ...status, ...statusData } : status
+  const handleSaveStatus = useCallback(async (statusData: StatusData) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      if (statusData.id) { // Editing existing status
+        const updatedStatus = await updateReviewStatus(statusData.id, { label: statusData.label, description: statusData.description });
+        setReviewStatuses(prevStatuses =>
+          prevStatuses.map(s => s.id === updatedStatus.id ? updatedStatus : s)
         );
-      } else { 
-        const newStatus: ReviewStatus = {
-          ...statusData,
-          id: Date.now().toString(), 
-        };
-        return [...prevStatuses, newStatus];
+      } else { // Creating new status
+        const newStatus = await createReviewStatus({ label: statusData.label, description: statusData.description });
+        setReviewStatuses(prevStatuses => [...prevStatuses, newStatus]);
       }
-    });
-    handleCloseStatusDialog();
+      handleCloseStatusDialog();
+    } catch (err) {
+      console.error("Failed to save status:", err);
+      setError(`保存状态失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
   }, [handleCloseStatusDialog]);
 
-  // Delete Status Handlers
   const handleOpenDeleteConfirm = (statusId: string) => {
     setDeletingStatusId(statusId);
     setIsDeleteConfirmOpen(true);
@@ -96,20 +113,35 @@ const ReviewStatusManagementPage: React.FC = () => {
     setDeletingStatusId(null);
   }, []);
 
-  const handleConfirmDeleteStatus = useCallback(() => {
-    if (deletingStatusId) {
-      setReviewStatuses(prevStatuses => prevStatuses.filter(status => status.id !== deletingStatusId));
-      
-      // If the status being edited is the one deleted, close the edit dialog
+  const handleConfirmDeleteStatus = useCallback(async () => {
+    if (!deletingStatusId) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      await deleteReviewStatus(deletingStatusId);
+      setReviewStatuses(prevStatuses => prevStatuses.filter(s => s.id !== deletingStatusId));
       if (editingStatusData?.id === deletingStatusId) {
         handleCloseStatusDialog();
       }
+      handleCloseDeleteConfirm();
+    } catch (err) {
+      console.error("Failed to delete status:", err);
+      setError(`删除状态失败: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
     }
-    handleCloseDeleteConfirm();
   }, [deletingStatusId, editingStatusData?.id, handleCloseStatusDialog, handleCloseDeleteConfirm]);
 
-  // Find the status to delete for the dialog's content text
   const statusToDeleteDetails = reviewStatuses.find(s => s.id === deletingStatusId);
+  
+  if (isLoading && reviewStatuses.length === 0) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <CircularProgress />
+        <Typography sx={{ml: 2}}>加载审核状态...</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
@@ -117,26 +149,20 @@ const ReviewStatusManagementPage: React.FC = () => {
         审核状态管理
       </Typography>
 
-      <Paper 
-        elevation={1} 
-        sx={{ 
-          backgroundColor: theme.palette.background.paper,
-        }}
-      >
-        <Toolbar 
-          sx={{ 
-            p: { xs: 1.5, sm: 2 }, 
-            borderBottom: `1px solid ${theme.palette.divider}`,
-          }}
-        >
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      <Paper elevation={1} sx={{ backgroundColor: theme.palette.background.paper }}>
+        <Toolbar sx={{ p: { xs: 1.5, sm: 2 }, borderBottom: `1px solid ${theme.palette.divider}` }}>
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddCircleOutlineIcon />}
-            onClick={handleOpenCreateStatusDialog} 
+            onClick={handleOpenCreateStatusDialog}
+            disabled={isLoading}
           >
             添加状态
           </Button>
+          {isLoading && <CircularProgress size={24} sx={{ml: 2}}/>}
         </Toolbar>
 
         <TableContainer>
@@ -152,36 +178,36 @@ const ReviewStatusManagementPage: React.FC = () => {
               {reviewStatuses.map((status) => (
                 <TableRow
                   key={status.id}
-                  sx={{ 
+                  sx={{
                     '&:last-child td, &:last-child th': { border: 0 },
-                    '&:hover': {
-                      backgroundColor: theme.palette.action.hover,
-                    }
+                    '&:hover': { backgroundColor: theme.palette.action.hover },
                   }}
                 >
-                  <TableCell component="th" scope="row" sx={{color: theme.palette.text.primary}}>
+                  <TableCell component="th" scope="row" sx={{ color: theme.palette.text.primary }}>
                     {status.label}
                   </TableCell>
-                  <TableCell sx={{color: theme.palette.text.secondary, whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
+                  <TableCell sx={{ color: theme.palette.text.secondary, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                     {status.description}
                   </TableCell>
                   <TableCell align="center">
                     <Tooltip title="编辑状态">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleOpenEditStatusDialog(status.id!)} 
-                        sx={{ mr: 0.5, color: theme.palette.info.main, '&:hover': {backgroundColor: theme.palette.action.focus} }}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpenEditStatusDialog(status.id!)}
+                        disabled={isLoading}
+                        sx={{ mr: 0.5, color: theme.palette.info.main, '&:hover': { backgroundColor: theme.palette.action.focus } }}
                       >
-                        <EditIcon fontSize="small"/>
+                        <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="删除状态">
-                      <IconButton 
-                        size="small" 
-                        onClick={() => handleOpenDeleteConfirm(status.id!)} // Updated onClick
-                        sx={{ color: theme.palette.error.main, '&:hover': {backgroundColor: theme.palette.action.focus} }}
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpenDeleteConfirm(status.id!)}
+                        disabled={isLoading}
+                        sx={{ color: theme.palette.error.main, '&:hover': { backgroundColor: theme.palette.action.focus } }}
                       >
-                        <DeleteOutlineIcon fontSize="small"/>
+                        <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
                   </TableCell>
@@ -190,10 +216,10 @@ const ReviewStatusManagementPage: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-        {reviewStatuses.length === 0 && (
-            <Typography align="center" color="text.secondary" sx={{ p: 3 }}>
-                暂无审核状态信息。
-            </Typography>
+        {!isLoading && reviewStatuses.length === 0 && !error && (
+          <Typography align="center" color="text.secondary" sx={{ p: 3 }}>
+            暂无审核状态信息。
+          </Typography>
         )}
       </Paper>
 
@@ -211,8 +237,8 @@ const ReviewStatusManagementPage: React.FC = () => {
         title="确认删除状态"
         contentText={
           deletingStatusId && statusToDeleteDetails
-          ? `您确定要删除状态 "${statusToDeleteDetails.label}" 吗？此操作无法撤销。`
-          : "您确定要删除此状态吗？此操作无法撤销。"
+            ? `您确定要删除状态 "${statusToDeleteDetails.label}" 吗？此操作无法撤销。`
+            : "您确定要删除此状态吗？此操作无法撤销。"
         }
       />
     </Box>

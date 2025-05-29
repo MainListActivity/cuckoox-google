@@ -229,13 +229,13 @@ This checklist outlines the development tasks required to build the CuckooX plat
         - [x] UI for assigning menu permissions (tree/checklist, dark/light mode).
         - [x] UI for assigning operation (CRUD) permissions per menu.
     - [x] **User-Role Assignment UI.**
-    - [ ] Connect to API for managing roles and permissions.
+    - [x] Connect to API for managing roles and permissions. (Note: Mock API service implemented, actual backend integration pending)
 - [x] **审核状态管理 (Review Status Management - `AdminPage.tsx` section or new page - Design tasks 10.x):**
     - [x] **Status List:** Implement table for audit statuses. "添加状态" button.
     - [x] **Add/Edit/Delete Status Form:** Simple form for status labels.
-    - [ ] Connect to API. These statuses will populate dropdowns in Claim Review.
-- [ ] **案件通知规则配置 (in `AdminPage.tsx` - `product.md 3.1.3` related):**
-    - [ ] UI for admin to configure rules and templates for "案件机器人" notifications (though actual sending is backend).
+    - [x] Connect to API. These statuses will populate dropdowns in Claim Review. (Note: Mock API service implemented, actual backend integration pending)
+- [x] **案件通知规则配置 (in `AdminPage.tsx` - `product.md 3.1.3` related):** (Note: UI and Mock API service implemented, actual backend integration pending)
+    - [x] UI for admin to configure rules and templates for "案件机器人" notifications (though actual sending is backend). (Note: UI and Mock API service implemented, actual backend integration pending)
 
 ## 10. Non-Functional Requirements & Polish
 
