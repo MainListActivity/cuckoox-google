@@ -18,7 +18,18 @@ export interface Meeting {
   minutes_delta_json?: string | null;
   created_at?: string;
   updated_at?: string;
+  attendees?: MeetingAttendee[]; // Added attendees field
+  attendee_ids?: (RecordId | string)[]; // Field to store attendee IDs in DB
 }
+
+// Define MeetingAttendee interface
+export interface MeetingAttendee {
+  id: string; // Record link for user or creditor
+  name: string;
+  type: 'user' | 'creditor'; // To distinguish attendee type
+  // 'group' property will be added by useCaseParticipants hook, not part of DB model for MeetingAttendee directly
+}
+
 
 export function useLiveMeetings(caseId: string | null): Meeting[] {
   const { client, isConnected } = useSurrealClient();

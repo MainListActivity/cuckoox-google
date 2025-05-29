@@ -14,37 +14,44 @@ import {
   useTheme,
   alpha as muiAlpha,
 } from '@mui/material';
-import { Message } from '../../pages/MessageCenterPage'; // Adjust path as necessary
+import { CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '../../types/message'; // Import refined types
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import CampaignIcon from '@mui/icons-material/Campaign';
-import InfoIcon from '@mui/icons-material/Info';
+import InfoIcon from '@mui/icons-material/Info'; // Keep for default/fallback
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import LinkIcon from '@mui/icons-material/Link'; // For generic action_link
 
 export interface NotificationCardProps {
-  message: Message;
+  // Accept either of the notification types
+  message: CaseRobotReminderMessage | BusinessNotificationMessage | Message; // Message for fallback if old types slip through
 }
 
 const NotificationCard: React.FC<NotificationCardProps> = ({ message }) => {
   const theme = useTheme();
-  const isCaseBotReminder = message.sender.includes('案件机器人');
+  
+  const isCaseBotReminder = message.type === 'CASE_ROBOT_REMINDER';
+  const isBusinessNotification = message.type === 'BUSINESS_NOTIFICATION';
 
-  let avatarIcon = <CampaignIcon />;
-  let chipLabel = message.type;
+  let avatarIcon = <CampaignIcon />; // Default
+  let chipLabel = message.type; // Default to raw type
   let chipColor: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' = 'default';
+  let title = message.sender_name || (message as any).sender || '通知'; // Use sender_name, fallback to sender for older types
 
   if (isCaseBotReminder) {
+    const caseBotMsg = message as CaseRobotReminderMessage;
     avatarIcon = <SmartToyIcon />;
-    chipLabel = '案件提醒'; // More specific label for case bot
+    chipLabel = '案件提醒';
     chipColor = 'info';
-  } else if (message.type === 'SystemAlert') {
-    avatarIcon = <InfoIcon />; // Or CampaignIcon
-    chipLabel = '系统提醒';
-    chipColor = 'warning';
-  } else if (message.type === 'Notification') {
-    avatarIcon = <CampaignIcon />; // Or InfoIcon if preferred for general notifications
-    chipLabel = '通知';
-    chipColor = 'info'; // Consistent with MessageListItem
+    title = caseBotMsg.sender_name;
+  } else if (isBusinessNotification) {
+    const bizMsg = message as BusinessNotificationMessage;
+    avatarIcon = <CampaignIcon />; // Or determine by severity
+    chipLabel = bizMsg.title || '系统通知'; // Use notification title for chip if available
+    chipColor = bizMsg.severity || 'info'; // Map severity to chip color
+    title = bizMsg.sender_name;
+    if (bizMsg.severity === 'error') avatarIcon = <InfoIcon sx={{color: theme.palette.error.main}}/>;
+    else if (bizMsg.severity === 'warning') avatarIcon = <InfoIcon sx={{color: theme.palette.warning.main}}/>;
   }
 
 
@@ -67,12 +74,12 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ message }) => {
         }
         title={
           <Typography variant="h6" component="div">
-            {message.sender}
+            {title}
           </Typography>
         }
         subheader={
           <Typography variant="caption" color="text.secondary">
-            {message.timestamp}
+            {new Date(message.created_at).toLocaleString()}
           </Typography>
         }
         action={
@@ -92,23 +99,22 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ message }) => {
                 相关案件信息:
               </Typography>
               <Typography variant="body2" color="text.primary">
-                案件ID: {message.case_id}
+                案件ID: {String(message.case_id).replace(/^case:/, '')}
               </Typography>
               {/* Add more case details here if available and needed */}
             </Box>
           </>
         )}
       </CardContent>
-      {isCaseBotReminder && (
-        <>
-          <Divider />
-          <CardActions sx={{ p: 1.5, justifyContent: 'flex-end', backgroundColor: muiAlpha(theme.palette.divider, 0.04) }}>
+      <CardActions sx={{ p: 1.5, justifyContent: 'flex-end', backgroundColor: muiAlpha(theme.palette.divider, 0.04) }}>
+        {isCaseBotReminder && (
+          <>
             <Button 
               variant="outlined" 
               size="small" 
               startIcon={<CheckCircleOutlineIcon />}
               sx={{ mr: 1 }}
-              // onClick={() => console.log('Acknowledge:', message.id)}
+              // onClick={() => console.log('Acknowledge:', message.id)} // TODO: Implement acknowledge if needed
             >
               我知道了
             </Button>
@@ -117,13 +123,26 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ message }) => {
               size="small" 
               color="primary"
               startIcon={<VisibilityIcon />}
-              // onClick={() => console.log('View Case Details:', message.case_id)}
+              // onClick={() => navigateToCase(message.case_id)} // TODO: Implement navigation
             >
               查看案件详情
             </Button>
-          </CardActions>
-        </>
-      )}
+          </>
+        )}
+        {isBusinessNotification && (message as BusinessNotificationMessage).action_link && (
+          <Button 
+            variant="contained" 
+            size="small" 
+            color="primary"
+            startIcon={<LinkIcon />}
+            href={(message as BusinessNotificationMessage).action_link}
+            target="_blank" // Open in new tab if it's an external link
+            rel="noopener noreferrer"
+          >
+            查看操作
+          </Button>
+        )}
+      </CardActions>
     </Card>
   );
 };

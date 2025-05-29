@@ -10,76 +10,146 @@ import {
   useTheme,
   alpha,
   IconButton, // Added
-  Tooltip,    // Added
-  ListItemSecondaryAction, // Added
+  Tooltip,    
+  ListItemSecondaryAction, 
 } from '@mui/material';
-import { Message } from '../../pages/MessageCenterPage'; 
+// Import DisplayListItem and related types from where MessageCenterPage imports them
+// Assuming DisplayListItem is now part of types/message.ts or passed correctly
+import { DisplayListItem, ConversationSummary, Message, IMMessage, CaseRobotReminderMessage, BusinessNotificationMessage } from '../../types/message'; 
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'; // Added
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'; 
+import GroupIcon from '@mui/icons-material/Group'; 
+import PersonIcon from '@mui/icons-material/Person'; 
+import { mdiEmailOpenOutline } from '@mdi/js'; // Icon for Mark as Unread
 
 // Define the props for the component
 export interface MessageListItemProps {
-  message: Message;
-  onSelectMessage: (messageId: string) => void;
-  onDeleteMessage: (messageId: string) => void; // Added
+  itemData: DisplayListItem; 
+  onSelectItem: (item: DisplayListItem) => void; 
+  onDeleteItem: (itemId: string | import('surrealdb.js').RecordId) => void; 
+  onMarkAsUnread: (item: DisplayListItem) => void; // New prop
   selected: boolean;
 }
 
-const MessageListItem: React.FC<MessageListItemProps> = ({ message, onSelectMessage, onDeleteMessage, selected }) => {
+const MessageListItem: React.FC<MessageListItemProps> = ({ itemData, onSelectItem, onDeleteItem, onMarkAsUnread, selected }) => {
   const theme = useTheme();
 
-  const isUnread = !message.is_read;
+  const { itemType } = itemData;
+  const data = itemData; // data is the itemData itself after discriminating itemType
 
-  // Determine icon based on message type or sender
-  let icon = <ChatBubbleOutlineIcon />;
-  if (message.type === 'SystemAlert') {
-    icon = <NotificationsActiveIcon />;
-  } else if (message.sender.includes('案件机器人')) {
-    icon = <SmartToyIcon />;
-  } else if (message.type === 'Notification') {
-    icon = <NotificationsActiveIcon /> // Or another appropriate icon
-  }
+  let primaryText: string;
+  let secondaryText: string;
+  let timestamp: string;
+  let isUnread: boolean;
+  let icon: JSX.Element;
+  let chipLabel: string | null = null;
+  let chipColor: 'success' | 'warning' | 'info' | 'default' | 'primary' | 'secondary' | undefined = 'default';
+
+  if (itemType === 'conversation') {
+    const conversation = data as ConversationSummary & { itemType: 'conversation' };
+    // Primary Text: Participant names or conversation title
+    if (conversation.participants.length > 2 || conversation.is_group_chat) {
+      primaryText = conversation.participants.map(p => p.name).join(', ') || 'Group Chat';
+      icon = <GroupIcon />;
+    } else if (conversation.participants.length === 2) {
+      // Attempt to find the other participant's name (assuming current user is one of them)
+      // This requires knowledge of current user's ID, which is not available here.
+      // Simplification: join names, or use a generic title if names are not distinct enough.
+      primaryText = conversation.participants.map(p => p.name).join(' & ') || 'Conversation';
+      icon = <PersonIcon />;
+    } else if (conversation.participants.length === 1) {
+      primaryText = conversation.participants[0]?.name || 'Self Chat'; // Should not happen often
+      icon = <PersonIcon />;
+    } else {
+      primaryText = 'Empty Conversation'; // Should ideally not happen
+      icon = <ChatBubbleOutlineIcon />;
+    }
+    if(conversation.last_message_sender_name) {
+        primaryText = `${conversation.last_message_sender_name} (in ${primaryText})`;
+    }
 
 
-  // Chip label and color
-  let chipLabel = message.type;
-  let chipColor: 'success' | 'warning' | 'info' | 'default' | 'primary' | 'secondary' = 'default';
-
-  if (message.type === 'IM') {
-    chipLabel = 'IM';
+    secondaryText = conversation.last_message_snippet;
+    timestamp = new Date(conversation.last_message_timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    isUnread = conversation.unread_count > 0;
+    chipLabel = 'IM 会话';
     chipColor = 'success';
-  } else if (message.type === 'SystemAlert') {
-    chipLabel = '提醒';
-    chipColor = 'warning';
-  } else if (message.type === 'Notification') { 
-    chipLabel = '通知';
-    chipColor = 'info';
+  } else { // itemType === 'notification'
+    const notification = data as Message & { itemType: 'notification' };
+    primaryText = notification.sender_name || (notification as IMMessage).sender_name || '系统通知'; // Fallback for sender_name
+    secondaryText = notification.content;
+    timestamp = new Date(notification.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    isUnread = !notification.is_read;
+
+    if (notification.type === 'CASE_ROBOT_REMINDER') {
+      icon = <SmartToyIcon />;
+      chipLabel = '案件机器人';
+      chipColor = 'info';
+    } else if (notification.type === 'BUSINESS_NOTIFICATION') {
+      icon = <NotificationsActiveIcon />;
+      chipLabel = '系统通知';
+      chipColor = 'warning';
+      // Potentially use notification.severity for chipColor if available and mapped
+      const bnMsg = notification as BusinessNotificationMessage;
+      if(bnMsg.severity === 'error') chipColor = 'error';
+      else if(bnMsg.severity === 'success') chipColor = 'success';
+      // info and warning are already handled or default
+    } else { // Fallback for other Message types if any, or old IMs if they were passed
+      icon = <ChatBubbleOutlineIcon />;
+      chipLabel = notification.type; // Display the raw type
+      chipColor = 'default';
+    }
   }
 
-
-  const contentSnippet = message.content.length > 50 
-    ? `${message.content.substring(0, 50)}...` 
-    : message.content;
+  const contentSnippet = secondaryText.length > 50 
+    ? `${secondaryText.substring(0, 50)}...` 
+    : secondaryText;
 
   const handleDeleteClick = (event: React.MouseEvent) => {
-    event.stopPropagation(); // Prevent onSelectMessage from firing
-    onDeleteMessage(message.id);
+    event.stopPropagation(); 
+    onDeleteItem(data.id);
+  };
+
+  const handleMarkUnreadClick = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    onMarkAsUnread(data);
   };
 
   return (
     <ListItem
       button
-      onClick={() => onSelectMessage(message.id)}
+      onClick={() => onSelectItem(data)} 
       selected={selected}
       alignItems="flex-start"
-      secondaryAction={ // Use secondaryAction for the delete button
-        <Tooltip title="删除消息">
-          <IconButton
-            edge="end"
-            aria-label="delete"
-            onClick={handleDeleteClick}
+      secondaryAction={ 
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {!isUnread && itemType === 'notification' && ( // Show "Mark as Unread" only for read notifications
+            <Tooltip title="标记为未读">
+              <IconButton
+                edge="end"
+                aria-label="mark as unread"
+                onClick={handleMarkUnreadClick}
+                size="small"
+                sx={{ 
+                  mr: 0.5, // Add some margin if delete icon is also present
+                  color: theme.palette.text.secondary,
+                  '&:hover': {
+                    color: theme.palette.info.main, 
+                    backgroundColor: alpha(theme.palette.info.main, 0.08)
+                  }
+                }}
+              >
+                <SvgIcon fontSize="small"><path d={mdiEmailOpenOutline} /></SvgIcon>
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title="删除">
+            <IconButton
+              edge="end"
+              aria-label="delete"
+              onClick={handleDeleteClick}
             size="small"
             sx={{ 
               // Show on hover or focus, or always if preferred
@@ -154,7 +224,7 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ message, onSelectMess
                 textOverflow: 'ellipsis',
               }}
             >
-              {message.sender}
+              {primaryText} {/* Use derived primaryText */}
             </Typography>
             <Typography
               variant="caption"
@@ -166,7 +236,7 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ message, onSelectMess
                 ml: 1,
               }}
             >
-              {message.timestamp} 
+              {timestamp} {/* Use derived timestamp */}
             </Typography>
           </Box>
         }
@@ -183,14 +253,14 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ message, onSelectMess
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                mb: message.type ? 0.5 : 0, 
+                mb: chipLabel ? 0.5 : 0, // Use chipLabel to determine margin
               }}
             >
               {contentSnippet}
             </Typography>
             {chipLabel && (
               <Chip
-                icon={message.sender.includes('案件机器人') && message.type === 'IM' ? <SmartToyIcon fontSize="small" /> : undefined}
+                icon={itemType === 'notification' && (data as Message).type === 'CASE_ROBOT_REMINDER' ? <SmartToyIcon fontSize="small" /> : undefined}
                 label={chipLabel}
                 size="small"
                 color={chipColor} // This prop directly influences bg and text color when variant="filled"

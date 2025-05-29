@@ -35,19 +35,23 @@ import {
   mdiPencil,     // Added for Edit action
   mdiCancel,
   mdiPlayCircleOutline,
+  mdiAccountGroupOutline, // For attendees icon
 } from '@mdi/js';
+import { Autocomplete } from '@mui/material'; 
 import { useAuth } from '../../contexts/AuthContext'; 
 import { useCaseStatus } from '../../contexts/CaseStatusContext'; 
-import { RichTextEditor, QuillDelta } from '../../components/RichTextEditor'; // Added
-import Delta from 'quill-delta'; // Added
+import { RichTextEditor, QuillDelta } from '../../components/RichTextEditor'; 
+import Delta from 'quill-delta'; 
+import { useSnackbar } from '../../contexts/SnackbarContext'; // Import useSnackbar
 
-import { useSurrealClient } from '../../contexts/SurrealProvider'; // Added for DB stubs
-import { Meeting as MeetingData, useLiveMeetings } from '../../hooks/useLiveMeetingData'; // Import Meeting type and hook
+import { useSurrealClient } from '../../contexts/SurrealProvider'; 
+import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '../../hooks/useLiveMeetingData'; 
+import { useCaseParticipants, Participant } from '../../hooks/useCaseParticipants'; 
 
-// Define an interface for the meeting object for better type safety
-// The Meeting interface is now imported from useLiveMeetingData.ts
-// We'll alias it to MeetingFormData for the form to avoid confusion if fields differ slightly.
-type MeetingFormData = Omit<MeetingData, 'id' | 'case_id' | 'status' | 'recording_url' | 'minutes_exist' | 'minutes_delta_json' | 'created_at' | 'updated_at'>;
+// Extended MeetingFormData to include attendees for the form
+type MeetingFormData = Omit<MeetingData, 'id' | 'case_id' | 'status' | 'recording_url' | 'minutes_exist' | 'minutes_delta_json' | 'created_at' | 'updated_at' | 'attendees' | 'attendee_ids'> & {
+  attendees: Participant[]; // Use Participant type for form state, as it includes 'group'
+};
 
 
 const defaultMeetingFormData: MeetingFormData = {
@@ -57,6 +61,7 @@ const defaultMeetingFormData: MeetingFormData = {
   duration_minutes: 60,
   conference_link: '',
   agenda: '',
+  attendees: [], // Initialize attendees
 };
 
 
@@ -65,6 +70,7 @@ const OnlineMeetingPage: React.FC = () => {
   const [isMeetingFormOpen, setIsMeetingFormOpen] = useState(false);
   const [currentMeeting, setCurrentMeeting] = useState<MeetingData | null>(null); 
   const [formData, setFormData] = useState<MeetingFormData>(defaultMeetingFormData);
+  const [isViewMode, setIsViewMode] = useState(false); // Added for view details mode
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false); 
   const [meetingToCancel, setMeetingToCancel] = useState<MeetingData | null>(null); 
   
@@ -72,36 +78,58 @@ const OnlineMeetingPage: React.FC = () => {
   const [currentMeetingForMinutes, setCurrentMeetingForMinutes] = useState<MeetingData | null>(null); 
   const [currentMinutesDelta, setCurrentMinutesDelta] = useState<QuillDelta | null>(null); 
   const [searchTerm, setSearchTerm] = useState(''); 
+  const [startDate, setStartDate] = useState<string>(''); // For date range filter
+  const [endDate, setEndDate] = useState<string>('');   // For date range filter
 
   const { user, selectedCaseId, hasRole, isLoading: isAuthLoading } = useAuth(); 
   const { caseStatus, isLoading: isCaseStatusLoading } = useCaseStatus();
-  const { client } = useSurrealClient(); // For DB stubs
+  const { client } = useSurrealClient(); 
+  const { enqueueSnackbar } = useSnackbar(); // Instantiate snackbar
   
-  const liveMeetings = useLiveMeetings(selectedCaseId); // Use live data hook
+  const liveMeetings = useLiveMeetings(selectedCaseId); 
+  const { participants, isLoading: isLoadingParticipants } = useCaseParticipants(selectedCaseId); 
 
   const filteredMeetings = useMemo(() => {
-    if (!searchTerm) {
-      return liveMeetings; // Use liveMeetings
-    }
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    return liveMeetings.filter(meeting => 
-      meeting.title.toLowerCase().includes(lowerSearchTerm) ||
-      meeting.type.toLowerCase().includes(lowerSearchTerm)
-    );
-  }, [liveMeetings, searchTerm]); // Depend on liveMeetings
+    return liveMeetings.filter(meeting => {
+      // Text search filter
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      const matchesSearchTerm = !searchTerm ||
+        meeting.title.toLowerCase().includes(lowerSearchTerm) ||
+        meeting.type.toLowerCase().includes(lowerSearchTerm);
+
+      if (!matchesSearchTerm) return false;
+
+      // Date range filter
+      // Assuming meeting.scheduled_time is an ISO string (e.g., "2023-10-26T10:00:00Z")
+      // We only care about the date part for comparison with YYYY-MM-DD from date pickers
+      const meetingDateStr = meeting.scheduled_time.substring(0, 10); // Extracts "YYYY-MM-DD"
+
+      if (startDate && meetingDateStr < startDate) {
+        return false;
+      }
+      if (endDate && meetingDateStr > endDate) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [liveMeetings, searchTerm, startDate, endDate]);
 
   const canViewModule = useMemo(() => {
     if (!selectedCaseId || !user) return false; // Must have a case selected and user loaded
 
-    const hasRequiredViewRole = hasRole('案件管理人') || hasRole('协办律师') || hasRole('法官') || hasRole('债权人'); // Added more roles for viewing
+    const hasRequiredViewRole = hasRole('案件管理人') || hasRole('协办律师') || hasRole('法官') || hasRole('债权人'); // Roles for viewing module
     
+    // Corrected list of case statuses where meetings module should be active
     const allowedCaseStatusesForMeetings = [
       "债权人第一次会议", 
       "债权人第二次会议", 
       "破产清算", 
       "重整", 
-      "和解",
-      // Add any other statuses where meetings module should be active
+      "和解"
+      // Add other specific statuses from product.md if online meetings are relevant there.
+      // For example, if certain preparatory meetings happen before "债权人第一次会议", they could be added.
+      // Current list is based on common meeting-heavy stages.
     ];
     // Ensure caseStatus is a string before calling .includes
     const isCorrectCaseStatus = typeof caseStatus === 'string' && allowedCaseStatusesForMeetings.includes(caseStatus);
@@ -117,6 +145,21 @@ const OnlineMeetingPage: React.FC = () => {
       const localScheduledTime = currentMeeting.scheduled_time.includes(' ') || currentMeeting.scheduled_time.includes('Z')
         ? new Date(currentMeeting.scheduled_time.replace(' ', 'T')).toISOString().slice(0, 16)
         : currentMeeting.scheduled_time;
+      
+      // Populate attendees for editing
+      let loadedAttendees: Participant[] = [];
+      if (currentMeeting.attendee_ids && participants.length > 0) {
+        loadedAttendees = participants.filter(p => currentMeeting.attendee_ids?.includes(p.id as string));
+      } else if (currentMeeting.attendees && currentMeeting.attendees.length > 0) {
+        // Fallback if full attendee objects are already on currentMeeting (e.g. from a richer fetch)
+        // This might require mapping if MeetingAttendee and Participant types differ significantly
+        loadedAttendees = currentMeeting.attendees.map(att => ({
+          id: att.id,
+          name: att.name,
+          type: att.type,
+          group: att.type === 'user' ? '系统用户' : '债权人'
+        }));
+      }
 
       setFormData({
         title: currentMeeting.title,
@@ -125,21 +168,23 @@ const OnlineMeetingPage: React.FC = () => {
         duration_minutes: currentMeeting.duration_minutes || 60,
         conference_link: currentMeeting.conference_link,
         agenda: currentMeeting.agenda || '',
+        attendees: loadedAttendees,
       });
-    } else {
+    } else { // Setting up for a new meeting or if dialog closes
       const now = new Date();
       now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); 
       const defaultScheduledTime = now.toISOString().slice(0, 16);
-      setFormData({...defaultMeetingFormData, scheduled_time: defaultScheduledTime });
+      setFormData({...defaultMeetingFormData, scheduled_time: defaultScheduledTime, attendees: [] });
     }
-  }, [currentMeeting, isMeetingFormOpen]);
+  }, [currentMeeting, isMeetingFormOpen, participants]); // Added participants to dependency array for attendee loading
 
 
-  const handleOpenMeetingForm = (meetingToEdit?: MeetingData) => {
-    if (meetingToEdit) {
-      setCurrentMeeting(meetingToEdit);
+  const handleOpenMeetingForm = (meetingData?: MeetingData, viewMode = false) => {
+    setIsViewMode(viewMode);
+    if (meetingData) {
+      setCurrentMeeting(meetingData); 
     } else {
-      setCurrentMeeting(null);
+      setCurrentMeeting(null); 
     }
     setIsMeetingFormOpen(true);
   };
@@ -147,7 +192,12 @@ const OnlineMeetingPage: React.FC = () => {
   const handleCloseMeetingForm = () => {
     setIsMeetingFormOpen(false);
     setCurrentMeeting(null);
-    setFormData(defaultMeetingFormData);
+    // Resetting form data, including attendees
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); 
+    const defaultScheduledTime = now.toISOString().slice(0, 16);
+    setFormData({...defaultMeetingFormData, scheduled_time: defaultScheduledTime, attendees: [] });
+    setIsViewMode(false); 
   };
 
   const handleFormChange = (event: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | SelectChangeEvent<string>) => {
@@ -157,11 +207,11 @@ const OnlineMeetingPage: React.FC = () => {
   
   const handleSaveMeeting = async () => {
     if (!selectedCaseId || !client) {
-      alert('Case ID or Surreal client not available.');
+      enqueueSnackbar('未选择案件或数据库连接不可用。', { variant: 'error' });
       return;
     }
     if (!formData.title || !formData.scheduled_time) {
-      alert('会议名称和计划开始时间不能为空！');
+      enqueueSnackbar('会议名称和计划开始时间不能为空！', { variant: 'warning' });
       return;
     }
     
@@ -176,22 +226,21 @@ const OnlineMeetingPage: React.FC = () => {
         duration_minutes: formData.duration_minutes ? parseInt(String(formData.duration_minutes), 10) : undefined,
         conference_link: formData.conference_link,
         agenda: formData.agenda,
+        attendee_ids: formData.attendees?.map(att => att.id as string) || [], // Save attendee IDs
         updated_at: currentTimestamp,
-        // Note: status is not changed here. It's changed by specific actions like cancel.
       };
       try {
         console.log('Attempting to update meeting:', String(currentMeeting.id), meetingDataToUpdate);
-        await client.merge(String(currentMeeting.id), meetingDataToUpdate);
+        await client.merge(String(currentMeeting.id), meetingDataToUpdate); 
         console.log('Meeting updated successfully');
-        // snackbar.enqueueSnackbar('会议已更新', { variant: 'success' }); // Optional
+        enqueueSnackbar('会议已成功更新', { variant: 'success' });
       } catch (error) {
         console.error('Error updating meeting:', error);
-        alert('更新会议失败，请查看控制台了解详情。');
-        // snackbar.enqueueSnackbar('更新会议失败', { variant: 'error' }); // Optional
+        enqueueSnackbar(`更新会议失败: ${error.message || '请查看控制台'}`, { variant: 'error' });
       }
     } else { // Creating new meeting
       if (!selectedCaseId || !user?.id) {
-        alert('未选择案件或用户信息不完整，无法创建会议。');
+        enqueueSnackbar('未选择案件或用户信息不完整，无法创建会议。', { variant: 'error' });
         return;
       }
       const meetingDataToCreate = {
@@ -202,23 +251,23 @@ const OnlineMeetingPage: React.FC = () => {
         duration_minutes: formData.duration_minutes ? parseInt(String(formData.duration_minutes), 10) : 60,
         conference_link: formData.conference_link,
         agenda: formData.agenda,
+        attendee_ids: formData.attendees?.map(att => att.id as string) || [], // Save attendee IDs
         status: '已安排',
         minutes_delta_json: null,
         minutes_exist: false,
         created_by: user.id, 
         created_at: currentTimestamp,
         updated_at: currentTimestamp,
-        recording_url: null, // Explicitly set null for new meetings
+        recording_url: null,
       };
       try {
         console.log('Attempting to create meeting:', meetingDataToCreate);
         await client.create('meeting', meetingDataToCreate);
         console.log('Meeting created successfully');
-        // snackbar.enqueueSnackbar('会议已创建', { variant: 'success' }); // Optional
+        enqueueSnackbar('会议已成功创建', { variant: 'success' });
       } catch (error) {
         console.error('Error creating meeting:', error);
-        alert('创建会议失败，请查看控制台了解详情。');
-        // snackbar.enqueueSnackbar('创建会议失败', { variant: 'error' }); // Optional
+        enqueueSnackbar(`创建会议失败: ${error.message || '请查看控制台'}`, { variant: 'error' });
       }
     }
     handleCloseMeetingForm();
@@ -243,11 +292,10 @@ const OnlineMeetingPage: React.FC = () => {
           updated_at: new Date().toISOString() 
         });
         console.log('Meeting cancelled successfully');
-        // snackbar.enqueueSnackbar('会议已取消', { variant: 'success' }); // Optional
+        enqueueSnackbar('会议已成功取消', { variant: 'success' });
       } catch (error) {
         console.error('Error cancelling meeting:', error);
-        alert('取消会议失败，请查看控制台了解详情。');
-        // snackbar.enqueueSnackbar('取消会议失败', { variant: 'error' }); // Optional
+        enqueueSnackbar(`取消会议失败: ${error.message || '请查看控制台'}`, { variant: 'error' });
       }
     }
     handleCloseCancelConfirm();
@@ -286,11 +334,10 @@ const OnlineMeetingPage: React.FC = () => {
           updated_at: new Date().toISOString() 
         });
         console.log('Minutes saved successfully');
-        // snackbar.enqueueSnackbar('会议纪要已保存', { variant: 'success' }); // Optional
+        enqueueSnackbar('会议纪要已成功保存', { variant: 'success' });
       } catch (error) {
         console.error('Error saving minutes:', error);
-        alert('保存会议纪要失败，请查看控制台了解详情。');
-        // snackbar.enqueueSnackbar('保存纪要失败', { variant: 'error' }); // Optional
+        enqueueSnackbar(`保存会议纪要失败: ${error.message || '请查看控制台'}`, { variant: 'error' });
       }
     }
     handleCloseMinutesDialog();
@@ -327,7 +374,8 @@ const OnlineMeetingPage: React.FC = () => {
         )}
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+      {/* Filter Controls: Search Text and Date Range */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2 }}>
         <TextField
           variant="outlined"
           size="small"
@@ -341,13 +389,34 @@ const OnlineMeetingPage: React.FC = () => {
               </InputAdornment>
             ),
           }}
+          sx={{ flexGrow: 1, minWidth: '200px' }}
         />
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TextField
+            label="开始日期"
+            type="date"
+            size="small"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: '160px' }}
+          />
+          <TextField
+            label="结束日期"
+            type="date"
+            size="small"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ minWidth: '160px' }}
+          />
+        </Box>
       </Box>
       
       {filteredMeetings.length === 0 ? (
         <Paper elevation={1} sx={{ p: 3, textAlign: 'center', mt: 2 }}>
           <Typography color="text.secondary">
-            {searchTerm ? "未找到匹配的会议记录。" : "当前案件暂无会议记录。"}
+            {searchTerm || startDate || endDate ? "未找到匹配的会议记录。" : "当前案件暂无会议记录。"}
           </Typography>
         </Paper>
       ) : (
@@ -402,13 +471,15 @@ const OnlineMeetingPage: React.FC = () => {
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
                     <Tooltip title="查看详情">
-                      <IconButton size="small" onClick={() => alert(`查看详情: ${meeting.title}`)}>
+                      {/* Updated onClick to call handleOpenMeetingForm with viewMode = true */}
+                      <IconButton size="small" onClick={() => handleOpenMeetingForm(meeting, true)}>
                         <SvgIcon><path d={mdiInformationOutline} /></SvgIcon>
                       </IconButton>
                     </Tooltip>
                     { isEditable && (
                       <Tooltip title="编辑会议">
-                        <IconButton size="small" onClick={() => handleOpenMeetingForm(meeting)}>
+                        {/* Edit mode call (viewMode is false by default) */}
+                        <IconButton size="small" onClick={() => handleOpenMeetingForm(meeting)}> 
                            <SvgIcon><path d={mdiPencil} /></SvgIcon>
                         </IconButton>
                       </Tooltip>
@@ -442,91 +513,202 @@ const OnlineMeetingPage: React.FC = () => {
         </TableContainer>
       )}
 
-      {/* Meeting Form Dialog */}
+      {/* Meeting Form / View Details Dialog */}
       <Dialog open={isMeetingFormOpen} onClose={handleCloseMeetingForm} maxWidth="sm" fullWidth>
-        <DialogTitle>{currentMeeting?.id ? '编辑会议' : '安排新会议'}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            name="title"
-            label="会议名称"
-            type="text"
-            fullWidth
-            variant="outlined"
-            value={formData.title}
-            onChange={handleFormChange}
-            required
-            sx={{mb:2, mt:1}}
-          />
-          <FormControl fullWidth margin="dense" sx={{mb:2}}>
-            <InputLabel id="meeting-type-label">会议类型</InputLabel>
-            <Select
-              labelId="meeting-type-label"
-              name="type"
-              value={formData.type}
-              label="会议类型"
-              onChange={handleFormChange as any} // Cast because SelectChangeEvent is slightly different
-            >
-              <MenuItem value="债权人第一次会议">债权人第一次会议</MenuItem>
-              <MenuItem value="债权人第二次会议">债权人第二次会议</MenuItem>
-              <MenuItem value="临时会议">临时会议</MenuItem>
-              <MenuItem value="内部讨论会">内部讨论会</MenuItem>
-              <MenuItem value="其他">其他</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField
-            margin="dense"
-            name="scheduled_time"
-            label="计划开始时间"
-            type="datetime-local"
-            fullWidth
-            variant="outlined"
-            value={formData.scheduled_time}
-            onChange={handleFormChange}
-            InputLabelProps={{ shrink: true }}
-            required
-            sx={{mb:2}}
-          />
-          <TextField
-            margin="dense"
-            name="duration_minutes"
-            label="持续时间 (分钟)"
-            type="number"
-            fullWidth
-            variant="outlined"
-            value={formData.duration_minutes}
-            onChange={handleFormChange}
-            inputProps={{ min: 15 }}
-            sx={{mb:2}}
-          />
-          <TextField
-            margin="dense"
-            name="conference_link"
-            label="会议链接 (URL)"
-            type="url"
-            fullWidth
-            variant="outlined"
-            value={formData.conference_link}
-            onChange={handleFormChange}
-            sx={{mb:2}}
-          />
-          <TextField
-            margin="dense"
-            name="agenda"
-            label="会议议程"
-            type="text"
-            fullWidth
-            multiline
-            rows={3}
-            variant="outlined"
-            value={formData.agenda}
-            onChange={handleFormChange}
-          />
+        <DialogTitle>
+          {isViewMode 
+            ? '查看会议详情' 
+            : (currentMeeting?.id ? '编辑会议' : '安排新会议')}
+        </DialogTitle>
+        <DialogContent dividers sx={{pt:2}}>
+          {isViewMode && currentMeeting ? (
+            // Read-only view
+            <Box>
+              <Typography variant="subtitle1" gutterBottom><strong>会议名称:</strong> {currentMeeting.title}</Typography>
+              <Typography variant="body1" gutterBottom><strong>类型:</strong> {currentMeeting.type}</Typography>
+              <Typography variant="body1" gutterBottom><strong>计划时间:</strong> {new Date(currentMeeting.scheduled_time).toLocaleString()}</Typography>
+              <Typography variant="body1" gutterBottom><strong>持续时间:</strong> {currentMeeting.duration_minutes || 'N/A'} 分钟</Typography>
+              <Typography variant="body1" gutterBottom>
+                <strong>状态:</strong> <Chip label={currentMeeting.status} size="small" 
+                                        color={
+                                          currentMeeting.status === '已结束' ? 'default' :
+                                          currentMeeting.status === '已安排' ? 'info' :
+                                          currentMeeting.status === '进行中' ? 'success' :
+                                          currentMeeting.status === '已取消' ? 'error' :
+                                          'default'
+                                        }
+                                        variant={currentMeeting.status === '已结束' || currentMeeting.status === '已取消' ? 'outlined' : 'filled'}
+                                      />
+              </Typography>
+              {currentMeeting.conference_link && (
+                <Typography variant="body1" gutterBottom>
+                  <strong>会议链接:</strong> <Link href={currentMeeting.conference_link} target="_blank" rel="noopener noreferrer">{currentMeeting.conference_link}</Link>
+                </Typography>
+              )}
+              {currentMeeting.agenda && (
+                <Typography variant="body1" gutterBottom style={{ whiteSpace: 'pre-wrap' }}>
+                  <strong>议程:</strong>{'\n'}{currentMeeting.agenda}
+                </Typography>
+              )}
+              <Typography variant="body1" gutterBottom>
+                <strong>参会人员:</strong>
+                {currentMeeting.attendees && currentMeeting.attendees.length > 0 
+                  ? currentMeeting.attendees.map(att => `${att.name} (${att.type === 'user' ? '用户' : '债权人'})`).join('; ')
+                  : (currentMeeting.attendee_ids && currentMeeting.attendee_ids.length > 0 && participants.length > 0)
+                    ? participants.filter(p => currentMeeting.attendee_ids?.includes(p.id as string))
+                        .map(p => `${p.name} (${p.group})`).join('; ')
+                    : '无'
+                }
+              </Typography>
+              
+              {currentMeeting.minutes_exist ? (
+                 <Button 
+                    variant="outlined" 
+                    size="small" 
+                    onClick={() => handleOpenMinutesDialog(currentMeeting)} 
+                    startIcon={<SvgIcon><path d={mdiFileDocumentOutline} /></SvgIcon>}
+                    sx={{mt:1, mr:1}}
+                >
+                    查看/编辑会议纪要
+                </Button>
+              ) : (
+                <Typography variant="body1" gutterBottom><strong>会议纪要:</strong> 暂无</Typography>
+              )}
+
+              {currentMeeting.recording_url && (
+                 <Link href={currentMeeting.recording_url} target="_blank" rel="noopener noreferrer" sx={{display:'inline-flex', alignItems:'center', mt:1}}>
+                    <Button 
+                        variant="outlined" 
+                        size="small" 
+                        startIcon={<SvgIcon><path d={mdiVideoOutline} /></SvgIcon>}
+                    >
+                        查看录像
+                    </Button>
+                </Link>
+              )}
+            </Box>
+          ) : (
+            // Editable form
+            <>
+              <TextField
+                autoFocus
+                margin="dense"
+                name="title"
+                label="会议名称"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={formData.title}
+                onChange={handleFormChange}
+                required
+                sx={{mb:2, mt:1}}
+                disabled={isViewMode}
+              />
+              <FormControl fullWidth margin="dense" sx={{mb:2}}>
+                <InputLabel id="meeting-type-label">会议类型</InputLabel>
+                <Select
+                  labelId="meeting-type-label"
+                  name="type"
+                  value={formData.type}
+                  label="会议类型"
+                  onChange={handleFormChange as any} 
+                  disabled={isViewMode}
+                >
+                  <MenuItem value="债权人第一次会议">债权人第一次会议</MenuItem>
+                  <MenuItem value="债权人第二次会议">债权人第二次会议</MenuItem>
+                  <MenuItem value="临时会议">临时会议</MenuItem>
+                  <MenuItem value="内部讨论会">内部讨论会</MenuItem>
+                  <MenuItem value="其他">其他</MenuItem>
+                </Select>
+              </FormControl>
+               <Autocomplete
+                multiple
+                id="attendees-select"
+                options={participants}
+                groupBy={(option) => option.group}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                value={formData.attendees}
+                onChange={(_event, newValue) => {
+                  setFormData(prev => ({ ...prev, attendees: newValue }));
+                }}
+                loading={isLoadingParticipants}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    variant="outlined"
+                    label="参会人员"
+                    placeholder="选择参会人员"
+                    margin="dense"
+                  />
+                )}
+                disabled={isViewMode}
+                sx={{mb:2}}
+              />
+              <TextField
+                margin="dense"
+                name="scheduled_time"
+                label="计划开始时间"
+                type="datetime-local"
+                fullWidth
+                variant="outlined"
+                value={formData.scheduled_time}
+                onChange={handleFormChange}
+                InputLabelProps={{ shrink: true }}
+                required
+                sx={{mb:2}}
+                disabled={isViewMode}
+              />
+              <TextField
+                margin="dense"
+                name="duration_minutes"
+                label="持续时间 (分钟)"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.duration_minutes}
+                onChange={handleFormChange}
+                inputProps={{ min: 15 }}
+                sx={{mb:2}}
+                disabled={isViewMode}
+              />
+              <TextField
+                margin="dense"
+                name="conference_link"
+                label="会议链接 (URL)"
+                type="url"
+                fullWidth
+                variant="outlined"
+                value={formData.conference_link}
+                onChange={handleFormChange}
+                sx={{mb:2}}
+                disabled={isViewMode}
+              />
+              <TextField
+                margin="dense"
+                name="agenda"
+                label="会议议程"
+                type="text"
+                fullWidth
+                multiline
+                rows={3}
+                variant="outlined"
+                value={formData.agenda}
+                onChange={handleFormChange}
+                disabled={isViewMode}
+              />
+            </>
+          )}
         </DialogContent>
         <DialogActions sx={{p: '16px 24px'}}>
-          <Button onClick={handleCloseMeetingForm} color="secondary">取消</Button>
-          <Button onClick={handleSaveMeeting} variant="contained" color="primary">保存</Button>
+          {isViewMode ? (
+            <Button onClick={handleCloseMeetingForm} color="primary" variant="contained">关闭</Button>
+          ) : (
+            <>
+              <Button onClick={handleCloseMeetingForm} color="secondary">取消</Button>
+              <Button onClick={handleSaveMeeting} variant="contained" color="primary">保存</Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
 
