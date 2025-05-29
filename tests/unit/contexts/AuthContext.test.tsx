@@ -1,9 +1,9 @@
 import React, { ReactNode } from 'react';
 import { render, act, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AuthProvider, useAuth, Case, Role } from './AuthContext'; // Adjust path as needed
-import authService from '../services/authService';
-import { db } from '../lib/surreal';
+import { AuthProvider, useAuth, Case, Role } from '../../../src/contexts/AuthContext'; // Adjust path as needed
+import authService from '../../../src/services/authService';
+import { db } from '../../../src/lib/surreal';
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
 
@@ -22,7 +22,7 @@ const localStorageMock = (() => {
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 // Mock authService
-vi.mock('../services/authService', () => ({
+vi.mock('../../../src/services/authService', () => ({
   default: {
     getUser: vi.fn(),
     loginRedirect: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock('../services/authService', () => ({
 }));
 
 // Mock surrealdb
-vi.mock('../lib/surreal', () => ({
+vi.mock('../../../src/lib/surreal', () => ({
   db: {
     select: vi.fn(),
     query: vi.fn(),

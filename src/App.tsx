@@ -15,31 +15,33 @@ import GlobalLoader from './components/GlobalLoader'; // ADDED
 import GlobalError from './components/GlobalError'; // ADDED
 
 // Lazy load pages for better performance
-const HomePage = React.lazy(() => import('./pages/HomePage'));
-const LoginPage = React.lazy(() => import('./pages/LoginPage'));
-const DashboardPage = React.lazy(() => import('./pages/DashboardPage'));
-const CaseListPage = React.lazy(() => import('./pages/CaseListPage'));
-const CaseDetailPage = React.lazy(() => import('./pages/CaseDetailPage'));
-const CreditorListPage = React.lazy(() => import('./pages/CreditorListPage'));
-const ClaimListPage = React.lazy(() => import('./pages/ClaimListPage'));
-const ClaimSubmissionPage = React.lazy(() => import('./pages/ClaimSubmissionPage'));
-const ClaimAttachmentPage = React.lazy(() => import('./pages/ClaimAttachmentPage'));
-const SubmittedClaimDetailPage = React.lazy(() => import('./pages/SubmittedClaimDetailPage'));
-const MyClaimsPage = React.lazy(() => import('./pages/MyClaimsPage'));
-const AccessDeniedPage = React.lazy(() => import('./pages/AccessDeniedPage')); // <-- ADDED (for status)
-const AccessDeniedRolePage = React.lazy(() => import('./pages/AccessDeniedRolePage')); // <-- ADDED (for role)
-const CaseStatusToggler = React.lazy(() => import('./components/admin/CaseStatusToggler')); // <-- ADDED
-const ClaimReviewDetailPage = React.lazy(() => import('./pages/ClaimReviewDetailPage'));
-const ClaimDataDashboardPage = React.lazy(() => import('./pages/ClaimDataDashboardPage'));
-const OnlineMeetingPage = React.lazy(() => import('./pages/OnlineMeetingPage'));
-const MessageCenterPage = React.lazy(() => import('./pages/MessageCenterPage'));
-const AdminPage = React.lazy(() => import('./pages/AdminPage'));
-const AdminThemePage = React.lazy(() => import('./pages/AdminThemePage')); // ADDED
-const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage'));
-const CaseSelectionPage = React.lazy(() => import('./pages/CaseSelectionPage'));
-const OidcCallbackPage = React.lazy(() => import('./pages/OidcCallbackPage')); // <-- IMPORT
-const CreateCasePage = React.lazy(() => import('./pages/CreateCasePage')); // <-- IMPORT
-const AdminCreateClaimAttachmentsPage = React.lazy(() => import('./pages/admin/AdminCreateClaimAttachmentsPage')); // <-- IMPORT
+const HomePage = React.lazy(() => import('./pages/index'));
+const LoginPage = React.lazy(() => import('./pages/login'));
+const DashboardPage = React.lazy(() => import('./pages/dashboard/index'));
+const CaseListPage = React.lazy(() => import('./pages/cases/index'));
+const CaseDetailPage = React.lazy(() => import('./pages/cases/[caseId]'));
+const CreditorListPage = React.lazy(() => import('./pages/creditors'));
+const ClaimListPage = React.lazy(() => import('./pages/claims/index'));
+const ClaimSubmissionPage = React.lazy(() => import('./pages/claims/submit'));
+const ClaimAttachmentPage = React.lazy(() => import('./pages/claims/attachment'));
+const SubmittedClaimDetailPage = React.lazy(() => import('./pages/my-claims/[claimId]'));
+const MyClaimsPage = React.lazy(() => import('./pages/my-claims/index'));
+const AccessDeniedPage = React.lazy(() => import('./pages/access-denied'));
+const AccessDeniedRolePage = React.lazy(() => import('./pages/access-denied-role'));
+const CaseStatusToggler = React.lazy(() => import('./components/admin/CaseStatusToggler')); // This is a component, path is likely correct
+const ClaimReviewDetailPage = React.lazy(() => import('./pages/claims/[claimId]/review'));
+const ClaimDataDashboardPage = React.lazy(() => import('./pages/dashboard/claims'));
+const OnlineMeetingPage = React.lazy(() => import('./pages/meetings'));
+const MessageCenterPage = React.lazy(() => import('./pages/messages'));
+const AdminPage = React.lazy(() => import('./pages/admin/index'));
+const AdminThemePage = React.lazy(() => import('./pages/admin/theme'));
+const NotFoundPage = React.lazy(() => import('./pages/404'));
+const CaseSelectionPage = React.lazy(() => import('./pages/select-case'));
+const OidcCallbackPage = React.lazy(() => import('./pages/oidc-callback'));
+const CreateCasePage = React.lazy(() => import('./pages/cases/create'));
+const AdminCreateClaimAttachmentsPage = React.lazy(() => import('./pages/admin/create-claim-attachments'));
+const NotificationRuleManagementPage = React.lazy(() => import('./pages/admin/manage/notification-rules'));
+// Note: ReviewStatusManagementPage and RoleManagementPage were not previously imported in App.tsx, so no path update needed here for them.
 
 
 function App() {

@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useConversationsList, useSystemNotifications } from './useMessageCenterData';
-import { ConversationSummary, CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '../types/message';
+import { useConversationsList, useSystemNotifications } from '../../../src/hooks/useMessageCenterData';
+import { ConversationSummary, CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '../../../src/types/message';
 import { RecordId } from 'surrealdb.js';
 
 // Mock the SurrealClient
@@ -11,7 +11,7 @@ const mockKill = jest.fn();
 // Store the callback passed to listenLive to simulate events
 let liveCallback: ((actionEvent: { action: string; result: any }) => void) | null = null;
 
-jest.mock('../contexts/SurrealProvider', () => ({
+jest.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({
     client: {
       query: mockQuery,
@@ -27,7 +27,7 @@ jest.mock('../contexts/SurrealProvider', () => ({
 }));
 
 // Mock useAuth if needed for userId (not strictly necessary if we pass userId directly)
-jest.mock('../contexts/AuthContext', () => ({
+jest.mock('../../../src/contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'user:test-user', name: 'Test User' }, // Example user
     // ... other auth context values if needed by hooks directly (they don't seem to)

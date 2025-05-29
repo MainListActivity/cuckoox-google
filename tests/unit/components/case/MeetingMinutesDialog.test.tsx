@@ -2,12 +2,12 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../i18n'; // Assuming your i18n setup is here
-import MeetingMinutesDialog, { QuillDelta } from './MeetingMinutesDialog'; // Assuming QuillDelta is exported or defined
+import i18n from '../../../../src/i18n'; // Assuming your i18n setup is here
+import MeetingMinutesDialog, { QuillDelta } from '../../../../src/components/case/MeetingMinutesDialog'; // Assuming QuillDelta is exported or defined
 import Delta from 'quill-delta'; // Import Delta
 
 // Mock RichTextEditor
-vi.mock('../RichTextEditor', () => ({
+vi.mock('../../../../src/components/RichTextEditor', () => ({
   __esModule: true,
   default: vi.fn(({ value, onChange, placeholder }) => ( // Changed onTextChange to onChange based on MeetingMinutesDialog
       <textarea

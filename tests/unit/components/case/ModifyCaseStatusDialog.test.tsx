@@ -2,12 +2,12 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../i18n'; // Assuming your i18n setup is here
-import { SnackbarProvider } from '../../contexts/SnackbarContext';
-import ModifyCaseStatusDialog, { CaseStatus } from './ModifyCaseStatusDialog';
+import i18n from '../../../../src/i18n'; // Assuming your i18n setup is here
+import { SnackbarProvider } from '../../../../src/contexts/SnackbarContext';
+import ModifyCaseStatusDialog, { CaseStatus } from '../../../../src/components/case/ModifyCaseStatusDialog';
 
 // Mock RichTextEditor
-vi.mock('../RichTextEditor', () => ({
+vi.mock('../../../../src/components/RichTextEditor', () => ({
   __esModule: true,
   default: vi.fn(({ value, onTextChange, placeholder }) => (
       <textarea
