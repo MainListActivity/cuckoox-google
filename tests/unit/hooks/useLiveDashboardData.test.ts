@@ -4,7 +4,7 @@ import {
   useLiveTodaysReviewedClaimsCount,
   useLiveUsersOnlineByRoleChartData,
   // Import BarChartDataPoint if needed for direct comparison, or rely on toMatchObject
-} from './useLiveDashboardData';
+} from '../../../src/hooks/useLiveDashboardData';
 // Assuming default colors are imported/defined within useLiveDashboardData for roleColorMap
 // For testing, we might need to export them or re-define for assertion if not exported
 import { teal, cyan, purple, grey } from '@mui/material/colors';
@@ -16,7 +16,7 @@ const mockListenLive = jest.fn().mockResolvedValue({ id: 'live-query-id-mock' })
 const mockKill = jest.fn().mockResolvedValue(undefined); // Ensure kill returns a promise
 
 
-jest.mock('../contexts/SurrealProvider', () => ({
+jest.mock('../../../src/contexts/SurrealProvider', () => ({
   //  ...jest.requireActual('../contexts/SurrealProvider'), // Avoid if it has side effects or real client init
   useSurrealClient: () => ({
     client: {

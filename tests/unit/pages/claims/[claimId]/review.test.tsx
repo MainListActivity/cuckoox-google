@@ -3,9 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../i18n'; // Adjust path
-import { SnackbarProvider, useSnackbar } from '../contexts/SnackbarContext';
-import ClaimReviewDetailPage from './ClaimReviewDetailPage';
+import i18n from '../../../../../src/i18n'; // Adjust path
+import { SnackbarProvider, useSnackbar } from '../../../../../src/contexts/SnackbarContext';
+import ClaimReviewDetailPage from '../../../../../src/pages/claims/[claimId]/review';
 import Delta from 'quill-delta';
 
 // Mock useNavigate and useParams
@@ -21,7 +21,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock RichTextEditor
-vi.mock('../../components/RichTextEditor', () => ({
+vi.mock('../../../../../src/components/RichTextEditor', () => ({
     __esModule: true,
     default: vi.fn(({ value, onChange, readOnly, placeholder }) => (
         <textarea
@@ -41,8 +41,8 @@ vi.mock('../../components/RichTextEditor', () => ({
 
 // Mock useSnackbar
 const mockShowSnackbar = vi.fn();
-vi.mock('../../contexts/SnackbarContext', async () => {
-    const actual = await vi.importActual('../../contexts/SnackbarContext');
+vi.mock('../../../../../src/contexts/SnackbarContext', async () => {
+    const actual = await vi.importActual('../../../../../src/contexts/SnackbarContext');
     return {
         ...actual,
         useSnackbar: () => ({

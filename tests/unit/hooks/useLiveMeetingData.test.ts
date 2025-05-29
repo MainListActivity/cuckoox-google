@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useLiveMeetings, Meeting } from './useLiveMeetingData';
+import { useLiveMeetings, Meeting } from '../../../src/hooks/useLiveMeetingData';
 import { RecordId } from 'surrealdb.js';
 
 // Mock the SurrealClient
@@ -11,7 +11,7 @@ const mockKill = jest.fn();
 // Store the callback passed to listenLive to simulate events
 let liveCallback: ((actionEvent: { action: string; result: Meeting }) => void) | null = null;
 
-jest.mock('../contexts/SurrealProvider', () => ({
+jest.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({
     client: {
       select: mockSelect,

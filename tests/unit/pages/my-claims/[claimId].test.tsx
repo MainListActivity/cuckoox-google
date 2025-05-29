@@ -3,8 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../i18n'; // Adjust path
-import SubmittedClaimDetailPage from './SubmittedClaimDetailPage';
+import i18n from '../../../../../src/i18n'; // Adjust path
+import SubmittedClaimDetailPage from '../../../../../src/pages/my-claims/[claimId]';
 
 // Mock useNavigate and useParams
 const mockNavigate = vi.fn();
@@ -20,7 +20,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock ClaimDetailView
-vi.mock('../../components/claim/ClaimDetailView', () => ({
+vi.mock('../../../../../src/components/claim/ClaimDetailView', () => ({
   __esModule: true,
   default: vi.fn(({ claim }) => (
     <div data-testid="mocked-claim-detail-view">

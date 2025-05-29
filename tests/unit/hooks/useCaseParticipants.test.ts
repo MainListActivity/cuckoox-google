@@ -1,11 +1,11 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { useCaseParticipants, Participant } from './useCaseParticipants';
+import { useCaseParticipants, Participant } from '../../../src/hooks/useCaseParticipants';
 import { RecordId } from 'surrealdb.js';
 
 // Mock the SurrealClient
 const mockQuery = jest.fn();
 
-jest.mock('../contexts/SurrealProvider', () => ({
+jest.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({
     client: {
       query: mockQuery,

@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import LoginPage from './LoginPage'; // Adjust path as needed
-import { AppUser } from '../contexts/AuthContext'; // Assuming AppUser is exported
+import LoginPage from '../../../src/pages/login'; // Adjust path as needed
+import { AppUser } from '../../../src/contexts/AuthContext'; // Assuming AppUser is exported
 
 // Mock dependencies
 const mockNavigate = vi.fn();
@@ -17,20 +17,20 @@ vi.mock('react-router-dom', async () => {
 
 const mockSetAuthState = vi.fn();
 const mockUseAuth = vi.fn();
-vi.mock('../contexts/AuthContext', () => ({
+vi.mock('../../../src/contexts/AuthContext', () => ({
   useAuth: mockUseAuth,
   // Assuming AppUser might be re-exported or used by LoginPage.test.tsx directly
 }));
 
 const mockLoginRedirect = vi.fn();
-vi.mock('../services/authService', () => ({
+vi.mock('../../../src/services/authService', () => ({
   default: {
     loginRedirect: mockLoginRedirect,
   },
 }));
 
 const mockDbSignin = vi.fn();
-vi.mock('../lib/surreal', () => ({
+vi.mock('../../../src/lib/surreal', () => ({
   db: {
     signin: mockDbSignin,
   },
