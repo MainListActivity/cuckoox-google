@@ -1,5 +1,5 @@
-import React, { useState, ReactNode, useEffect, useRef } from 'react'; // Added useEffect, useRef
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'; // Added useLocation
+import React, { useState, ReactNode, useEffect, useRef } from 'react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, NavItemType } from '@/src/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import {
@@ -7,12 +7,13 @@ import {
   Box,
   Button,
   Drawer as MuiDrawer,
+  SwipeableDrawer,
   IconButton,
   Switch,
   List,
   ListItemButton,
-  Menu, // Added Menu
-  MenuItem, // Added MenuItem
+  Menu,
+  MenuItem,
   ListItemIcon,
   ListItemText,
   Toolbar,
@@ -22,15 +23,17 @@ import {
   styled,
   Theme as MuiTheme,
   CSSObject,
-  alpha, // Added alpha
+  alpha,
+  useMediaQuery,
+  useTheme as useMuiTheme,
 } from '@mui/material';
 import SvgIcon from '@mui/material/SvgIcon';
 import { useTheme } from '@/src/contexts/ThemeContext';
 import {
   mdiMenu,
   mdiMenuOpen,
-  mdiWeatherSunny, // Added icons for theme toggle
-  mdiWeatherNight, // Added icons for theme toggle
+  mdiWeatherSunny,
+  mdiWeatherNight,
   mdiViewDashboard,
   mdiBriefcase,
   mdiAccountGroup,
@@ -42,16 +45,17 @@ import {
   mdiLogout,
   mdiTextBoxMultipleOutline,
   mdiFileUploadOutline,
-  mdiBriefcaseSearchOutline, // Added for case switcher
+  mdiBriefcaseSearchOutline,
+  mdiClose,
 } from '@mdi/js';
 
 // Icon map for dynamic menu items
 const iconMap: { [key: string]: string } = {
   'mdiViewDashboard': mdiViewDashboard,
-  'mdiBriefcase': mdiBriefcase, // This is also used for the case switcher icon for consistency if desired
-  'mdiAccountGroup': mdiAccountGroup, // Example icon
-  'mdiFileDocumentOutline': mdiFileDocumentOutline, // Example icon
-  'mdiChartBar': mdiChartBar, // Example icon
+  'mdiBriefcase': mdiBriefcase,
+  'mdiAccountGroup': mdiAccountGroup,
+  'mdiFileDocumentOutline': mdiFileDocumentOutline,
+  'mdiChartBar': mdiChartBar,
   'mdiVideo': mdiVideo,
   'mdiMessageTextOutline': mdiMessageTextOutline,
   'mdiCog': mdiCog,
@@ -64,7 +68,7 @@ interface LayoutProps {
 }
 
 const drawerWidthOpen = 240;
-const drawerWidthClosed = (theme: MuiTheme) => theme.spacing(7); // MUI default is 7 for closed mini drawer
+const drawerWidthClosed = (theme: MuiTheme) => theme.spacing(7);
 
 const openedMixin = (theme: MuiTheme): CSSObject => ({
   width: drawerWidthOpen,
@@ -83,7 +87,7 @@ const closedMixin = (theme: MuiTheme): CSSObject => ({
   overflowX: 'hidden',
   width: drawerWidthClosed(theme),
   [theme.breakpoints.up('sm')]: {
-    width: theme.spacing(9), // Slightly wider on sm screens when closed
+    width: theme.spacing(9),
   },
 });
 
@@ -108,12 +112,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { t } = useTranslation();
   const muiTheme = useTheme();
   const { themeMode, toggleThemeMode, muiTheme:currentTheme } = muiTheme;
-  const [drawerOpen, setDrawerOpen] = useState(true);
-  const { user, logout, navMenuItems, isMenuLoading, selectedCaseId, userCases, selectCase } = useAuth(); // Added userCases, selectCase
+  const theme = useMuiTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [drawerOpen, setDrawerOpen] = useState(!isMobile);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const { user, logout, navMenuItems, isMenuLoading, selectedCaseId, userCases, selectCase } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const hasAutoNavigatedRef = useRef(false);
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null); // State for Menu anchor
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const handleClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -126,8 +133,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const handleCaseSelect = async (caseId: string) => {
     if (caseId !== selectedCaseId) {
       await selectCase(caseId);
-      // Auto-navigation logic in another useEffect will handle redirection if needed
-      // Resetting hasAutoNavigatedRef is handled by the selectedCaseId dependency in its own useEffect
     }
     handleClose();
   };
@@ -139,59 +144,197 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     if (!isMenuLoading && navMenuItems && navMenuItems.length > 0 && !hasAutoNavigatedRef.current) {
       const firstItemPath = navMenuItems[0].path;
-      // Only navigate if currently at a root/generic path and it's not the target,
-      // or if on select-case (though ideally should not happen if menu is loaded).
-      // This prevents redirecting if user is already on a valid, specific page.
       if (firstItemPath && (location.pathname === '/' || location.pathname === '/dashboard' || location.pathname === '/select-case') && location.pathname !== firstItemPath) {
         console.log(`Auto-navigating to first menu item: ${firstItemPath}`);
         navigate(firstItemPath, { replace: true });
         hasAutoNavigatedRef.current = true;
       } else if (firstItemPath && location.pathname === firstItemPath) {
-        // If already on the first item path, still mark as navigated to prevent future attempts for this load.
         hasAutoNavigatedRef.current = true;
       }
     }
   }, [isMenuLoading, navMenuItems, location.pathname, navigate, selectedCaseId]);
-
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  // Hardcoded navItems is now removed
+  const handleDrawerToggle = () => {
+    if (isMobile) {
+      setMobileDrawerOpen(!mobileDrawerOpen);
+    } else {
+      setDrawerOpen(!drawerOpen);
+    }
+  };
+
+  const handleMobileDrawerClose = () => {
+    setMobileDrawerOpen(false);
+  };
+
+  const handleMobileDrawerOpen = () => {
+    setMobileDrawerOpen(true);
+  };
+
+  // Update drawer state when screen size changes
+  useEffect(() => {
+    setDrawerOpen(!isMobile);
+  }, [isMobile]);
+
+  // Drawer content component to reuse for both desktop and mobile
+  const DrawerContent = () => (
+    <>
+      {isMobile && (
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          p: 2,
+          backgroundColor: alpha(currentTheme.palette.primary.main, 0.1),
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            CuckooX
+          </Typography>
+          <IconButton onClick={handleMobileDrawerClose}>
+            <SvgIcon><path d={mdiClose} /></SvgIcon>
+          </IconButton>
+        </Box>
+      )}
+      {!isMobile && <Toolbar />}
+      <Divider sx={{ borderColor: alpha(currentTheme.palette.primary.main, 0.2) }} />
+      <List sx={{ flexGrow: 1 }}>
+        {isMenuLoading ? (
+          <ListItemButton sx={{ justifyContent: drawerOpen || isMobile ? 'initial' : 'center', px: 2.5 }}>
+            <ListItemIcon sx={{ minWidth: 0, mr: drawerOpen || isMobile ? 3 : 'auto', justifyContent: 'center' }}>
+              <CircularProgress size={24} />
+            </ListItemIcon>
+            {(drawerOpen || isMobile) && <ListItemText primary={t('loading_menu', 'Loading menu...')} />}
+          </ListItemButton>
+        ) : navMenuItems && navMenuItems.length > 0 ? (
+          navMenuItems.map((item: NavItemType) => (
+            <ListItemButton
+              key={item.id}
+              component={NavLink}
+              to={item.path}
+              end={item.path === '/dashboard' || item.path === '/'}
+              onClick={isMobile ? handleMobileDrawerClose : undefined}
+              sx={{
+                minHeight: 48,
+                justifyContent: drawerOpen || isMobile ? 'initial' : 'center',
+                px: 2.5,
+                '&.active': {
+                  backgroundColor: alpha(currentTheme.palette.primary.main, 0.3),
+                  color: currentTheme.palette.primary.main,
+                  borderLeft: `4px solid ${currentTheme.palette.primary.main}`,
+                  '& .MuiSvgIcon-root': {
+                    color: currentTheme.palette.primary.main,
+                  },
+                },
+                '&:hover': {
+                  backgroundColor: alpha(currentTheme.palette.primary.main, 0.15),
+                },
+              }}
+              title={t(item.labelKey)}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: 0,
+                  mr: drawerOpen || isMobile ? 3 : 'auto',
+                  justifyContent: 'center',
+                }}
+              >
+                {iconMap[item.iconName] ? (
+                  <SvgIcon><path d={iconMap[item.iconName]} /></SvgIcon>
+                ) : null}
+              </ListItemIcon>
+              <ListItemText primary={t(item.labelKey)} sx={{ opacity: drawerOpen || isMobile ? 1 : 0 }} />
+            </ListItemButton>
+          ))
+        ) : (
+          <ListItemButton sx={{ justifyContent: drawerOpen || isMobile ? 'initial' : 'center', px: 2.5 }}>
+            <ListItemText 
+              primary={t('no_menu_items', 'No accessible items')} 
+              sx={{ opacity: drawerOpen || isMobile ? 1 : 0 , textAlign: drawerOpen || isMobile ? 'left' : 'center' }} 
+            />
+          </ListItemButton>
+        )}
+      </List>
+      <Divider sx={{ borderColor: alpha(currentTheme.palette.primary.main, 0.2) }} />
+      {user && (drawerOpen || isMobile) && (
+        <Box sx={{ p: 2, textAlign: 'center' }}>
+          <Typography variant="body2" sx={{ color: currentTheme.palette.text.secondary }}>
+            {user.name}
+          </Typography>
+        </Box>
+      )}
+      <Box sx={{ p: drawerOpen || isMobile ? 2 : 0.5, display: 'flex', justifyContent: 'center' }}>
+        <Button
+          onClick={handleLogout}
+          variant="contained"
+          color="primary"
+          fullWidth={drawerOpen || isMobile}
+          sx={(theme: MuiTheme) => ({
+              minWidth: drawerOpen || isMobile ? 'auto' : theme.spacing(5),
+              width: drawerOpen || isMobile ? 'auto' : theme.spacing(5),
+              height: theme.spacing(5),
+              p: drawerOpen || isMobile ? 1 : 0,
+          })}
+          title={t('layout_logout_button')}
+        >
+          <ListItemIcon sx={{ 
+              justifyContent: 'center', 
+              minWidth: 0, 
+              color: 'inherit',
+              mr: drawerOpen || isMobile ? 1 : 0
+          }}>
+            <SvgIcon>
+              <path d={mdiLogout} />
+            </SvgIcon>
+          </ListItemIcon>
+          {(drawerOpen || isMobile) && <ListItemText primary={t('layout_logout_button')} sx={{flexGrow: 0}}/>}
+        </Button>
+      </Box>
+    </>
+  );
 
   return (
     <Box sx={{ display: 'flex' }}>
       <AppBar
         position="fixed"
-        elevation={0} // 移除阴影，让 AppBar 更好地融入背景
+        elevation={0}
         sx={{
           zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1,
-          backgroundColor: currentTheme.palette.background.default, // 与主页面背景色相同
-          color: currentTheme.palette.text.primary, // 使用主文本颜色
-          borderBottom: `1px solid ${alpha(currentTheme.palette.divider, 0.1)}`, // 添加细微的底部边框
+          backgroundColor: currentTheme.palette.background.default,
+          color: currentTheme.palette.text.primary,
+          borderBottom: `1px solid ${alpha(currentTheme.palette.divider, 0.1)}`,
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ px: { xs: 1, sm: 3 } }}>
           <IconButton
-            aria-label="open drawer"
-            onClick={() => setDrawerOpen(!drawerOpen)}
+            aria-label="toggle drawer"
+            onClick={handleDrawerToggle}
             edge="start"
             sx={{ 
               marginRight: 2,
-              color: currentTheme.palette.text.primary, // 确保图标颜色正确
+              color: currentTheme.palette.text.primary,
             }}
           >
             <SvgIcon>
-              <path d={drawerOpen ? mdiMenuOpen : mdiMenu} />
+              <path d={isMobile ? mdiMenu : (drawerOpen ? mdiMenuOpen : mdiMenu)} />
             </SvgIcon>
           </IconButton>
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              flexGrow: 1,
+              fontSize: { xs: '1.1rem', sm: '1.25rem' },
+            }}
+          >
             CuckooX
           </Typography>
 
-          {/* Case Switcher Button and Menu */}
+          {/* Case Switcher Button and Menu - Hide text on mobile */}
           {userCases && userCases.length > 1 && (
             <>
               <Button
@@ -200,11 +343,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 aria-haspopup="true"
                 aria-expanded={anchorEl ? 'true' : undefined}
                 onClick={handleClick}
-                color="inherit" // Inherits textPrimary from AppBar's context or explicit color
-                sx={{ textTransform: 'none' }}
+                color="inherit"
+                sx={{ 
+                  textTransform: 'none',
+                  minWidth: { xs: 'auto', sm: 'auto' },
+                  px: { xs: 1, sm: 2 },
+                }}
                 startIcon={<SvgIcon><path d={mdiBriefcaseSearchOutline} /></SvgIcon>}
               >
-                {selectedCaseId ? userCases.find(c => c.id.toString() === selectedCaseId)?.name : t('select_case_button', 'Select Case')}
+                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                  {selectedCaseId ? userCases.find(c => c.id.toString() === selectedCaseId)?.name : t('select_case_button', 'Select Case')}
+                </Box>
               </Button>
               <Menu
                 id="case-switcher-menu"
@@ -225,146 +374,109 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </Menu>
             </>
           )}
-          {/* End Case Switcher */}
 
-          <IconButton onClick={toggleThemeMode} sx={{ color: currentTheme.palette.text.primary }}>
-            <SvgIcon>
-              <path d={themeMode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
-            </SvgIcon>
-          </IconButton>
-          <Switch
-            checked={themeMode === 'dark'}
-            onChange={toggleThemeMode}
-            color="secondary"
-          />
-          {user && <Typography sx={{ mr: 2, color: currentTheme.palette.text.primary }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
+          {/* Theme Toggle - Show icon only on mobile */}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton 
+              onClick={toggleThemeMode} 
+              sx={{ 
+                color: currentTheme.palette.text.primary,
+                display: { xs: 'inline-flex', sm: 'none' },
+              }}
+            >
+              <SvgIcon>
+                <path d={themeMode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
+              </SvgIcon>
+            </IconButton>
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center' }}>
+              <IconButton onClick={toggleThemeMode} sx={{ color: currentTheme.palette.text.primary }}>
+                <SvgIcon>
+                  <path d={themeMode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
+                </SvgIcon>
+              </IconButton>
+              <Switch
+                checked={themeMode === 'dark'}
+                onChange={toggleThemeMode}
+                color="secondary"
+              />
+            </Box>
+          </Box>
+          
+          {/* User welcome - Hide on mobile */}
+          {user && (
+            <Typography 
+              sx={{ 
+                mr: 2, 
+                color: currentTheme.palette.text.primary,
+                display: { xs: 'none', md: 'block' },
+              }}
+            >
+              {t('layout_header_welcome', { name: user.name })}
+            </Typography>
+          )}
         </Toolbar>
       </AppBar>
 
-      <StyledDrawer 
-        variant="permanent" 
-        open={drawerOpen}
-        sx={{
-          '& .MuiDrawer-paper': {
-            backgroundColor: themeMode === 'dark' 
-              ? alpha(currentTheme.palette.primary.dark, 0.15) // 深色模式下使用深色 Teal 背景
-              : alpha(currentTheme.palette.primary.light, 0.08), // 亮色模式下使用浅色 Teal 背景
-            borderRight: `1px solid ${alpha(currentTheme.palette.primary.main, 0.2)}`,
-          }
-        }}
-      >
-        <Toolbar /> {/* Necessary to make the content below app bar */}
-        <Divider sx={{ borderColor: alpha(currentTheme.palette.primary.main, 0.2) }} />
-        <List sx={{ flexGrow: 1 }}>
-          {isMenuLoading ? (
-            <ListItemButton sx={{ justifyContent: drawerOpen ? 'initial' : 'center', px: 2.5 }}>
-              <ListItemIcon sx={{ minWidth: 0, mr: drawerOpen ? 3 : 'auto', justifyContent: 'center' }}>
-                <CircularProgress size={24} />
-              </ListItemIcon>
-              {drawerOpen && <ListItemText primary={t('loading_menu', 'Loading menu...')} />}
-            </ListItemButton>
-          ) : navMenuItems && navMenuItems.length > 0 ? (
-            navMenuItems.map((item: NavItemType) => (
-              <ListItemButton
-                key={item.id}
-                component={NavLink} // Changed to NavLink
-                to={item.path}
-                end={item.path === '/dashboard' || item.path === '/'} // Added end prop
-                sx={{
-                  minHeight: 48,
-                  justifyContent: drawerOpen ? 'initial' : 'center',
-                  px: 2.5,
-                  '&.active': {
-                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.3), // 更突出的激活状态
-                    color: currentTheme.palette.primary.main,
-                    borderLeft: `4px solid ${currentTheme.palette.primary.main}`, // 添加左边框强调
-                    '& .MuiSvgIcon-root': {
-                      color: currentTheme.palette.primary.main,
-                    },
-                  },
-                  '&:hover': {
-                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.15),
-                  },
-                }}
-                title={t(item.labelKey)}
-              >
-                <ListItemIcon
-                  sx={{
-                    minWidth: 0,
-                    mr: drawerOpen ? 3 : 'auto',
-                    justifyContent: 'center',
-                    // Active state for icon color is handled by parent's sx '&.active .MuiSvgIcon-root'
-                  }}
-                >
-                  {iconMap[item.iconName] ? (
-                    <SvgIcon><path d={iconMap[item.iconName]} /></SvgIcon>
-                  ) : null}
-                </ListItemIcon>
-                <ListItemText primary={t(item.labelKey)} sx={{ opacity: drawerOpen ? 1 : 0 }} />
-              </ListItemButton>
-            ))
-          ) : (
-            <ListItemButton sx={{ justifyContent: drawerOpen ? 'initial' : 'center', px: 2.5 }}>
-              <ListItemText 
-                primary={t('no_menu_items', 'No accessible items')} 
-                sx={{ opacity: drawerOpen ? 1 : 0 , textAlign: drawerOpen? 'left' : 'center' }} 
-              />
-            </ListItemButton>
-          )}
-        </List>
-        <Divider sx={{ borderColor: alpha(currentTheme.palette.primary.main, 0.2) }} />
-        {user && drawerOpen && (
-          <Box sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="body2" sx={{ color: currentTheme.palette.text.secondary }}>
-              {user.name}
-            </Typography>
-            {/* Removed user.role display */}
-          </Box>
-        )}
-        <Box sx={{ p: drawerOpen ? 2 : 0.5, display: 'flex', justifyContent: 'center' }}>
-          <Button
-            onClick={handleLogout}
-            variant="contained"
-            color="primary" // 使用 primary 色保持一致性
-            fullWidth={drawerOpen}
-            sx={(theme: MuiTheme) => ({ // Explicitly type theme here
-                minWidth: drawerOpen ? 'auto' : theme.spacing(5),
-                width: drawerOpen ? 'auto' : theme.spacing(5),
-                height: theme.spacing(5),
-                p: drawerOpen ? 1 : 0,
-            })}
-            title={t('layout_logout_button')}
-          >
-            <ListItemIcon sx={{ 
-                justifyContent: 'center', 
-                minWidth: 0, 
-                color: 'inherit', // Ensure icon inherits button text color
-                mr: drawerOpen ? 1 : 0
-            }}>
-              <SvgIcon>
-                <path d={mdiLogout} />
-              </SvgIcon>
-            </ListItemIcon>
-            {drawerOpen && <ListItemText primary={t('layout_logout_button')} sx={{flexGrow: 0}}/>}
-          </Button>
-        </Box>
-      </StyledDrawer>
+      {/* Desktop Drawer */}
+      {!isMobile && (
+        <StyledDrawer 
+          variant="permanent" 
+          open={drawerOpen}
+          sx={{
+            '& .MuiDrawer-paper': {
+              backgroundColor: themeMode === 'dark' 
+                ? alpha(currentTheme.palette.primary.dark, 0.15)
+                : alpha(currentTheme.palette.primary.light, 0.08),
+              borderRight: `1px solid ${alpha(currentTheme.palette.primary.main, 0.2)}`,
+            }
+          }}
+        >
+          <DrawerContent />
+        </StyledDrawer>
+      )}
+
+      {/* Mobile Drawer */}
+      {isMobile && (
+        <SwipeableDrawer
+          anchor="left"
+          open={mobileDrawerOpen}
+          onClose={handleMobileDrawerClose}
+          onOpen={handleMobileDrawerOpen}
+          ModalProps={{
+            keepMounted: true, // Better open performance on mobile
+          }}
+          sx={{
+            '& .MuiDrawer-paper': {
+              width: drawerWidthOpen,
+              backgroundColor: themeMode === 'dark' 
+                ? currentTheme.palette.primary.dark
+                : currentTheme.palette.primary.light,
+              borderRight: `1px solid ${alpha(currentTheme.palette.primary.main, 0.2)}`,
+            },
+            '& .MuiBackdrop-root': {
+              backgroundColor: 'rgba(0, 0, 0, 0.5)', // 半透明黑色背景
+            }
+          }}
+        >
+          <DrawerContent />
+        </SwipeableDrawer>
+      )}
 
       <Box 
         component="main" 
         sx={{ 
           flexGrow: 1, 
           backgroundColor: currentTheme.palette.background.default,
-          minHeight: '100vh', // 确保背景色覆盖整个视口高度
+          minHeight: '100vh',
           display: 'flex',
           flexDirection: 'column',
         }}
       >
-        <Toolbar /> {/* This is important to offset content below the AppBar */}
+        <Toolbar />
         <Box sx={{ 
           flexGrow: 1, 
-          p: 3,
-          overflow: 'auto', // 允许内容滚动
+          p: { xs: 2, sm: 3 },
+          overflow: 'auto',
         }}>
           {children}
         </Box>

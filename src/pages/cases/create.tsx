@@ -101,8 +101,8 @@ const CreateCasePage: React.FC = () => {
           content: JSON.stringify(newEmptyDelta.ops),
           created_by: user.id,
           last_edited_by: user.id,
-          created_at: new Date().toISOString(), // Add created_at field
-          updated_at: new Date().toISOString(), // Add updated_at field
+          created_at: new Date(), // Use Date object instead of ISO string
+          updated_at: new Date(), // Use Date object instead of ISO string
         });
 
         if (createdRecords && createdRecords[0] && createdRecords[0].id) {
@@ -271,7 +271,7 @@ const CreateCasePage: React.FC = () => {
         await client.merge(docId, {
           content: JSON.stringify(deltaToSave.ops),
           last_edited_by: editorUserId,
-          updated_at: new Date().toISOString(), // Add updated_at field
+          updated_at: new Date(), // Use Date object instead of ISO string
         });
         console.log(`Document ${docId} saved successfully.`);
       } catch (error) {
@@ -325,8 +325,8 @@ const CreateCasePage: React.FC = () => {
       filing_material_doc_id: filingMaterialDocId,
       created_by: user?.id,
       admin_id: user?.id, // Assuming creator is admin for now
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: new Date(),
+      updated_at: new Date(),
     };
     console.log("Saving case data:", caseData);
 
