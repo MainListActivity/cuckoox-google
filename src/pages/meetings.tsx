@@ -38,15 +38,15 @@ import {
   mdiAccountGroupOutline, // For attendees icon
 } from '@mdi/js';
 import { Autocomplete } from '@mui/material'; 
-import { useAuth } from '../../contexts/AuthContext'; 
-import { useCaseStatus } from '../../contexts/CaseStatusContext'; 
-import { RichTextEditor, QuillDelta } from '../../components/RichTextEditor'; 
-import Delta from 'quill-delta'; 
-import { useSnackbar } from '../../contexts/SnackbarContext'; // Import useSnackbar
+import { useAuth } from '@/src/contexts/AuthContext'; 
+import { useCaseStatus } from '@/src/contexts/CaseStatusContext'; 
+import RichTextEditor,{ QuillDelta } from '@/src/components/RichTextEditor'; 
+import { Delta } from 'quill/core'; 
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Import useSnackbar
 
-import { useSurrealClient } from '../../contexts/SurrealProvider'; 
-import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '../../hooks/useLiveMeetingData'; 
-import { useCaseParticipants, Participant } from '../../hooks/useCaseParticipants'; 
+import { useSurrealClient } from '@/src/contexts/SurrealProvider'; 
+import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
+import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants'; 
 
 // Extended MeetingFormData to include attendees for the form
 type MeetingFormData = Omit<MeetingData, 'id' | 'case_id' | 'status' | 'recording_url' | 'minutes_exist' | 'minutes_delta_json' | 'created_at' | 'updated_at' | 'attendees' | 'attendee_ids'> & {

@@ -2,10 +2,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useSurrealClient } from '../contexts/SurrealProvider';
-import RichTextEditor, { QuillDelta } from '../components/RichTextEditor';
-import Delta from 'quill-delta';
-import { useAuth } from '../contexts/AuthContext';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor';
+import { Delta } from 'quill/core';
+import { useAuth } from '@/src/contexts/AuthContext';
 import {
   Box,
   Typography,
@@ -24,7 +24,7 @@ import {
   FormHelperText,
 } from '@mui/material';
 import { mdiArrowLeft, mdiContentSave } from '@mdi/js';
-import { useSnackbar } from '../contexts/SnackbarContext'; // Added
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added
 
 // Debounce helper
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
@@ -343,7 +343,7 @@ const CreateCasePage: React.FC = () => {
           {pageError && <MuiAlert severity="error" sx={{ mb: 2 }}>{pageError}</MuiAlert>}
 
           <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 id="caseName"
                 label={t('create_case_case_name_label', '案件名称')}
@@ -354,7 +354,7 @@ const CreateCasePage: React.FC = () => {
                 required
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               {/* // TODO: Replace with a proper user selection component (e.g., dropdown, autocomplete) */}
               <TextField
                 id="caseLead"
@@ -366,7 +366,7 @@ const CreateCasePage: React.FC = () => {
                 required
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth variant="outlined" required>
                 <InputLabel id="case-procedure-label">{t('create_case_procedure_label', '案件程序')}</InputLabel>
                 <Select
@@ -390,7 +390,7 @@ const CreateCasePage: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 id="acceptanceDate"
                 label={t('create_case_acceptance_date_label', '受理时间')}
@@ -418,7 +418,7 @@ const CreateCasePage: React.FC = () => {
 
             {showBankruptcyFields && (
               <>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <TextField
                     id="announcementDate"
                     label={t('create_case_announcement_date_label', '公告时间')}
@@ -445,7 +445,7 @@ const CreateCasePage: React.FC = () => {
                     helperText={t('create_case_announcement_date_hint', '最迟受理破产申请之日起25日')}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <TextField
                     id="claimStartDate"
                     label={t('create_case_claim_start_date_label', '债权申报开始时间')}
@@ -462,7 +462,7 @@ const CreateCasePage: React.FC = () => {
                     helperText={t('create_case_claim_start_date_hint', '公告之日起不得少于30日')}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                   <TextField
                     id="claimEndDate"
                     label={t('create_case_claim_end_date_label', '债权申报截止时间')}

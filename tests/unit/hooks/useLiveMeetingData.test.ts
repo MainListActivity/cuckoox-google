@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useLiveMeetings, Meeting } from '../../../src/hooks/useLiveMeetingData';
+import { useLiveMeetings, Meeting } from '@/src/hooks/useLiveMeetingData';
 import { RecordId } from 'surrealdb.js';
 
 // Mock the SurrealClient

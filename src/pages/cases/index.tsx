@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next'; // Added for t function
-import { useSnackbar } from '../../contexts/SnackbarContext'; // Added for showSuccess
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added for showSuccess
 import {
   Box,
   TextField, // Added TextField for search
@@ -29,8 +29,8 @@ import {
 } from '@mdi/js';
 
 // Import Dialogs
-import ModifyCaseStatusDialog, { CaseStatus } from '../../components/case/ModifyCaseStatusDialog'; // Corrected path
-import MeetingMinutesDialog, { QuillDelta } from '../../components/case/MeetingMinutesDialog'; // Corrected path and imported QuillDelta
+import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/ModifyCaseStatusDialog'; // Corrected path
+import MeetingMinutesDialog, { QuillDelta } from '@/src/components/case/MeetingMinutesDialog'; // Corrected path and imported QuillDelta
 
 // Define a type for our case items, you might want to move this to a types file
 interface CaseItem {

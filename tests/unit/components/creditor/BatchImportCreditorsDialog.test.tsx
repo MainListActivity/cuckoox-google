@@ -2,8 +2,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../../src/i18n'; // Adjust path
-import BatchImportCreditorsDialog from '../../../../src/components/creditor/BatchImportCreditorsDialog';
+import i18n from '@/src/i18n'; // Adjust path
+import BatchImportCreditorsDialog from '@/src/components/creditor/BatchImportCreditorsDialog';
 
 const mockOnClose = vi.fn();
 const mockOnImport = vi.fn();

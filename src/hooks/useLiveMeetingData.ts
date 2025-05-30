@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSurrealClient } from '../contexts/SurrealProvider'; // Adjust path as needed
+import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // Adjust path as needed
 import { RecordId } from 'surrealdb.js'; // For typing RecordId
 
 // Interface for Meeting data, aligning with expected DB structure

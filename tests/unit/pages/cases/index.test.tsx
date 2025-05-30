@@ -1,11 +1,11 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import CaseListPage from '../../../../src/pages/cases/index';
+import CaseListPage from '@/src/pages/cases/index';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router-dom'; // Needed for Link component
 import { I18nextProvider } from 'react-i18next'; // For useTranslation
-import i18n from '../../../../src/i18n'; // Assuming you have an i18n setup file
-import { SnackbarProvider } from '../../../../src/contexts/SnackbarContext'; // Actual provider
+import i18n from '@/src/i18n'; // Assuming you have an i18n setup file
+import { SnackbarProvider } from '@/src/contexts/SnackbarContext'; // Actual provider
 
 // Mock child components (Dialogs)
 jest.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => (props: any) => (

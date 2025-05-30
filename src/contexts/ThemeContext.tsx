@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { ThemeProvider as MuiThemeProvider, Theme as MuiTheme } from '@mui/material/styles';
-import { getAppTheme } from '../theme'; // Corrected path
+import { getAppTheme } from '@/src/theme'; // Corrected path
 import { grey } from '@mui/material/colors';
 
 // 1. Define Context Types

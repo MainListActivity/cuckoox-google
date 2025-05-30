@@ -3,9 +3,9 @@
 // TODO: Access Control - Verify this claimId belongs to the logged-in creditor.
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom'; // Added useParams
-import RichTextEditor, { QuillDelta } from '../../components/RichTextEditor'; // Adjusted path, imported QuillDelta
-import { useSnackbar } from '../../contexts/SnackbarContext'; // Assuming path is correct
-import Delta from 'quill-delta'; // Import Delta
+import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor'; // Adjusted path, imported QuillDelta
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Assuming path is correct
+import { Delta } from 'quill/core'; // Import Delta
 
 const ClaimAttachmentPage: React.FC = () => {
   const navigate = useNavigate();

@@ -3,10 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../../../src/i18n'; // Adjust path
-import { SnackbarProvider, useSnackbar } from '../../../../../src/contexts/SnackbarContext';
-import ClaimReviewDetailPage from '../../../../../src/pages/claims/[claimId]/review';
-import Delta from 'quill-delta';
+import i18n from '@/src/i18n'; // Adjust path
+import { SnackbarProvider, useSnackbar } from '@/src/contexts/SnackbarContext';
+import ClaimReviewDetailPage from '@/src/pages/claims/[claimId]/review';
+import { Delta } from 'quill/core';
 
 // Mock useNavigate and useParams
 const mockNavigate = vi.fn();

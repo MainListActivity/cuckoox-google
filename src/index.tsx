@@ -1,15 +1,15 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import App from './App';
-import { AuthProvider } from './contexts/AuthContext';
-import { SurrealProvider } from './contexts/SurrealProvider'; // <-- IMPORT NEW PROVIDER
-import './styles/main.css'; // Tailwind CSS and global styles
+import App from '@/src/App';
+import { AuthProvider } from '@/src/contexts/AuthContext';
+import { SurrealProvider } from '@/src/contexts/SurrealProvider'; // <-- IMPORT NEW PROVIDER
+import '@/src/styles/main.css'; // Tailwind CSS and global styles
 // REMOVED: import { connectSurrealDB } from './lib/surreal';
 import { I18nextProvider } from 'react-i18next';
-import i18n from './i18n';
+import i18n from '@/src/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // ADDED
-import { CustomThemeProvider } from './contexts/ThemeContext'; // ADDED
+import { CustomThemeProvider } from '@/src/contexts/ThemeContext'; // ADDED
 import { StyledEngineProvider } from '@mui/material/styles'; // ADDED
 
 const rootElement = document.getElementById('root');

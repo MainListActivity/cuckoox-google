@@ -11,11 +11,12 @@ import {
   alpha,
   IconButton, // Added
   Tooltip,    
-  ListItemSecondaryAction, 
+  ListItemSecondaryAction,
+  SvgIcon,
 } from '@mui/material';
 // Import DisplayListItem and related types from where MessageCenterPage imports them
 // Assuming DisplayListItem is now part of types/message.ts or passed correctly
-import { DisplayListItem, ConversationSummary, Message, IMMessage, CaseRobotReminderMessage, BusinessNotificationMessage } from '../../types/message'; 
+import { DisplayListItem, ConversationSummary, Message, IMMessage, CaseRobotReminderMessage, BusinessNotificationMessage } from '@/src/types/message'; 
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -45,7 +46,7 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ itemData, onSelectIte
   let isUnread: boolean;
   let icon: JSX.Element;
   let chipLabel: string | null = null;
-  let chipColor: 'success' | 'warning' | 'info' | 'default' | 'primary' | 'secondary' | undefined = 'default';
+  let chipColor: 'success' | 'warning' | 'info' | 'default' | 'primary' | 'secondary' | 'error' | undefined = 'default';
 
   if (itemType === 'conversation') {
     const conversation = data as ConversationSummary & { itemType: 'conversation' };
@@ -150,21 +151,22 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ itemData, onSelectIte
               edge="end"
               aria-label="delete"
               onClick={handleDeleteClick}
-            size="small"
-            sx={{ 
-              // Show on hover or focus, or always if preferred
-              // opacity: 0.7, 
-              // '&:hover, &:focus': { opacity: 1 },
-              color: theme.palette.text.secondary, // Default color
-              '&:hover': {
-                color: theme.palette.error.main, // Error color on hover
-                backgroundColor: alpha(theme.palette.error.main, 0.08)
-              }
-            }}
-          >
-            <DeleteOutlineIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+              size="small"
+              sx={{ 
+                // Show on hover or focus, or always if preferred
+                // opacity: 0.7, 
+                // '&:hover, &:focus': { opacity: 1 },
+                color: theme.palette.text.secondary, // Default color
+                '&:hover': {
+                  color: theme.palette.error.main, // Error color on hover
+                  backgroundColor: alpha(theme.palette.error.main, 0.08)
+                }
+              }}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
       }
       sx={{
         pt: 1.5,
@@ -263,7 +265,7 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ itemData, onSelectIte
                 icon={itemType === 'notification' && (data as Message).type === 'CASE_ROBOT_REMINDER' ? <SmartToyIcon fontSize="small" /> : undefined}
                 label={chipLabel}
                 size="small"
-                color={chipColor} // This prop directly influences bg and text color when variant="filled"
+                color={chipColor as any} // This prop directly influences bg and text color when variant="filled"
                 variant={isUnread || selected ? "filled" : "outlined"}
                 sx={{
                   mt: 0.5,

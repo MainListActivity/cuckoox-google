@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSnackbar } from '../../contexts/SnackbarContext'; // Added for showSuccess
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added for showSuccess
 import {
   Dialog,
   DialogTitle,
@@ -17,8 +17,8 @@ import {
   Grid,
   Chip,
 } from '@mui/material';
-import RichTextEditor, { QuillDelta } from '../RichTextEditor'; // Assuming path
-import Delta from 'quill-delta';
+import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor'; // Assuming path
+import { Delta } from 'quill/core';
 
 // Define valid case statuses - should match product documentation
 export type CaseStatus =

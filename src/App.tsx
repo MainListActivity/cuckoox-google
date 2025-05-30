@@ -1,46 +1,46 @@
 import React, {Suspense, ReactNode, useEffect} from 'react';
 import {Routes, Route, Navigate, useLocation, useNavigate} from 'react-router-dom';
-import {useAuth} from './contexts/AuthContext';
-import {useSurreal} from './contexts/SurrealProvider';
+import {useAuth} from '@/src/contexts/AuthContext';
+import {useSurreal} from '@/src/contexts/SurrealProvider';
 import {useTranslation} from 'react-i18next';
 // Remove MUI ThemeProvider, use our own from ThemeContext
 // import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'; 
 // import theme from './theme'; // This is likely MUI theme, not our custom one
-import { CustomThemeProvider } from './contexts/ThemeContext'; // Import our ThemeProvider
-import { SnackbarProvider } from './contexts/SnackbarContext'; // Import SnackbarProvider
-import { CaseStatusProvider } from './contexts/CaseStatusContext'; // <-- ADDED
-import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
-import GlobalLoader from './components/GlobalLoader'; // ADDED
-import GlobalError from './components/GlobalError'; // ADDED
+import { CustomThemeProvider } from '@/src/contexts/ThemeContext'; // Import our ThemeProvider
+import { SnackbarProvider } from '@/src/contexts/SnackbarContext'; // Import SnackbarProvider
+import { CaseStatusProvider } from '@/src/contexts/CaseStatusContext'; // <-- ADDED
+import Layout from '@/src/components/Layout';
+import ProtectedRoute from '@/src/components/ProtectedRoute';
+import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
+import GlobalError from '@/src/components/GlobalError'; // ADDED
 
 // Lazy load pages for better performance
-const HomePage = React.lazy(() => import('./pages/index'));
-const LoginPage = React.lazy(() => import('./pages/login'));
-const DashboardPage = React.lazy(() => import('./pages/dashboard/index'));
-const CaseListPage = React.lazy(() => import('./pages/cases/index'));
-const CaseDetailPage = React.lazy(() => import('./pages/cases/[caseId]'));
-const CreditorListPage = React.lazy(() => import('./pages/creditors'));
-const ClaimListPage = React.lazy(() => import('./pages/claims/index'));
-const ClaimSubmissionPage = React.lazy(() => import('./pages/claims/submit'));
-const ClaimAttachmentPage = React.lazy(() => import('./pages/claims/attachment'));
-const SubmittedClaimDetailPage = React.lazy(() => import('./pages/my-claims/[claimId]'));
-const MyClaimsPage = React.lazy(() => import('./pages/my-claims/index'));
-const AccessDeniedPage = React.lazy(() => import('./pages/access-denied'));
-const AccessDeniedRolePage = React.lazy(() => import('./pages/access-denied-role'));
-const CaseStatusToggler = React.lazy(() => import('./components/admin/CaseStatusToggler')); // This is a component, path is likely correct
-const ClaimReviewDetailPage = React.lazy(() => import('./pages/claims/[claimId]/review'));
-const ClaimDataDashboardPage = React.lazy(() => import('./pages/dashboard/claims'));
-const OnlineMeetingPage = React.lazy(() => import('./pages/meetings'));
-const MessageCenterPage = React.lazy(() => import('./pages/messages'));
-const AdminPage = React.lazy(() => import('./pages/admin/index'));
-const AdminThemePage = React.lazy(() => import('./pages/admin/theme'));
-const NotFoundPage = React.lazy(() => import('./pages/404'));
-const CaseSelectionPage = React.lazy(() => import('./pages/select-case'));
-const OidcCallbackPage = React.lazy(() => import('./pages/oidc-callback'));
-const CreateCasePage = React.lazy(() => import('./pages/cases/create'));
-const AdminCreateClaimAttachmentsPage = React.lazy(() => import('./pages/admin/create-claim-attachments'));
-const NotificationRuleManagementPage = React.lazy(() => import('./pages/admin/manage/notification-rules'));
+const HomePage = React.lazy(() => import('@/src/pages/index'));
+const LoginPage = React.lazy(() => import('@/src/pages/login'));
+const DashboardPage = React.lazy(() => import('@/src/pages/dashboard/index'));
+const CaseListPage = React.lazy(() => import('@/src/pages/cases/index'));
+const CaseDetailPage = React.lazy(() => import('@/src/pages/cases/[caseId]'));
+const CreditorListPage = React.lazy(() => import('@/src/pages/creditors'));
+const ClaimListPage = React.lazy(() => import('@/src/pages/claims/index'));
+const ClaimSubmissionPage = React.lazy(() => import('@/src/pages/claims/submit'));
+const ClaimAttachmentPage = React.lazy(() => import('@/src/pages/claims/attachment'));
+const SubmittedClaimDetailPage = React.lazy(() => import('@/src/pages/my-claims/[claimId]'));
+const MyClaimsPage = React.lazy(() => import('@/src/pages/my-claims/index'));
+const AccessDeniedPage = React.lazy(() => import('@/src/pages/access-denied'));
+const AccessDeniedRolePage = React.lazy(() => import('@/src/pages/access-denied-role'));
+const CaseStatusToggler = React.lazy(() => import('@/src/components/admin/CaseStatusToggler')); // This is a component, path is likely correct
+const ClaimReviewDetailPage = React.lazy(() => import('@/src/pages/claims/[claimId]/review'));
+const ClaimDataDashboardPage = React.lazy(() => import('@/src/pages/dashboard/claims'));
+const OnlineMeetingPage = React.lazy(() => import('@/src/pages/meetings'));
+const MessageCenterPage = React.lazy(() => import('@/src/pages/messages'));
+const AdminPage = React.lazy(() => import('@/src/pages/admin/index'));
+const AdminThemePage = React.lazy(() => import('@/src/pages/admin/theme'));
+const NotFoundPage = React.lazy(() => import('@/src/pages/404'));
+const CaseSelectionPage = React.lazy(() => import('@/src/pages/select-case'));
+const OidcCallbackPage = React.lazy(() => import('@/src/pages/oidc-callback'));
+const CreateCasePage = React.lazy(() => import('@/src/pages/cases/create'));
+const AdminCreateClaimAttachmentsPage = React.lazy(() => import('@/src/pages/admin/create-claim-attachments'));
+const NotificationRuleManagementPage = React.lazy(() => import('@/src/pages/admin/manage/notification-rules'));
 // Note: ReviewStatusManagementPage and RoleManagementPage were not previously imported in App.tsx, so no path update needed here for them.
 
 

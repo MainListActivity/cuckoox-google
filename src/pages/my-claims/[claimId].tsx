@@ -3,7 +3,7 @@
 // TODO: Access Control - Verify this claimId belongs to the logged-in creditor OR if an admin is viewing, different rules might apply (though this page is creditor-focused).
 // Workflow: This page displays a read-only view of the claim as per product requirements.
 import React, { useState, useEffect } from 'react'; // Added useState, useEffect
-import ClaimDetailView from '../../components/claim/ClaimDetailView'; // Adjusted path
+import ClaimDetailView from '@/src/components/claim/ClaimDetailView'; // Adjusted path
 import { useNavigate, useParams } from 'react-router-dom'; // Added useParams
 
 // Define the structure for ClaimData, matching ClaimDetailView's expected props

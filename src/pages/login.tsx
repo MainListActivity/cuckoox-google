@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import authService from '../services/authService'; // For OIDC login
-import { useSurrealClient } from '../contexts/SurrealProvider';
-import { AppUser } from '../contexts/AuthContext';
+import { useAuth } from '@/src/contexts/AuthContext';
+import authService from '@/src/services/authService'; // For OIDC login
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { AppUser } from '@/src/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import GlobalLoader from '../components/GlobalLoader';
+import GlobalLoader from '@/src/components/GlobalLoader';
 import {
   Box,
   Paper,

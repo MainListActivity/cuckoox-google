@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useConversationsList, useSystemNotifications } from '../../../src/hooks/useMessageCenterData';
-import { ConversationSummary, CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '../../../src/types/message';
+import { useConversationsList, useSystemNotifications } from '@/src/hooks/useMessageCenterData';
+import { ConversationSummary, CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '@/src/types/message';
 import { RecordId } from 'surrealdb.js';
 
 // Mock the SurrealClient

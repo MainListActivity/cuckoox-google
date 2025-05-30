@@ -15,9 +15,9 @@ import {
     Stack,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import RichTextEditor, { QuillDelta } from '../../components/RichTextEditor';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import Delta from 'quill-delta';
+import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor';
+import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { Delta } from 'quill/core';
 
 const AdminCreateClaimAttachmentsPage: React.FC = () => {
     const { t } = useTranslation();
@@ -63,12 +63,12 @@ const AdminCreateClaimAttachmentsPage: React.FC = () => {
                         {t('admin_claim_id_label', '临时债权 ID')}: {tempClaimId}
                     </Typography>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <Typography variant="subtitle1">
                                 {t('creditor_label', '债权人')}: {placeholderBasicInfo.creditorName}
                             </Typography>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <Typography variant="subtitle1">
                                 {t('asserted_amount_label', '申报金额')}: {placeholderBasicInfo.assertedTotal}
                             </Typography>

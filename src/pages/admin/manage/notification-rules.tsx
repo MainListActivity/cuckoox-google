@@ -26,9 +26,9 @@ import {
   deleteNotificationRule,
   NotificationRule,
   // NotificationRuleInput, // Not used directly in this file's save handler
-} from '../../../services/adminNotificationRuleService'; // Adjusted import path
-import CreateEditNotificationRuleDialog from '../../../components/admin/notifications/CreateEditNotificationRuleDialog'; // Adjusted import path
-import ConfirmDeleteDialog from '../../../components/common/ConfirmDeleteDialog'; // Adjusted import path
+} from '@/src/services/adminNotificationRuleService'; // Adjusted import path
+import CreateEditNotificationRuleDialog from '@/src/components/admin/notifications/CreateEditNotificationRuleDialog'; // Adjusted import path
+import ConfirmDeleteDialog from '@/src/components/common/ConfirmDeleteDialog'; // Adjusted import path
 
 const NotificationRuleManagementPage: React.FC = () => {
   const theme = useTheme();

@@ -1,9 +1,9 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import GlobalLoader from '../components/GlobalLoader'; // Import GlobalLoader
+import { useAuth } from '@/src/contexts/AuthContext';
+import GlobalLoader from '@/src/components/GlobalLoader'; // Import GlobalLoader
 import { useTranslation } from 'react-i18next';
-import { useCaseStatus, CaseStatus } from '../contexts/CaseStatusContext';
+import { useCaseStatus, CaseStatus } from '@/src/contexts/CaseStatusContext';
 
 interface AutoNavigateConfig {
   requiredRole: string;

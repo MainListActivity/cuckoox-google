@@ -4,8 +4,8 @@
 // TODO: Access Control - If loaded with a claimId (for editing): Verify this claimId belongs to the logged-in creditor and is in an editable status ('草稿', '已驳回', '需要补充').
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSnackbar } from '../../contexts/SnackbarContext'; // Assuming path is correct
-// TODO: import { useAuth } from '../../contexts/AuthContext'; // To get logged-in creditor info
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Assuming path is correct
+// TODO: import { useAuth } from '@/src/contexts/AuthContext'; // To get logged-in creditor info
 
 const ClaimSubmissionPage: React.FC = () => {
   const navigate = useNavigate();

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { useSurrealClient } from '../contexts/SurrealProvider'; // For future save operation
+import { useAuth } from '@/src/contexts/AuthContext';
+import { useTheme } from '@/src/contexts/ThemeContext';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // For future save operation
 import { useTranslation } from 'react-i18next';
 
 const AdminThemePage: React.FC = () => {

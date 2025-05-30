@@ -9,27 +9,24 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import MessageListItem from '../components/messages/MessageListItem';
-import ChatBubble, { ChatBubbleProps } from '../components/messages/ChatBubble';
-import ChatInput from '../components/messages/ChatInput';
-import NotificationCard from '../components/messages/NotificationCard';
-import { 
-import MessageListItem from '../components/messages/MessageListItem';
-import ChatBubble, { ChatBubbleProps } from '../components/messages/ChatBubble';
-import ChatInput from '../components/messages/ChatInput';
-import NotificationCard from '../components/messages/NotificationCard';
+import MessageListItem from '@/src/components/messages/MessageListItem';
+import ChatBubble, { ChatBubbleProps } from '@/src/components/messages/ChatBubble';
+import ChatInput from '@/src/components/messages/ChatInput';
+import NotificationCard from '@/src/components/messages/NotificationCard';
 import { 
   Message, 
   IMMessage, 
   CaseRobotReminderMessage, 
   BusinessNotificationMessage,
   ConversationSummary
-} from '../../types/message'; 
+} from '@/src/types/message'; 
 import { 
   useConversationsList, 
   useSystemNotifications 
-} from '../../hooks/useMessageCenterData'; 
-import { useAuth } from '../../contexts/AuthContext'; 
+} from '@/src/hooks/useMessageCenterData'; 
+import { useAuth } from '@/src/contexts/AuthContext'; 
+import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { CircularProgress, Skeleton, ListItem, ListItemIcon, ListItemText } from '@mui/material'; // Added Skeleton components
 
 // Define a union type for items in the left panel list
@@ -37,13 +34,15 @@ type DisplayListItem = (ConversationSummary & { itemType: 'conversation' }) | (M
 
 interface ChatMessageDisplay extends ChatBubbleProps {
   id: string; 
+  senderName?: string;
 }
 
 
 const MessageCenterPage: React.FC = () => {
   const theme = useTheme();
   const { user, selectedCaseId } = useAuth(); // Get current user and selected case
-  const { enqueueSnackbar } = useSnackbar();
+  const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
+  const client = useSurrealClient();
 
   // Fetch data using new hooks
   const { 
@@ -69,26 +68,26 @@ const MessageCenterPage: React.FC = () => {
   // Handle errors from hooks
   useEffect(() => {
     if (conversationsError) {
-      enqueueSnackbar(`加载会话列表失败: ${conversationsError.message || '未知错误'}`, { variant: 'error' });
+      showError(`加载会话列表失败: ${conversationsError.message || '未知错误'}`);
     }
     if (notificationsError) {
-      enqueueSnackbar(`加载通知列表失败: ${notificationsError.message || '未知错误'}`, { variant: 'error' });
+      showError(`加载通知列表失败: ${notificationsError.message || '未知错误'}`);
     }
-  }, [conversationsError, notificationsError, enqueueSnackbar]);
+  }, [conversationsError, notificationsError, showError]);
 
 
   // Combine conversations and notifications into a single list for display, sorted by timestamp
   // This combinedList will be used by MessageListItem
   const combinedList = useMemo((): DisplayListItem[] => {
-    const convItems: DisplayListItem[] = conversations.map(c => ({ ...c, itemType: 'conversation', created_at: c.last_message_timestamp, updated_at: c.last_message_timestamp, is_read: c.unread_count === 0 }));
-    const notifItems: DisplayListItem[] = notifications.map(n => ({ ...n, itemType: 'notification' }));
+    const convItems: DisplayListItem[] = conversations.map((c: any) => ({ ...c, itemType: 'conversation' as const, created_at: c.last_message_timestamp, updated_at: c.last_message_timestamp, is_read: c.unread_count === 0 }));
+    const notifItems: DisplayListItem[] = notifications.map((n: any) => ({ ...n, itemType: 'notification' as const }));
     
     const allItems = [...convItems, ...notifItems];
     
     // Sort by updated_at or created_at (last_message_timestamp for conversations)
     allItems.sort((a, b) => {
-        const dateA = new Date(a.updated_at || a.created_at).getTime();
-        const dateB = new Date(b.updated_at || b.created_at).getTime();
+        const dateA = new Date((a as any).updated_at || (a as any).created_at || (a as any).last_message_timestamp).getTime();
+        const dateB = new Date((b as any).updated_at || (b as any).created_at || (b as any).last_message_timestamp).getTime();
         return dateB - dateA; // Descending order
     });
     return allItems;
@@ -101,7 +100,7 @@ const MessageCenterPage: React.FC = () => {
       // For now, use existing simulation logic, but use conversation details
       const convSummary = selectedItem as ConversationSummary;
       // Determine the "other" participant for display name in chat header
-      const otherParticipantName = convSummary.participants.find(p => p.id !== user?.id)?.name || convSummary.last_message_sender_name || '对方';
+      const otherParticipantName = convSummary.participants.find((p: any) => p.id !== user?.id)?.name || convSummary.last_message_sender_name || '对方';
 
       const simulatedConvo: ChatMessageDisplay[] = [
         { id: 'sim1', messageText: convSummary.last_message_snippet, timestamp: new Date(convSummary.last_message_timestamp).toLocaleTimeString(), isSender: false, senderName: convSummary.last_message_sender_name || otherParticipantName },
@@ -117,37 +116,35 @@ const MessageCenterPage: React.FC = () => {
     chatHistoryEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentConversation]);
 
-  const { client } = useSurrealClient(); 
-
   const handleSelectItem = useCallback(async (item: DisplayListItem) => {
     setSelectedItem(item);
     
     if (item.itemType === 'notification' && !item.is_read && client) {
       try {
         // Optimistic UI update
-        setNotifications(prev => // Use the destructured setter
-          prev.map(n => n.id === item.id ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n)
+        setNotifications((prev: any) => // Use the destructured setter
+          prev.map((n: any) => n.id === item.id ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n)
         );
         await client.merge(String(item.id), { 
           is_read: true, 
           updated_at: new Date().toISOString() 
         });
-        enqueueSnackbar('通知已标记为已读', { variant: 'success' });
+        showSuccess('通知已标记为已读');
       } catch (error) {
         console.error("Error marking notification as read:", error);
-        enqueueSnackbar('标记通知为已读失败', { variant: 'error' });
+        showError('标记通知为已读失败');
         // Revert optimistic update on error
-        setNotifications(prev => // Use the destructured setter
-          prev.map(n => n.id === item.id ? { ...n, is_read: false, updated_at: item.updated_at } : n) // Revert to original updated_at
+        setNotifications((prev: any) => // Use the destructured setter
+          prev.map((n: any) => n.id === item.id ? { ...n, is_read: false, updated_at: item.updated_at } : n) // Revert to original updated_at
         );
       }
     }
-  }, [client, enqueueSnackbar, setNotifications]);
+  }, [client, showSuccess, showError, setNotifications]);
 
   const handleMarkAsUnread = useCallback(async (itemToMarkUnread: DisplayListItem) => {
     if (itemToMarkUnread.itemType !== 'notification' || !client) {
       if (itemToMarkUnread.itemType === 'conversation') {
-        enqueueSnackbar('会话的未读状态由新消息自动管理。', { variant: 'info' });
+        showInfo('会话的未读状态由新消息自动管理。');
       }
       return;
     }
@@ -155,28 +152,28 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       // Optimistic UI update
-      setNotifications(prev => // Use the destructured setter
-        prev.map(n => n.id === notification.id ? { ...n, is_read: false, updated_at: new Date().toISOString() } : n)
+      setNotifications((prev: any) => // Use the destructured setter
+        prev.map((n: any) => n.id === notification.id ? { ...n, is_read: false, updated_at: new Date().toISOString() } : n)
       );
       await client.merge(String(notification.id), { 
         is_read: false, 
         updated_at: new Date().toISOString() 
       });
-      enqueueSnackbar('通知已标记为未读', { variant: 'success' });
+      showSuccess('通知已标记为未读');
     } catch (error) {
       console.error("Error marking notification as unread:", error);
-      enqueueSnackbar('标记通知为未读失败', { variant: 'error' });
+      showError('标记通知为未读失败');
       // Revert optimistic update
-      setNotifications(prev => // Use the destructured setter
-        prev.map(n => n.id === notification.id ? { ...n, is_read: true, updated_at: notification.updated_at } : n)
+      setNotifications((prev: any) => // Use the destructured setter
+        prev.map((n: any) => n.id === notification.id ? { ...n, is_read: true, updated_at: notification.updated_at } : n)
       );
     }
-  }, [client, enqueueSnackbar, setNotifications]);
+  }, [client, showSuccess, showError, showInfo, setNotifications]);
 
 
   const handleDeleteItem = useCallback(async (itemToDelete: DisplayListItem) => {
     if (!client) {
-      enqueueSnackbar('数据库连接不可用', { variant: 'error' });
+      showError('数据库连接不可用');
       return;
     }
     const itemId = itemToDelete.id;
@@ -184,9 +181,9 @@ const MessageCenterPage: React.FC = () => {
 
     // Optimistic UI update
     if (itemToDelete.itemType === 'conversation') {
-      setConversations(prev => prev.filter(c => c.id !== itemId));
+      setConversations((prev: any) => prev.filter((c: any) => c.id !== itemId));
     } else if (itemToDelete.itemType === 'notification') {
-      setNotifications(prev => prev.filter(n => n.id !== itemId));
+      setNotifications((prev: any) => prev.filter((n: any) => n.id !== itemId));
     }
     if (selectedItem?.id === itemId) {
       setSelectedItem(null);
@@ -194,18 +191,18 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       await client.delete(String(itemId));
-      enqueueSnackbar('消息/通知已删除', { variant: 'success' });
-    } catch (error) {
+      showSuccess('消息/通知已删除');
+    } catch (error: any) {
       console.error("Error deleting item:", error);
-      enqueueSnackbar(`删除失败: ${error.message || '未知错误'}`, { variant: 'error' });
+      showError(`删除失败: ${error.message || '未知错误'}`);
       // Revert optimistic update
       if (originalItem.itemType === 'conversation') {
-         setConversations(prev => [...prev, originalItem as ConversationSummary].sort((a,b) => new Date(b.last_message_timestamp).getTime() - new Date(a.last_message_timestamp).getTime() ));
+         setConversations((prev: any) => [...prev, originalItem as ConversationSummary].sort((a,b) => new Date(b.last_message_timestamp).getTime() - new Date(a.last_message_timestamp).getTime() ));
       } else if (originalItem.itemType === 'notification') {
-         setNotifications(prev => [...prev, originalItem as Message].sort((a,b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime() ));
+         setNotifications((prev: any) => [...prev, originalItem as Message].sort((a,b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime() ));
       }
     }
-  }, [client, selectedItem, enqueueSnackbar, setConversations, setNotifications]);
+  }, [client, selectedItem, showSuccess, showError, setConversations, setNotifications]);
 
 
   const handleFilterChange = (
@@ -227,13 +224,13 @@ const MessageCenterPage: React.FC = () => {
     return combinedList; // 'all'
   }, [combinedList, currentFilter]);
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = async (text: string) => {
     if (!selectedItem || selectedItem.itemType !== 'conversation') {
-      enqueueSnackbar('请先选择一个会话以发送消息。', { variant: 'warning' });
+      showWarning('请先选择一个会话以发送消息。');
       return;
     }
     if (!user?.id || !client) {
-      enqueueSnackbar('用户未登录或数据库连接不可用。', { variant: 'error' });
+      showError('用户未登录或数据库连接不可用。');
       return;
     }
 
@@ -251,25 +248,26 @@ const MessageCenterPage: React.FC = () => {
       // case_id: convSummary.case_id // If conversations are case-specific and message needs this link
     };
 
+    // Optimistically add to local simulated conversation for immediate feedback
+    const optimisticMessage: ChatMessageDisplay = {
+      id: `temp-${Date.now()}`, // Temporary ID
+      messageText: text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isSender: true,
+      senderName: 'You',
+    };
+
     try {
-      // Optimistically add to local simulated conversation for immediate feedback
-      const optimisticMessage: ChatMessageDisplay = {
-        id: `temp-${Date.now()}`, // Temporary ID
-        messageText: text,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isSender: true,
-        senderName: 'You',
-      };
       setCurrentConversation(prevConvo => [...prevConvo, optimisticMessage]);
 
       await client.create('message', newMessageData);
-      enqueueSnackbar('消息已发送', { variant: 'success' });
+      showSuccess('消息已发送');
       // The live query in useConversationsList (if it listens to 'message' table) 
       // should update the conversation summary (last message, timestamp).
       // Full chat history would require a dedicated hook and state.
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message:", error);
-      enqueueSnackbar(`发送消息失败: ${error.message || '未知错误'}`, { variant: 'error' });
+      showError(`发送消息失败: ${error.message || '未知错误'}`);
       // Optional: remove optimistic message if send failed
       setCurrentConversation(prevConvo => prevConvo.filter(msg => msg.id !== optimisticMessage.id));
     }
@@ -283,7 +281,7 @@ const MessageCenterPage: React.FC = () => {
       
       <Grid container spacing={{ xs: 1, sm: 2 }} sx={{ flexGrow: 1, overflow: 'hidden' }}>
         {/* Left Column: Message List Area */}
-        <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Paper 
             elevation={1} 
             sx={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: theme.palette.background.paper }}
@@ -347,7 +345,7 @@ const MessageCenterPage: React.FC = () => {
         </Grid>
 
         {/* Right Column: Message Content / IM Chat View / Notification Card View */}
-        <Grid item xs={12} md={8} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <Grid size={{ xs: 12, md: 8 }} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Paper 
             elevation={1} 
             sx={{ 
@@ -371,8 +369,8 @@ const MessageCenterPage: React.FC = () => {
                     会话: {
                       (selectedItem as ConversationSummary).participants && (selectedItem as ConversationSummary).participants.length > 0
                         ? (selectedItem as ConversationSummary).participants
-                            .filter(p => user ? p.id !== user.id : true) // Show other participants
-                            .map(p => p.name)
+                            .filter((p: any) => user ? p.id !== user.id : true) // Show other participants
+                            .map((p: any) => p.name)
                             .join(', ') || ((selectedItem as ConversationSummary).participants[0]?.name || '未知会话') // Fallback if current user is only participant or names missing
                         : '未知会话'
                     }
@@ -380,9 +378,9 @@ const MessageCenterPage: React.FC = () => {
                   {/* Display case_id if available on the conversation summary, or from selectedMessage if it's an IM */}
                   {/* For now, let's assume ConversationSummary might have a case_id if relevant */}
                   {/* Or if selectedItem is an IMMessage (though current logic selects ConversationSummary for IMs) */}
-                  {(selectedItem as ConversationSummary).case_id && ( 
+                  {(selectedItem as any).case_id && ( 
                      <Typography variant="caption" color="text.secondary">
-                        相关案件: {String((selectedItem as ConversationSummary).case_id).replace(/^case:/, '')}
+                        相关案件: {String((selectedItem as any).case_id).replace(/^case:/, '')}
                      </Typography>
                   )}
                 </Box>
@@ -393,7 +391,6 @@ const MessageCenterPage: React.FC = () => {
                       messageText={chatMsg.messageText}
                       timestamp={chatMsg.timestamp}
                       isSender={chatMsg.isSender}
-                      senderName={chatMsg.senderName}
                     />
                   ))}
                   <div ref={chatHistoryEndRef} />

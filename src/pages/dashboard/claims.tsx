@@ -29,7 +29,7 @@ import {
   // AssignmentTurnedInOutlined as AssignmentTurnedInIcon,
 } from '@mui/icons-material';
 
-import { useAuth } from '../../contexts/AuthContext'; // Adjust path as per your project structure
+import { useAuth } from '@/src/contexts/AuthContext'; // Adjust path as per your project structure
 import { 
   useLiveClaimCountForCase,
   useLiveTotalClaimAmount,
@@ -46,7 +46,7 @@ import {
   useLiveClaimsByNatureChartData,
   useLiveRecentSubmissions,
   useLiveRecentReviewActions,
-} from '../../hooks/useLiveDashboardData'; // Adjust path
+} from '@/src/hooks/useLiveDashboardData'; // Adjust path
 
 // Common styles for the 7 metric cards
 // The `theme` parameter will now be the global theme
@@ -201,7 +201,7 @@ const ClaimDataDashboardPage: React.FC = () => {
         {/* Metric Cards Grid - Row 1 (New Metrics + First Two Original) */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {/* Metric: Today's Submissions Count */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statOrange'), 
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -231,7 +231,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* Metric: Today's Reviewed Claims Count */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statRed'), 
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -256,7 +256,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* Metric 1: Total Number of Claims (Live) - Now 3rd item in this row */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statBlue'), 
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -286,7 +286,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* Metric 2: Total Approved Claims (Live) - Now 4th item in this row */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statGreen'),
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -314,7 +314,7 @@ const ClaimDataDashboardPage: React.FC = () => {
         {/* Metric Cards Grid - Row 2 (Remaining Original Metrics) */}
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {/* Metric 3: Total Pending Claims (Live) */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statYellow'),
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -339,7 +339,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* Metric 4: Number of Unique Claimants (Live) */}
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statPurple'),
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -366,7 +366,7 @@ const ClaimDataDashboardPage: React.FC = () => {
 
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {/* Metric 5: Total Claimed Amount (Live) */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statBlue'),
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -383,14 +383,14 @@ const ClaimDataDashboardPage: React.FC = () => {
                     color: isTotalClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
                     textShadow: isTotalClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statBlue.main, 0.5)}`,
                   }}>
-                    {liveTotalClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                    {liveTotalClaimAmount.toLocaleString()} <span style={{marginLeft: '4px', opacity: 0.7, fontSize: '1.5rem'}}>元</span>
                   </Typography>
                 )}
               </CardContent>
             </Card>
           </Grid>
           {/* Metric 6: Total Approved Amount (Live) */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statGreen'),
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -407,14 +407,14 @@ const ClaimDataDashboardPage: React.FC = () => {
                     color: isApprovedClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
                     textShadow: isApprovedClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statGreen.main, 0.5)}`,
                   }}>
-                    {liveApprovedClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
+                    {liveApprovedClaimAmount.toLocaleString()} <span style={{marginLeft: '4px', opacity: 0.7, fontSize: '1.5rem'}}>元</span>
                   </Typography>
                 )}
               </CardContent>
             </Card>
           </Grid>
           {/* Metric 7: Total Pending Amount (Live) */}
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Card sx={{
               ...metricCardStyle(theme, 'statYellow'),
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
@@ -431,8 +431,9 @@ const ClaimDataDashboardPage: React.FC = () => {
                     color: isPendingClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
                     textShadow: isPendingClaimAmountUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statYellow.main, 0.5)}`,
                   }}>
-                    {livePendingClaimAmount.toLocaleString()} <Typography component="span" variant="h5" sx={{ml:0.5, opacity:0.7}}>元</Typography>
-                </Typography>
+                    {livePendingClaimAmount.toLocaleString()} <span style={{marginLeft: '4px', opacity: 0.7, fontSize: '1.5rem'}}>元</span>
+                  </Typography>
+                )}
               </CardContent>
             </Card>
           </Grid>
@@ -441,7 +442,7 @@ const ClaimDataDashboardPage: React.FC = () => {
         {/* Chart Grid */}
         <Grid container spacing={3}>
           {/* Review Progress Chart (Pie Chart) */}
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid size={{ xs: 12, md: 6, lg: 3 }}>
             <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
               <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
                 <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
@@ -475,7 +476,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* User Online Distribution Chart (Bar Chart) - Currently Mock Data */}
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid size={{ xs: 12, md: 6, lg: 3 }}>
             <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
               <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
                 <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
@@ -506,7 +507,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* Trend Chart (Daily Claims Count - Line Chart) */}
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid size={{ xs: 12, md: 6, lg: 3 }}>
             <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
               <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
                 <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
@@ -543,7 +544,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* Composition Chart (Claims by Nature - Pie Chart) */}
-          <Grid item xs={12} md={6} lg={3}>
+          <Grid size={{ xs: 12, md: 6, lg: 3 }}>
             <Card sx={{...contentCardStyle, minHeight: chartCardMinHeight}}>
               <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', p:2 }}>
                 <Typography variant={chartTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1}}>
@@ -579,7 +580,7 @@ const ClaimDataDashboardPage: React.FC = () => {
         {/* Dynamic Lists Grid */}
         <Grid container spacing={3} sx={{ mt: 1 }}> 
           {/* Recently Submitted Claims List */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{...contentCardStyle, minHeight: listCardMinHeight }}>
               <CardContent sx={{p:2, flexGrow:1, display:'flex', flexDirection:'column'}}>
                 <Typography variant={listTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1.5}}>
@@ -625,7 +626,7 @@ const ClaimDataDashboardPage: React.FC = () => {
           </Grid>
 
           {/* Recently Completed Review Actions List */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{...contentCardStyle, minHeight: listCardMinHeight }}>
               <CardContent sx={{p:2, flexGrow:1, display:'flex', flexDirection:'column'}}>
                 <Typography variant={listTitleVariant} component="h3" gutterBottom textAlign="center" sx={{color: theme.palette.text.primary, mb:1.5}}>

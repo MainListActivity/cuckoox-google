@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import LoginPage from '../../../src/pages/login'; // Adjust path as needed
-import { AppUser } from '../../../src/contexts/AuthContext'; // Assuming AppUser is exported
+import LoginPage from '@/src/pages/login'; // Adjust path as needed
+import { AppUser } from '@/src/contexts/AuthContext'; // Assuming AppUser is exported
 
 // Mock dependencies
 const mockNavigate = vi.fn();

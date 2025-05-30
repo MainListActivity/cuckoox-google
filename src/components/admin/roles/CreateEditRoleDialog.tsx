@@ -158,7 +158,7 @@ const CreateEditRoleDialog: React.FC<CreateEditRoleDialogProps> = ({
     return (
       <Box key={menu.id} sx={{ mb: 1.5, pl: level * 2.5 }}>
         <Grid container alignItems="center" spacing={1}>
-          <Grid item xs={12} sm={4} md={3} sx={{ display: 'flex', alignItems: 'center' }}>
+          <Grid size={{ xs: 12, sm: 4, md: 3 }} sx={{ display: 'flex', alignItems: 'center' }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -171,7 +171,7 @@ const CreateEditRoleDialog: React.FC<CreateEditRoleDialogProps> = ({
               sx={{minWidth: '150px'}}
             />
           </Grid>
-          <Grid item xs={12} sm={8} md={9}>
+          <Grid size={{ xs: 12, sm: 8, md: 9 }}>
             <FormGroup row sx={{ flexWrap: 'wrap' }}>
               <FormControlLabel
                 control={<Checkbox size="small" checked={currentPermission.canRead} onChange={(e) => handlePermissionChange(menu.id, 'canRead', e.target.checked)} />}

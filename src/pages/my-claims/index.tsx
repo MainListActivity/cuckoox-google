@@ -4,7 +4,7 @@
 // TODO: Data - API should only return claims belonging to the logged-in creditor.
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSnackbar } from '../../contexts/SnackbarContext'; // Assuming path is correct
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Assuming path is correct
 
 interface Claim {
   id: string;

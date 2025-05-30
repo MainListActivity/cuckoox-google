@@ -14,6 +14,7 @@ import {
     Grid,
     FormHelperText,
     Box,
+    Typography,
 } from '@mui/material';
 
 export interface AdminBasicClaimData {
@@ -122,7 +123,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                 <Box component="form" noValidate autoComplete="off">
                     <Typography variant="h6" gutterBottom sx={{mt:1, mb:2}}>{t('creditor_information_title', '债权人信息')}</Typography>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <FormControl fullWidth error={!!errors.creditorCategory}>
                                 <InputLabel id="creditorCategory-label">{t('creditor_form_category_label', '类别')}*</InputLabel>
                                 <Select
@@ -138,7 +139,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                                 {errors.creditorCategory && <FormHelperText>{errors.creditorCategory}</FormHelperText>}
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField
                                 required
                                 name="creditorName"
@@ -150,7 +151,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                                 helperText={errors.creditorName}
                             />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField
                                 required
                                 name="creditorIdentifier"
@@ -166,7 +167,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
 
                     <Typography variant="h6" gutterBottom sx={{mt:3, mb:2}}>{t('contact_information_title', '联系人信息')}</Typography>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 required
                                 name="contactPersonName"
@@ -178,7 +179,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                                 helperText={errors.contactPersonName}
                             />
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <TextField
                                 required
                                 name="contactInfo"
@@ -194,7 +195,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
 
                     <Typography variant="h6" gutterBottom sx={{mt:3, mb:2}}>{t('asserted_claim_information_title', '主张债权信息')}</Typography>
                     <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <FormControl fullWidth error={!!errors.claimNature}>
                                 <InputLabel id="claimNature-label">{t('claim_form_nature_label', '债权性质')}*</InputLabel>
                                 {/* // TODO: Fetch from admin config */}
@@ -213,7 +214,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                                 {errors.claimNature && <FormHelperText>{errors.claimNature}</FormHelperText>}
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                             <FormControl fullWidth error={!!errors.currency}>
                                 <InputLabel id="currency-label">{t('claim_form_currency_label', '币种')}*</InputLabel>
                                 <Select
@@ -229,7 +230,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                                 {errors.currency && <FormHelperText>{errors.currency}</FormHelperText>}
                             </FormControl>
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField
                                 required
                                 name="principal"
@@ -243,7 +244,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                                 InputProps={{ inputProps: { min: 0 } }}
                             />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField
                                 name="interest"
                                 label={t('claim_form_interest_label', '利息')}
@@ -256,7 +257,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
                                 InputProps={{ inputProps: { min: 0 } }}
                             />
                         </Grid>
-                        <Grid item xs={12} sm={4}>
+                        <Grid size={{ xs: 12, sm: 4 }}>
                             <TextField
                                 name="otherFees"
                                 label={t('claim_form_other_fees_label', '其他费用')}

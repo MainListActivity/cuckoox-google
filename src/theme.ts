@@ -1,5 +1,5 @@
 import { createTheme, PaletteOptions, alpha } from '@mui/material/styles';
-import { teal, grey, blue, green, yellow, purple, orange, red } from '@mui/material/colors';
+import { teal, grey, blue, green, yellow, purple, orange, red, cyan } from '@mui/material/colors';
 
 // Module augmentation for custom palette keys
 declare module '@mui/material/styles' {

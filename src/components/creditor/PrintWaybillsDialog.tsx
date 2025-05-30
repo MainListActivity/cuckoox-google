@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSnackbar } from '../../contexts/SnackbarContext'; // Added for showSuccess
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added for showSuccess
 import {
   Dialog,
   DialogTitle,
@@ -14,7 +14,7 @@ import {
   Divider,
   Box,
 } from '@mui/material';
-import type { Creditor } from '../../pages/CreditorListPage'; // Assuming Creditor type is exported
+import type { Creditor } from '@/src/pages/creditors'; // Import Creditor type
 
 interface PrintWaybillsDialogProps {
   open: boolean;

@@ -20,9 +20,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 // Import AddEditStatusDialog and its StatusData type
-import AddEditStatusDialog, { StatusData } from '../../components/admin/review_statuses/AddEditStatusDialog';
+import AddEditStatusDialog, { StatusData } from '@/src/pages/components/admin/review_statuses/AddEditStatusDialog';
 // Import ConfirmDeleteDialog
-import ConfirmDeleteDialog from '../../components/common/ConfirmDeleteDialog';
+import ConfirmDeleteDialog from '@/src/pages/components/common/ConfirmDeleteDialog';
 
 // ReviewStatus interface now uses StatusData structure directly
 interface ReviewStatus extends StatusData {

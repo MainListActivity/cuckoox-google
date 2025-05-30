@@ -2,8 +2,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../i18n'; // Adjust path
-import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from './AdminCreateClaimBasicInfoDialog';
+import i18n from '@/src/i18n'; // Adjust path
+import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from '@/src/components/admin/claims/AdminCreateClaimBasicInfoDialog';
 
 const mockOnClose = vi.fn();
 const mockOnNext = vi.fn();

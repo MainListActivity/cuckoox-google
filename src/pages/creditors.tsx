@@ -29,11 +29,12 @@ import {
   mdiFileImportOutline,
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import PrintWaybillsDialog from '../../components/creditor/PrintWaybillsDialog';
+import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import PrintWaybillsDialog from '@/src/components/creditor/PrintWaybillsDialog';
 // Changed CreditorData to CreditorFormData in import from AddCreditorDialog
-import AddCreditorDialog, { CreditorFormData } from '../../components/creditor/AddCreditorDialog'; 
-import BatchImportCreditorsDialog from '../../components/creditor/BatchImportCreditorsDialog';
+import AddCreditorDialog, { CreditorFormData } from '@/src/components/creditor/AddCreditorDialog'; 
+import BatchImportCreditorsDialog from '@/src/components/creditor/BatchImportCreditorsDialog';
+import ConfirmDeleteDialog from '@/src/components/common/ConfirmDeleteDialog';
 
 // Define Creditor type for clarity
 export interface Creditor {
@@ -66,6 +67,8 @@ const CreditorListPage: React.FC = () => {
   const [batchImportOpen, setBatchImportOpen] = useState<boolean>(false);
   const [editingCreditor, setEditingCreditor] = useState<Creditor | null>(null);
   const [isImporting, setIsImporting] = useState<boolean>(false); // Added for batch import loading state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
+  const [creditorToDelete, setCreditorToDelete] = useState<Creditor | null>(null);
 
   // TODO: Fetch creditors for the selected case from API
 
@@ -191,6 +194,25 @@ const CreditorListPage: React.FC = () => {
     }, 1500); // Simulate 1.5 seconds import time
   };
 
+  // Delete handlers
+  const handleOpenDeleteDialog = (creditor: Creditor) => {
+    setCreditorToDelete(creditor);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setCreditorToDelete(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (creditorToDelete) {
+      setCreditors(prev => prev.filter(c => c.id !== creditorToDelete.id));
+      showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
+      handleCloseDeleteDialog();
+    }
+  };
+
 
   return (
     <Box sx={{ p: 3 }}>
@@ -314,10 +336,7 @@ const CreditorListPage: React.FC = () => {
                             aria-label="delete creditor" 
                             onClick={(e) => {
                               e.stopPropagation(); 
-                              // TODO: Implement delete logic, perhaps with a confirmation dialog
-                              console.log("TODO: Implement delete creditor", creditor.id); 
-                              // Example: setCreditors(prev => prev.filter(c => c.id !== creditor.id));
-                              // showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
+                              handleOpenDeleteDialog(creditor);
                             }}
                           >
                             <SvgIcon fontSize="small"><path d={mdiDeleteOutline} /></SvgIcon>
@@ -354,6 +373,17 @@ const CreditorListPage: React.FC = () => {
         onClose={() => setBatchImportOpen(false)}
         onImport={handleImportCreditors}
         isImporting={isImporting} // Pass isImporting state
+      />
+      <ConfirmDeleteDialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+        onConfirm={handleConfirmDelete}
+        title={t('delete_creditor_dialog_title', '确认删除债权人')}
+        contentText={
+          creditorToDelete 
+            ? t('delete_creditor_dialog_content', `您确定要删除债权人 "${creditorToDelete.name}" 吗？此操作不可撤销。`)
+            : ''
+        }
       />
     </Box>
   );

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSurrealClient } from '../contexts/SurrealProvider'; // Adjust path if needed
+import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // Adjust path if needed
 // import { Thing } from 'surrealdb.js'; // For typing if needed, e.g. caseId
 
 // Generic type for count results

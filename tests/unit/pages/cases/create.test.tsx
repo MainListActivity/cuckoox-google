@@ -3,11 +3,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../../src/i18n'; // Assuming your i18n setup is here
-import { SurrealProvider } from '../../../../src/contexts/SurrealProvider';
-import { AuthContext } from '../../../../src/contexts/AuthContext';
-import { SnackbarProvider } from '../../../../src/contexts/SnackbarContext';
-import CreateCasePage from '../../../../src/pages/cases/create';
+import i18n from '@/src/i18n'; // Assuming your i18n setup is here
+import { SurrealProvider } from '@/src/contexts/SurrealProvider';
+import { AuthContext } from '@/src/contexts/AuthContext';
+import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
+import CreateCasePage from '@/src/pages/cases/create';
 
 // Mocks
 vi.mock('react-router-dom', async () => {

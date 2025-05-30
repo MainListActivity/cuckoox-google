@@ -3,7 +3,7 @@
 // TODO: Auto-Navigation - Logic for automatic navigation to this page (e.g., if case status is '债权申报' and user has permissions) should be handled in higher-level routing.
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useSnackbar } from '../../contexts/SnackbarContext';
+import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -43,7 +43,7 @@ import {
   mdiFileDocumentOutline, // For attachment icon
 } from '@mdi/js';
 // Import the new dialog
-import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from '../../components/admin/claims/AdminCreateClaimBasicInfoDialog';
+import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from '@/src/components/admin/claims/AdminCreateClaimBasicInfoDialog';
 
 
 // Updated Claim interface

@@ -3,9 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom'; // For useNavigate
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../../src/i18n'; // Adjust path
-import { SnackbarProvider, useSnackbar } from '../../../../src/contexts/SnackbarContext';
-import ClaimSubmissionPage from '../../../../src/pages/claims/submit';
+import i18n from '@/src/i18n'; // Adjust path
+import { SnackbarProvider, useSnackbar } from '@/src/contexts/SnackbarContext';
+import ClaimSubmissionPage from '@/src/pages/claims/submit';
 
 // Mock useNavigate
 const mockNavigate = vi.fn();

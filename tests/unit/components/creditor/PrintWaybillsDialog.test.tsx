@@ -2,10 +2,10 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../../src/i18n'; // Adjust path
-import PrintWaybillsDialog from '../../../../src/components/creditor/PrintWaybillsDialog';
-import { Creditor } from '../../../../src/pages/creditors'; // Adjust path
-import { SnackbarProvider } from '../../../../src/contexts/SnackbarContext';
+import i18n from '@/src/i18n'; // Adjust path
+import PrintWaybillsDialog from '@/src/components/creditor/PrintWaybillsDialog';
+import { Creditor } from '@/src/pages/creditors'; // Adjust path
+import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 
 const mockOnClose = vi.fn();
 

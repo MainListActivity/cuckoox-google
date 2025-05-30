@@ -1,5 +1,5 @@
 import React from 'react';
-import { useCaseStatus, CaseStatus } from '../../contexts/CaseStatusContext'; // Adjust path as needed
+import { useCaseStatus, CaseStatus } from '@/src/contexts/CaseStatusContext'; // Adjust path as needed
 
 const CaseStatusToggler: React.FC = () => {
   const { caseStatus, setCaseStatus } = useCaseStatus();

@@ -1,6 +1,6 @@
 import React, { useState, ReactNode, useEffect, useRef } from 'react'; // Added useEffect, useRef
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'; // Added useLocation
-import { useAuth, NavItemType } from '../contexts/AuthContext';
+import { useAuth, NavItemType } from '@/src/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import {
   AppBar,
@@ -25,7 +25,7 @@ import {
   alpha, // Added alpha
 } from '@mui/material';
 import SvgIcon from '@mui/material/SvgIcon';
-import { useTheme } from '../contexts/ThemeContext';
+import { useTheme } from '@/src/contexts/ThemeContext';
 import {
   mdiMenu,
   mdiMenuOpen,

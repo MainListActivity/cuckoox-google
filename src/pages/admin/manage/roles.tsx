@@ -32,8 +32,8 @@ import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
 import CheckBoxIcon from '@mui/icons-material/CheckBox';
 
 // Import Dialog and its types
-import CreateEditRoleDialog, { RoleData, MenuPermission } from '../../components/admin/roles/CreateEditRoleDialog';
-import ConfirmDeleteDialog from '../../components/common/ConfirmDeleteDialog'; // Import ConfirmDeleteDialog
+import CreateEditRoleDialog, { RoleData, MenuPermission } from '@/src/pages/components/admin/roles/CreateEditRoleDialog';
+import ConfirmDeleteDialog from '@/src/pages/components/common/ConfirmDeleteDialog'; // Import ConfirmDeleteDialog
 
 // Mock User Data
 interface SystemUser {

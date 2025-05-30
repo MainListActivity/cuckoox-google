@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import authService from '../services/authService';
-import { useAuth, AppUser } from '../contexts/AuthContext'; // Import AppUser
-import { useSurrealClient } from '../contexts/SurrealProvider'; // ADDED
+import authService from '@/src/services/authService';
+import { useAuth, AppUser } from '@/src/contexts/AuthContext'; // Import AppUser
+import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // ADDED
 import { useTranslation } from 'react-i18next';
-import GlobalLoader from '../components/GlobalLoader'; // ADDED
+import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
 
 const OidcCallbackPage: React.FC = () => {
   const { t } = useTranslation();

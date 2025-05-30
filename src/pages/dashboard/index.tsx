@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '@/src/contexts/AuthContext';
 import {
   Box,
   Typography,
@@ -11,7 +11,7 @@ import {
   ListItemText,
   Button, // Added Button
 } from '@mui/material';
-import { useSnackbar } from '../contexts/SnackbarContext'; // Added useSnackbar
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added useSnackbar
 
 const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -52,7 +52,7 @@ const DashboardPage: React.FC = () => {
 
       <Grid container spacing={3}>
         {statCards.map((card, index) => (
-          <Grid item xs={12} md={6} lg={4} key={index}>
+          <Grid size={{ xs: 12, md: 6, lg: 4 }} key={index}>
             <Card sx={{ '&:hover': { boxShadow: 6 } }}>
               <CardContent>
                 <Typography variant="h6" component="h2" sx={{ color: card.color }} gutterBottom>

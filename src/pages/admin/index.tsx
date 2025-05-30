@@ -37,7 +37,7 @@ const AdminPage: React.FC = () => {
       
       <Grid container spacing={3}>
         {adminSections.map((section, index) => (
-          <Grid item xs={12} sm={6} md={4} key={index}>
+          <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
             <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               <CardContent sx={{ flexGrow: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>

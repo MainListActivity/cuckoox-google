@@ -8,8 +8,8 @@ import {
   Button,
   Box,
 } from '@mui/material';
-import RichTextEditor, { QuillDelta } from '../RichTextEditor'; // Adjust path as necessary
-import Delta from 'quill-delta';
+import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor'; // Adjust path as necessary
+import { Delta } from 'quill/core';
 
 interface CaseInfo {
   caseId: string;

@@ -32,6 +32,8 @@ import {
   CircularProgress,
   Alert,
   SvgIcon,
+  IconButton,
+  Stack,
 } from '@mui/material';
 import {
   mdiArrowLeft,
@@ -41,9 +43,9 @@ import {
   mdiFileDocumentOutline, // For attachments
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
-import RichTextEditor, { QuillDelta } from '../../components/RichTextEditor'; // Assuming QuillDelta is exported
-import { useSnackbar } from '../../contexts/SnackbarContext';
-import Delta from 'quill-delta'; // For initializing editor content
+import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor'; // Assuming QuillDelta is exported
+import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { Delta } from 'quill/core'; // For initializing editor content
 
 // Define a type for the claim data structure for better type safety
 interface AssertedDetails {
@@ -131,7 +133,7 @@ const ClaimReviewDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const { id: claimIdFromParams } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { showSnackbar } = useSnackbar();
+  const { showSuccess, showError } = useSnackbar();
 
   // TODO: Fetch actual claim data based on claimIdFromParams
   const [claimData, setClaimData] = useState<ClaimDataType | null>(null);
@@ -216,7 +218,7 @@ const ClaimReviewDetailPage: React.FC = () => {
 
   const handleSubmitReview = () => {
     if (!validateModalForm() || !claimData) {
-      showSnackbar(t('claim_review_error_form_invalid', '请修正审核表单中的错误。'), 'error');
+      showError(t('claim_review_error_form_invalid', '请修正审核表单中的错误。'));
       return;
     }
 
@@ -240,7 +242,7 @@ const ClaimReviewDetailPage: React.FC = () => {
       setClaimData(updatedClaimData);
       setAdminInternalNotes(new Delta().insert(modalReviewOpinion)); // Update internal notes as well if it's tied to official opinion
 
-      showSnackbar(t('claim_review_submit_success_mock', '审核意见已提交 (模拟)'), 'success');
+      showSuccess(t('claim_review_submit_success_mock', '审核意见已提交 (模拟)'));
       setAuditModalOpen(false);
     }
   };
@@ -298,7 +300,7 @@ const ClaimReviewDetailPage: React.FC = () => {
         <Container maxWidth="xl" sx={{ flexGrow: 1, py: 3 }}>
           <Grid container spacing={3}>
             {/* Left Panel: Creditor's Submitted Information */}
-            <Grid item xs={12} lg={4}>
+            <Grid size={{ xs: 12, lg: 4 }}>
               <Paper elevation={3} sx={{ p: 2, height: '100%' }}>
                 <Typography variant="h5" gutterBottom>{t('creditor_submitted_info_title', '债权人申报信息')}</Typography>
                 <List dense>
@@ -343,7 +345,7 @@ const ClaimReviewDetailPage: React.FC = () => {
             </Grid>
 
             {/* Right Panel: Attachments & Review Area */}
-            <Grid item xs={12} lg={8}>
+            <Grid size={{ xs: 12, lg: 8 }}>
               <Stack spacing={3}>
                 <Paper elevation={3} sx={{ p: 2 }}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
@@ -389,7 +391,7 @@ const ClaimReviewDetailPage: React.FC = () => {
           <DialogTitle>{t('fill_review_opinion_and_amount_title', '填写审核意见与认定金额')}</DialogTitle>
           <DialogContent dividers>
             <Grid container spacing={2} sx={{pt:1}}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <FormControl fullWidth error={!!modalErrors.modalApprovedNature}>
                   <InputLabel id="modalApprovedNature-label">{t('approved_claim_nature_label', '审核认定债权性质')}*</InputLabel>
                   <Select
@@ -407,7 +409,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                   {modalErrors.modalApprovedNature && <FormHelperText>{modalErrors.modalApprovedNature}</FormHelperText>}
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <FormControl fullWidth error={!!modalErrors.modalAuditStatus}>
                   <InputLabel id="modalAuditStatus-label">{t('audit_status_label', '审核状态')}*</InputLabel>
                   <Select
@@ -425,7 +427,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                   {modalErrors.modalAuditStatus && <FormHelperText>{modalErrors.modalAuditStatus}</FormHelperText>}
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <TextField
                     label={t('approved_principal_label', '审核认定本金') + ` (${claimData.asserted_details.currency})*`}
                     type="number"
@@ -437,7 +439,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                     InputProps={{ inputProps: { min: 0 } }}
                 />
               </Grid>
-              <Grid item xs={12} sm={6} md={4}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <TextField
                     label={t('approved_interest_label', '审核认定利息') + ` (${claimData.asserted_details.currency})*`}
                     type="number"
@@ -449,7 +451,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                     InputProps={{ inputProps: { min: 0 } }}
                 />
               </Grid>
-              <Grid item xs={12} sm={12} md={4}>
+              <Grid size={{ xs: 12, sm: 12, md: 4 }}>
                 <TextField
                     label={t('approved_other_fees_label', '审核认定其他费用') + ` (${claimData.asserted_details.currency})`}
                     type="number"
@@ -461,7 +463,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                     InputProps={{ inputProps: { min: 0 } }}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <TextField
                     label={t('review_opinion_label', '审核意见/备注')}
                     multiline
@@ -473,7 +475,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                     helperText={modalErrors.modalReviewOpinion}
                 />
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Typography variant="subtitle2" gutterBottom>{t('admin_supplemental_attachments_modal_label', '管理人补充附件材料 (可选)')}</Typography>
                 <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 200, p:1 }}>
                   <RichTextEditor

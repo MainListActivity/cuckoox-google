@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSurrealClient } from '../contexts/SurrealProvider';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb.js';
 import { 
   Message, 
@@ -7,7 +7,7 @@ import {
   CaseRobotReminderMessage, 
   BusinessNotificationMessage,
   IMMessage // For potential use in conversation last message
-} from '../types/message';
+} from '@/src/types/message';
 
 // --- useConversationsList Hook ---
 interface RawConversationParticipant {

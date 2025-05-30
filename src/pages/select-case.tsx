@@ -1,9 +1,9 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Case } from '../contexts/AuthContext'; // Import Case interface
+import { useAuth } from '@/src/contexts/AuthContext';
+import { Case } from '@/src/contexts/AuthContext'; // Import Case interface
 import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
-import GlobalLoader from '../components/GlobalLoader'; // ADDED
+import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
 
 const CaseSelectionPage: React.FC = () => {
   const { t } = useTranslation(); // <-- INITIALIZE T

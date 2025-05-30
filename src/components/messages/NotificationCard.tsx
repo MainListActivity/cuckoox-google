@@ -14,7 +14,7 @@ import {
   useTheme,
   alpha as muiAlpha,
 } from '@mui/material';
-import { CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '../../types/message'; // Import refined types
+import { CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '@/src/types/message'; // Import refined types
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import CampaignIcon from '@mui/icons-material/Campaign';
 import InfoIcon from '@mui/icons-material/Info'; // Keep for default/fallback

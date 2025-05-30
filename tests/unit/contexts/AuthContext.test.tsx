@@ -1,9 +1,9 @@
 import React, { ReactNode } from 'react';
 import { render, act, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AuthProvider, useAuth, Case, Role } from '../../../src/contexts/AuthContext'; // Adjust path as needed
-import authService from '../../../src/services/authService';
-import { db } from '../../../src/lib/surreal';
+import { AuthProvider, useAuth, Case, Role } from '@/src/contexts/AuthContext'; // Adjust path as needed
+import authService from '@/src/services/authService';
+import { db } from '@/src/lib/surreal';
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
 

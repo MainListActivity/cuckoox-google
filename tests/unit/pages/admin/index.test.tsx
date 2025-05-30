@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import AdminPage from '../../../../src/pages/admin/index';
+import AdminPage from '@/src/pages/admin/index';
 import { ThemeProvider, createTheme } from '@mui/material/styles'; // For Theme context
-import { adminSections } from '../../../../src/pages/admin/index'; // Import adminSections if it's exported, otherwise redefine or mock
+import { adminSections } from '@/src/pages/admin/index'; // Import adminSections if it's exported, otherwise redefine or mock
 
 // Mock SvgIcon if it causes issues in tests, or ensure it's handled by the testing environment
 // jest.mock('@mui/material/SvgIcon', () => (props: any) => <svg data-testid="mock-svg-icon" {...props} />);

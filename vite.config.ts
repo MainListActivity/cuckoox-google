@@ -1,7 +1,7 @@
-import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react'; // Standard Vite React plugin
 import { UserConfig } from 'vitest/config'; // Import UserConfig for typing
+import { fileURLToPath, URL } from 'node:url';
 
 // Define a type that extends Vite's UserConfig with Vitest's test config
 interface VitestConfig extends UserConfig {
@@ -18,14 +18,14 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, '.'),
+          '@': fileURLToPath(new URL('.', import.meta.url)),
         }
       },
       test: { // Vitest configuration
         globals: true,
         environment: 'jsdom', // Common for React component testing
         include: ['tests/unit/**/*.test.{ts,tsx}'],
-        // setupFiles: './tests/setup.ts', // Optional: if you have a test setup file
+        setupFiles: './tests/setup.ts', // Setup file for test environment
         exclude: [ // Default Vitest excludes + e2e
           '**/node_modules/**',
           '**/dist/**',

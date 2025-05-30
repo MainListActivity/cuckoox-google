@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import authService from '../services/authService';
-// import { db } from '../lib/surreal'; // REMOVED
-import {useSurreal} from './SurrealProvider'; // ADDED
+import authService from '@/src/services/authService';
+// import { db } from '@/src/lib/surreal'; // REMOVED
+import {useSurreal} from '@/src/contexts/SurrealProvider'; // ADDED
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb'; // Import for typing record IDs
 

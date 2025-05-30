@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSurrealClient } from '../contexts/SurrealProvider';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb.js';
 
 export interface Participant {
