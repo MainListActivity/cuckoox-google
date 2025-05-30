@@ -167,7 +167,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         position="fixed"
         sx={{
           zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1,
-          // background: `linear-gradient(to right, ${currentTheme.palette.primary.main}, ${currentTheme.colors.secondary})`, // Using context theme
+          background: `linear-gradient(to right, ${currentTheme.palette.primary}, ${currentTheme.palette.secondary})`, // Using context theme
         }}
       >
         <Toolbar>
@@ -221,7 +221,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
           {/* End Case Switcher */}
 
-          <IconButton onClick={toggleThemeMode} sx={{ color: currentTheme.palette.primary.main }}>
+          <IconButton onClick={toggleThemeMode} sx={{ color: currentTheme.palette.common.white }}>
             <SvgIcon>
               <path d={themeMode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
             </SvgIcon>
@@ -231,7 +231,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             onChange={toggleThemeMode}
             color="secondary"
           />
-          {user && <Typography sx={{ mr: 2, color: currentTheme.palette.primary.main }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
+          {user && <Typography sx={{ mr: 2, color: currentTheme.palette.common.white }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
         </Toolbar>
       </AppBar>
 

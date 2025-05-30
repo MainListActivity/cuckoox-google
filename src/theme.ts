@@ -37,12 +37,6 @@ declare module '@mui/material/styles' {
   }
 }
 
-declare module "@mui/material/Typography/Typography" {
-  interface TypographyPropsVariantOverrides {
-    digitalMetric: true;
-  }
-}
-
 
 // Define the light palette
 const lightPalette: PaletteOptions = {

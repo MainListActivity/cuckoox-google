@@ -1,6 +1,6 @@
 # Developer Checklist: 破产案件全生命周期管理平台
 
-This checklist outlines the development tasks required to build the CuckooX platform. It is based on `product.md`, `design_tasks_checklist.md`, and `规范.md`.
+This checklist outlines the development tasks required to build the CuckooX platform. It is based on `产品说明文档-jules.md`, `design_tasks_checklist.md`, and `规范.md`.
 
 ## 0. Global Setup & Core Infrastructure
 
@@ -26,7 +26,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
         - [x] Handle callback from OIDC and store user session/token securely. (Handled by `oidc-client-ts` and `AuthContext`).
     - [x] **SurrealDB Direct Login (Admin Mode):**
         - [x] Implement UI and logic for admin login form when `admin=true` URL parameter is present. (Design task 1.1.1) (Verified in `LoginPage.tsx`).
-    - [x] **Case Selection Logic (as per `product.md 2.1.1` & `design_tasks_checklist.md 1.1.2`):**
+    - [x] **Case Selection Logic (as per `产品说明文档-jules.md 2.1.1` & `design_tasks_checklist.md 1.1.2`):**
         - [x] Enhance `AuthContext` or a new `CaseContext` to manage selected case ID. (`AuthContext` handles this).
         - [x] Implement logic to handle `case=案件ID` from URL (check permissions, load case). (Implemented in `App.tsx` calling `auth.selectCase`).
         - [x] Implement logic to load last selected case from `localStorage` (or SurrealDB if backend stores this preference). (`AuthContext` handles this).
@@ -34,7 +34,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
         - [x] Implement redirect to `/select-case` (CaseSelectionPage) if multiple cases and no selection. (`ProtectedRoute.tsx` handles this).
     - [x] **Role-Based Access Control (RBAC):**
         - [x] Ensure `AuthContext` (`user.role`, `hasRole`) robustly supports role checks. (`hasRole` implemented).
-        - [x] `ProtectedRoute.tsx`: Enhance to handle dynamic menu rendering based on roles/permissions fetched after login/case selection (as per `product.md 2.1.1`). (Frontend prepared with mock data flow for dynamic menus in `AuthContext` and `Layout.tsx`. Full implementation depends on backend API for permissions).
+        - [x] `ProtectedRoute.tsx`: Enhance to handle dynamic menu rendering based on roles/permissions fetched after login/case selection (as per `产品说明文档-jules.md 2.1.1`). (Frontend prepared with mock data flow for dynamic menus in `AuthContext` and `Layout.tsx`. Full implementation depends on backend API for permissions).
 - [x] **Global Components:**
     - [x] **Loading States:** Develop consistent loading indicators/spinners (visible in dark/light modes). (Design task 1.3.3) (`GlobalLoader.tsx` implemented, themed, and usage in `ProtectedRoute` improved).
     - [x] **Error Handling:** Develop consistent error message components/toasts. (Design task 1.3.4) (`GlobalError.tsx` implemented and themed; `SnackbarContext` for toasts).
@@ -84,15 +84,15 @@ This checklist outlines the development tasks required to build the CuckooX plat
     - [x] Connect to API to fetch case details and `quilljs` content.
 - [x] **Modify Status (within `CaseDetailPage.tsx` or modal - Design tasks 2.4.x):** (Implemented UI, dynamic status display based on state transitions, inputs for data including QuillJS, mock submission, dialog connection)
     - [x] Implement UI to initiate status modification.
-    - [x] Dynamically display valid next statuses based on `product.md 3.1.4` state transitions.
+    - [x] Dynamically display valid next statuses based on `产品说明文档-jules.md 3.1.4` state transitions.
     - [x] Implement inputs for required data (e.g., dates, `QuillJS` for "裁定重整公告" / "重整计划").
     - [x] Implement submission to API and confirmation dialogs.
 - [x] **Meeting Minutes (within `CaseDetailPage.tsx` or modal - Design tasks 2.5.x):** (Implemented button, QuillJS integration, mock save, dialog connection)
     - [x] Implement "填写会议纪要" button (conditional display based on case status).
     - [x] Integrate `QuillJS` editor for inputting/saving minutes, associated with the case/meeting.
-- [x] **Access Control & Reminders (as per `product.md 3.1.2`, `3.1.3`):** (Frontend part: UI elements conditional display based on status is reviewed/implemented; TODOs for role-based control added. Reminder generation confirmed as backend task)
+- [x] **Access Control & Reminders (as per `产品说明文档-jules.md 3.1.2`, `3.1.3`):** (Frontend part: UI elements conditional display based on status is reviewed/implemented; TODOs for role-based control added. Reminder generation confirmed as backend task)
     - [x] Ensure UI elements (buttons, menu items) are dynamically shown/hidden based on user role and case status.
-    - [x] (Backend Task) Implement "案件机器人" logic for sending reminders as per table in `product.md 3.1.3`. Frontend will consume these in Message Center.
+    - [x] (Backend Task) Implement "案件机器人" logic for sending reminders as per table in `产品说明文档-jules.md 3.1.3`. Frontend will consume these in Message Center.
 
 ## 3. 债权人管理 (Creditor Management)
 
@@ -101,7 +101,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
     - [x] Toolbar buttons: "添加单个债权人", "批量导入债权人", "打印快递单号".
     - [x] Implement responsive table for creditor list.
     - [x] Connect to API for fetching/managing creditors for the selected case.
-    - [x] Implement automatic navigation to this module if case is "立案" and user has permission (as per `product.md 3.2.2` & `design_tasks_checklist.md 3.5.1`). (Placeholder comment added; actual implementation is a higher-level routing concern but acknowledged)
+    - [x] Implement automatic navigation to this module if case is "立案" and user has permission (as per `产品说明文档-jules.md 3.2.2` & `design_tasks_checklist.md 3.5.1`). (Placeholder comment added; actual implementation is a higher-level routing concern but acknowledged)
 - [x] **Add Single Creditor (modal or new page - Design tasks 3.2.x):** (Implemented dialog for add/edit, validation, mock submission)
     - [x] Implement form with specified fields (类别, 名称, ID, 联系人, 地址 etc.).
     - [x] Implement validation and API submission.
@@ -115,28 +115,28 @@ This checklist outlines the development tasks required to build the CuckooX plat
 
 ## 4. 债权申报 (Claim Submission by Creditor) - Creditor Facing
 - [!] **UI Framework Note:** Pages in this module currently use Tailwind CSS. `规范.md` specifies MUI. This needs to be reconciled or MUI migration planned.
-- [x] **Access Control (as per `product.md 3.3.2` & `design_tasks_checklist.md 4.5.1`):** (Placeholder comments added; actual case status check is higher-level)
+- [x] **Access Control (as per `产品说明文档-jules.md 3.3.2` & `design_tasks_checklist.md 4.5.1`):** (Placeholder comments added; actual case status check is higher-level)
     - [x] Ensure module is accessible only during "债权申报" stage for creditor roles.
-- [x] **Create/Edit Basic Claim Info (`ClaimSubmissionPage.tsx` - Design tasks 4.1.x):** (Implemented form, auto-calculation, mock save & navigation with claim ID. Noted: uses Tailwind)
+- [x] **Create/Edit Basic Claim Info (`ClaimSubmissionPage.tsx` - Design tasks 4.1.x):** (Implemented form, auto-calculation, mock save & navigation with claim ID. Noted: uses MUI)
     - [x] Implement "新增申报" button and form for basic claim details (性质, 本金, 利息, etc.).
     - [x] Implement "保存并下一步（编辑附件）" workflow.
     - [x] Connect to API.
-- [x] **Edit Attachment Materials (QuillJS page/section - Design tasks 4.2.x):** (Implemented page with `claimId`, RichTextEditor, mock save draft/submit actions. Noted: uses Tailwind; RichTextEditor file/image upload is mock)
+- [x] **Edit Attachment Materials (QuillJS page/section - Design tasks 4.2.x):** (Implemented page with `claimId`, RichTextEditor, mock save draft/submit actions. Noted: uses MUI; RichTextEditor file/image upload is mock)
     - [x] Integrate `QuillJS` editor for claim justification and evidence upload (images to MinIO, other files as links).
     - [x] Display basic claim info for reference.
     - [x] Implement "返回修改基本信息", "保存草稿", "提交申报" buttons.
     - [x] Handle API interaction for saving/submitting.
-- [x] **Claim Submission Flow & Read-Only View (Design tasks 4.3.x):** (Implemented mock submission, navigation to a submitted detail page. Read-only view handled by `SubmittedClaimDetailPage.tsx`. Noted: uses Tailwind)
+- [x] **Claim Submission Flow & Read-Only View (Design tasks 4.3.x):** (Implemented mock submission, navigation to a submitted detail page. Read-only view handled by `SubmittedClaimDetailPage.tsx`. Noted: uses MUI)
     - [x] Implement validation and feedback for submission.
     - [x] Implement read-only view for submitted/approved claims from creditor's perspective.
-- [x] **Creditor's Claim List (`MyClaimsPage.tsx` adapted for creditors - Design tasks 4.4.x):** (Implemented list with mock data, actions for view/withdraw/edit with navigation. Noted: uses Tailwind)
+- [x] **Creditor's Claim List (`MyClaimsPage.tsx` adapted for creditors - Design tasks 4.4.x):** (Implemented list with mock data, actions for view/withdraw/edit with navigation. Noted: uses MUI)
     - [x] Develop a view for creditors to see their own claims (申报时间, 性质, 总额, 审核状态, 审核意见).
     - [x] Implement actions: View Details, Withdraw (if not audited), Edit (if draft/rejected).
     - [x] Connect to API.
 
 ## 5. 债权审核 (Claim Review by Administrator) - Administrator Facing
 
-- [ ] **Access Control & Auto-Navigation (as per `product.md 3.4.2` & `design_tasks_checklist.md 5.6.1`):**
+- [ ] **Access Control & Auto-Navigation (as per `产品说明文档-jules.md 3.4.2` & `design_tasks_checklist.md 5.6.1`):**
     - [ ] Ensure module is accessible during "债权申报" stage for admin/manager roles.
     - [ ] Implement automatic navigation if conditions met.
 - [ ] **Administrator's Claim List (`ClaimListPage.tsx` - Design tasks 5.1.x):**
@@ -213,7 +213,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
     - [x] Implement message input (text, image, file upload with vector icons). (Text input implemented and sends to backend; file/image uploads are placeholders).
     - [x] Style chat bubbles for dark/light modes.
 - [x] **System Reminders (Design tasks 8.3.x):**
-    - [x] Implement card-based UI for "案件机器人" messages (from `product.md 3.1.3`). (Using `NotificationCard.tsx`).
+    - [x] Implement card-based UI for "案件机器人" messages (from `产品说明文档-jules.md 3.1.3`). (Using `NotificationCard.tsx`).
     - [x] Implement display for business operation notifications (claim approved/rejected, new claim to audit, etc.). (Using `NotificationCard.tsx`).
 - [x] **Notification Management (Design tasks 8.4.x):**
     - [x] Implement mark as read/unread. (Implemented for notifications with backend persistence).
@@ -234,7 +234,7 @@ This checklist outlines the development tasks required to build the CuckooX plat
     - [ ] **Status List:** Implement table for audit statuses. "添加状态" button.
     - [ ] **Add/Edit/Delete Status Form:** Simple form for status labels.
     - [ ] Connect to API. These statuses will populate dropdowns in Claim Review.
-- [ ] **案件通知规则配置 (in `AdminPage.tsx` - `product.md 3.1.3` related):**
+- [ ] **案件通知规则配置 (in `AdminPage.tsx` - `产品说明文档-jules.md 3.1.3` related):**
     - [ ] UI for admin to configure rules and templates for "案件机器人" notifications (though actual sending is backend).
 
 ## 10. Non-Functional Requirements & Polish
