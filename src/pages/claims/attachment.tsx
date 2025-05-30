@@ -52,7 +52,7 @@ const ClaimAttachmentPage: React.FC = () => {
 
 
   return (
-    <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-lg shadow min-h-screen">
+    <div className="p-4 sm:p-6 bg-white dark:bg-gray-800 rounded-lg shadow">
       <h1 className="text-2xl font-semibold text-gray-800 dark:text-white mb-6">编辑附件材料</h1>
 
       {/* Basic Claim Information Section */}

@@ -97,7 +97,9 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
     updateCssVariables(muiTheme);
     // Persist themeMode to localStorage
     localStorage.setItem('themeMode', themeMode);
-  }, [muiTheme]); // muiTheme dependency ensures this runs when themeMode changes
+    // Set data-theme attribute on document element for CSS variables
+    document.documentElement.setAttribute('data-theme', themeMode);
+  }, [muiTheme, themeMode]); // muiTheme dependency ensures this runs when themeMode changes
 
   const toggleThemeMode = () => {
     setThemeMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));

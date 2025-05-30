@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/src/contexts/AuthContext';
+import { useAuth,AppUser } from '@/src/contexts/AuthContext';
 import authService from '@/src/services/authService'; // For OIDC login
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
-import { AppUser } from '@/src/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader';
+import PageContainer from '@/src/components/PageContainer';
 import {
   Box,
   Paper,
@@ -116,17 +116,17 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        backgroundColor: (theme) => theme.palette.mode === 'dark' ? theme.palette.background.default : theme.palette.grey[100],
-        p: 2,
-      }}
-    >
+    <PageContainer variant="login">
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '100%',
+          p: 2,
+        }}
+      >
       <Paper elevation={6} sx={{ p: { xs: 2, sm: 3, md: 4 }, width: '100%', maxWidth: 420, textAlign: 'center' }}>
         <Typography variant="h4" component="h1" color="primary" sx={{ mb: 3 }}>
           {t('login_page_title', 'CuckooX')}
@@ -215,7 +215,8 @@ const LoginPage: React.FC = () => {
           </>
         )}
       </Paper>
-    </Box>
+      </Box>
+    </PageContainer>
   );
 };
 

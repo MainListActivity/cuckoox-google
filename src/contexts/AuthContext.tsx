@@ -6,7 +6,7 @@ import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb'; // Import for typing record IDs
 
 // Matches AppUser in authService and user table in SurrealDB
-interface AppUser {
+ export interface AppUser {
   id: string; // SurrealDB record ID, e.g., user:xxxx
   github_id: string;
   name: string;
@@ -93,49 +93,100 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const checkCurrentUser = async () => {
       setIsLoading(true);
       try {
-        const currentOidcUser = await authService.getUser();
-        if (currentOidcUser && !currentOidcUser.expired) {
-          const githubId = currentOidcUser.profile.sub;
-          if (!githubId) {
-            throw new Error("No github_id (sub) found in OIDC user profile during session check.");
+        // 首先检查本地存储的用户信息
+        const storedUser = localStorage.getItem('cuckoox-user');
+        const storedIsLoggedIn = localStorage.getItem('cuckoox-isLoggedIn');
+        
+        if (storedUser && storedIsLoggedIn === 'true') {
+          // 如果有本地存储的用户信息，先使用它来初始化会话
+          const appUser = JSON.parse(storedUser) as AppUser;
+          
+          // 对于管理员用户，不需要检查 OIDC
+          if (appUser.github_id === '--admin--') {
+            await initializeUserSession(appUser, null);
+            setIsLoading(false);
+            return;
           }
-          const userRecordId = `user:${githubId}`;
-          const result: AppUser[] = await client.select(userRecordId); // MODIFIED db.select to client.select
-
-          if (result.length > 0) {
-            const appUserFromDb = result[0];
-            await initializeUserSession(appUserFromDb, currentOidcUser); // Modified
-          } else {
-            console.warn(`User ${githubId} found in OIDC but not in DB. Logging out.`);
-            setUser(null);
+          
+          // 对于普通用户，先恢复会话，然后异步检查 OIDC 状态
+          await initializeUserSession(appUser, null);
+          
+          // 异步检查 OIDC 状态（不阻塞用户使用）
+          authService.getUser().then(async (currentOidcUser) => {
+            if (currentOidcUser && !currentOidcUser.expired) {
+              // OIDC 会话有效，更新 oidcUser
+              setOidcUser(currentOidcUser);
+              
+              // 可选：同步更新数据库中的用户信息
+              const githubId = currentOidcUser.profile.sub;
+              if (githubId && githubId === appUser.github_id) {
+                const userRecordId = `user:${githubId}`;
+                try {
+                  const result = await client.select(userRecordId);
+                  if (result && result.length > 0) {
+                    const appUserFromDb = result[0] as unknown as AppUser;
+                    setUser(appUserFromDb);
+                    localStorage.setItem('cuckoox-user', JSON.stringify(appUserFromDb));
+                  }
+                } catch (error) {
+                  console.error("Error syncing user data from DB:", error);
+                }
+              }
+            } else {
+              // OIDC 会话已过期，但保持用户登录状态
+              console.log("OIDC session expired, but keeping user logged in with stored credentials");
+              setOidcUser(null);
+            }
+          }).catch((error) => {
+            console.error("Error checking OIDC session:", error);
+            // 即使 OIDC 检查失败，也保持用户登录状态
             setOidcUser(null);
-            setIsLoggedIn(false);
-            localStorage.removeItem('cuckoox-isLoggedIn');
-            localStorage.removeItem('cuckoox-user');
-            localStorage.removeItem('cuckoox-selectedCaseId');
-          }
+          });
         } else {
-          const storedUser = localStorage.getItem('cuckoox-user');
-          if(storedUser) {
-            localStorage.removeItem('cuckoox-isLoggedIn');
-            localStorage.removeItem('cuckoox-user');
-            localStorage.removeItem('cuckoox-selectedCaseId');
+          // 没有本地存储的用户信息，检查 OIDC
+          const currentOidcUser = await authService.getUser();
+          if (currentOidcUser && !currentOidcUser.expired) {
+            const githubId = currentOidcUser.profile.sub;
+            if (!githubId) {
+              throw new Error("No github_id (sub) found in OIDC user profile during session check.");
+            }
+            const userRecordId = `user:${githubId}`;
+            const result = await client.select(userRecordId);
+
+            if (result && result.length > 0) {
+              const appUserFromDb = result[0] as unknown as AppUser;
+              await initializeUserSession(appUserFromDb, currentOidcUser);
+            } else {
+              console.warn(`User ${githubId} found in OIDC but not in DB. Logging out.`);
+              clearAuthState();
+            }
+          } else {
+            // 没有有效的会话
+            clearAuthState();
           }
         }
       } catch (error) {
         console.error("Error checking current user session:", error);
-        setIsLoggedIn(false);
-        setUser(null);
-        setOidcUser(null);
-        localStorage.removeItem('cuckoox-user');
-        localStorage.removeItem('cuckoox-isLoggedIn');
-        localStorage.removeItem('cuckoox-selectedCaseId');
+        clearAuthState();
       } finally {
         setIsLoading(false);
       }
     };
     checkCurrentUser();
   }, []);
+
+  const clearAuthState = () => {
+    setUser(null);
+    setOidcUser(null);
+    setIsLoggedIn(false);
+    setSelectedCaseId(null);
+    setUserCases([]);
+    setCurrentUserCaseRoles([]);
+    setNavMenuItems([]);
+    localStorage.removeItem('cuckoox-isLoggedIn');
+    localStorage.removeItem('cuckoox-user');
+    localStorage.removeItem('cuckoox-selectedCaseId');
+  };
 
   const initializeUserSession = async (appUser: AppUser, oidcUserInstance?: OidcUser | null) => { // MODIFIED
     setUser(appUser);
@@ -224,10 +275,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const fetchAndUpdateMenuPermissions = async (currentRoles: Role[]) => {
-    if (!currentRoles || currentRoles.length === 0) {
-      setNavMenuItems([]); // No roles, no menu items
+    // Check if user is admin (github_id === '--admin--')
+    const isAdmin = user && user.github_id === '--admin--';
+    
+    if (!isAdmin && (!currentRoles || currentRoles.length === 0)) {
+      setNavMenuItems([]); // No roles, no menu items for non-admin users
       return;
     }
+    
     setIsMenuLoading(true);
     console.log("Fetching menu permissions for roles:", currentRoles.map(r => r.name));
 
@@ -245,11 +300,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       { id: 'admin_home', path: '/admin', labelKey: 'nav_system_management', iconName: 'mdiCog', requiredRoles: ['admin'] },
     ];
 
-    const userRoleNames = currentRoles.map(role => role.name);
-    const filteredNavItems = mockAllNavItems.filter(item => {
-      if (!item.requiredRoles || item.requiredRoles.length === 0) return true; // No specific roles required
-      return item.requiredRoles.some(requiredRole => userRoleNames.includes(requiredRole));
-    });
+    let filteredNavItems: NavItemType[];
+    
+    if (isAdmin) {
+      // Admin users get all menu items without filtering
+      filteredNavItems = mockAllNavItems;
+      console.log("Admin user detected, returning all menu items");
+    } else {
+      // Non-admin users get filtered menu items based on their roles
+      const userRoleNames = currentRoles.map(role => role.name);
+      filteredNavItems = mockAllNavItems.filter(item => {
+        if (!item.requiredRoles || item.requiredRoles.length === 0) return true; // No specific roles required
+        return item.requiredRoles.some(requiredRole => userRoleNames.includes(requiredRole));
+      });
+    }
     // End of Mock Implementation
     
     // Simulate API delay
@@ -360,28 +424,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error("Error during logout process:", error);
     } finally {
       // Clear all client-side state for any logout type or if logout was called without user
-      setUser(null);
-      setOidcUser(null);
-      setIsLoggedIn(false);
-      setSelectedCaseId(null);
-      setUserCases([]);
-      setCurrentUserCaseRoles([]);
-      setNavMenuItems([]); // Clear menu on logout
-      localStorage.removeItem('cuckoox-isLoggedIn');
-      localStorage.removeItem('cuckoox-user');
-      localStorage.removeItem('cuckoox-selectedCaseId');
-      // Any other app-specific cleanup related to user session can go here
+      clearAuthState();
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (selectedCaseId && currentUserCaseRoles && currentUserCaseRoles.length > 0) {
+    // Check if user is admin
+    const isAdmin = user && user.github_id === '--admin--';
+    
+    if (isAdmin) {
+      // Admin users should see all menus regardless of case selection
+      fetchAndUpdateMenuPermissions([]);
+    } else if (selectedCaseId && currentUserCaseRoles && currentUserCaseRoles.length > 0) {
       fetchAndUpdateMenuPermissions(currentUserCaseRoles);
     } else if (!selectedCaseId) {
       setNavMenuItems([]); // Clear menu if no case is selected
     }
-  }, [selectedCaseId, currentUserCaseRoles]); // Dependency: currentUserCaseRoles might need to be stringified or use its length if it's an array that changes reference. For simplicity, direct dependency is fine for now.
+  }, [selectedCaseId, currentUserCaseRoles, user]); // Added user as dependency
 
   const hasRole = (roleName: string): boolean => {
     if (roleName === 'admin') {

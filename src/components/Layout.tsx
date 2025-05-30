@@ -165,9 +165,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     <Box sx={{ display: 'flex' }}>
       <AppBar
         position="fixed"
+        elevation={0} // 移除阴影，让 AppBar 更好地融入背景
         sx={{
           zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1,
-          background: `linear-gradient(to right, ${currentTheme.palette.primary}, ${currentTheme.palette.secondary})`, // Using context theme
+          backgroundColor: currentTheme.palette.background.default, // 与主页面背景色相同
+          color: currentTheme.palette.text.primary, // 使用主文本颜色
+          borderBottom: `1px solid ${alpha(currentTheme.palette.divider, 0.1)}`, // 添加细微的底部边框
         }}
       >
         <Toolbar>
@@ -175,7 +178,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             aria-label="open drawer"
             onClick={() => setDrawerOpen(!drawerOpen)}
             edge="start"
-            sx={{ marginRight: 2 }}
+            sx={{ 
+              marginRight: 2,
+              color: currentTheme.palette.text.primary, // 确保图标颜色正确
+            }}
           >
             <SvgIcon>
               <path d={drawerOpen ? mdiMenuOpen : mdiMenu} />
@@ -221,7 +227,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
           {/* End Case Switcher */}
 
-          <IconButton onClick={toggleThemeMode} sx={{ color: currentTheme.palette.common.white }}>
+          <IconButton onClick={toggleThemeMode} sx={{ color: currentTheme.palette.text.primary }}>
             <SvgIcon>
               <path d={themeMode === 'dark' ? mdiWeatherNight : mdiWeatherSunny} />
             </SvgIcon>
@@ -231,13 +237,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             onChange={toggleThemeMode}
             color="secondary"
           />
-          {user && <Typography sx={{ mr: 2, color: currentTheme.palette.common.white }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
+          {user && <Typography sx={{ mr: 2, color: currentTheme.palette.text.primary }}>{t('layout_header_welcome', { name: user.name })}</Typography>}
         </Toolbar>
       </AppBar>
 
-      <StyledDrawer variant="permanent" open={drawerOpen}>
+      <StyledDrawer 
+        variant="permanent" 
+        open={drawerOpen}
+        sx={{
+          '& .MuiDrawer-paper': {
+            backgroundColor: themeMode === 'dark' 
+              ? alpha(currentTheme.palette.primary.dark, 0.15) // 深色模式下使用深色 Teal 背景
+              : alpha(currentTheme.palette.primary.light, 0.08), // 亮色模式下使用浅色 Teal 背景
+            borderRight: `1px solid ${alpha(currentTheme.palette.primary.main, 0.2)}`,
+          }
+        }}
+      >
         <Toolbar /> {/* Necessary to make the content below app bar */}
-        <Divider />
+        <Divider sx={{ borderColor: alpha(currentTheme.palette.primary.main, 0.2) }} />
         <List sx={{ flexGrow: 1 }}>
           {isMenuLoading ? (
             <ListItemButton sx={{ justifyContent: drawerOpen ? 'initial' : 'center', px: 2.5 }}>
@@ -258,14 +275,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   justifyContent: drawerOpen ? 'initial' : 'center',
                   px: 2.5,
                   '&.active': {
-                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.2),
+                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.3), // 更突出的激活状态
                     color: currentTheme.palette.primary.main,
+                    borderLeft: `4px solid ${currentTheme.palette.primary.main}`, // 添加左边框强调
                     '& .MuiSvgIcon-root': {
                       color: currentTheme.palette.primary.main,
                     },
                   },
                   '&:hover': {
-                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.1),
+                    backgroundColor: alpha(currentTheme.palette.primary.main, 0.15),
                   },
                 }}
                 title={t(item.labelKey)}
@@ -294,10 +312,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </ListItemButton>
           )}
         </List>
-        <Divider />
+        <Divider sx={{ borderColor: alpha(currentTheme.palette.primary.main, 0.2) }} />
         {user && drawerOpen && (
           <Box sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="body2">{user.name}</Typography>
+            <Typography variant="body2" sx={{ color: currentTheme.palette.text.secondary }}>
+              {user.name}
+            </Typography>
             {/* Removed user.role display */}
           </Box>
         )}
@@ -305,7 +325,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             onClick={handleLogout}
             variant="contained"
-            color="secondary" 
+            color="primary" // 使用 primary 色保持一致性
             fullWidth={drawerOpen}
             sx={(theme: MuiTheme) => ({ // Explicitly type theme here
                 minWidth: drawerOpen ? 'auto' : theme.spacing(5),
@@ -330,9 +350,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Box>
       </StyledDrawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, backgroundColor: currentTheme.palette.background.default }}>
+      <Box 
+        component="main" 
+        sx={{ 
+          flexGrow: 1, 
+          backgroundColor: currentTheme.palette.background.default,
+          minHeight: '100vh', // 确保背景色覆盖整个视口高度
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         <Toolbar /> {/* This is important to offset content below the AppBar */}
-        {children}
+        <Box sx={{ 
+          flexGrow: 1, 
+          p: 3,
+          overflow: 'auto', // 允许内容滚动
+        }}>
+          {children}
+        </Box>
       </Box>
     </Box>
   );

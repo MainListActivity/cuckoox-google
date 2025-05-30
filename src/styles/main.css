@@ -1,8 +1,9 @@
+/* Light mode colors (default) */
 :root {
   --color-primary: #009688;        /* Teal 500 */
   --color-secondary: #00796B;      /* Teal 700 */
   --color-accent: #009688;         /* Teal 500 */
-  --color-background: #f6f6f6;
+  --color-background: #f6f6f6;     /* 规范要求的主背景色 */
   --color-surface: #ffffff;         /* White */
   --color-error: #F44336;           /* Red Base */
   --color-warning: #FFC107;         /* Amber Base */
@@ -16,6 +17,29 @@
   --color-text-hint: #9E9E9E;         /* Grey Base */
   --color-border-light: #EEEEEE;       /* Grey Lighten 2 */
   --color-border-dark: #BDBDBD;        /* Grey Lighten 1 */
+  --color-divider: rgba(0, 0, 0, 0.12);
+}
+
+/* Dark mode colors */
+[data-theme="dark"] {
+  --color-primary: #4db6ac;        /* Teal 300 - 更亮的色调用于深色模式 */
+  --color-secondary: #26a69a;      /* Teal 400 */
+  --color-accent: #4db6ac;         /* Teal 300 */
+  --color-background: #121212;     /* 深色模式背景 */
+  --color-surface: #1e1e1e;        /* 深色模式卡片背景 */
+  --color-error: #ef5350;          /* Red 400 */
+  --color-warning: #ffca28;        /* Amber 400 */
+  --color-info: #42a5f5;           /* Blue 400 */
+  --color-success: #66bb6a;        /* Green 400 */
+  --color-text-primary: #ffffff;   /* White */
+  --color-text-secondary: #b0b0b0; /* Grey 400 */
+  --color-text-on-primary: #000000;
+  --color-text-on-secondary: #000000;
+  --color-text-disabled: #616161;  /* Grey 700 */
+  --color-text-hint: #757575;      /* Grey 600 */
+  --color-border-light: #424242;   /* Grey 800 */
+  --color-border-dark: #616161;    /* Grey 700 */
+  --color-divider: rgba(255, 255, 255, 0.12);
 }
 
 /* Include Tailwind CSS base styles, components, and utilities */
@@ -30,6 +54,7 @@ body {
   background-color: var(--color-background);
   color: var(--color-text-primary);
   margin: 0; /* Ensure no default body margin */
+  transition: background-color 0.3s ease, color 0.3s ease; /* 平滑过渡 */
 }
 
 /* Ensure root takes full height for layouts */
@@ -37,6 +62,17 @@ body {
   min-height: 100vh;
   display: flex; /* Helps with some layout structures like sticky footers */
   flex-direction: column;
+  background-color: var(--color-background); /* 确保根元素也使用背景色 */
+}
+
+/* 确保所有主要容器都继承背景色 */
+main, .main-content, [role="main"] {
+  background-color: var(--color-background);
+}
+
+/* 为 MUI Paper 组件设置默认背景 */
+.MuiPaper-root {
+  background-color: var(--color-surface);
 }
 
 
@@ -46,14 +82,25 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--color-border-light);
 }
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--color-border-dark);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: var(--color-text-hint);
+}
+
+/* 深色模式下的滚动条 */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--color-border-dark);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-hint);
 }
 
 /* Example of a utility class you might add with Tailwind's @layer directive */
