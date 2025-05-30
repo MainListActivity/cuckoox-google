@@ -285,7 +285,7 @@ const ClaimReviewDetailPage: React.FC = () => {
 
 
   return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
         <AppBar position="sticky">
           <Toolbar>
             <IconButton edge="start" color="inherit" component={RouterLink} to="/admin/claims" aria-label="back to claims list" sx={{ mr: 2 }}>

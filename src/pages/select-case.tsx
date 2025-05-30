@@ -60,8 +60,9 @@ const CaseSelectionPage: React.FC = () => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          minHeight: '100vh',
+          minHeight: '100%',
           p: 2,
+          flex: 1,
         }}
       >
         <Paper 

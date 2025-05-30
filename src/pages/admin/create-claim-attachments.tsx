@@ -48,7 +48,7 @@ const AdminCreateClaimAttachmentsPage: React.FC = () => {
     };
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <AppBar position="sticky">
                 <Toolbar>
                     <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>

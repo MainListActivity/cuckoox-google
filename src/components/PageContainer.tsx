@@ -25,7 +25,9 @@ const PageContainer: React.FC<PageContainerProps> = ({
           background: theme.palette.mode === 'dark'
             ? `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.background.default} 100%)`
             : `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.background.default} 100%)`,
-          minHeight: '100vh',
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column' as const,
         };
       
       case 'dashboard':
@@ -34,7 +36,9 @@ const PageContainer: React.FC<PageContainerProps> = ({
           background: theme.palette.mode === 'dark'
             ? `linear-gradient(180deg, ${theme.palette.background.default} 0%, ${theme.palette.grey[900]} 100%)`
             : theme.palette.background.default,
-          minHeight: '100vh',
+          minHeight: '100%',
+          display: 'flex',
+          flexDirection: 'column' as const,
         };
       
       default:
