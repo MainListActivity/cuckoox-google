@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { useSurreal } from '@/src/contexts/SurrealProvider';
 import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor';
 import { Delta } from 'quill/core';
 import { useAuth } from '@/src/contexts/AuthContext';
@@ -21,7 +21,6 @@ import {
   MenuItem,
   InputLabel,
   FormControl,
-  FormHelperText,
 } from '@mui/material';
 import { mdiArrowLeft, mdiContentSave } from '@mdi/js';
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added
@@ -40,7 +39,7 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
 
 const CreateCasePage: React.FC = () => {
   const { t } = useTranslation();
-  const client = useSurrealClient();
+  const { surreal: client, isSuccess: isConnected } = useSurreal();
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -50,6 +49,9 @@ const CreateCasePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null); // Renamed error state for clarity
   const { showSuccess } = useSnackbar(); // Added
+  const [retryCount, setRetryCount] = useState(0); // Track retry attempts
+  const [isRetrying, setIsRetrying] = useState(false); // Prevent concurrent retries
+  const maxRetries = 3; // Maximum retry attempts
 
   // New form states
   const [caseName, setCaseName] = useState<string>(`示例案件 ${Date.now()}`);
@@ -67,7 +69,7 @@ const CreateCasePage: React.FC = () => {
   const [isClaimStartDateAuto, setIsClaimStartDateAuto] = useState(true);
   const [isClaimEndDateAuto, setIsClaimEndDateAuto] = useState(true);
   
-  const liveQueryRef = useRef<string | null>(null);
+  const liveQueryRef = useRef<string | null>(null); // Store the live query ID
   
   // Determine if bankruptcy-specific fields should be shown
   const showBankruptcyFields = caseProcedure === '破产清算' || caseProcedure === '破产重整' || caseProcedure === '破产和解';
@@ -80,36 +82,72 @@ const CreateCasePage: React.FC = () => {
         setIsEditorLoading(false);
         return;
       }
+      
+      // Prevent retry if already retrying or exceeded max retries
+      if (isRetrying || retryCount >= maxRetries) {
+        if (retryCount >= maxRetries) {
+          setPageError(t('create_case_error_max_retries', '创建文档失败，请刷新页面重试。'));
+        }
+        setIsEditorLoading(false);
+        return;
+      }
+      
       setIsEditorLoading(true);
+      setIsRetrying(true);
+      
       try {
         const newEmptyDelta = new Delta();
-        const createdRecords: Array<{ id: string, content: string, created_by: string }> = await client.create('document', {
+        const createdRecords = await client.create('document', {
           content: JSON.stringify(newEmptyDelta.ops),
           created_by: user.id,
           last_edited_by: user.id,
+          created_at: new Date().toISOString(), // Add created_at field
+          updated_at: new Date().toISOString(), // Add updated_at field
         });
 
         if (createdRecords && createdRecords[0] && createdRecords[0].id) {
-          setFilingMaterialDocId(createdRecords[0].id);
-          setFilingMaterialDelta(new Delta(JSON.parse(createdRecords[0].content)));
+          const docId = typeof createdRecords[0].id === 'string' ? createdRecords[0].id : createdRecords[0].id.toString();
+          setFilingMaterialDocId(docId);
+          const content = createdRecords[0].content as string;
+          setFilingMaterialDelta(new Delta(JSON.parse(content)));
           console.log('Created new document for filing material:', createdRecords[0].id);
+          setRetryCount(0); // Reset retry count on success
+          setPageError(null); // Clear any previous errors
         } else {
           throw new Error('Failed to create document record or get its ID.');
         }
       } catch (e) { // Changed error variable name to avoid conflict
         console.error("Error creating new document for filing material:", e);
-        setPageError(t('create_case_error_generic')); // Use new error state
+        setRetryCount(prev => prev + 1);
+        
+        // Check if error is about missing created_at field
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        if (errorMessage.includes('created_at') || errorMessage.includes('datetime')) {
+          console.log('Detected created_at field error, will retry with timestamp...');
+        }
+        
+        if (retryCount + 1 < maxRetries) {
+          setPageError(t('create_case_error_retry', `创建文档失败，正在重试... (${retryCount + 1}/${maxRetries})`));
+          // Wait a bit before retrying
+          setTimeout(() => {
+            setIsRetrying(false);
+          }, 1000);
+        } else {
+          setPageError(t('create_case_error_max_retries', '创建文档失败，请刷新页面重试。'));
+        }
       } finally {
         setIsEditorLoading(false);
+        setIsRetrying(false);
       }
     };
-    if(!filingMaterialDocId && user && user.id) {
+    
+    if(!filingMaterialDocId && user && user.id && !isRetrying) {
         createNewDocument();
     } else if (!user && !isEditorLoading) {
         setIsEditorLoading(false);
         setPageError(t('create_case_error_generic')); // Use new error state
     }
-  }, [user, filingMaterialDocId, t, isEditorLoading, client]);
+  }, [user, filingMaterialDocId, t, isEditorLoading, client, retryCount, isRetrying]);
 
   useEffect(() => {
     if (!acceptanceDate) {
@@ -159,34 +197,45 @@ const CreateCasePage: React.FC = () => {
     const setupLiveQuery = async () => {
       console.log(`Setting up LIVE query for document: ${filingMaterialDocId}`);
       try {
-        const stream = await client.live('document', filingMaterialDocId);
-        liveQueryRef.current = stream.toString();
-
-        for await (const event of stream) {
-            if (!isMounted) break;
-            console.log('Live event received:', event);
+        // Use LIVE SELECT query for the document
+        const liveSelectQuery = `LIVE SELECT * FROM document WHERE id = $docId;`;
+        const queryResponse = await client.query<[{ result: string }]>(liveSelectQuery, { docId: filingMaterialDocId });
+        const qid = queryResponse && queryResponse[0] && queryResponse[0].result;
+        
+        if (qid) {
+          liveQueryRef.current = qid; // Store the query ID as-is, without type checking
+          
+          // Listen to live events
+          client.subscribeLive(qid as any, (action: any, result: any) => {
+            if (!isMounted) return;
             
-            if (event.action === 'UPDATE' && event.result && typeof event.result.content === 'string') {
-                if (user && event.result.last_edited_by === user.id) {
+            console.log('Live event received:', action, result);
+            
+            if (action === 'UPDATE' && result && typeof result.content === 'string') {
+                if (user && result.last_edited_by === user.id) {
                     console.log("Live: Ignoring own change for user:", user.id);
-                    continue;
+                    return;
                 }
                 try {
-                    const remoteDeltaOps = JSON.parse(event.result.content as string);
+                    const remoteDeltaOps = JSON.parse(result.content as string);
                     const remoteDelta = new Delta(remoteDeltaOps.ops ? remoteDeltaOps.ops : remoteDeltaOps);
-                    console.log("Live: Applying remote delta from user:", event.result.last_edited_by);
+                    console.log("Live: Applying remote delta from user:", result.last_edited_by);
                     setFilingMaterialDelta(remoteDelta);
                 } catch (e) {
-                    console.error("Live: Error parsing remote delta:", e, "Raw content:", event.result.content);
+                    console.error("Live: Error parsing remote delta:", e, "Raw content:", result.content);
                 }
-            } else if (event.action === 'DELETE') {
+            } else if (action === 'DELETE') {
                 console.warn(`Live: Document ${filingMaterialDocId} was deleted.`);
                 if (isMounted) {
                     setFilingMaterialDelta(new Delta());
                     setPageError(t('create_case_error_no_filing_doc')); // Use new error state
                 }
             }
+          });
+        } else {
+          console.error("Failed to get live query ID for document. Response:", queryResponse);
         }
+
       } catch (e) { // Changed error variable name
         if (isMounted) console.error("Live query setup or stream error:", e);
       }
@@ -198,11 +247,19 @@ const CreateCasePage: React.FC = () => {
       isMounted = false;
       if (liveQueryRef.current) {
          console.log('Requesting to kill live query UUID:', liveQueryRef.current);
-         client.kill(liveQueryRef.current as string).catch(err => console.error("Error killing live query:", err));
+         // Kill the live query using the query ID
+         if (liveQueryRef.current && client && isConnected) {
+           // Cast to any to handle type mismatch
+           (client as any).kill(liveQueryRef.current).then(() => {
+             liveQueryRef.current = null;
+           }).catch((err: any) => {
+             console.error("Error killing live query:", err);
+           });
+         }
          liveQueryRef.current = null;
       }
     };
-  }, [filingMaterialDocId, user, t, client]); // Added client to dependencies
+  }, [filingMaterialDocId, user, t, client, isConnected]); // Added client and isConnected to dependencies
 
 
   const debouncedSave = useCallback(
@@ -214,6 +271,7 @@ const CreateCasePage: React.FC = () => {
         await client.merge(docId, {
           content: JSON.stringify(deltaToSave.ops),
           last_edited_by: editorUserId,
+          updated_at: new Date().toISOString(), // Add updated_at field
         });
         console.log(`Document ${docId} saved successfully.`);
       } catch (error) {
@@ -274,11 +332,14 @@ const CreateCasePage: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const createdCaseRecords: Array<{id: string}> = await client.create('case', caseData);
+      const createdCaseRecords = await client.create('case', caseData);
       console.log('Case created:', createdCaseRecords);
       showSuccess(t('create_case_success')); // Use snackbar
       if (createdCaseRecords[0]?.id) {
-        navigate(`/cases/${createdCaseRecords[0].id.replace('case:', '')}`);
+        const caseId = typeof createdCaseRecords[0].id === 'string' 
+          ? createdCaseRecords[0].id 
+          : createdCaseRecords[0].id.toString();
+        navigate(`/cases/${caseId.replace('case:', '')}`);
       } else {
         navigate('/cases');
       }
@@ -323,7 +384,20 @@ const CreateCasePage: React.FC = () => {
   }
   
   if (pageError && !filingMaterialDocId) { // If doc creation failed critically
-    return <Box sx={{ p: 3 }}><MuiAlert severity="error">{pageError}</MuiAlert></Box>;
+    return (
+      <Box sx={{ p: 3 }}>
+        <MuiAlert severity="error" sx={{ mb: 2 }}>{pageError}</MuiAlert>
+        {retryCount >= maxRetries && (
+          <Button 
+            variant="contained" 
+            onClick={() => window.location.reload()}
+            sx={{ mt: 2 }}
+          >
+            {t('refresh_page', '刷新页面')}
+          </Button>
+        )}
+      </Box>
+    );
   }
 
   return (

@@ -129,7 +129,7 @@ export function useConversationsList(userId: string | null): {
           const { result: qid } = (await client.query<[{result: string}]>(liveMessageQuery, {userId}))[0]; // Or use conversation query
           if (qid && typeof qid === 'string') {
             liveQueryIdRef.current = qid;
-            client.listenLive(qid, () => {
+            client. subscribeLive(qid, () => {
               // console.log('Live event received, re-fetching conversations for user:', userId);
               fetchConversations(userId);
             });
@@ -237,7 +237,7 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
           const { result: qid } = (await client.query<[{result: string}]>(liveQuery, params))[0];
           if (qid && typeof qid === 'string') {
             liveQueryIdRef.current = qid;
-            client.listenLive(qid, () => {
+            client. subscribeLive(qid, () => {
               // console.log('Live event for notifications, re-fetching for user:', userId, 'case:', caseId);
               fetchNotifications(userId, caseId); // Pass caseId here too
             });

@@ -186,7 +186,7 @@ function createLiveMetricHook<TResultType, TDataType>(
 
           if (qid && typeof qid === 'string') {
             liveQueryIdRef.current = qid;
-            client.listenLive(liveQueryIdRef.current, (_action, _data) => {
+            client. subscribeLive(liveQueryIdRef.current, (_action, _data) => {
               // Re-fetch the specific metric without setting isLoading to true again,
               // as this is a background update.
               // Or, we could have a separate state for "isUpdating". For now, direct fetch.

@@ -87,7 +87,7 @@ export function useLiveMeetings(caseId: string | null): Meeting[] {
 
         if (qid && typeof qid === 'string') {
           liveQueryIdRef.current = qid;
-          client.listenLive<Meeting>(liveQueryIdRef.current, (actionEvent) => {
+          client. subscribeLive<Meeting>(liveQueryIdRef.current, (actionEvent) => {
             const { action, result: meetingData } = actionEvent;
             // console.log(`Live event on meeting query ${liveQueryIdRef.current}:`, action, meetingData);
             

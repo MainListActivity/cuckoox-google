@@ -21,8 +21,8 @@ const root = ReactDOM.createRoot(rootElement);
 
 // Define constants for SurrealDB connection from .env
 const surrealEndpoint = import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc';
-const surrealNamespace = import.meta.env.VITE_SURREALDB_NAMESPACE || 'test';
-const surrealDatabase = import.meta.env.VITE_SURREALDB_DATABASE || 'test';
+const surrealNamespace = import.meta.env.VITE_SURREALDB_NAMESPACE || 'ck_go';
+const surrealDatabase = import.meta.env.VITE_SURREALDB_DATABASE || 'ck_go';
 
 // REMOVED: renderApp, renderError functions, and connectSurrealDB() promise handling
 

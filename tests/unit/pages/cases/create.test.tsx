@@ -55,8 +55,13 @@ vi.mock('../../../../src/components/RichTextEditor', () => ({
 
 
 const mockSurrealClient = {
-  create: vi.fn().mockResolvedValue([{ id: 'document:testdocid' }]),
+  create: vi.fn().mockResolvedValue([{ 
+    id: 'document:testdocid',
+    content: JSON.stringify({ ops: [] }) // Add content field with empty Delta
+  }]),
   merge: vi.fn().mockResolvedValue({}),
+  query: vi.fn().mockResolvedValue([{ result: 'lq:testlivequeryid' }]), // Add query method
+  subscribeLive: vi.fn(), // Add subscribeLive method
   live: vi.fn().mockImplementation(async () => {
     // Mock the async generator
     async function* stream() {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LoginPage from '@/src/pages/login'; // Adjust path as needed
 import { AppUser } from '@/src/contexts/AuthContext'; // Assuming AppUser is exported
@@ -127,7 +127,7 @@ describe('LoginPage', () => {
   });
 
   describe('Admin Login Form - Successful Submission', () => {
-    beforeEach(()_ => {
+    beforeEach(() => {
         setupMockLocation(true);
         mockDbSignin.mockResolvedValue(undefined); // Simulate successful signin
         render(<LoginPage />);

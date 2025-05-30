@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { type JSX } from 'react';
 import {
   ListItem,
   ListItemText,
@@ -127,7 +127,7 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ itemData, onSelectIte
       secondaryAction={ 
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           {!isUnread && itemType === 'notification' && ( // Show "Mark as Unread" only for read notifications
-            <Tooltip title="标记为未读">
+            (<Tooltip title="标记为未读">
               <IconButton
                 edge="end"
                 aria-label="mark as unread"
@@ -144,7 +144,7 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ itemData, onSelectIte
               >
                 <SvgIcon fontSize="small"><path d={mdiEmailOpenOutline} /></SvgIcon>
               </IconButton>
-            </Tooltip>
+            </Tooltip>)
           )}
           <Tooltip title="删除">
             <IconButton
