@@ -21,8 +21,8 @@ interface ProtectedRouteProps {
 // Define routes that require a case to be selected to be accessible
 const routesRequiringCaseSelection: string[] = [
   '/dashboard',
-  '/cases', // CaseListPage might be an exception if it's where you *could* select/view all cases
-            // But for now, let's assume individual case interaction pages require a selection.
+  // '/cases', // 案件列表页面不需要先选择案件，用户需要通过这个页面来创建或选择案件
+  // '/cases/create', // 案件创建页面也不需要先选择案件
   '/cases/:id', // CaseDetailPage definitely requires a selected case context, though ID is in URL
   '/creditors',
   '/claims',
@@ -30,7 +30,7 @@ const routesRequiringCaseSelection: string[] = [
   '/claims/:id/review',
   '/claim-dashboard',
   '/online-meetings',
-  // '/messages', // Message center might be global or case-specific, TBD based on requirements
+  '/messages', // 消息中心可能需要案件上下文
   // '/admin', // Admin page might operate outside a specific case context or have its own logic
 ];
 

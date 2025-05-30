@@ -3,9 +3,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import i18n from '@/src/i18n'; // Assuming your i18n setup is here
 import { SurrealProvider } from '@/src/contexts/SurrealProvider';
-import { AuthContext } from '@/src/contexts/AuthContext';
+import { AuthProvider } from '@/src/contexts/AuthContext';
 import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 import CreateCasePage from '@/src/pages/cases/create';
 
@@ -15,6 +16,21 @@ vi.mock('react-router-dom', async () => {
   return {
     ...actual,
     useNavigate: () => vi.fn(),
+  };
+});
+
+// Mock AuthContext before other mocks
+vi.mock('../../../../src/contexts/AuthContext', async () => {
+  const actual = await vi.importActual('../../../../src/contexts/AuthContext');
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: { id: 'user:testuserid', name: 'Test User' },
+      loading: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+      token: 'test-token'
+    }),
   };
 });
 
@@ -49,6 +65,8 @@ const mockSurrealClient = {
     return stream();
   }),
   kill: vi.fn().mockResolvedValue({}),
+  close: vi.fn().mockResolvedValue({}),
+  status: 'disconnected' as const,
 };
 
 const mockUser = {
@@ -66,33 +84,57 @@ const formatDate = (date: Date): string => {
 
 
 describe('CreateCasePage', () => {
+  let queryClient: QueryClient;
+
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset date states for each test if they were module-level (they are component state, so fine)
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
   });
 
   const renderComponent = () => {
     return render(
-      <BrowserRouter>
-        <I18nextProvider i18n={i18n}>
-          <SurrealProvider client={mockSurrealClient as any}>
-            <AuthContext.Provider value={{ user: mockUser, loading: false, login: vi.fn(), logout: vi.fn(), token: 'test-token' }}>
-              <SnackbarProvider>
-                <CreateCasePage />
-              </SnackbarProvider>
-            </AuthContext.Provider>
-          </SurrealProvider>
-        </I18nextProvider>
-      </BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <I18nextProvider i18n={i18n}>
+            <SurrealProvider 
+              client={mockSurrealClient as any}
+              endpoint="http://localhost:8000"
+              namespace="test"
+              database="test"
+              autoConnect={false}
+            >
+              <AuthProvider>
+                <SnackbarProvider>
+                  <CreateCasePage />
+                </SnackbarProvider>
+              </AuthProvider>
+            </SurrealProvider>
+          </I18nextProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
     );
   };
 
   it('should auto-populate announcementDate when acceptanceDate is filled and procedure is bankruptcy-related', async () => {
     renderComponent();
 
-    // Wait for editor to finish its initial loading/creation logic if any async ops are involved
-    // This might involve waiting for the mockSurrealClient.create('document') to resolve
-    await waitFor(() => expect(mockSurrealClient.create).toHaveBeenCalledWith('document', expect.anything()));
+    // Wait for the document to be created
+    await waitFor(() => {
+      expect(mockSurrealClient.create).toHaveBeenCalledWith('document', expect.objectContaining({
+        created_by: 'user:testuserid',
+        last_edited_by: 'user:testuserid'
+      }));
+    });
+
+    // Wait for the form to be visible
+    await waitFor(() => {
+      expect(screen.getByLabelText(/案件名称/)).toBeInTheDocument();
+    });
     
     // Select "破产清算" (Liquidation) as case procedure - it's the default, but we can be explicit
     const caseProcedureSelect = screen.getByLabelText(/案件程序/); // Adjust if label changes

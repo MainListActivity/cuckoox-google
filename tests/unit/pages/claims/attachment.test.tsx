@@ -40,13 +40,17 @@ vi.mock('../../../../src/components/RichTextEditor', () => ({
 
 
 // Mock useSnackbar
-const mockShowSnackbar = vi.fn();
+const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
 vi.mock('../../../../src/contexts/SnackbarContext', async () => {
   const actual = await vi.importActual('../../../../src/contexts/SnackbarContext');
   return {
     ...actual,
     useSnackbar: () => ({
-      showSnackbar: mockShowSnackbar,
+      showSuccess: mockShowSuccess,
+      showError: mockShowError,
+      showWarning: vi.fn(),
+      showInfo: vi.fn(),
     }),
   };
 });
@@ -101,8 +105,8 @@ describe('ClaimAttachmentPage', () => {
         expect.any(String) // For the JSON.stringify(editorContent.ops)
       );
     });
-    // Snackbar can be success or error due to Math.random
-    expect(mockShowSnackbar).toHaveBeenCalledWith(expect.any(String), expect.stringMatching(/success|error/));
+    // Check if either success or error was called (depends on Math.random)
+    expect(mockShowSuccess.mock.calls.length + mockShowError.mock.calls.length).toBeGreaterThan(0);
     consoleSpy.mockRestore();
   });
 
@@ -124,19 +128,11 @@ describe('ClaimAttachmentPage', () => {
         );
     });
     
-    // Check if snackbar was called (success/error depends on Math.random)
-    expect(mockShowSnackbar).toHaveBeenCalledWith(expect.any(String), expect.stringMatching(/success|error/));
+    // Check if either success or error was called (depends on Math.random)
+    expect(mockShowSuccess.mock.calls.length + mockShowError.mock.calls.length).toBeGreaterThan(0);
 
-    // If submission was "successful" (based on Math.random, hard to test deterministically without more mocks)
-    // For this test, we assume it could be success or error. If success, navigate is called.
-    // To make it deterministic, you'd mock Math.random or the API call itself.
-    // For now, we just check if navigate was called if the success path was taken by Math.random.
-    // This part of the test is flaky due to Math.random.
-    // A better approach would be to mock the API call that handleSubmitClaim makes.
-    // Given the current structure, we can check if navigate was called to the expected path if the snackbar showed success.
-    
-    // This is a simplified check. In a real test, you'd ensure the navigation only happens on success.
-    if (mockShowSnackbar.mock.calls.some(call => call[1] === 'success')) {
+    // If submission was successful, navigate should have been called
+    if (mockShowSuccess.mock.calls.length > 0) {
         expect(mockNavigate).toHaveBeenCalledWith(`/my-claims/${mockClaimId}/submitted`);
     }
     consoleSpy.mockRestore();

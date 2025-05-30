@@ -1,55 +1,65 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import CaseListPage from '@/src/pages/cases/index';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
-import { BrowserRouter } from 'react-router-dom'; // Needed for Link component
-import { I18nextProvider } from 'react-i18next'; // For useTranslation
-import i18n from '@/src/i18n'; // Assuming you have an i18n setup file
-import { SnackbarProvider } from '@/src/contexts/SnackbarContext'; // Actual provider
+import { BrowserRouter } from 'react-router-dom';
+import { I18nextProvider } from 'react-i18next';
+import i18n from '@/src/i18n';
+import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 
 // Mock child components (Dialogs)
-jest.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => (props: any) => (
-  <div data-testid="mock-modify-status-dialog" data-open={props.open}>
-    Mock ModifyCaseStatusDialog - Case ID: {props.currentCase?.id}
-    <button onClick={props.onClose}>Close Modify</button>
-    {/* <button onClick={() => props.onSave({})}>Save Status</button> */}
-  </div>
-));
+vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
+  default: (props: any) => (
+    <div data-testid="mock-modify-status-dialog" data-open={props.open}>
+      Mock ModifyCaseStatusDialog - Case ID: {props.currentCase?.id}
+      <button onClick={props.onClose}>Close Modify</button>
+    </div>
+  )
+}));
 
-jest.mock('../../../../src/components/case/MeetingMinutesDialog', () => (props: any) => (
-  <div data-testid="mock-meeting-minutes-dialog" data-open={props.open}>
-    Mock MeetingMinutesDialog - Case ID: {props.caseInfo?.caseId} - Title: {props.meetingTitle}
-    <button onClick={props.onClose}>Close Minutes</button>
-    <button onClick={() => props.onSave({ ops: [{ insert: 'Test minutes' }] }, props.meetingTitle)}>Save Minutes</button>
-  </div>
-));
+vi.mock('../../../../src/components/case/MeetingMinutesDialog', () => ({
+  default: (props: any) => (
+    <div data-testid="mock-meeting-minutes-dialog" data-open={props.open}>
+      Mock MeetingMinutesDialog - Case ID: {props.caseInfo?.caseId} - Title: {props.meetingTitle}
+      <button onClick={props.onClose}>Close Minutes</button>
+      <button onClick={() => props.onSave({ ops: [{ insert: 'Test minutes' }] }, props.meetingTitle)}>Save Minutes</button>
+    </div>
+  )
+}));
 
 // Mock context hooks
-const mockShowSuccess = jest.fn();
-const mockShowError = jest.fn(); // if used
-jest.mock('../../../../src/contexts/SnackbarContext', () => ({
-  ...jest.requireActual('../../../../src/contexts/SnackbarContext'), // Import and retain default values
-  useSnackbar: () => ({
-    showSuccess: mockShowSuccess,
-    showError: mockShowError,
-  }),
-}));
+const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
+vi.mock('../../../../src/contexts/SnackbarContext', async () => {
+  const actual = await vi.importActual('../../../../src/contexts/SnackbarContext');
+  return {
+    ...actual,
+    useSnackbar: () => ({
+      showSuccess: mockShowSuccess,
+      showError: mockShowError,
+    }),
+  };
+});
 
 // Mock useTranslation
-jest.mock('react-i18next', () => ({
-  ...jest.requireActual('react-i18next'),
-  useTranslation: () => ({
-    t: (key: string, options?: any) => {
-      if (options && options.title) return options.title; // For meeting minutes title hack
-      if (key === 'first_creditors_meeting_minutes_title') return '第一次债权人会议纪要';
-      if (key === 'second_creditors_meeting_minutes_title') return '第二次债权人会议纪要';
-      if (key === 'meeting_minutes_generic_title') return '会议纪要';
-      if (key === 'meeting_minutes_save_success_mock') return '会议纪要已（模拟）保存成功！';
-      return key;
-    },
-    i18n: { changeLanguage: jest.fn() }
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const actual = await vi.importActual('react-i18next');
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, options?: any) => {
+        if (options && options.title) return options.title;
+        if (key === 'first_creditors_meeting_minutes_title') return '第一次债权人会议纪要';
+        if (key === 'second_creditors_meeting_minutes_title') return '第二次债权人会议纪要';
+        if (key === 'meeting_minutes_generic_title') return '会议纪要';
+        if (key === 'meeting_minutes_save_success_mock') return '会议纪要已（模拟）保存成功！';
+        return key;
+      },
+      i18n: { changeLanguage: vi.fn() }
+    }),
+  };
+});
 
 
 const theme = createTheme();
@@ -94,25 +104,25 @@ describe('CaseListPage', () => {
     // Any other necessary resets
   });
 
-  test('renders page title "案件列表"', () => {
+  it('renders page title "案件列表"', () => {
     renderCaseListPage();
     expect(screen.getByText('案件列表', { selector: 'h1' })).toBeInTheDocument();
   });
 
-  test('renders "创建新案件" button', () => {
+  it('renders "创建新案件" button', () => {
     renderCaseListPage();
-    const createButton = screen.getByRole('button', { name: /创建新案件/i });
-    expect(createButton).toBeInTheDocument();
-    expect(createButton.closest('a')).toHaveAttribute('href', '/cases/create');
+    const createLink = screen.getByRole('link', { name: /创建新案件/i });
+    expect(createLink).toBeInTheDocument();
+    expect(createLink).toHaveAttribute('href', '/cases/create');
   });
 
-  test('renders search field and filter button', () => {
+  it('renders search field and filter button', () => {
     renderCaseListPage();
     expect(screen.getByPlaceholderText('搜索案件...')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /筛选/i })).toBeInTheDocument();
   });
 
-  test('renders table headers correctly', () => {
+  it('renders table headers correctly', () => {
     renderCaseListPage();
     expect(screen.getByText('案件编号')).toBeInTheDocument();
     expect(screen.getByText('案件程序')).toBeInTheDocument();
@@ -122,7 +132,7 @@ describe('CaseListPage', () => {
     expect(screen.getByText('操作')).toBeInTheDocument();
   });
 
-  test('renders a list of mock cases', () => {
+  it('renders a list of mock cases', () => {
     renderCaseListPage(); // Uses the component's internal mockCases
     // Check for data from one of the mock cases
     expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
@@ -133,7 +143,7 @@ describe('CaseListPage', () => {
     expect(screen.getByText('BK-2023-002')).toBeInTheDocument();
   });
 
-  test('renders action buttons for each case row', () => {
+  it('renders action buttons for each case row', () => {
     renderCaseListPage();
     // For the first case (BK-2023-001)
     const firstRowActions = screen.getAllByRole('row').find(row => row.textContent?.includes('BK-2023-001'));
@@ -155,7 +165,7 @@ describe('CaseListPage', () => {
     }
   });
   
-  test('shows "暂无案件数据" when no cases are provided (conceptual - requires ability to modify data source)', () => {
+  it('shows "暂无案件数据" when no cases are provided (conceptual - requires ability to modify data source)', () => {
     // This test is tricky because the component uses an internal mockCases.
     // To properly test this, mockCases should be fetched via a mockable hook or prop.
     // For now, this test is more of a placeholder for that capability.
@@ -170,7 +180,7 @@ describe('CaseListPage', () => {
   });
 
   describe('Dialog Interactions', () => {
-    test('Modify Status Dialog opens and closes', () => {
+    it('Modify Status Dialog opens and closes', () => {
       renderCaseListPage();
       const modifyButton = screen.getAllByRole('button', { name: /修改状态/i })[0]; // Get first modify button
       fireEvent.click(modifyButton);
@@ -187,7 +197,7 @@ describe('CaseListPage', () => {
       });
     });
 
-    test('Meeting Minutes Dialog opens, saves, and closes for appropriate case', () => {
+    it('Meeting Minutes Dialog opens, saves, and closes for appropriate case', () => {
       renderCaseListPage();
       // Find the row for 'BK-2023-003' which should have the meeting minutes button
       const caseRow = screen.getAllByRole('row').find(row => row.textContent?.includes('BK-2023-003'));
@@ -213,6 +223,3 @@ describe('CaseListPage', () => {
     });
   });
 });
-
-// Utility to use 'within' API, not always needed if selectors are unique
-import { within } from '@testing-library/react';
