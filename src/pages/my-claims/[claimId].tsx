@@ -1,10 +1,11 @@
-// STYLING: This page currently uses Tailwind CSS. Per 规范.md, consider migration to MUI components.
 // TODO: Access Control - This page should only be accessible to users with a 'creditor' role.
 // TODO: Access Control - Verify this claimId belongs to the logged-in creditor OR if an admin is viewing, different rules might apply (though this page is creditor-focused).
 // Workflow: This page displays a read-only view of the claim as per product requirements.
-import React, { useState, useEffect } from 'react'; // Added useState, useEffect
-import ClaimDetailView from '@/src/components/claim/ClaimDetailView'; // Adjusted path
-import { useNavigate, useParams } from 'react-router-dom'; // Added useParams
+import React, { useState, useEffect } from 'react';
+import ClaimDetailView from '@/src/components/claim/ClaimDetailView';
+import { useNavigate, useParams } from 'react-router-dom';
+import PageContainer from '@/src/components/PageContainer';
+import { Box, Button, Typography, CircularProgress } from '@mui/material';
 
 // Define the structure for ClaimData, matching ClaimDetailView's expected props
 // This interface should ideally be shared if it's used across multiple files.
@@ -83,43 +84,79 @@ const SubmittedClaimDetailPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="p-4 sm:p-6 bg-gray-100 dark:bg-gray-900 min-h-screen flex justify-center items-center">
-        <p className="text-lg text-gray-700 dark:text-gray-300">Loading claim details...</p>
-        {/* Consider adding a spinner/loader component here */}
-      </div>
+      <PageContainer>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '60vh',
+          }}
+        >
+          <Box sx={{ textAlign: 'center' }}>
+            <CircularProgress sx={{ mb: 2 }} />
+            <Typography variant="body1" color="text.secondary">
+              Loading claim details...
+            </Typography>
+          </Box>
+        </Box>
+      </PageContainer>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 sm:p-6 bg-gray-100 dark:bg-gray-900 min-h-screen flex justify-center items-center">
-        <p className="text-lg text-red-600 dark:text-red-400">Error: {error}</p>
-      </div>
+      <PageContainer>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '60vh',
+          }}
+        >
+          <Typography variant="body1" color="error">
+            Error: {error}
+          </Typography>
+        </Box>
+      </PageContainer>
     );
   }
 
   if (!claimToView) {
     return (
-      <div className="p-4 sm:p-6 bg-gray-100 dark:bg-gray-900 min-h-screen flex justify-center items-center">
-        <p className="text-lg text-gray-700 dark:text-gray-300">Claim not found.</p>
-      </div>
+      <PageContainer>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '60vh',
+          }}
+        >
+          <Typography variant="body1" color="text.secondary">
+            Claim not found.
+          </Typography>
+        </Box>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-100 dark:bg-gray-900 min-h-screen">
-      <div className="max-w-4xl mx-auto">
+    <PageContainer>
+      <Box sx={{ p: 3, maxWidth: '896px', mx: 'auto' }}>
         <ClaimDetailView claim={claimToView} />
-        <div className="mt-8 flex justify-center">
-          <button
-            onClick={() => navigate('/my-claims')} 
-            className="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus:ring-offset-gray-900"
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => navigate('/my-claims')}
           >
             返回我的申报列表
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </Box>
+      </Box>
+    </PageContainer>
   );
 };
 
