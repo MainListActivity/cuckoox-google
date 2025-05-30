@@ -23,14 +23,14 @@ const routesRequiringCaseSelection: string[] = [
   '/dashboard',
   // '/cases', // 案件列表页面不需要先选择案件，用户需要通过这个页面来创建或选择案件
   // '/cases/create', // 案件创建页面也不需要先选择案件
-  '/cases/:id', // CaseDetailPage definitely requires a selected case context, though ID is in URL
+  // '/cases/:id', // CaseDetailPage definitely requires a selected case context, though ID is in URL
   '/creditors',
   '/claims',
   '/claims/submit',
   '/claims/:id/review',
   '/claim-dashboard',
   '/online-meetings',
-  '/messages', // 消息中心可能需要案件上下文
+  // '/messages', // 消息中心不需要案件上下文
   // '/admin', // Admin page might operate outside a specific case context or have its own logic
 ];
 

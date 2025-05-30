@@ -15,7 +15,7 @@ DEFINE TABLE user SCHEMAFULL
 
 DEFINE FIELD github_id ON user TYPE string; -- Can be special value like '--admin--'
 DEFINE FIELD name ON user TYPE string;
-DEFINE FIELD email ON user TYPE option<string> ASSERT $value = NONE OR is::email($value);
+DEFINE FIELD email ON user TYPE option<string> ASSERT $value = NONE OR string::is::email($value);
 DEFINE FIELD created_at ON user TYPE datetime VALUE $before OR time::now();
 DEFINE FIELD updated_at ON user TYPE datetime VALUE time::now();
 DEFINE FIELD last_login_case_id ON user TYPE option<record<case>>;
@@ -30,15 +30,17 @@ DEFINE TABLE case SCHEMAFULL
 DEFINE FIELD name ON case TYPE string;
 DEFINE FIELD case_number ON case TYPE string;
 DEFINE FIELD case_manager_name ON case TYPE string;
-DEFINE FIELD case_procedure ON case TYPE string DEFAULT '破产清算'; -- e.g. 破产清算, 和解, 重整
+DEFINE FIELD case_procedure ON case TYPE string DEFAULT '破产'; -- e.g. 破产, 和解, 重整
 DEFINE FIELD acceptance_date ON case TYPE datetime;
-DEFINE FIELD procedure_phase ON case TYPE string; -- e.g., '立案审查', '债权申报', '第一次债权人会议', '重整计划表决', '裁定批准重整计划', '重整计划执行', '裁定终结程序'
-DEFINE FIELD created_by_user ON case TYPE record<user> VALUE $auth.id DEFAULT $auth.id;
+DEFINE FIELD procedure_phase ON case TYPE string DEFAULT '立案'; -- e.g., '立案', '公告', '债权申报', '债权人第一次会议', '裁定重整', '提交重整计划', '延迟提交重整计划', '债权人第二次会议', '破产清算', '结案'
+DEFINE FIELD created_by_user ON case TYPE record<user> DEFAULT $auth.id;
 DEFINE FIELD case_lead_user_id ON case TYPE option<record<user>>; -- Renamed from admin_id
 DEFINE FIELD filing_material_doc_id ON case TYPE option<record<document>>;
 DEFINE FIELD announcement_date ON case TYPE option<datetime>;
 DEFINE FIELD claim_submission_start_date ON case TYPE option<datetime>;
 DEFINE FIELD claim_submission_end_date ON case TYPE option<datetime>;
+DEFINE FIELD first_creditor_meeting_date ON case TYPE option<datetime>; -- ADDED
+DEFINE FIELD second_creditor_meeting_date ON case TYPE option<datetime>; -- ADDED
 DEFINE FIELD reorganization_ruling_date ON case TYPE option<datetime>;
 DEFINE FIELD reorganization_plan_submission_date ON case TYPE option<datetime>;
 DEFINE FIELD delayed_reorganization_plan_submission_date ON case TYPE option<datetime>;
@@ -47,7 +49,7 @@ DEFINE FIELD reorganization_ruling_announcement_doc_id ON case TYPE option<recor
 DEFINE FIELD reorganization_plan_doc_id ON case TYPE option<record<document>>;
 DEFINE FIELD selected_theme_name ON case TYPE option<string>; -- ADDED
 DEFINE FIELD created_at ON case TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON case TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
+DEFINE FIELD updated_at ON case TYPE datetime VALUE time::now();
 -- Removed 'status' and 'details' as per instruction, assuming covered by procedure_phase and specific doc links.
 
 -- Define Roles Table
@@ -56,10 +58,11 @@ DEFINE TABLE role SCHEMAFULL
     FOR select FULL
     FOR create, update, delete WHERE $auth.roles CONTAINS 'admin';
 
-DEFINE FIELD name ON role TYPE string ASSERT $value != NONE AND string::len($value) > 0 UNIQUE;
+DEFINE FIELD name ON role TYPE string ASSERT $value != NONE AND string::len($value) > 0;
+DEFINE INDEX role_name_idx ON role COLUMNS name UNIQUE;
 DEFINE FIELD description ON role TYPE option<string>;
 DEFINE FIELD created_at ON role TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON role TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
+DEFINE FIELD updated_at ON role TYPE datetime VALUE time::now();
 
 -- Define User Case Role Table (Link between users, cases, and their role in that case)
 DEFINE TABLE user_case_role SCHEMAFULL
@@ -88,11 +91,13 @@ DEFINE FIELD type ON creditor TYPE string ASSERT $value IN ['organization', 'ind
 DEFINE FIELD name ON creditor TYPE string;
 DEFINE FIELD legal_id ON creditor TYPE string; -- Company registration or personal ID
 DEFINE FIELD contact_person_name ON creditor TYPE option<string>;
-DEFINE FIELD contact_details ON creditor TYPE string; -- Could be JSON for structured data: { phone: "...", email: "...", address: "..." }
+DEFINE FIELD contact_phone ON creditor TYPE option<string>;
+DEFINE FIELD contact_email ON creditor TYPE option<string>;
+DEFINE FIELD contact_address ON creditor TYPE option<string>;
 DEFINE FIELD case_id ON creditor TYPE record<case>;
 DEFINE FIELD created_at ON creditor TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON creditor TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
-DEFINE FIELD created_by ON creditor TYPE record<user> VALUE $auth.id DEFAULT $auth.id;
+DEFINE FIELD updated_at ON creditor TYPE datetime VALUE time::now();
+DEFINE FIELD created_by ON creditor TYPE record<user> DEFAULT $auth.id;
 DEFINE INDEX creditor_case_legal_id_idx ON creditor COLUMNS case_id, legal_id UNIQUE;
 
 -- Define Claim Review Status Definition Table
@@ -101,12 +106,13 @@ DEFINE TABLE claim_review_status_definition SCHEMAFULL
     FOR select FULL
     FOR create, update, delete WHERE $auth.roles CONTAINS 'admin';
 
-DEFINE FIELD name ON claim_review_status_definition TYPE string UNIQUE;
+DEFINE FIELD name ON claim_review_status_definition TYPE string;
+DEFINE INDEX claim_review_status_name_idx ON claim_review_status_definition COLUMNS name UNIQUE;
 DEFINE FIELD description ON claim_review_status_definition TYPE option<string>;
 DEFINE FIELD is_active ON claim_review_status_definition TYPE bool DEFAULT true;
 DEFINE FIELD display_order ON claim_review_status_definition TYPE int DEFAULT 0;
 DEFINE FIELD created_at ON claim_review_status_definition TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON claim_review_status_definition TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
+DEFINE FIELD updated_at ON claim_review_status_definition TYPE datetime VALUE time::now();
 
 -- Define Claim Table
 DEFINE TABLE claim SCHEMAFULL
@@ -119,30 +125,34 @@ DEFINE TABLE claim SCHEMAFULL
 DEFINE FIELD creditor_id ON claim TYPE record<creditor>;
 DEFINE FIELD case_id ON claim TYPE record<case>;
 DEFINE FIELD claim_number ON claim TYPE string; -- Should be unique per case, enforced by application
-DEFINE FIELD asserted_claim_details ON claim TYPE object (
-    nature TYPE string,
-    principal TYPE decimal,
-    interest TYPE decimal,
-    other_amount TYPE option<decimal>,
-    total_asserted_amount TYPE decimal,
-    attachment_doc_id TYPE record<document>
-);
-DEFINE FIELD approved_claim_details ON claim TYPE option<object> (
-    nature TYPE string,
-    principal TYPE decimal,
-    interest TYPE decimal,
-    other_amount TYPE option<decimal>,
-    total_approved_amount TYPE decimal,
-    approved_attachment_doc_id TYPE option<record<document>>
-);
+DEFINE FIELD asserted_claim_details ON claim TYPE object;
+DEFINE FIELD asserted_claim_details.nature ON claim TYPE string;
+DEFINE FIELD asserted_claim_details.principal ON claim TYPE decimal;
+DEFINE FIELD asserted_claim_details.interest ON claim TYPE decimal;
+DEFINE FIELD asserted_claim_details.other_amount ON claim TYPE option<decimal>;
+DEFINE FIELD asserted_claim_details.total_asserted_amount ON claim TYPE decimal;
+DEFINE FIELD asserted_claim_details.attachment_doc_id ON claim TYPE record<document>;
+DEFINE FIELD asserted_claim_details.currency ON claim TYPE string DEFAULT 'CNY'; -- ADDED
+DEFINE FIELD asserted_claim_details.brief_description ON claim TYPE option<string>; -- ADDED
+
+DEFINE FIELD approved_claim_details ON claim TYPE option<object>;
+DEFINE FIELD approved_claim_details.nature ON claim TYPE string;
+DEFINE FIELD approved_claim_details.principal ON claim TYPE decimal;
+DEFINE FIELD approved_claim_details.interest ON claim TYPE decimal;
+DEFINE FIELD approved_claim_details.other_amount ON claim TYPE option<decimal>;
+DEFINE FIELD approved_claim_details.total_approved_amount ON claim TYPE decimal;
+DEFINE FIELD approved_claim_details.approved_attachment_doc_id ON claim TYPE option<record<document>>;
+DEFINE FIELD approved_claim_details.currency ON claim TYPE string DEFAULT 'CNY'; -- ADDED
 DEFINE FIELD reviewer_id ON claim TYPE option<record<user>>;
 DEFINE FIELD review_status_id ON claim TYPE option<record<claim_review_status_definition>>;
 DEFINE FIELD review_time ON claim TYPE option<datetime>;
 DEFINE FIELD submission_time ON claim TYPE datetime VALUE $before OR time::now();
 DEFINE FIELD created_at ON claim TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON claim TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
-DEFINE FIELD created_by ON claim TYPE record<user> VALUE $auth.id DEFAULT $auth.id;
+DEFINE FIELD updated_at ON claim TYPE datetime VALUE time::now();
+DEFINE FIELD created_by ON claim TYPE record<user> DEFAULT $auth.id;
 DEFINE FIELD comments_doc_id ON claim TYPE option<record<document>>; -- For general review discussion
+DEFINE FIELD review_comments ON claim TYPE option<string>; -- ADDED for review notes
+DEFINE FIELD status ON claim TYPE string DEFAULT '草稿'; -- ADDED: 草稿, 待审核, etc.
 DEFINE INDEX claim_case_number_idx ON claim COLUMNS case_id, claim_number UNIQUE;
 DEFINE INDEX claim_case_creditor_idx ON claim COLUMNS case_id, creditor_id;
 DEFINE INDEX claim_case_status_idx ON claim COLUMNS case_id, review_status_id;
@@ -166,8 +176,8 @@ DEFINE FIELD s3_object_key ON document TYPE option<string>;    -- Key for S3 obj
 DEFINE FIELD file_size ON document TYPE option<int>;           -- File size in bytes
 DEFINE FIELD mime_type ON document TYPE option<string>;        -- MIME type of the file
 DEFINE FIELD created_at ON document TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON document TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
-DEFINE FIELD created_by ON document TYPE record<user> VALUE $auth.id DEFAULT $auth.id;
+DEFINE FIELD updated_at ON document TYPE datetime VALUE time::now();
+DEFINE FIELD created_by ON document TYPE record<user> DEFAULT $auth.id;
 DEFINE FIELD last_edited_by ON document TYPE option<record<user>>;
 DEFINE FIELD version ON document TYPE int DEFAULT 1;
 DEFINE FIELD locked_by ON document TYPE option<record<user>>;
@@ -181,11 +191,11 @@ DEFINE TABLE document_comment SCHEMAFULL
     FOR update, delete WHERE $auth.id = user_id OR $auth.roles CONTAINS 'admin';
 
 DEFINE FIELD document_id ON document_comment TYPE record<document>;
-DEFINE FIELD user_id ON document_comment TYPE record<user> VALUE $auth.id DEFAULT $auth.id;
+DEFINE FIELD user_id ON document_comment TYPE record<user> DEFAULT $auth.id;
 DEFINE FIELD comment_text ON document_comment TYPE string;
 DEFINE FIELD selection_details ON document_comment TYPE option<object>; -- e.g., { type: 'text', start: 10, length: 5 }
 DEFINE FIELD created_at ON document_comment TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON document_comment TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
+DEFINE FIELD updated_at ON document_comment TYPE datetime VALUE time::now();
 DEFINE FIELD resolved_at ON document_comment TYPE option<datetime>;
 DEFINE FIELD resolved_by ON document_comment TYPE option<record<user>>;
 DEFINE INDEX doc_comment_doc_idx ON document_comment COLUMNS document_id;
@@ -197,13 +207,18 @@ DEFINE TABLE meeting SCHEMAFULL
     FOR create, update, delete WHERE $auth.roles CONTAINS 'admin' OR $auth.roles CONTAINS 'case_manager';
 
 DEFINE FIELD case_id ON meeting TYPE record<case>;
-DEFINE FIELD meeting_type ON meeting TYPE string; -- e.g., 'FIRST_CREDITOR_MEETING', 'FINANCIAL_REVIEW_MEETING'
-DEFINE FIELD scheduled_date ON meeting TYPE datetime;
-DEFINE FIELD status ON meeting TYPE string; -- e.g., 'SCHEDULED', 'COMPLETED', 'CANCELLED', 'POSTPONED'
+DEFINE FIELD meeting_name ON meeting TYPE string; -- ADDED
+DEFINE FIELD meeting_type ON meeting TYPE string; -- e.g., 'FIRST_CREDITOR_MEETING', 'SECOND_CREDITOR_MEETING', 'INTERNAL_MEETING'
+DEFINE FIELD scheduled_start_date ON meeting TYPE datetime;
+DEFINE FIELD scheduled_end_date ON meeting TYPE datetime; -- ADDED
+DEFINE FIELD status ON meeting TYPE string DEFAULT 'SCHEDULED'; -- e.g., 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'POSTPONED'
+DEFINE FIELD meeting_agenda ON meeting TYPE option<string>; -- ADDED
+DEFINE FIELD meeting_link ON meeting TYPE option<string>; -- ADDED for online meeting URL
 DEFINE FIELD meeting_record_doc_id ON meeting TYPE option<record<document>>; -- For minutes or recordings
+DEFINE FIELD participants ON meeting TYPE option<array<record<user>>>; -- ADDED
 DEFINE FIELD created_at ON meeting TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON meeting TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
-DEFINE FIELD created_by ON meeting TYPE record<user> VALUE $auth.id DEFAULT $auth.id;
+DEFINE FIELD updated_at ON meeting TYPE datetime VALUE time::now();
+DEFINE FIELD created_by ON meeting TYPE record<user> DEFAULT $auth.id;
 DEFINE INDEX meeting_case_idx ON meeting COLUMNS case_id;
 
 -- Define Message Table (For IM and system reminders)
@@ -216,11 +231,11 @@ DEFINE TABLE message SCHEMAFULL
 DEFINE FIELD chat_id ON message TYPE string; -- e.g., 'case:<uuid>', 'user_pair:<user1_uuid>_<user2_uuid>', 'user:<user_uuid_for_system_reminders>'
 DEFINE FIELD sender_id ON message TYPE string; -- e.g., 'user:<uuid>', 'system:notifications', 'bot:case_<case_uuid>'
 DEFINE FIELD receiver_id ON message TYPE option<string>; -- e.g., 'user:<uuid>' for DMs, null for group/case chats
-DEFINE FIELD content ON message TYPE string OR object; -- Flexible: text, JSON for cards, etc.
+DEFINE FIELD content ON message TYPE any; -- Flexible: text, JSON for cards, etc.
 DEFINE FIELD message_type ON message TYPE string DEFAULT 'USER_CHAT'; -- e.g., 'USER_CHAT', 'SYSTEM_REMINDER', 'BOT_MESSAGE', 'FILE_UPLOAD'
 DEFINE FIELD case_id ON message TYPE option<record<case>>; -- Link to case if relevant
 DEFINE FIELD created_at ON message TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON message TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now(); -- For edits if allowed
+DEFINE FIELD updated_at ON message TYPE datetime VALUE time::now(); -- For edits if allowed
 DEFINE FIELD read_at ON message TYPE option<datetime>; -- Simplified: last read time by receiver (for DMs). Groups need per-user status.
 DEFINE INDEX message_chat_created_idx ON message COLUMNS chat_id, created_at;
 DEFINE INDEX message_case_created_idx ON message COLUMNS case_id, created_at;
@@ -257,14 +272,15 @@ DEFINE TABLE menu_item SCHEMAFULL
     FOR select FULL
     FOR create, update, delete WHERE $auth.roles CONTAINS 'admin';
 
-DEFINE FIELD path ON menu_item TYPE string UNIQUE; -- e.g., '/dashboard', '/cases'
+DEFINE FIELD path ON menu_item TYPE string; -- e.g., '/dashboard', '/cases'
+DEFINE INDEX menu_item_path_idx ON menu_item COLUMNS path UNIQUE;
 DEFINE FIELD label_key ON menu_item TYPE string; -- Translation key, e.g., 'menu.dashboard', 'menu.cases'
 DEFINE FIELD icon ON menu_item TYPE option<string>; -- e.g., 'dashboard', 'gavel'
 DEFINE FIELD parent_id ON menu_item TYPE option<record<menu_item>>; -- For sub-menus
 DEFINE FIELD display_order ON menu_item TYPE int DEFAULT 0;
 DEFINE FIELD required_permission ON menu_item TYPE option<record<permission>>; -- Optional link to a specific permission
 DEFINE FIELD created_at ON menu_item TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON menu_item TYPE datetime VALUE time::now() ON DUPLICATE KEY UPDATE updated_at = time::now();
+DEFINE FIELD updated_at ON menu_item TYPE datetime VALUE time::now();
 
 -- Define Role Menu Item Table (Link roles to menu items they can see)
 -- This table can be used if menu visibility isn't solely driven by permissions on resources.
@@ -290,6 +306,51 @@ DEFINE FIELD case_id ON case_bot_subscription TYPE record<case>;
 DEFINE FIELD subscribed_at ON case_bot_subscription TYPE datetime VALUE time::now();
 DEFINE INDEX user_case_subscription_idx ON case_bot_subscription COLUMNS user_id, case_id UNIQUE;
 
+-- Define Notification Rule Table (for case bot reminders)
+DEFINE TABLE notification_rule SCHEMAFULL
+  PERMISSIONS
+    FOR select FULL
+    FOR create, update, delete WHERE $auth.roles CONTAINS 'admin';
+
+DEFINE FIELD procedure_phase ON notification_rule TYPE string; -- e.g., '立案', '公告', etc.
+DEFINE FIELD trigger_condition ON notification_rule TYPE string; -- e.g., 'acceptance_date + 25 days - now() <= 5'
+DEFINE FIELD notification_frequency ON notification_rule TYPE string DEFAULT 'DAILY'; -- e.g., 'DAILY', 'ONCE'
+DEFINE FIELD notification_time ON notification_rule TYPE string DEFAULT '10:00'; -- e.g., '10:00' for 10 AM
+DEFINE FIELD message_template ON notification_rule TYPE string; -- e.g., '距离最迟公告时间仅有 {days} 天'
+DEFINE FIELD is_active ON notification_rule TYPE bool DEFAULT true;
+DEFINE FIELD created_at ON notification_rule TYPE datetime VALUE $before OR time::now();
+DEFINE FIELD updated_at ON notification_rule TYPE datetime VALUE time::now();
+DEFINE INDEX notification_rule_phase_idx ON notification_rule COLUMNS procedure_phase;
+
+-- Define Document Version Table (for tracking document history)
+DEFINE TABLE document_version SCHEMAFULL
+  PERMISSIONS
+    FOR select WHERE $auth.id -- Access controlled through parent document
+    FOR create WHERE $auth.id
+    FOR update, delete WHERE $auth.roles CONTAINS 'admin'; -- Versions should be immutable
+
+DEFINE FIELD document_id ON document_version TYPE record<document>;
+DEFINE FIELD version_number ON document_version TYPE int;
+DEFINE FIELD content ON document_version TYPE string; -- Snapshot of content at this version
+DEFINE FIELD change_summary ON document_version TYPE option<string>;
+DEFINE FIELD created_by ON document_version TYPE record<user>;
+DEFINE FIELD created_at ON document_version TYPE datetime VALUE $before OR time::now();
+DEFINE INDEX doc_version_idx ON document_version COLUMNS document_id, version_number UNIQUE;
+
+-- Define Claim Nature Definition Table (for dropdown options)
+DEFINE TABLE claim_nature_definition SCHEMAFULL
+  PERMISSIONS
+    FOR select FULL
+    FOR create, update, delete WHERE $auth.roles CONTAINS 'admin';
+
+DEFINE FIELD name ON claim_nature_definition TYPE string;
+DEFINE INDEX claim_nature_name_idx ON claim_nature_definition COLUMNS name UNIQUE;
+DEFINE FIELD description ON claim_nature_definition TYPE option<string>;
+DEFINE FIELD is_active ON claim_nature_definition TYPE bool DEFAULT true;
+DEFINE FIELD display_order ON claim_nature_definition TYPE int DEFAULT 0;
+DEFINE FIELD created_at ON claim_nature_definition TYPE datetime VALUE $before OR time::now();
+DEFINE FIELD updated_at ON claim_nature_definition TYPE datetime VALUE time::now();
+
 
 -- ==========================
 -- Seed Data (Optional Examples - typically run manually or via a script)
@@ -314,12 +375,42 @@ INSERT INTO claim_review_status_definition (name, description, display_order) VA
   ('未确认', 'Claim rejected by case manager.', 6),
   ('异议处理中', 'Objection raised against the claim, under resolution.', 7);
 
+-- Example Claim Natures
+INSERT INTO claim_nature_definition (name, description, display_order) VALUES
+  ('普通债权', 'General unsecured claims', 0),
+  ('有财产担保债权', 'Secured claims with property collateral', 1),
+  ('劳动报酬', 'Employee wages and benefits', 2),
+  ('税款债权', 'Tax claims', 3),
+  ('其他优先债权', 'Other priority claims', 4);
+
+-- Example Notification Rules (based on product document)
+INSERT INTO notification_rule (procedure_phase, trigger_condition, message_template) VALUES
+  ('立案', 'acceptance_date + 25 days - now() <= 5', '距离最迟公告时间仅有 {days} 天'),
+  ('公告', 'announcement_date + 30 days - now() <= 3', '距离开始债权申报时间还有 {days} 天'),
+  ('债权申报', 'announcement_date + 3 months - now() <= 3', '距离债权申报截止还有 {days} 天'),
+  ('债权人第一次会议', 'claim_submission_end_date + 15 days - now() <= 3', '距离第一次债权人会议截止时间还有 {days} 天'),
+  ('裁定重整', 'reorganization_ruling_date + 6 months - now() <= 5', '距离提交重整计划截止时间还有 {days} 天，超时未提交将宣告破产清算'),
+  ('延迟提交重整计划', 'delayed_reorganization_plan_submission_date + 3 months - now() <= 5', '距离提交重整计划截止时间还有 {days} 天，超时未提交将宣告破产清算'),
+  ('债权人第二次会议', 'reorganization_plan_submission_date + 15 days - now() <= 3', '距离第二次债权人会议通知截止时间还有 {days} 天');
+
 -- Example Menu Items (label_key would be used for i18n)
 INSERT INTO menu_item (path, label_key, icon, display_order) VALUES
   ('/dashboard', 'menu.dashboard', 'dashboard', 0),
-  ('/cases', 'menu.cases', 'folder-open', 1),
-  ('/cases/new', 'menu.cases.new', 'plus-circle', 0) parent_id = (SELECT id FROM menu_item WHERE path = '/cases'),
-  ('/admin/users', 'menu.admin.users', 'users', 100);
+  ('/cases', 'menu.cases', 'folder-open', 10),
+  ('/creditors', 'menu.creditors', 'users', 20),
+  ('/claims', 'menu.claims', 'file-text', 30),
+  ('/claim-review', 'menu.claim_review', 'check-circle', 40),
+  ('/claim-dashboard', 'menu.claim_dashboard', 'bar-chart', 50),
+  ('/meetings', 'menu.meetings', 'calendar', 60),
+  ('/messages', 'menu.messages', 'message-circle', 70),
+  ('/admin/roles', 'menu.admin.roles', 'shield', 100),
+  ('/admin/review-statuses', 'menu.admin.review_statuses', 'list', 110);
+
+-- Example Sub-menu Items (needs separate INSERT for parent_id)
+INSERT INTO menu_item (path, label_key, icon, display_order, parent_id) VALUES
+  ('/cases/new', 'menu.cases.new', 'plus-circle', 0, (SELECT id FROM menu_item WHERE path = '/cases' LIMIT 1)),
+  ('/claims/submit', 'menu.claims.submit', 'send', 0, (SELECT id FROM menu_item WHERE path = '/claims' LIMIT 1)),
+  ('/claims/my-claims', 'menu.claims.my_claims', 'folder', 1, (SELECT id FROM menu_item WHERE path = '/claims' LIMIT 1));
 */
 
 -- End of Schema --
