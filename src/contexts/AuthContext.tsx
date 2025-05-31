@@ -324,6 +324,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log("Updated navMenuItems:", filteredNavItems);
   };
   
+  // Helper function to update last selected case in DB
+  const updateLastSelectedCaseInDB = async (userId: string, caseId: string) => {
+    if (!client || !userId || !caseId) {
+      console.warn('updateLastSelectedCaseInDB: Surreal client not available or missing userId/caseId.');
+      return;
+    }
+    try {
+      await client.query('UPDATE user SET last_selected_case_id = $caseId WHERE id = $userId;', {
+        userId,
+        caseId,
+      });
+      console.log(`Successfully updated last_selected_case_id for user ${userId} to ${caseId}`);
+    } catch (error) {
+      console.error('Failed to update last_selected_case_id in DB:', error);
+    }
+  };
+
   // Internal helper to set roles based on a selected case ID and pre-fetched UserCaseRoleDetails
   const selectCaseInternal = (caseIdToSelect: string, allUserCaseRolesDetails: UserCaseRoleDetails[]) => {
     setSelectedCaseId(caseIdToSelect);
@@ -385,6 +402,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           localStorage.setItem('cuckoox-user', JSON.stringify(updatedUser));
       }
 
+      // Update last selected case in DB
+      if (user?.id) {
+        await updateLastSelectedCaseInDB(user.id.toString(), caseIdToSelect);
+      }
 
     } catch (error) {
       console.error(`Error selecting case ${caseIdToSelect}:`, error);

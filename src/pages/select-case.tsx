@@ -294,7 +294,7 @@ const CaseSelectionPage: React.FC = () => {
                                 {caseItem.name}
                               </Typography>
                               {isSelected && (
-                                <SvgIcon sx={{ ml: 1, color: 'primary.main' }}>
+                                <SvgIcon sx={{ ml: 1, color: 'primary.main' }} data-testid="selected-check-icon">
                                   <path d={mdiCheckCircle} />
                                 </SvgIcon>
                               )}
