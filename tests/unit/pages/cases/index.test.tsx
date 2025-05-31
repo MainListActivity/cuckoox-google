@@ -7,6 +7,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/src/i18n';
 import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
+import { SurrealContext, SurrealContextType } from '@/src/contexts/SurrealProvider'; // Added
 
 // Mock child components (Dialogs)
 vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
@@ -83,13 +84,19 @@ const renderCaseListPage = (cases = mockCasesData) => {
   // Let's assume we can't directly inject data for this test structure and rely on the component's internal mock.
   // The provided component uses its own 'mockCases' constant.
 
+  // Define a default mock Surreal context value outside render helper to be accessible in beforeEach
+  let mockSurrealContextValue: Partial<SurrealContextType>;
+
+
   return render(
     <ThemeProvider theme={theme}>
       <BrowserRouter>
         {/* <I18nextProvider i18n={i18n}> // Using jest.mock for useTranslation */}
+        <SurrealContext.Provider value={mockSurrealContextValue as SurrealContextType}>
           <SnackbarProvider> {/* Use the actual provider if useSnackbar is complex, or mock it fully */}
             <CaseListPage />
           </SnackbarProvider>
+        </SurrealContext.Provider>
         {/* </I18nextProvider> */}
       </BrowserRouter>
     </ThemeProvider>
@@ -101,6 +108,34 @@ describe('CaseListPage', () => {
     // Reset mocks before each test
     mockShowSuccess.mockClear();
     mockShowError.mockClear();
+
+    // Setup mockSurrealContextValue here to ensure it's fresh for each test
+    mockSurrealContextValue = {
+      surreal: {
+        query: vi.fn().mockResolvedValue([mockCasesData]),
+        select: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        merge: vi.fn(),
+        delete: vi.fn(),
+        live: vi.fn(),
+        kill: vi.fn(),
+        let: vi.fn(),
+        unset: vi.fn(),
+        signup: vi.fn(),
+        signin: vi.fn(),
+        invalidate: vi.fn(),
+        authenticate: vi.fn(),
+        sync: vi.fn(),
+        close: vi.fn(),
+      },
+      isConnected: true,
+      isLoading: false,
+      error: null,
+      dbInfo: null,
+      connect: vi.fn(),
+      signout: vi.fn(),
+    };
     // Any other necessary resets
   });
 

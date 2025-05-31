@@ -107,8 +107,10 @@ const ClaimSubmissionPage: React.FC = () => {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
               <Box sx={{ flex: '1 1 100%', '@media (min-width: 900px)': { flex: '1 1 45%' } }}>
                 <FormControl fullWidth required error={!!errors.claimNature}>
-                  <InputLabel>债权性质</InputLabel>
+                  <InputLabel id="claimNature-label">债权性质</InputLabel>
                   <Select
+                    labelId="claimNature-label"
+                    id="claimNature-select" // Ensure Select has an id if InputLabel uses htmlFor
                     value={claimNature}
                     onChange={(e) => {
                       setClaimNature(e.target.value);
@@ -126,8 +128,10 @@ const ClaimSubmissionPage: React.FC = () => {
               
               <Box sx={{ flex: '1 1 100%', '@media (min-width: 900px)': { flex: '1 1 45%' } }}>
                 <FormControl fullWidth required error={!!errors.currency}>
-                  <InputLabel>币种</InputLabel>
+                  <InputLabel id="currency-label">币种</InputLabel>
                   <Select
+                    labelId="currency-label"
+                    id="currency-select" // Ensure Select has an id if InputLabel uses htmlFor
                     value={currency}
                     onChange={(e) => {
                       setCurrency(e.target.value);

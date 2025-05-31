@@ -10,25 +10,24 @@ import {
 import { teal, cyan, purple, grey } from '@mui/material/colors';
 
 
+import { vi } from 'vitest'; // Import vi
+
 // Mock the SurrealClient
-const mockQuery = jest.fn();
-const mockListenLive = jest.fn().mockResolvedValue({ id: 'live-query-id-mock' }); // Ensure listenLive returns a promise for await
-const mockKill = jest.fn().mockResolvedValue(undefined); // Ensure kill returns a promise
+const mockQuery = vi.fn();
+const mockListenLive = vi.fn();
+const mockKill = vi.fn();
+const mockSubscribeLive = vi.fn(); // Added for completeness, though createLiveMetricHook uses listenLive
 
-
-jest.mock('../../../src/contexts/SurrealProvider', () => ({
-  //  ...jest.requireActual('../contexts/SurrealProvider'), // Avoid if it has side effects or real client init
+vi.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({
     client: {
       query: mockQuery,
-      listenLive: mockListenLive,
+      listenLive: mockListenLive, // createLiveMetricHook uses listenLive
+      subscribeLive: mockSubscribeLive, // For other live hooks if they use it
       kill: mockKill,
-      // Mock other client properties/methods if the hook factory uses them
-      // For example, if it checks client.isConnected status directly or client.ws.readyState etc.
-      // For now, keeping it simple as per the factory's current usage.
-      isConnected: true, // Default to connected for most tests
+      isConnected: true,
     },
-    isConnected: true, // Redundant if client.isConnected is available and used, but good for clarity
+    isConnected: true,
   }),
 }));
 
@@ -42,9 +41,12 @@ describe('useLiveDashboardData Hooks', () => {
     mockQuery.mockReset();
     mockListenLive.mockReset();
     mockKill.mockReset();
+    mockSubscribeLive.mockReset(); // Reset new mock
     
     // Default behavior for listenLive and kill for simplicity in tests not focusing on them
-    mockListenLive.mockResolvedValue({ result: 'mock-live-query-id' });
+    // listenLive (and subscribeLive) should return an object with a close method for the live query itself
+    mockListenLive.mockResolvedValue({ id: 'mock-listen-live-id', close: vi.fn() });
+    mockSubscribeLive.mockResolvedValue({ id: 'mock-subscribe-live-id', close: vi.fn() });
     mockKill.mockResolvedValue(undefined);
   });
 
@@ -74,8 +76,8 @@ describe('useLiveDashboardData Hooks', () => {
     it('should use correct query parameters including default limit if $limit were present', async () => {
         // This specific query doesn't use $limit, but testing the mechanism if it did:
         const queryWithLimit = "SELECT count() FROM claim WHERE case_id = $caseId LIMIT $limit;";
-        const mockMetricQueryFn = jest.fn().mockReturnValue(queryWithLimit);
-        const mockParseResult = jest.fn().mockReturnValue(0);
+        const mockMetricQueryFn = vi.fn().mockReturnValue(queryWithLimit); // Use vi.fn()
+        const mockParseResult = vi.fn().mockReturnValue(0); // Use vi.fn()
 
         // Temporarily mock createLiveMetricHook or the specific hook's internals if needed,
         // or assume the factory correctly passes limit. For now, we trust the factory.

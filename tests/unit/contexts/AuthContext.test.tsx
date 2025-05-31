@@ -1,9 +1,10 @@
 import React, { ReactNode } from 'react';
 import { render, act, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AuthProvider, useAuth, Case, Role } from '@/src/contexts/AuthContext'; // Adjust path as needed
+import { AuthProvider, useAuth, Case, Role } // Removed AppUser as it's defined locally for test
+    from '@/src/contexts/AuthContext'; // Adjust path as needed
 import authService from '@/src/services/authService';
-import { db } from '@/src/lib/surreal';
+// import { db } from '@/src/lib/surreal'; // No longer directly imported by AuthContext
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
 
@@ -31,15 +32,29 @@ vi.mock('../../../src/services/authService', () => ({
   }
 }));
 
-// Mock surrealdb
-vi.mock('../../../src/lib/surreal', () => ({
-  db: {
-    select: vi.fn(),
-    query: vi.fn(),
-    merge: vi.fn(),
-    signout: vi.fn(),
-    signin: vi.fn(), // Added in case it's used by other parts
-  }
+// Mock SurrealProvider instead of direct db import
+const mockSurrealClient = {
+  select: vi.fn(),
+  query: vi.fn(),
+  merge: vi.fn(),
+  signout: vi.fn(),
+  signin: vi.fn(),
+  create: vi.fn(), // Add other methods used by AuthContext if any
+  delete: vi.fn(),
+  // Add any other client methods AuthContext might use
+};
+vi.mock('@/src/contexts/SurrealProvider', () => ({
+  useSurreal: () => ({ // This is the hook AuthContext now uses
+    surreal: mockSurrealClient,
+    isConnected: true, // Mock connection status
+    isLoading: false,
+    error: null,
+    dbInfo: null,
+    connect: vi.fn(),
+    signout: mockSurrealClient.signout, // Ensure signout from useSurreal is also mocked if used directly
+  }),
+  // Keep SurrealProvider export if it's used by TestWrapper, but it's not directly.
+  // SurrealProvider: ({ children } : {children: ReactNode}) => children,
 }));
 
 // Mock console.error and console.warn to spy on them
@@ -118,7 +133,7 @@ const renderWithAuthProvider = (initialUser: AppUser | null = null, initialOidcU
   }
   
   // Mock db.query for loadUserCasesAndRoles to prevent errors, return empty by default
-  (db.query as vi.Mock).mockResolvedValue([[]]); // Simulates no cases/roles
+  (mockSurrealClient.query as vi.Mock).mockResolvedValue([[]]); // Simulates no cases/roles
 
   const renderResult = render(
     <AuthProvider>
@@ -149,9 +164,9 @@ describe('AuthContext', () => {
 
     // Default mocks for services to prevent unwanted errors in tests not focused on them
     (authService.getUser as vi.Mock).mockResolvedValue(null);
-    (db.select as vi.Mock).mockResolvedValue([]);
-    (db.query as vi.Mock).mockResolvedValue([[]]); // Default to no cases/roles
-    (db.signout as vi.Mock).mockResolvedValue(undefined);
+    (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
+    (mockSurrealClient.query as vi.Mock).mockResolvedValue([[]]); // Default to no cases/roles
+    (mockSurrealClient.signout as vi.Mock).mockResolvedValue(undefined);
     (authService.logoutRedirect as vi.Mock).mockResolvedValue(undefined);
   });
 
@@ -234,15 +249,15 @@ describe('AuthContext', () => {
         await act(async () => { // Ensure initial state is set
           capturedAuthContext.setAuthState(mockAdminUser, null);
         });
-        (db.signout as vi.Mock).mockResolvedValue(undefined); // Reset mock for specific test
+        (mockSurrealClient.signout as vi.Mock).mockResolvedValue(undefined); // Reset mock for specific test
       });
 
-      it('should call db.signout, not call authService.logoutRedirect, and clear client state', async () => {
+      it('should call surreal.signout, not call authService.logoutRedirect, and clear client state', async () => {
         await act(async () => {
           await capturedAuthContext.logout();
         });
 
-        expect(db.signout).toHaveBeenCalledTimes(1);
+        expect(mockSurrealClient.signout).toHaveBeenCalledTimes(1); // Changed from db.signout
         expect(authService.logoutRedirect).not.toHaveBeenCalled();
         
         expect(capturedAuthContext.user).toBeNull();
@@ -252,15 +267,15 @@ describe('AuthContext', () => {
         expect(localStorageMock.getItem('cuckoox-selectedCaseId')).toBeNull();
       });
 
-      it('should clear client state even if db.signout fails', async () => {
+      it('should clear client state even if surreal.signout fails', async () => {
         const signOutError = new Error('SurrealDB signout failed');
-        (db.signout as vi.Mock).mockRejectedValueOnce(signOutError);
+        (mockSurrealClient.signout as vi.Mock).mockRejectedValueOnce(signOutError); // Changed from db.signout
 
         await act(async () => {
           await capturedAuthContext.logout();
         });
         
-        expect(db.signout).toHaveBeenCalledTimes(1);
+        expect(mockSurrealClient.signout).toHaveBeenCalledTimes(1); // Changed from db.signout
         expect(consoleErrorSpy).toHaveBeenCalledWith('Error during SurrealDB signout:', signOutError);
         
         expect(capturedAuthContext.user).toBeNull();
@@ -278,13 +293,13 @@ describe('AuthContext', () => {
         (authService.logoutRedirect as vi.Mock).mockResolvedValue(undefined); // Reset mock
       });
 
-      it('should call authService.logoutRedirect, not call db.signout, and clear client state', async () => {
+      it('should call authService.logoutRedirect, not call surreal.signout, and clear client state', async () => {
         await act(async () => {
           await capturedAuthContext.logout();
         });
 
         expect(authService.logoutRedirect).toHaveBeenCalledTimes(1);
-        expect(db.signout).not.toHaveBeenCalled();
+        expect(mockSurrealClient.signout).not.toHaveBeenCalled(); // Changed from db.signout
 
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
@@ -320,7 +335,7 @@ describe('AuthContext', () => {
           await capturedAuthContext.logout();
         });
 
-        expect(db.signout).not.toHaveBeenCalled();
+        expect(mockSurrealClient.signout).not.toHaveBeenCalled(); // Changed from db.signout
         expect(authService.logoutRedirect).not.toHaveBeenCalled();
         // Check for console.warn based on AuthContext implementation
         expect(consoleWarnSpy).toHaveBeenCalledWith("Logout called without a user session.");

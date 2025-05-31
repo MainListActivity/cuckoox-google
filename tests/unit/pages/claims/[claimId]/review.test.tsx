@@ -40,13 +40,20 @@ vi.mock('../../../../../src/components/RichTextEditor', () => ({
 }));
 
 // Mock useSnackbar
-const mockShowSnackbar = vi.fn();
+const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
+const mockShowInfo = vi.fn();
+const mockShowWarning = vi.fn();
+
 vi.mock('../../../../../src/contexts/SnackbarContext', async () => {
     const actual = await vi.importActual('../../../../../src/contexts/SnackbarContext');
     return {
-        ...actual,
+        ...actual, // Spread actual to keep SnackbarProvider if it's used by the test directly
         useSnackbar: () => ({
-            showSnackbar: mockShowSnackbar,
+            showSuccess: mockShowSuccess,
+            showError: mockShowError,
+            showInfo: mockShowInfo,
+            showWarning: mockShowWarning,
         }),
     };
 });
@@ -136,7 +143,7 @@ describe('ClaimReviewDetailPage', () => {
                 // expect(screen.getByText('审核认定本金不能为空且必须大于等于0。')).toBeInTheDocument();
                 expect(screen.getByText('审核意见/备注不能为空。')).toBeInTheDocument();
             });
-            expect(mockShowSnackbar).toHaveBeenCalledWith('请修正审核表单中的错误。', 'error');
+            expect(mockShowError).toHaveBeenCalledWith('请修正审核表单中的错误。'); // Changed to mockShowError and removed 'error' type arg
         });
 
         it('calls handleSubmitReview, updates data, and shows snackbar on successful modal submission', async () => {
@@ -169,7 +176,7 @@ describe('ClaimReviewDetailPage', () => {
             fireEvent.click(submitReviewButton);
 
             await waitFor(() => {
-                expect(mockShowSnackbar).toHaveBeenCalledWith('审核意见已提交 (模拟)', 'success');
+                expect(mockShowSuccess).toHaveBeenCalledWith('审核意见已提交 (模拟)'); // Changed to mockShowSuccess and removed 'success' type arg
             });
 
             // Check if data on the page updated (e.g., status chip)

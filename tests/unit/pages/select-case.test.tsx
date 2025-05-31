@@ -8,9 +8,10 @@ import { AuthContext, AuthContextType, AppUser, Case } from '@/src/contexts/Auth
 import { SurrealContext, SurrealContextType } from '@/src/contexts/SurrealProvider';
 import { SnackbarContext, SnackbarContextType } from '@/src/contexts/SnackbarContext';
 import { RecordId } from 'surrealdb';
+import { vi } from 'vitest'; // Import vi
 
 // Mock i18n
-jest.mock('react-i18next', () => ({
+vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: any) => {
       if (key === 'case_selection_welcome') return `Welcome, ${options.name}`;
@@ -33,9 +34,9 @@ jest.mock('react-i18next', () => ({
 }));
 
 // Mock react-router-dom
-const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+const mockNavigate = vi.fn(); // Use vi.fn()
+vi.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'), // Keep this if you only want to mock parts
   useNavigate: () => mockNavigate,
   useLocation: () => ({ state: null, pathname: '/select-case' }),
 }));
@@ -95,20 +96,20 @@ const renderWithProviders = (ui: React.ReactElement) => {
 
 describe('CaseSelectionPage', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks(); // Use vi.clearAllMocks()
     mockAuthContextValue = {
       user: mockUser,
-      selectCase: jest.fn().mockResolvedValue(undefined),
+      selectCase: vi.fn().mockResolvedValue(undefined), // Use vi.fn()
       selectedCaseId: null,
       isLoading: false, // Auth loading, not case loading
       isCaseLoading: false, // Specific to case loading within AuthContext
       isLoggedIn: true,
-      refreshUserCasesAndRoles: jest.fn().mockResolvedValue(undefined),
-      hasRole: jest.fn().mockReturnValue(false),
+      refreshUserCasesAndRoles: vi.fn().mockResolvedValue(undefined), // Use vi.fn()
+      hasRole: vi.fn().mockReturnValue(false), // Use vi.fn()
       navMenuItems: [],
       isMenuLoading: false,
-      logout: jest.fn(),
-      setAuthState: jest.fn(),
+      logout: vi.fn(), // Use vi.fn()
+      setAuthState: vi.fn(), // Use vi.fn()
       oidcUser: null,
       userCases: [], // Initially empty, will be populated by Surreal mock
       currentUserCaseRoles: [],
@@ -116,7 +117,7 @@ describe('CaseSelectionPage', () => {
 
     mockSurrealContextValue = {
       surreal: {
-        query: jest.fn().mockImplementation((query) => {
+        query: vi.fn().mockImplementation((query) => { // Use vi.fn()
           // This mock simulates the query made by CaseSelectionPage to fetch cases
           // It should return an array, where the first element is the array of results
           if (query.includes('SELECT id, name, case_number, case_procedure, procedure_phase, acceptance_date, case_manager_name FROM case WHERE id IN')) {
@@ -128,35 +129,35 @@ describe('CaseSelectionPage', () => {
           }
           return Promise.resolve([[]]); // Default empty result
         }),
-        select: jest.fn(),
-        create: jest.fn(),
-        update: jest.fn(),
-        merge: jest.fn(),
-        delete: jest.fn(),
-        live: jest.fn(),
-        kill: jest.fn(),
-        let: jest.fn(),
-        unset: jest.fn(),
-        signup: jest.fn(),
-        signin: jest.fn(),
-        invalidate: jest.fn(),
-        authenticate: jest.fn(),
-        sync: jest.fn(),
-        close: jest.fn(),
+        select: vi.fn(), // Use vi.fn()
+        create: vi.fn(), // Use vi.fn()
+        update: vi.fn(), // Use vi.fn()
+        merge: vi.fn(), // Use vi.fn()
+        delete: vi.fn(), // Use vi.fn()
+        live: vi.fn(), // Use vi.fn()
+        kill: vi.fn(), // Use vi.fn()
+        let: vi.fn(), // Use vi.fn()
+        unset: vi.fn(), // Use vi.fn()
+        signup: vi.fn(), // Use vi.fn()
+        signin: vi.fn(), // Use vi.fn()
+        invalidate: vi.fn(), // Use vi.fn()
+        authenticate: vi.fn(), // Use vi.fn()
+        sync: vi.fn(), // Use vi.fn()
+        close: vi.fn(), // Use vi.fn()
       },
       isConnected: true,
       isLoading: false, // Surreal client general loading
       error: null,
       dbInfo: null,
-      connect: jest.fn(),
-      signout: jest.fn(),
+      connect: vi.fn(), // Use vi.fn()
+      signout: vi.fn(), // Use vi.fn()
     } as unknown as SurrealContextType;
 
     mockSnackbarContextValue = {
-      showSuccess: jest.fn(),
-      showError: jest.fn(),
-      showInfo: jest.fn(),
-      showWarning: jest.fn(),
+      showSuccess: vi.fn(), // Use vi.fn()
+      showError: vi.fn(), // Use vi.fn()
+      showInfo: vi.fn(), // Use vi.fn()
+      showWarning: vi.fn(), // Use vi.fn()
     };
   });
 
@@ -175,7 +176,7 @@ describe('CaseSelectionPage', () => {
   });
 
   test('renders no cases available message', async () => {
-    mockSurrealContextValue.surreal.query = jest.fn()
+    mockSurrealContextValue.surreal.query = vi.fn() // Use vi.fn()
         .mockResolvedValueOnce([[]]) // For user_case_role query
         .mockResolvedValueOnce([[]]); // For case details query
     renderWithProviders(<CaseSelectionPage />);
@@ -185,7 +186,7 @@ describe('CaseSelectionPage', () => {
   });
 
   test('handles error when fetching user_case_role', async () => {
-    mockSurrealContextValue.surreal.query = jest.fn().mockRejectedValueOnce(new Error('DB Error fetching user_case_role'));
+    mockSurrealContextValue.surreal.query = vi.fn().mockRejectedValueOnce(new Error('DB Error fetching user_case_role')); // Use vi.fn()
     renderWithProviders(<CaseSelectionPage />);
     await waitFor(() => {
       expect(screen.getByText('Failed to load case list.')).toBeInTheDocument();
@@ -195,7 +196,7 @@ describe('CaseSelectionPage', () => {
 
   test('handles error when fetching case details', async () => {
     // First query for user_case_role succeeds
-    mockSurrealContextValue.surreal.query = jest.fn()
+    mockSurrealContextValue.surreal.query = vi.fn() // Use vi.fn()
         .mockResolvedValueOnce([mockCases.map(c => ({ case_id: c.id.toString() }))]) // user_case_role
         .mockRejectedValueOnce(new Error('DB Error fetching case details')); // case details
     renderWithProviders(<CaseSelectionPage />);
@@ -259,7 +260,7 @@ describe('CaseSelectionPage', () => {
   });
 
   test('handles case selection failure', async () => {
-    mockAuthContextValue.selectCase = jest.fn().mockRejectedValue(new Error('Selection Failed'));
+    mockAuthContextValue.selectCase = vi.fn().mockRejectedValue(new Error('Selection Failed')); // Use vi.fn()
     renderWithProviders(<CaseSelectionPage />);
 
     await waitFor(() => {

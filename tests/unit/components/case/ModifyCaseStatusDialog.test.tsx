@@ -61,7 +61,7 @@ describe('ModifyCaseStatusDialog', () => {
     fireEvent.mouseDown(nextStatusSelect); // Open select
 
     // Wait for MenuItems to be available if they are rendered asynchronously or within a Portal
-    const公告Option = await screen.findByText('公告');
+    const 公告Option = await screen.findByText('公告'); // Corrected variable name
     fireEvent.click(公告Option);
 
     await waitFor(() => {
