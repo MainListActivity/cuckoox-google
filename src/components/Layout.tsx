@@ -448,9 +448,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           sx={{
             '& .MuiDrawer-paper': {
               width: drawerWidthOpen,
-              backgroundColor: themeMode === 'dark' 
-                ? currentTheme.palette.primary.dark
-                : currentTheme.palette.primary.light,
+              backgroundColor: currentTheme.palette.background.paper,
               borderRight: `1px solid ${alpha(currentTheme.palette.primary.main, 0.2)}`,
             },
             '& .MuiBackdrop-root': {
