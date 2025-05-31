@@ -16,8 +16,8 @@ DEFINE TABLE user SCHEMAFULL
 DEFINE FIELD github_id ON user TYPE string; -- Can be special value like '--admin--'
 DEFINE FIELD name ON user TYPE string;
 DEFINE FIELD email ON user TYPE option<string> ASSERT $value = NONE OR string::is::email($value);
-DEFINE FIELD created_at ON user TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON user TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON user TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON user TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD last_login_case_id ON user TYPE option<record<case>>;
 
 -- Define Cases Table
@@ -48,8 +48,8 @@ DEFINE FIELD closing_date ON case TYPE option<datetime>;
 DEFINE FIELD reorganization_ruling_announcement_doc_id ON case TYPE option<record<document>>;
 DEFINE FIELD reorganization_plan_doc_id ON case TYPE option<record<document>>;
 DEFINE FIELD selected_theme_name ON case TYPE option<string>; -- ADDED
-DEFINE FIELD created_at ON case TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON case TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON case TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON case TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 -- Removed 'status' and 'details' as per instruction, assuming covered by procedure_phase and specific doc links.
 
 -- Define Roles Table
@@ -61,8 +61,8 @@ DEFINE TABLE role SCHEMAFULL
 DEFINE FIELD name ON role TYPE string ASSERT $value != NONE AND string::len($value) > 0;
 DEFINE INDEX role_name_idx ON role COLUMNS name UNIQUE;
 DEFINE FIELD description ON role TYPE option<string>;
-DEFINE FIELD created_at ON role TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON role TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON role TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON role TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 
 -- Define User Case Role Table (Link between users, cases, and their role in that case)
 DEFINE TABLE user_case_role SCHEMAFULL
@@ -95,8 +95,8 @@ DEFINE FIELD contact_phone ON creditor TYPE option<string>;
 DEFINE FIELD contact_email ON creditor TYPE option<string>;
 DEFINE FIELD contact_address ON creditor TYPE option<string>;
 DEFINE FIELD case_id ON creditor TYPE record<case>;
-DEFINE FIELD created_at ON creditor TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON creditor TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON creditor TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON creditor TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD created_by ON creditor TYPE record<user> DEFAULT $auth.id;
 DEFINE INDEX creditor_case_legal_id_idx ON creditor COLUMNS case_id, legal_id UNIQUE;
 
@@ -111,8 +111,8 @@ DEFINE INDEX claim_review_status_name_idx ON claim_review_status_definition COLU
 DEFINE FIELD description ON claim_review_status_definition TYPE option<string>;
 DEFINE FIELD is_active ON claim_review_status_definition TYPE bool DEFAULT true;
 DEFINE FIELD display_order ON claim_review_status_definition TYPE int DEFAULT 0;
-DEFINE FIELD created_at ON claim_review_status_definition TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON claim_review_status_definition TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON claim_review_status_definition TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON claim_review_status_definition TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 
 -- Define Claim Table
 DEFINE TABLE claim SCHEMAFULL
@@ -147,8 +147,8 @@ DEFINE FIELD reviewer_id ON claim TYPE option<record<user>>;
 DEFINE FIELD review_status_id ON claim TYPE option<record<claim_review_status_definition>>;
 DEFINE FIELD review_time ON claim TYPE option<datetime>;
 DEFINE FIELD submission_time ON claim TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD created_at ON claim TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON claim TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON claim TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON claim TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD created_by ON claim TYPE record<user> DEFAULT $auth.id;
 DEFINE FIELD comments_doc_id ON claim TYPE option<record<document>>; -- For general review discussion
 DEFINE FIELD review_comments ON claim TYPE option<string>; -- ADDED for review notes
@@ -175,8 +175,8 @@ DEFINE FIELD original_file_name ON document TYPE option<string>; -- If it's an u
 DEFINE FIELD s3_object_key ON document TYPE option<string>;    -- Key for S3 object if stored there
 DEFINE FIELD file_size ON document TYPE option<int>;           -- File size in bytes
 DEFINE FIELD mime_type ON document TYPE option<string>;        -- MIME type of the file
-DEFINE FIELD created_at ON document TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON document TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON document TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON document TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD created_by ON document TYPE record<user> DEFAULT $auth.id;
 DEFINE FIELD last_edited_by ON document TYPE option<record<user>>;
 DEFINE FIELD version ON document TYPE int DEFAULT 1;
@@ -194,8 +194,8 @@ DEFINE FIELD document_id ON document_comment TYPE record<document>;
 DEFINE FIELD user_id ON document_comment TYPE record<user> DEFAULT $auth.id;
 DEFINE FIELD comment_text ON document_comment TYPE string;
 DEFINE FIELD selection_details ON document_comment TYPE option<object>; -- e.g., { type: 'text', start: 10, length: 5 }
-DEFINE FIELD created_at ON document_comment TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON document_comment TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON document_comment TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON document_comment TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD resolved_at ON document_comment TYPE option<datetime>;
 DEFINE FIELD resolved_by ON document_comment TYPE option<record<user>>;
 DEFINE INDEX doc_comment_doc_idx ON document_comment COLUMNS document_id;
@@ -216,8 +216,8 @@ DEFINE FIELD meeting_agenda ON meeting TYPE option<string>; -- ADDED
 DEFINE FIELD meeting_link ON meeting TYPE option<string>; -- ADDED for online meeting URL
 DEFINE FIELD meeting_record_doc_id ON meeting TYPE option<record<document>>; -- For minutes or recordings
 DEFINE FIELD participants ON meeting TYPE option<array<record<user>>>; -- ADDED
-DEFINE FIELD created_at ON meeting TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON meeting TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON meeting TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON meeting TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD created_by ON meeting TYPE record<user> DEFAULT $auth.id;
 DEFINE INDEX meeting_case_idx ON meeting COLUMNS case_id;
 
@@ -234,8 +234,8 @@ DEFINE FIELD receiver_id ON message TYPE option<string>; -- e.g., 'user:<uuid>' 
 DEFINE FIELD content ON message TYPE any; -- Flexible: text, JSON for cards, etc.
 DEFINE FIELD message_type ON message TYPE string DEFAULT 'USER_CHAT'; -- e.g., 'USER_CHAT', 'SYSTEM_REMINDER', 'BOT_MESSAGE', 'FILE_UPLOAD'
 DEFINE FIELD case_id ON message TYPE option<record<case>>; -- Link to case if relevant
-DEFINE FIELD created_at ON message TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON message TYPE datetime VALUE time::now(); -- For edits if allowed
+DEFINE FIELD OVERWRITE created_at ON message TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON message TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD read_at ON message TYPE option<datetime>; -- Simplified: last read time by receiver (for DMs). Groups need per-user status.
 DEFINE INDEX message_chat_created_idx ON message COLUMNS chat_id, created_at;
 DEFINE INDEX message_case_created_idx ON message COLUMNS case_id, created_at;
@@ -252,7 +252,7 @@ DEFINE TABLE permission SCHEMAFULL
 
 DEFINE FIELD action ON permission TYPE string; -- e.g., 'create', 'read', 'update', 'delete'
 DEFINE FIELD resource ON permission TYPE string; -- e.g., 'case', 'document', 'claim'
-DEFINE FIELD created_at ON permission TYPE datetime VALUE $before OR time::now();
+DEFINE FIELD OVERWRITE created_at ON permission TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
 DEFINE INDEX permission_idx ON permission COLUMNS action, resource UNIQUE;
 
 -- Define Role Permission Table (Link roles to granular permissions)
@@ -279,8 +279,8 @@ DEFINE FIELD icon ON menu_item TYPE option<string>; -- e.g., 'dashboard', 'gavel
 DEFINE FIELD parent_id ON menu_item TYPE option<record<menu_item>>; -- For sub-menus
 DEFINE FIELD display_order ON menu_item TYPE int DEFAULT 0;
 DEFINE FIELD required_permission ON menu_item TYPE option<record<permission>>; -- Optional link to a specific permission
-DEFINE FIELD created_at ON menu_item TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON menu_item TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON menu_item TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON menu_item TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 
 -- Define Role Menu Item Table (Link roles to menu items they can see)
 -- This table can be used if menu visibility isn't solely driven by permissions on resources.
@@ -318,8 +318,8 @@ DEFINE FIELD notification_frequency ON notification_rule TYPE string DEFAULT 'DA
 DEFINE FIELD notification_time ON notification_rule TYPE string DEFAULT '10:00'; -- e.g., '10:00' for 10 AM
 DEFINE FIELD message_template ON notification_rule TYPE string; -- e.g., '距离最迟公告时间仅有 {days} 天'
 DEFINE FIELD is_active ON notification_rule TYPE bool DEFAULT true;
-DEFINE FIELD created_at ON notification_rule TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON notification_rule TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON notification_rule TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON notification_rule TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 DEFINE INDEX notification_rule_phase_idx ON notification_rule COLUMNS procedure_phase;
 
 -- Define Document Version Table (for tracking document history)
@@ -334,7 +334,7 @@ DEFINE FIELD version_number ON document_version TYPE int;
 DEFINE FIELD content ON document_version TYPE string; -- Snapshot of content at this version
 DEFINE FIELD change_summary ON document_version TYPE option<string>;
 DEFINE FIELD created_by ON document_version TYPE record<user>;
-DEFINE FIELD created_at ON document_version TYPE datetime VALUE $before OR time::now();
+DEFINE FIELD OVERWRITE created_at ON document_version TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
 DEFINE INDEX doc_version_idx ON document_version COLUMNS document_id, version_number UNIQUE;
 
 -- Define Claim Nature Definition Table (for dropdown options)
@@ -348,8 +348,8 @@ DEFINE INDEX claim_nature_name_idx ON claim_nature_definition COLUMNS name UNIQU
 DEFINE FIELD description ON claim_nature_definition TYPE option<string>;
 DEFINE FIELD is_active ON claim_nature_definition TYPE bool DEFAULT true;
 DEFINE FIELD display_order ON claim_nature_definition TYPE int DEFAULT 0;
-DEFINE FIELD created_at ON claim_nature_definition TYPE datetime VALUE $before OR time::now();
-DEFINE FIELD updated_at ON claim_nature_definition TYPE datetime VALUE time::now();
+DEFINE FIELD OVERWRITE created_at ON claim_nature_definition TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
+DEFINE FIELD OVERWRITE updated_at ON claim_nature_definition TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
 
 
 -- ==========================

@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'; // Ensured useState is imported
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-// import { db } from '@/src/lib/surreal'; // TODO: Fix this import
-import { RecordId } from 'surrealdb'; // For typing record IDs
-import RichTextEditor from '@/src/components/RichTextEditor'; // IMPORT RichTextEditor
-import { Delta } from 'quill/core'; // Import Delta
-import { useTranslation } from 'react-i18next'; // <-- IMPORT I18N
+import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { RecordId } from 'surrealdb';
+import RichTextEditor from '@/src/components/RichTextEditor';
+import { Delta } from 'quill/core';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Typography,
@@ -54,43 +54,52 @@ import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added for showS
 interface Case {
   id: RecordId;
   name: string;
-  case_number?: string;
-  details?: string; 
-  status?: string; 
-  admin_id?: RecordId; 
-  created_at?: string; 
-  updated_at?: string; 
-  case_lead_name?: string; // Already present, but good to confirm
-  acceptance_date?: string;
-  announcement_date?: string; // Added as it's used in timeline
-  claim_start_date?: string; // Added as it's used in timeline
-  claim_end_date?: string; // Added as it's used in timeline
-  // New optional date fields for timeline
+  case_number: string;
+  case_manager_name: string;
+  case_procedure: string;
+  acceptance_date: string;
+  procedure_phase: string;
+  created_by_user: RecordId;
+  case_lead_user_id?: RecordId;
+  filing_material_doc_id?: RecordId;
+  announcement_date?: string;
+  claim_submission_start_date?: string;
+  claim_submission_end_date?: string;
   first_creditor_meeting_date?: string;
-  restructuring_decision_date?: string;
-  plan_submission_date?: string;
-  delayed_plan_submission_date?: string;
   second_creditor_meeting_date?: string;
+  reorganization_ruling_date?: string;
+  reorganization_plan_submission_date?: string;
+  delayed_reorganization_plan_submission_date?: string;
   closing_date?: string;
-  filing_material_doc_id?: RecordId | null;
-  // case_procedure is used by displayCase, ensure it's available
-  case_procedure?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface Document {
   id: RecordId;
   content: string;
-  // ... other document fields ...
+  original_file_name?: string;
+  mime_type?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface User {
+  id: RecordId;
+  name: string;
+  email?: string;
 }
 
 const CaseDetailPage: React.FC = () => {
   const { t } = useTranslation(); 
   const { id } = useParams<{ id: string }>();
+  const { surreal: client, isSuccess: isConnected } = useSurreal();
   const [caseDetail, setCaseDetail] = useState<Case | null>(null);
+  const [caseLeadName, setCaseLeadName] = useState<string>('');
   const [filingMaterialContent, setFilingMaterialContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const { showSuccess } = useSnackbar(); // Added for snackbar
+  const { showSuccess, showError } = useSnackbar();
 
   // State for dialogs
   const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
@@ -134,9 +143,11 @@ const CaseDetailPage: React.FC = () => {
 
 
   useEffect(() => {
-    if (!id) {
-      setError(t('case_detail_unspecified_case')); // Use a generic "unspecified" key if no ID
-      setIsLoading(false);
+    if (!id || !isConnected) {
+      if (!id) {
+        setError(t('case_detail_unspecified_case'));
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -145,36 +156,54 @@ const CaseDetailPage: React.FC = () => {
       setError(null);
       try {
         const caseRecordId = id.startsWith('case:') ? id : `case:${id}`;
-        // TODO: Fix db import and uncomment
-        // const result: Case[] = await db.select(caseRecordId);
-        const result: Case[] = []; // Temporary placeholder
-
-        if (result.length === 0 || !result[0]) {
+        
+        // Query case with related user information
+        const query = `
+          SELECT 
+            *,
+            case_lead_user_id.name as case_lead_name
+          FROM ${caseRecordId}
+        `;
+        
+        const result = await client.query<[Case & { case_lead_name?: string }][]>(query);
+        
+        if (!result || result.length === 0 || !result[0] || (result[0] as any[]).length === 0) {
           setError(t('case_detail_error_not_found'));
           setCaseDetail(null);
           setIsLoading(false);
           return;
         }
-        const fetchedCase = result[0];
+        
+        const fetchedCase = result[0][0] as Case & { case_lead_name?: string };
         setCaseDetail(fetchedCase);
+        setCaseLeadName(fetchedCase.case_lead_name || fetchedCase.case_manager_name || t('case_detail_to_be_assigned'));
 
+        // Fetch filing material document if exists
         if (fetchedCase.filing_material_doc_id) {
           const docId = fetchedCase.filing_material_doc_id.toString();
-          // TODO: Fix db import and uncomment
-          // const docResult: Document[] = await db.select(docId);
-          const docResult: Document[] = []; // Temporary placeholder
-          if (docResult.length > 0 && docResult[0]) {
-            setFilingMaterialContent(docResult[0].content);
-          } else {
-            console.warn(`Filing material document not found for ID: ${docId}`);
-            setFilingMaterialContent(t('case_detail_filing_material_not_found'));
+          try {
+            // Use query instead of select to avoid type issues
+            const docQuery = `SELECT * FROM ${docId}`;
+            const docResult = await client.query<[Document[]]>(docQuery);
+            
+            if (docResult && docResult[0] && docResult[0].length > 0) {
+              const doc = docResult[0][0];
+              setFilingMaterialContent(doc.content || '');
+            } else {
+              console.warn(`Filing material document not found for ID: ${docId}`);
+              setFilingMaterialContent('');
+            }
+          } catch (docErr) {
+            console.warn(`Error fetching filing material document: ${docErr}`);
+            setFilingMaterialContent('');
           }
         } else {
-          setFilingMaterialContent(t('case_detail_no_associated_filing_material'));
+          setFilingMaterialContent('');
         }
       } catch (err) {
         console.error("Error fetching case details:", err);
         setError(t('case_detail_error_fetch_failed'));
+        showError(t('case_detail_error_fetch_failed'));
         setCaseDetail(null);
       } finally {
         setIsLoading(false);
@@ -182,7 +211,7 @@ const CaseDetailPage: React.FC = () => {
     };
 
     fetchCaseDetails();
-  }, [id, t]); // Added t to dependency array
+  }, [id, isConnected, client, t, showError]);
 
   if (isLoading) {
     return (
@@ -205,33 +234,32 @@ const CaseDetailPage: React.FC = () => {
     name: caseDetail.name || t('case_detail_unnamed_case'),
     case_number: caseDetail.case_number || `BK-N/A-${caseDetail.id.toString().slice(caseDetail.id.toString().indexOf(':') + 1).slice(-4)}`,
     id: caseDetail.id.toString(),
-    // Use actual fields from schema, fallback to placeholders if needed for displayCase
-    case_lead_name: (caseDetail as any).case_lead || t('case_detail_to_be_assigned'), // Assuming case_lead might be on schema
-    acceptance_date: (caseDetail as any).acceptance_date || t('case_detail_date_unknown'),
-    announcement_date: (caseDetail as any).announcement_date, // Will be undefined if not set
-    claim_start_date: (caseDetail as any).claim_start_date,
-    claim_end_date: (caseDetail as any).claim_end_date,
-    case_procedure: (caseDetail as any).case_procedure || t('case_detail_procedure_unknown'),
-    current_stage: caseDetail.status || t('case_detail_stage_unknown'), // Using status as current_stage
+    case_lead_name: caseLeadName,
+    acceptance_date: caseDetail.acceptance_date ? new Date(caseDetail.acceptance_date).toISOString().split('T')[0] : t('case_detail_date_unknown'),
+    announcement_date: caseDetail.announcement_date ? new Date(caseDetail.announcement_date).toISOString().split('T')[0] : undefined,
+    claim_start_date: caseDetail.claim_submission_start_date ? new Date(caseDetail.claim_submission_start_date).toISOString().split('T')[0] : undefined,
+    claim_end_date: caseDetail.claim_submission_end_date ? new Date(caseDetail.claim_submission_end_date).toISOString().split('T')[0] : undefined,
+    case_procedure: caseDetail.case_procedure || t('case_detail_procedure_unknown'),
+    current_stage: caseDetail.procedure_phase || t('case_detail_stage_unknown'),
     filing_materials_status: filingMaterialContent ? t('case_detail_content_loaded') : t('case_detail_no_filing_material'),
-    details: caseDetail.details || t('case_detail_no_details')
+    details: t('case_detail_no_details') // Schema doesn't have details field
   };
 
-  // Mock timeline data - replace with actual data from case or related records
+  // Timeline data from case
   const timelineEvents = [
     { date: displayCase.acceptance_date, title: t('timeline_event_case_accepted', '案件受理'), icon: mdiGavel, color: 'primary' as const },
     ...(displayCase.announcement_date ? [{ date: displayCase.announcement_date, title: t('timeline_event_first_announcement', '首次公告'), icon: mdiCalendarClock, color: 'secondary' as const }] : []),
     ...(displayCase.claim_start_date ? [{ date: displayCase.claim_start_date, title: t('timeline_event_claim_submission_start', '债权申报开始'), icon: mdiAccountGroup, color: 'info' as const }] : []),
-    ...(displayCase.claim_end_date ? [{ date: displayCase.claim_end_date, title: t('timeline_event_claim_submission_end', '债权申报截止'), icon: mdiAccountGroup, color: 'warning' as const }] : []), // Added claim_end_date
-    ...(caseDetail?.first_creditor_meeting_date ? [{ date: caseDetail.first_creditor_meeting_date, title: t('timeline_event_first_creditor_meeting', '第一次债权人会议'), icon: mdiAccountMultiplePlus, color: 'success' as const }] : []),
-    ...(caseDetail?.restructuring_decision_date ? [{ date: caseDetail.restructuring_decision_date, title: t('timeline_event_restructuring_decision', '重整裁定'), icon: mdiFileSign, color: 'primary' as const }] : []),
-    ...(caseDetail?.plan_submission_date ? [{ date: caseDetail.plan_submission_date, title: t('timeline_event_plan_submission', '重整计划提交'), icon: mdiFileSign, color: 'secondary' as const }] : []),
-    ...(caseDetail?.delayed_plan_submission_date ? [{ date: caseDetail.delayed_plan_submission_date, title: t('timeline_event_delayed_plan_submission', '重整计划延期提交'), icon: mdiCalendarAlert, color: 'warning' as const }] : []),
-    ...(caseDetail?.second_creditor_meeting_date ? [{ date: caseDetail.second_creditor_meeting_date, title: t('timeline_event_second_creditor_meeting', '第二次债权人会议'), icon: mdiAccountMultipleCheck, color: 'success' as const }] : []),
-    ...(caseDetail?.closing_date ? [{ date: caseDetail.closing_date, title: t('timeline_event_closing_date', '案件办结'), icon: mdiBank, color: 'info' as const }] : []),
+    ...(displayCase.claim_end_date ? [{ date: displayCase.claim_end_date, title: t('timeline_event_claim_submission_end', '债权申报截止'), icon: mdiAccountGroup, color: 'warning' as const }] : []),
+    ...(caseDetail?.first_creditor_meeting_date ? [{ date: new Date(caseDetail.first_creditor_meeting_date).toISOString().split('T')[0], title: t('timeline_event_first_creditor_meeting', '第一次债权人会议'), icon: mdiAccountMultiplePlus, color: 'success' as const }] : []),
+    ...(caseDetail?.reorganization_ruling_date ? [{ date: new Date(caseDetail.reorganization_ruling_date).toISOString().split('T')[0], title: t('timeline_event_reorganization_ruling', '重整裁定'), icon: mdiFileSign, color: 'primary' as const }] : []),
+    ...(caseDetail?.reorganization_plan_submission_date ? [{ date: new Date(caseDetail.reorganization_plan_submission_date).toISOString().split('T')[0], title: t('timeline_event_reorganization_plan_submission', '重整计划提交'), icon: mdiFileSign, color: 'secondary' as const }] : []),
+    ...(caseDetail?.delayed_reorganization_plan_submission_date ? [{ date: new Date(caseDetail.delayed_reorganization_plan_submission_date).toISOString().split('T')[0], title: t('timeline_event_delayed_reorganization_plan_submission', '重整计划延期提交'), icon: mdiCalendarAlert, color: 'warning' as const }] : []),
+    ...(caseDetail?.second_creditor_meeting_date ? [{ date: new Date(caseDetail.second_creditor_meeting_date).toISOString().split('T')[0], title: t('timeline_event_second_creditor_meeting', '第二次债权人会议'), icon: mdiAccountMultipleCheck, color: 'success' as const }] : []),
+    ...(caseDetail?.closing_date ? [{ date: new Date(caseDetail.closing_date).toISOString().split('T')[0], title: t('timeline_event_closing_date', '案件办结'), icon: mdiBank, color: 'info' as const }] : []),
   ]
   .filter(event => event.date && event.date !== t('case_detail_date_unknown'))
-  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Sort chronologically
+  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 
   return (

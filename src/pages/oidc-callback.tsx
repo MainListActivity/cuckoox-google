@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import authService from '@/src/services/authService';
 import { useAuth, AppUser } from '@/src/contexts/AuthContext'; // Import AppUser
 import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // ADDED
+import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
 
@@ -27,10 +28,12 @@ const OidcCallbackPage: React.FC = () => {
                 throw new Error('GitHub ID (sub) not found in OIDC user profile after callback.');
             }
             const appUserForContext: AppUser = {
-                id: `user:${githubId}`, // This should match the ID used in SurrealDB
+                id: new RecordId('user', githubId), // This should match the ID used in SurrealDB
                 github_id: githubId,
                 name: oidcUser.profile.name || oidcUser.profile.preferred_username || 'Unknown User',
                 email: oidcUser.profile.email,
+                created_at: new Date(),
+                updated_at: new Date(),
                 // last_login_case_id will be populated by AuthContext's loadUserCasesAndRoles
             };
             
@@ -38,7 +41,7 @@ const OidcCallbackPage: React.FC = () => {
             setAuthState(appUserForContext, oidcUser);
             
             // Redirect to the intended page (stored by oidc-client-ts) or dashboard
-            const returnUrl = oidcUser.state?.path || '/dashboard';
+            const returnUrl = (oidcUser.state as any)?.path || '/dashboard';
             navigate(returnUrl, { replace: true });
         } else {
             throw new Error("OIDC user or profile not available after callback.");

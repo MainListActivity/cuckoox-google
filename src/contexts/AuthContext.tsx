@@ -7,13 +7,13 @@ import { RecordId } from 'surrealdb'; // Import for typing record IDs
 
 // Matches AppUser in authService and user table in SurrealDB
  export interface AppUser {
-  id: string; // SurrealDB record ID, e.g., user:xxxx
+  id: RecordId; // SurrealDB record ID, e.g., user:xxxx
   github_id: string;
   name: string;
   email?: string;
-  created_at?: string;
-  updated_at?: string;
-  last_login_case_id?: string | null; // Store as string "case:xxxx"
+  created_at?: Date;
+  updated_at?: Date;
+  last_login_case_id?: RecordId | null; // SurrealDB record ID for case
 }
 
 // Define Case and Role interfaces based on SurrealDB schema
@@ -246,8 +246,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (previouslySelectedCaseId && casesMap.has(previouslySelectedCaseId)) {
         caseToSelect = previouslySelectedCaseId;
-      } else if (lastCaseId && casesMap.has(lastCaseId)) {
-        caseToSelect = lastCaseId;
+      } else if (lastCaseId && casesMap.has(lastCaseId.toString())) {
+        caseToSelect = lastCaseId.toString();
       } else if (fetchedCases.length === 1 && fetchedCases[0].id) {
         caseToSelect = fetchedCases[0].id.toString();
       }
@@ -373,13 +373,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       selectCaseInternal(caseIdToSelect, userCaseRolesDetails);
 
-      await client.merge(user.id, { last_login_case_id: caseIdToSelect }); // MODIFIED db.merge to client.merge
+      // Convert string caseIdToSelect to RecordId for storage
+      const caseRecordId = new RecordId('case', caseIdToSelect.replace('case:', ''));
+      await client.merge(user.id, { last_login_case_id: caseRecordId }); // MODIFIED db.merge to client.merge
       
       // Update user object in context with the new last_login_case_id
-      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: caseIdToSelect } : null);
+      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: caseRecordId } : null);
       // Also update localStorage for the user object
       if (user) {
-          const updatedUser = { ...user, last_login_case_id: caseIdToSelect };
+          const updatedUser = { ...user, last_login_case_id: caseRecordId };
           localStorage.setItem('cuckoox-user', JSON.stringify(updatedUser));
       }
 

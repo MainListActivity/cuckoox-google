@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import { mdiArrowLeft, mdiContentSave } from '@mdi/js';
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added
+import { RecordId } from 'surrealdb';
 
 // Debounce helper
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
@@ -43,7 +44,7 @@ const CreateCasePage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [filingMaterialDocId, setFilingMaterialDocId] = useState<string | null>(null);
+  const [filingMaterialDocId, setFilingMaterialDocId] = useState<RecordId | null>(null);
   const [filingMaterialDelta, setFilingMaterialDelta] = useState<QuillDelta>(new Delta());
   const [isEditorLoading, setIsEditorLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -101,12 +102,12 @@ const CreateCasePage: React.FC = () => {
           content: JSON.stringify(newEmptyDelta.ops),
           created_by: user.id,
           last_edited_by: user.id,
-          created_at: new Date(), // Use Date object instead of ISO string
-          updated_at: new Date(), // Use Date object instead of ISO string
+          // created_at: new Date(), 
+          // updated_at: new Date(), 
         });
 
         if (createdRecords && createdRecords[0] && createdRecords[0].id) {
-          const docId = typeof createdRecords[0].id === 'string' ? createdRecords[0].id : createdRecords[0].id.toString();
+          const docId = createdRecords[0].id;
           setFilingMaterialDocId(docId);
           const content = createdRecords[0].content as string;
           setFilingMaterialDelta(new Delta(JSON.parse(content)));
@@ -263,7 +264,7 @@ const CreateCasePage: React.FC = () => {
 
 
   const debouncedSave = useCallback(
-    debounce(async (deltaToSave: QuillDelta, docId: string, editorUserId: string | undefined) => {
+    debounce(async (deltaToSave: QuillDelta, docId: RecordId, editorUserId: RecordId | undefined) => {
       if (!docId || !editorUserId) return;
       console.log(`Debounced save triggered for doc: ${docId} by user: ${editorUserId}`);
       setIsSaving(true);
@@ -271,7 +272,7 @@ const CreateCasePage: React.FC = () => {
         await client.merge(docId, {
           content: JSON.stringify(deltaToSave.ops),
           last_edited_by: editorUserId,
-          updated_at: new Date(), // Use Date object instead of ISO string
+          // updated_at: new Date(), 
         });
         console.log(`Document ${docId} saved successfully.`);
       } catch (error) {
@@ -298,54 +299,82 @@ const CreateCasePage: React.FC = () => {
   };
   
   const handleSaveCase = async () => {
-    if (!filingMaterialDocId) {
-      setPageError(t('create_case_error_no_filing_doc')); // Use new error state
+    if (!filingMaterialDocId || !isConnected) {
+      setPageError(t('create_case_error_no_filing_doc'));
       return;
     }
     setPageError(null); // Clear previous errors
 
-    // Validate required fields (example for caseLead and acceptanceDate)
-    if (!caseLead.trim() || !acceptanceDate) {
-      setPageError(t('create_case_error_required_fields', '请填写所有必填字段：案件负责人和受理时间。'));
+    // Validate required fields
+    if (!caseName.trim() || !acceptanceDate) {
+      setPageError(t('create_case_error_required_fields', '请填写所有必填字段：案件名称和受理时间。'));
       return;
     }
 
+    // Generate case number with timestamp
+    const timestamp = Date.now();
+    const caseNumber = `BK-${new Date().getFullYear()}-${timestamp.toString().slice(-6)}`;
 
-    const caseData = {
-      name: caseName,
-      case_lead: caseLead,
+    // Convert date strings to Date objects for SurrealDB
+    const caseData: any = {
+      name: caseName.trim(),
+      case_number: caseNumber,
+      case_manager_name: caseLead.trim() || user?.name || t('unassigned', '未分配'),
       case_procedure: caseProcedure,
-      acceptance_date: acceptanceDate,
-      announcement_date: showBankruptcyFields ? announcementDate : null,
-      claim_start_date: showBankruptcyFields ? claimStartDate : null,
-      claim_end_date: showBankruptcyFields ? claimEndDate : null,
-      case_number: "BK-" + Date.now().toString().slice(-6), // Placeholder
-      details: "此案件通过在线编辑器创建。", // Placeholder
-      status: '立案', // Default status
+      acceptance_date: new Date(acceptanceDate + 'T00:00:00Z'), // Convert to Date object with UTC
+      procedure_phase: '立案', // Default initial phase
       filing_material_doc_id: filingMaterialDocId,
-      created_by: user?.id,
-      admin_id: user?.id, // Assuming creator is admin for now
-      created_at: new Date(),
-      updated_at: new Date(),
+      created_by_user: user?.id,
+      case_lead_user_id: user?.id, // Initially assign to creator
     };
+
+    // Add optional date fields if they exist (for bankruptcy cases)
+    if (showBankruptcyFields) {
+      if (announcementDate) {
+        caseData.announcement_date = new Date(announcementDate + 'T00:00:00Z');
+      }
+      if (claimStartDate) {
+        caseData.claim_submission_start_date = new Date(claimStartDate + 'T00:00:00Z');
+      }
+      if (claimEndDate) {
+        caseData.claim_submission_end_date = new Date(claimEndDate + 'T00:00:00Z');
+      }
+    }
+
     console.log("Saving case data:", caseData);
 
     setIsSaving(true);
     try {
-      const createdCaseRecords = await client.create('case', caseData);
-      console.log('Case created:', createdCaseRecords);
-      showSuccess(t('create_case_success')); // Use snackbar
-      if (createdCaseRecords[0]?.id) {
-        const caseId = typeof createdCaseRecords[0].id === 'string' 
-          ? createdCaseRecords[0].id 
-          : createdCaseRecords[0].id.toString();
+      const createdCase = await client.create('case', caseData);
+      console.log('Case created:', createdCase);
+      
+      if (Array.isArray(createdCase) && createdCase[0]?.id) {
+        showSuccess(t('create_case_success', '案件创建成功！'));
+        const caseId = typeof createdCase[0].id === 'string' 
+          ? createdCase[0].id 
+          : createdCase[0].id.toString();
+        navigate(`/cases/${caseId.replace('case:', '')}`);
+      } else if (createdCase && (createdCase as any).id) {
+        showSuccess(t('create_case_success', '案件创建成功！'));
+        const caseId = typeof (createdCase as any).id === 'string' 
+          ? (createdCase as any).id 
+          : (createdCase as any).id.toString();
         navigate(`/cases/${caseId.replace('case:', '')}`);
       } else {
-        navigate('/cases');
+        throw new Error('Failed to get case ID from created record');
       }
-    } catch (e) { // Changed error variable name
+    } catch (e) {
       console.error('Error creating case:', e);
-      setPageError(t('create_case_error_generic')); // Use new error state
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      
+      // Check for specific error types
+      if (errorMessage.includes('datetime') || errorMessage.includes('date')) {
+        setPageError(t('create_case_error_date_format', '日期格式错误，请检查日期字段。'));
+      } else if (errorMessage.includes('permission') || errorMessage.includes('auth')) {
+        setPageError(t('create_case_error_permission', '您没有权限创建案件。'));
+      } else {
+        setPageError(t('create_case_error_generic', '创建案件失败，请稍后重试。'));
+      }
     } finally {
       setIsSaving(false);
     }

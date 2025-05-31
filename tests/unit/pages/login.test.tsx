@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LoginPage from '@/src/pages/login'; // Adjust path as needed
 import { AppUser } from '@/src/contexts/AuthContext'; // Assuming AppUser is exported
+import { RecordId } from 'surrealdb';
 
 // Mock dependencies
 const mockNavigate = vi.fn();
@@ -228,7 +229,7 @@ describe('LoginPage', () => {
 
   describe('Redirection - Already Logged-In OIDC User', () => {
     it('should navigate to /dashboard if OIDC user is already logged in', async () => {
-      const oidcUser: AppUser = { id: 'user:123', github_id: '123', name: 'Test User' };
+      const oidcUser: AppUser = { id: new RecordId('user','123'), github_id: '123', name: 'Test User' };
       setupMockAuth(true, false, oidcUser);
       setupMockLocation(false);
       
@@ -240,7 +241,7 @@ describe('LoginPage', () => {
     });
 
     it('should navigate to "from" location if specified and OIDC user logged in', async () => {
-      const oidcUser: AppUser = { id: 'user:123', github_id: '123', name: 'Test User' };
+      const oidcUser: AppUser = { id: new RecordId('user','123'), github_id: '123', name: 'Test User' };
       setupMockAuth(true, false, oidcUser);
       setupMockLocation(false, { from: { pathname: '/some/protected/route' } });
 
@@ -254,7 +255,7 @@ describe('LoginPage', () => {
 
   describe('Redirection - Already Logged-In Admin User', () => {
     it('should navigate to /admin if admin user is already logged in and accesses admin login page', async () => {
-      const adminUser: AppUser = { id: 'user:admin_super', github_id: '--admin--', name: 'Super Admin' };
+      const adminUser: AppUser = { id: new RecordId('user','admin_super'), github_id: '--admin--', name: 'Super Admin' };
       setupMockAuth(true, false, adminUser);
       setupMockLocation(true); // Attempting to access ?admin=true
 

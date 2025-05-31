@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { RecordId } from 'surrealdb';
 import {
   Box,
   TextField,
@@ -30,6 +32,11 @@ import {
   Divider,
   Badge,
   Avatar,
+  CircularProgress,
+  Alert,
+  TablePagination,
+  useMediaQuery,
+  Skeleton,
 } from '@mui/material';
 import {
   mdiPlusCircleOutline,
@@ -55,7 +62,28 @@ import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/Modify
 import MeetingMinutesDialog from '@/src/components/case/MeetingMinutesDialog';
 import { QuillDelta } from '@/src/components/RichTextEditor';
 
-// Define a type for our case items
+// Define interfaces based on SurrealDB schema
+interface Case {
+  id: RecordId;
+  name: string;
+  case_number: string;
+  case_manager_name: string;
+  case_procedure: string;
+  acceptance_date: string;
+  procedure_phase: string;
+  created_by_user: RecordId;
+  case_lead_user_id?: RecordId;
+  created_at: string;
+  updated_at: string;
+}
+
+interface User {
+  id: RecordId;
+  name: string;
+  email?: string;
+}
+
+// Define a type for our case items with joined user data
 interface CaseItem {
   id: string;
   case_number: string;
@@ -66,19 +94,16 @@ interface CaseItem {
   acceptance_date: string;
 }
 
-// Mock data
-const mockCases: CaseItem[] = [
-  { id: 'case001', case_number: 'BK-2023-001', case_lead_name: 'Alice Manager', case_procedure: '破产清算', creator_name: '系统管理员', current_stage: '债权申报', acceptance_date: '2023-01-15' },
-  { id: 'case002', case_number: 'BK-2023-002', case_lead_name: 'Bob Admin', case_procedure: '破产和解', creator_name: '张三', current_stage: '立案', acceptance_date: '2023-02-20' },
-  { id: 'case003', case_number: 'BK-2023-003', case_lead_name: 'Carol Handler', case_procedure: '破产重整', creator_name: '李四', current_stage: '债权人第一次会议', acceptance_date: '2023-03-10' },
-  { id: 'case004', case_number: 'BK-2023-004', case_lead_name: 'David Manager', case_procedure: '破产重整', creator_name: '王五', current_stage: '裁定重整', acceptance_date: '2023-04-05' },
-  { id: 'case005', case_number: 'BK-2023-005', case_lead_name: 'Eve Admin', case_procedure: '破产清算', creator_name: '赵六', current_stage: '破产清算', acceptance_date: '2023-05-12' },
-];
-
 const CaseListPage: React.FC = () => {
   const { t } = useTranslation();
-  const { showSuccess } = useSnackbar();
+  const { showSuccess, showError } = useSnackbar();
   const theme = useTheme();
+  const { surreal: client, isSuccess: isConnected } = useSurreal();
+
+  // State for cases data
+  const [cases, setCases] = useState<CaseItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // State for dialogs
   const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
@@ -89,32 +114,93 @@ const CaseListPage: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedCaseForMenu, setSelectedCaseForMenu] = useState<CaseItem | null>(null);
 
+  // Fetch cases from database
+  useEffect(() => {
+    const fetchCases = async () => {
+      if (!isConnected) return;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        // Query cases with related user information
+        const query = `
+          SELECT 
+            id,
+            name,
+            case_number,
+            case_manager_name,
+            case_procedure,
+            acceptance_date,
+            procedure_phase,
+            created_by_user,
+            case_lead_user_id,
+            created_at,
+            updated_at,
+            created_by_user.name as creator_name,
+            case_lead_user_id.name as case_lead_name
+          FROM case
+          ORDER BY created_at DESC
+        `;
+        
+        const result = await client.query(query);
+        
+        if (result && result[0]) {
+          const casesData = result[0] as any[];
+          
+          // Transform the data to match our CaseItem interface
+          const transformedCases: CaseItem[] = casesData.map(caseData => ({
+            id: caseData.id.toString().replace('case:', ''),
+            case_number: caseData.case_number || `BK-${caseData.id.toString().slice(-6)}`,
+            case_lead_name: caseData.case_lead_name || caseData.case_manager_name || t('unassigned', '未分配'),
+            case_procedure: caseData.case_procedure || '破产',
+            creator_name: caseData.creator_name || t('system', '系统'),
+            current_stage: caseData.procedure_phase as CaseStatus || '立案',
+            acceptance_date: caseData.acceptance_date ? new Date(caseData.acceptance_date).toISOString().split('T')[0] : '',
+          }));
+          
+          setCases(transformedCases);
+        } else {
+          setCases([]);
+        }
+      } catch (err) {
+        console.error('Error fetching cases:', err);
+        setError(t('error_fetching_cases', '获取案件列表失败'));
+        showError(t('error_fetching_cases', '获取案件列表失败'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCases();
+  }, [isConnected, client, t, showError]);
+
   // Statistics
   const stats = [
     { 
       label: t('total_cases', '总案件数'), 
-      value: mockCases.length, 
+      value: cases.length, 
       icon: mdiBriefcaseOutline,
       color: '#00897B',
       bgColor: alpha('#00897B', 0.1),
     },
     { 
       label: t('active_cases', '进行中'), 
-      value: mockCases.filter(c => !['结案', '终结'].includes(c.current_stage)).length, 
+      value: cases.filter(c => !['结案', '终结'].includes(c.current_stage)).length, 
       icon: mdiProgressClock,
       color: '#00ACC1',
       bgColor: alpha('#00ACC1', 0.1),
     },
     { 
       label: t('completed_cases', '已完成'), 
-      value: mockCases.filter(c => ['结案', '终结'].includes(c.current_stage)).length, 
+      value: cases.filter(c => ['结案', '终结'].includes(c.current_stage)).length, 
       icon: mdiCheckCircle,
       color: '#43A047',
       bgColor: alpha('#43A047', 0.1),
     },
     { 
       label: t('pending_review', '待审核'), 
-      value: mockCases.filter(c => c.current_stage === '债权申报').length, 
+      value: cases.filter(c => c.current_stage === '债权申报').length, 
       icon: mdiAlertCircle,
       color: '#FB8C00',
       bgColor: alpha('#FB8C00', 0.1),
@@ -363,6 +449,13 @@ const CaseListPage: React.FC = () => {
         </Paper>
       </Fade>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
       {/* Cases Table */}
       <Fade in timeout={900}>
         <Paper 
@@ -373,49 +466,55 @@ const CaseListPage: React.FC = () => {
             boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
           }}
         >
-          <TableContainer>
-            <Table stickyHeader aria-label="case list table">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
-                    {t('case_number', '案件编号')}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
-                    {t('case_procedure', '案件程序')}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
-                    {t('case_lead', '案件负责人')}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
-                    {t('creator', '创建人')}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
-                    {t('acceptance_date', '受理时间')}
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
-                    {t('current_stage', '程序进程')}
-                  </TableCell>
-                  <TableCell align="center" sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
-                    {t('actions', '操作')}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {mockCases.length === 0 && (
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+              <CircularProgress />
+              <Typography sx={{ ml: 2 }}>{t('loading_cases', '正在加载案件列表...')}</Typography>
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table stickyHeader aria-label="case list table">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      <Box sx={{ py: 8 }}>
-                        <SvgIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }}>
-                          <path d={mdiBriefcaseOutline} />
-                        </SvgIcon>
-                        <Typography color="text.secondary">
-                          {t('no_cases', '暂无案件数据')}
-                        </Typography>
-                      </Box>
+                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                      {t('case_number', '案件编号')}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                      {t('case_procedure', '案件程序')}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                      {t('case_lead', '案件负责人')}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                      {t('creator', '创建人')}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                      {t('acceptance_date', '受理时间')}
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                      {t('current_stage', '程序进程')}
+                    </TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                      {t('actions', '操作')}
                     </TableCell>
                   </TableRow>
-                )}
-                {mockCases.map((caseItem) => {
+                </TableHead>
+                <TableBody>
+                  {cases.length === 0 && !error && (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center">
+                        <Box sx={{ py: 8 }}>
+                          <SvgIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }}>
+                            <path d={mdiBriefcaseOutline} />
+                          </SvgIcon>
+                          <Typography color="text.secondary">
+                            {t('no_cases', '暂无案件数据')}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {cases.map((caseItem) => {
                   const statusStyle = getStatusColor(caseItem.current_stage);
                   const procedureStyle = getProcedureIcon(caseItem.case_procedure);
                   
@@ -542,6 +641,7 @@ const CaseListPage: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
+          )}
         </Paper>
       </Fade>
 

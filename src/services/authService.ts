@@ -1,6 +1,6 @@
 import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSettings } from 'oidc-client-ts';
 // import { db } from '../lib/surreal'; // REMOVED
-import Surreal from 'surrealdb'; // IMPORT Surreal class for type from the library
+import Surreal, { RecordId } from 'surrealdb'; // IMPORT Surreal class for type from the library
 
 // --- OIDC Configuration ---
 // These settings need to be configured based on your Quarkus OIDC provider.
@@ -22,13 +22,13 @@ const userManager = new UserManager(oidcSettings);
 
 // --- User Profile in SurrealDB ---
 // This matches the 'user' table schema defined in surreal_schemas.surql
-interface AppUser {
-  id: string; // SurrealDB record ID, e.g., user:xxxx
+interface AppUser extends Record<string, any> {
+  id: RecordId; // SurrealDB record ID, e.g., user:xxxx
   github_id: string;
   name: string;
   email?: string;
-  created_at?: string;
-  updated_at?: string;
+  created_at?: Date;
+  updated_at?: Date;
   last_login_case_id?: string | null;
 }
 
@@ -53,7 +53,7 @@ const authService = {
       // Adapt this mapping based on your GitHub OIDC provider's claims
       const githubId = oidcUser.profile.sub; // 'sub' is typically the unique subject identifier
       const name = oidcUser.profile.name || oidcUser.profile.preferred_username || 'Unknown User';
-      const email = oidcUser.profile.email;
+      const email = oidcUser.profile.email || '';
 
       if (!githubId) {
         throw new Error('GitHub ID (sub claim) not found in OIDC user profile.');
@@ -63,38 +63,41 @@ const authService = {
       let appUser: AppUser | null = null;
       // SurrealDB expects the Record ID without the angle brackets in the variable part.
       // So, user:⟨${githubId}⟩ becomes `user:${githubId}` when using template literals for ID.
-      const recordId = `user:${githubId}`;
-      
-      const existingUsers: AppUser[] = await client.select(recordId); // MODIFIED db.select to client.select
+      const recordId = new RecordId('user', githubId);
 
-      if (existingUsers.length > 0) {
+      const existingUsers: AppUser = await client.select<AppUser>(recordId); // MODIFIED db.select to client.select
+
+      if (existingUsers) {
         // Update returns an array of the updated records.
-        const updatedResult: AppUser[] = await client.update(recordId, { // MODIFIED db.update to client.update
+        const updatedResult: AppUser = await client.update<AppUser, AppUser>(recordId, { // MODIFIED db.update to client.update
+          id: recordId,
+          github_id: githubId,
           name: name,
           email: email,
-          updated_at: new Date().toISOString(),
+          updated_at: new Date(),
         });
         if (updatedResult.length > 0) {
           appUser = updatedResult[0];
         }
       } else {
         // Note: SurrealDB v1.x.x returns an array from create.
-        const createdResult: AppUser[] = await client.create(recordId, { // MODIFIED db.create to client.create
+        const createdResult: AppUser = await client.create<AppUser>(recordId, { // MODIFIED db.create to client.create
+          id: recordId,
           github_id: githubId,
           name: name,
           email: email,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          created_at: new Date(),
+          updated_at: new Date(),
         });
         if (createdResult.length > 0) {
           appUser = createdResult[0];
         }
       }
-      
+
       if (!appUser) {
         throw new Error('Failed to create or update user in SurrealDB.');
       }
-      
+
       // Store appUser or relevant parts in AuthContext or return for AuthContext to handle
       // For now, we just return the OIDC user, AuthContext will handle appUser sync
       return oidcUser;

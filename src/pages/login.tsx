@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth,AppUser } from '@/src/contexts/AuthContext';
 import authService from '@/src/services/authService'; // For OIDC login
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader';
 import PageContainer from '@/src/components/PageContainer';
@@ -81,10 +82,12 @@ const LoginPage: React.FC = () => {
       console.log('Admin successfully signed into SurrealDB via form.');
 
       const adminAppUser: AppUser = {
-        id: `user:admin_${adminUsername}`,
+        id: new RecordId('user', `admin_${adminUsername}`),
         github_id: '--admin--',
         name: t('administrator_name_generic', {username: adminUsername}),
         email: `admin-${adminUsername}@example.com`,
+        created_at: new Date(),
+        updated_at: new Date(),
       };
 
       setAuthState(adminAppUser, null);
