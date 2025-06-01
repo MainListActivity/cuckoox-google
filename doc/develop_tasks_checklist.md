@@ -93,6 +93,54 @@ This checklist outlines the development tasks required to build the CuckooX plat
 - [x] **Access Control & Reminders (as per `产品说明文档-jules.md 3.1.2`, `3.1.3`):** (Frontend part: UI elements conditional display based on status is reviewed/implemented; TODOs for role-based control added. Reminder generation confirmed as backend task)
     - [x] Ensure UI elements (buttons, menu items) are dynamically shown/hidden based on user role and case status.
     - [x] (Backend Task) Implement "案件机器人" logic for sending reminders as per table in `产品说明文档-jules.md 3.1.3`. Frontend will consume these in Message Center.
+- [ ] **2.7 案件成员管理 (Case Member Management) Implementation**
+    - [ ] **Data Structures & State Management:**
+        - [ ] Define frontend data structures/interfaces for `CaseMember` (e.g., `userId: string`, `caseId: string`, `roleInCase: 'owner' | 'member'`, `userName: string`, `userEmail?: string`, `avatarUrl?: string`).
+        - [ ] Update or create context/store (e.g., in `AuthContext`, `CaseContext`, or a new `CaseMemberContext`) to manage the list of case members for the currently viewed case.
+            - [ ] Include state for members, loading status, and errors.
+            - [ ] Implement actions/reducers for fetching, adding, and removing members.
+    - [ ] **API Integration Service (`src/services/caseMemberService.ts`):**
+        - [ ] Create a new service module `src/services/caseMemberService.ts`.
+        - [ ] Implement `fetchCaseMembers(caseId: string): Promise<CaseMember[]>`.
+        - [ ] Implement `addCaseMember(caseId: string, userId: string, roleInCase: 'member'): Promise<CaseMember>`. (Note: 'owner' role typically set at case creation by backend).
+        - [ ] Implement `removeCaseMember(caseId: string, userId: string): Promise<void>`.
+        - [ ] Mock these API calls initially if the backend is not ready, but define clear interfaces.
+    - [ ] **Case Creation Logic Update (e.g., `CreateCasePage.tsx` & Backend):**
+        - [ ] **Backend Task:** Ensure that when a case is created, the creating user (admin) is automatically assigned as the "案件拥有人" (Case Owner) for that case. The backend should handle this association.
+        - [ ] Frontend: Confirm that the current user's ID is available and potentially passed during case creation if required by the backend to identify the creator. No separate frontend call to set owner should be needed if backend handles this.
+    - [ ] **Case Details Page - Member Display (`src/pages/cases/[caseId].tsx`):**
+        - [ ] Create a new component `CaseMemberTab.tsx` (or similar, e.g., `CaseMembersSection.tsx`).
+        - [ ] Integrate this component as a new tab or a distinct section within the existing case details page layout.
+        - [ ] In `CaseMemberTab.tsx`:
+            - [ ] On component mount or when `caseId` changes, call `fetchCaseMembers` from the context/store (which in turn uses `caseMemberService.ts`).
+            - [ ] Display the list of case members (e.g., using MUI `List` or `Table`).
+            - [ ] For each member, display their `userName`, `userEmail` (if available), and their role in the case (e.g., "案件拥有人", "案件成员").
+            - [ ] Conditionally display a "Remove" icon button (e.g., MUI `IconButton` with a `Delete` icon) next to each member if:
+                - [ ] The current logged-in user is the "案件拥有人" of *this* case.
+                - [ ] The member in the list is not the "案件拥有人" themselves (owner cannot remove self).
+    - [ ] **Case Details Page - Add Member UI (`CaseMemberTab.tsx` and a new `AddCaseMemberDialog.tsx`):**
+        - [ ] In `CaseMemberTab.tsx`, if the current user is the "案件拥有人", display an "添加成员" (Add Member) button (e.g., MUI `Button` with `Add` icon).
+        - [ ] Create `AddCaseMemberDialog.tsx`:
+            - [ ] Modal dialog (e.g., MUI `Dialog`).
+            - [ ] Search input field for finding system users (e.g., by name or email). This will require a new `userService.searchUsers(query: string): Promise<User[]>` method (define in `userService.ts`, mock if necessary).
+            - [ ] Display search results in a list (e.g., MUI `List` with `ListItem`).
+            - [ ] Allow selection of a single user from the search results.
+            - [ ] On confirmation ("Add" button in dialog), call the context/store action to add member (which uses `caseMemberService.addCaseMember` with the selected user's ID and role "案件成员").
+            - [ ] Close dialog and refresh the member list in `CaseMemberTab.tsx` upon successful addition. Handle potential errors with feedback (e.g., Snackbar).
+    - [ ] **Case Details Page - Remove Member Logic (`CaseMemberTab.tsx` and a new `ConfirmRemoveMemberDialog.tsx`):**
+        - [ ] When the "Remove" button next to a member is clicked:
+            - [ ] Open a confirmation dialog (`ConfirmRemoveMemberDialog.tsx`).
+            - [ ] Dialog to display: "您确定要移除成员 [memberName] 吗？"
+            - [ ] On confirmation, call the context/store action to remove member (which uses `caseMemberService.removeCaseMember`).
+            - [ ] Close dialog and refresh the member list in `CaseMemberTab.tsx` upon successful removal. Handle errors with feedback.
+    - [ ] **Permissions & UI Hiding (General):**
+        - [ ] Re-verify that "Add Member" button and "Remove" buttons in `CaseMemberTab.tsx` are strictly visible only to the "案件拥有人" of the current case. This check should use the role information fetched as part of the case members list or current user's case-specific roles.
+    - [ ] **Styling and Theming:**
+        - [ ] Ensure all new UI components (`CaseMemberTab.tsx`, dialogs) and elements adhere to MUI guidelines, `规范.md`, and correctly support dark/light modes. Use theme colors and typography.
+    - [ ] **Unit Tests:**
+        - [ ] Write unit tests for `CaseMemberTab.tsx`, `AddCaseMemberDialog.tsx`, `ConfirmRemoveMemberDialog.tsx`.
+        - [ ] Write unit tests for `caseMemberService.ts` functions (mocking API responses).
+        - [ ] Write unit tests for any new context/store reducers/actions related to case members.
 
 ## 3. 债权人管理 (Creditor Management)
 

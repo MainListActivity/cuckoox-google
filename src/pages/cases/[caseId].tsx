@@ -20,6 +20,8 @@ import {
   ListItemText,
   ListItemIcon,
   SvgIcon,
+  Tabs, // Added for tab structure
+  Tab,   // Added for tab structure
 } from '@mui/material';
 import {
   Timeline,
@@ -49,6 +51,7 @@ import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/Modify
 import MeetingMinutesDialog from '@/src/components/case/MeetingMinutesDialog'; // Corrected path
 import type { QuillDelta } from '@/src/components/RichTextEditor'; // Import QuillDelta type
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added for showSuccess
+import CaseMemberTab from '@/src/components/case/CaseMemberTab'; // Added for Case Member Management
 
 // Define interfaces based on your SurrealDB schema
 interface Case {
@@ -105,9 +108,14 @@ const CaseDetailPage: React.FC = () => {
   const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
   const [meetingMinutesOpen, setMeetingMinutesOpen] = useState(false);
   const [currentMeetingTitle, setCurrentMeetingTitle] = useState<string>('');
+  const [activeTab, setActiveTab] = useState(0); // State for active tab
 
 
   // Handlers for dialogs
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+  };
+
   const handleOpenModifyStatus = () => {
     if (caseDetail) {
       setModifyStatusOpen(true);
@@ -346,62 +354,84 @@ const CaseDetailPage: React.FC = () => {
 
         {/* Right Column: Filing Material & Actions */}
         <Grid size={{ xs: 12, lg: 8 }}>
-          <Card sx={{height: '100%'}}> {/* Ensure card takes full height of grid item */}
-            <CardContent sx={{display: 'flex', flexDirection: 'column', height: '100%'}}>
-              <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
-                {t('case_detail_filing_material_title')}
-              </Typography>
-              <Box sx={{ 
-                  border: 1, 
-                  borderColor: 'divider', 
-                  borderRadius: 1, 
-                  p: 1, 
-                  flexGrow: 1, // Allow editor to grow
-                  minHeight: '300px', // Minimum height for editor area
-                  display: 'flex', // To make RichTextEditor fill this box
-                  flexDirection: 'column',
-                  '& .ql-container.ql-snow': { // Target Quill's container
-                    flexGrow: 1,
-                    display: 'flex',
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 0 }}>
+            <Tabs value={activeTab} onChange={handleTabChange} aria-label="case details tabs">
+              <Tab label={t('case_details_tab_main', '案件详情')} />
+              <Tab label={t('case_members_tab_label', '案件成员')} />
+            </Tabs>
+          </Box>
+
+          {/* Main Details Tab Content */}
+          {activeTab === 0 && (
+            <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0 }}> {/* Ensure card takes full height of grid item */}
+              <CardContent sx={{display: 'flex', flexDirection: 'column', height: '100%', p:3 }}>
+                <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
+                  {t('case_detail_filing_material_title')}
+                </Typography>
+                <Box sx={{
+                    border: 1,
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    p: 1,
+                    flexGrow: 1, // Allow editor to grow
+                    minHeight: '300px', // Minimum height for editor area
+                    display: 'flex', // To make RichTextEditor fill this box
                     flexDirection: 'column',
-                  },
-                  '& .ql-editor': { // Target Quill's editor area
-                    flexGrow: 1,
-                    overflowY: 'auto', // Add scroll to editor if content overflows
-                    p: 1, // Ensure padding inside editor
-                  },
-                  '& .ProseMirror': { backgroundColor: 'transparent', minHeight: '100%', p:1 } 
-                }}>
-                <RichTextEditor
-                  value={filingMaterialContent}
-                  readOnly={true}
-                  placeholder={t('case_detail_filing_material_empty')}
-                />
-              </Box>
-              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                {/* // TODO: Access Control - Also check user permission for 'manage_meeting_minutes'. */}
-                { (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议') && (
+                    '& .ql-container.ql-snow': { // Target Quill's container
+                      flexGrow: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                    },
+                    '& .ql-editor': { // Target Quill's editor area
+                      flexGrow: 1,
+                      overflowY: 'auto', // Add scroll to editor if content overflows
+                      p: 1, // Ensure padding inside editor
+                    },
+                    '& .ProseMirror': { backgroundColor: 'transparent', minHeight: '100%', p:1 }
+                  }}>
+                  <RichTextEditor
+                    value={filingMaterialContent}
+                    readOnly={true}
+                    placeholder={t('case_detail_filing_material_empty')}
+                  />
+                </Box>
+                <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  {/* // TODO: Access Control - Also check user permission for 'manage_meeting_minutes'. */}
+                  { (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议') && (
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
+                      onClick={handleOpenMeetingMinutes}
+                    >
+                      {t('case_detail_actions_meeting_minutes_button')}
+                    </Button>
+                  )}
+                  {/* // TODO: Access Control - Visibility and enabled state depend on user role and case status. */}
                   <Button 
                     variant="contained" 
-                    color="primary" 
-                    startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
-                    onClick={handleOpenMeetingMinutes}
+                    color="secondary"
+                    startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
+                    onClick={handleOpenModifyStatus}
                   >
-                    {t('case_detail_actions_meeting_minutes_button')}
+                    {t('case_detail_actions_change_status_button')}
                   </Button>
-                )}
-                {/* // TODO: Access Control - Visibility and enabled state depend on user role and case status. */}
-                <Button 
-                  variant="contained" 
-                  color="secondary" 
-                  startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
-                  onClick={handleOpenModifyStatus}
-                >
-                  {t('case_detail_actions_change_status_button')}
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Case Members Tab Content */}
+          {activeTab === 1 && (
+             <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0 }}>
+                <CardContent sx={{p:3}}>
+                    <CaseMemberTab
+                        caseId={id as string}
+                        // currentUserIsOwner and currentUserId props removed
+                    />
+                </CardContent>
+             </Card>
+          )}
         </Grid>
       </Grid>
 

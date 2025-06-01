@@ -25,6 +25,7 @@ import {
 import { mdiArrowLeft, mdiContentSave } from '@mdi/js';
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added
 import { RecordId } from 'surrealdb';
+import { addCaseMember } from '@/src/services/caseMemberService'; // Added for case member management
 
 // Debounce helper
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
@@ -347,24 +348,43 @@ const CreateCasePage: React.FC = () => {
     try {
       const createdCase = await client.create('case', caseData);
       console.log('Case created:', createdCase);
-      
+      let newCaseIdString: string | null = null;
+
       if (Array.isArray(createdCase) && createdCase[0]?.id) {
-        showSuccess(t('create_case_success', '案件创建成功！'));
-        const caseId = typeof createdCase[0].id === 'string' 
+        newCaseIdString = typeof createdCase[0].id === 'string'
           ? createdCase[0].id 
           : createdCase[0].id.toString();
-        navigate(`/cases/${caseId.replace('case:', '')}`);
       } else if (createdCase && (createdCase as any).id) {
-        showSuccess(t('create_case_success', '案件创建成功！'));
-        const caseId = typeof (createdCase as any).id === 'string' 
+         newCaseIdString = typeof (createdCase as any).id === 'string'
           ? (createdCase as any).id 
           : (createdCase as any).id.toString();
-        navigate(`/cases/${caseId.replace('case:', '')}`);
+      }
+
+      if (newCaseIdString && user && user.id) {
+        showSuccess(t('create_case_success', '案件创建成功！'));
+        try {
+          // Add current user as owner to this new case
+          await addCaseMember(
+            newCaseIdString, // The ID of the newly created case
+            user.id.toString(),      // Current user's ID
+            user.name,               // Current user's name
+            user.email,              // Current user's email
+            undefined,               // Avatar URL (optional, can be undefined)
+            'owner'                  // Role
+          );
+          console.log(`Successfully added user ${user.id.toString()} as owner to case ${newCaseIdString}`);
+        } catch (memberError) {
+          console.error(`Failed to add creator as case owner for ${newCaseIdString}:`, memberError);
+          // Optionally show a non-critical error to the user or log extensively
+          // For now, navigation will proceed even if this mock call fails.
+        }
+        navigate(`/cases/${newCaseIdString.replace('case:', '')}`);
       } else {
-        throw new Error('Failed to get case ID from created record');
+        if (!newCaseIdString) throw new Error('Failed to get case ID from created record');
+        if (!user || !user.id) throw new Error('Current user not available to be set as case owner');
       }
     } catch (e) {
-      console.error('Error creating case:', e);
+      console.error('Error creating case or setting owner:', e);
       const errorMessage = e instanceof Error ? e.message : String(e);
       
       // Check for specific error types
