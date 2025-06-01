@@ -73,6 +73,28 @@
     - [x] **2.6. 访问控制 (Access Control)**
         - [x] 2.6.1. Design how read-only views are presented.
         - [x] 2.6.2. Design UI for menu items and action buttons dynamically shown/hidden, ensuring consistency with left menu highlight color for active/available items.
+    - [ ] **2.7. 案件成员管理 (Case Member Management UI)**
+        - [ ] **Note:** UI should be integrated into the "案件详情页面" (Case Details Page, likely `src/pages/cases/[caseId].tsx`). All components must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
+        - [ ] **2.7.1. 显示案件成员 (Displaying Case Members)**
+            - [ ] Design a new tab or distinct section within Case Details titled "案件成员" (Case Members).
+            - [ ] Design a list or table to display members.
+                - [ ] Columns: Member Name, Case Role ("案件拥有人", "案件成员"), System Role/Email (optional).
+                - [ ] *Note: Table should be responsive. Consider card layout for smaller screens.*
+            - [ ] If current user is "案件拥有人", action buttons (e.g., "移除成员" using a vector trash icon) should be visible for each member (except the owner themselves). Buttons should be styled according to Material Design principles.
+        - [ ] **2.7.2. 添加新成员 (Adding New Members - By Case Owner)**
+            - [ ] Design an "添加成员" (Add Member) button (e.g., with a vector "add person" icon) visible only to the Case Owner within the "案件成员" section.
+            - [ ] Clicking "添加成员" opens a modal dialog.
+                - [ ] *Note: Modal should follow Material Design dialog specifications, including responsive behavior and dark/light mode support.*
+            - [ ] Modal content:
+                - [ ] Search input field (e.g., "按名称或邮箱搜索用户").
+                - [ ] List area to display search results. Each result item should show user's name and email.
+                - [ ] Mechanism for selecting one or more users from the results (e.g., checkboxes).
+            - [ ] Confirmation button (e.g., "添加选中用户") and "取消" button in the modal.
+        - [ ] **2.7.3. 移除成员 (Removing Members - By Case Owner)**
+            - [ ] As mentioned in 2.7.1, "移除成员" button (vector trash icon) next to each member in the list (not for the owner).
+            - [ ] Clicking the remove button triggers a confirmation modal.
+                - [ ] *Note: Confirmation dialog should be Material Design compliant. Example text: "您确定要移除该成员吗？此操作无法撤销。" Buttons: "确认移除", "取消".*
+            - [ ] Design feedback message upon successful removal or error.
 
 - [x] **3. 债权人管理 (Creditor Management)**
     - [x] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.
