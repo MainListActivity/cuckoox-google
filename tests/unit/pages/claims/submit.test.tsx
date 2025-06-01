@@ -18,13 +18,20 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock useSnackbar
-const mockShowSnackbar = vi.fn();
+const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
+const mockShowInfo = vi.fn();
+const mockShowWarning = vi.fn();
+
 vi.mock('../../../../src/contexts/SnackbarContext', async () => {
   const actual = await vi.importActual('../../../../src/contexts/SnackbarContext');
   return {
-    ...actual,
+    ...actual, // Spread actual to keep SnackbarProvider if it's used by the test directly
     useSnackbar: () => ({
-      showSnackbar: mockShowSnackbar,
+      showSuccess: mockShowSuccess,
+      showError: mockShowError,
+      showInfo: mockShowInfo,
+      showWarning: mockShowWarning,
     }),
   };
 });
@@ -66,7 +73,7 @@ describe('ClaimSubmissionPage', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(mockShowSnackbar).toHaveBeenCalledWith('请修正表单中的错误。', 'error');
+      expect(mockShowError).toHaveBeenCalledWith('请修正表单中的错误。'); // Changed to mockShowError
     });
     // Check for specific error messages (optional, but good)
     expect(screen.getByText('本金不能为空')).toBeInTheDocument(); 
@@ -81,7 +88,7 @@ describe('ClaimSubmissionPage', () => {
     
     await waitFor(() => {
       expect(screen.getByText('本金必须为正数')).toBeInTheDocument();
-      expect(mockShowSnackbar).toHaveBeenCalledWith('请修正表单中的错误。', 'error');
+      expect(mockShowError).toHaveBeenCalledWith('请修正表单中的错误。'); // Changed to mockShowError
     });
   });
 
@@ -111,15 +118,24 @@ describe('ClaimSubmissionPage', () => {
     renderComponent();
     
     // Fill required fields
-    fireEvent.change(screen.getByLabelText(/债权性质/), { target: { value: '普通债权' } });
+    // For MUI Select: first click the select to open it, then click the option.
+    const claimNatureSelect = screen.getByLabelText(/债权性质/);
+    fireEvent.mouseDown(claimNatureSelect);
+    const optionOrdinary = await screen.findByRole('option', { name: '普通债权' });
+    fireEvent.click(optionOrdinary);
+
     fireEvent.change(screen.getByLabelText(/本金/), { target: { value: '5000' } });
-    fireEvent.change(screen.getByLabelText(/币种/), { target: { value: 'CNY' } });
+
+    const currencySelect = screen.getByLabelText(/币种/);
+    fireEvent.mouseDown(currencySelect);
+    const optionCNY = await screen.findByRole('option', { name: 'CNY' });
+    fireEvent.click(optionCNY);
 
     const submitButton = screen.getByRole('button', { name: '保存并下一步（编辑附件）' });
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(mockShowSnackbar).toHaveBeenCalledWith('债权基本信息已保存。', 'success');
+      expect(mockShowSuccess).toHaveBeenCalledWith('债权基本信息已保存。'); // Changed to mockShowSuccess
       expect(mockNavigate).toHaveBeenCalledWith(expect.stringContaining('/claim-attachment/CLAIM-'));
     });
   });

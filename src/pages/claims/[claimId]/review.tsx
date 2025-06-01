@@ -321,6 +321,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                     <ListItemText
                         primary={<Typography variant="subtitle1" color="primary">{t('asserted_total_amount_label', '主张总金额')}</Typography>}
                         secondary={<Typography variant="h6" color="primary">{formatCurrencyDisplay(claimData.asserted_details.total, claimData.asserted_details.currency)}</Typography>}
+                        secondaryTypographyProps={{ component: 'div' }} // Use div for secondary if it contains block-like elements like Typography h6
                     />
                   </ListItem>
                   {claimData.asserted_details.briefDescription && (
@@ -328,7 +329,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                   )}
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="subtitle1" sx={{mt:1, ml:2}}>{t('current_audit_status_title', '当前审核状态')}</Typography>
-                  <ListItem><ListItemText primary={t('status_label', '状态')} secondary={<Chip label={claimData.audit_status} color={getStatusChipColor(claimData.audit_status)} size="small" />} /></ListItem>
+                  <ListItem><ListItemText primary={t('status_label', '状态')} secondary={<Chip label={claimData.audit_status} color={getStatusChipColor(claimData.audit_status)} size="small" />} secondaryTypographyProps={{ component: 'span' }} /></ListItem>
                   <ListItem><ListItemText primary={t('auditor_label', '审核人')} secondary={claimData.auditor || '-'} /></ListItem>
                   <ListItem><ListItemText primary={t('audit_time_label', '审核时间')} secondary={claimData.audit_time || '-'} /></ListItem>
                   <ListItem sx={{flexDirection: 'column', alignItems: 'flex-start'}}><Typography variant="caption" color="text.secondary">{t('official_review_opinion_label', '官方审核意见')}:</Typography> <Typography variant="body2" sx={{whiteSpace: 'pre-wrap'}}>{claimData.reviewOpinion || '-'}</Typography></ListItem>

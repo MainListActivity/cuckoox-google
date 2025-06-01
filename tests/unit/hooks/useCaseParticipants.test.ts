@@ -1,24 +1,42 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants';
 import { RecordId } from 'surrealdb.js';
+import { vi } from 'vitest'; // Import vi
 
 // Mock the SurrealClient
-const mockQuery = jest.fn();
+const mockQuery = vi.fn();
+const mockSelect = vi.fn();
+const mockListenLive = vi.fn();
+const mockKill = vi.fn();
+const mockSubscribeLive = vi.fn();
 
-jest.mock('../../../src/contexts/SurrealProvider', () => ({
+// Define a stable mock client object
+const mockSurrealDbClient = {
+  query: mockQuery,
+  select: mockSelect,
+  listenLive: (...args: any[]) => {
+    // Assuming liveCallback is defined elsewhere if needed for this hook's tests
+    // if (typeof args[1] === 'function') liveCallback = args[1];
+    return Promise.resolve({ id: 'mock-listen-live-ucp-' + Date.now(), close: vi.fn() });
+  },
+  subscribeLive: (...args: any[]) => {
+    // if (typeof args[1] === 'function') liveCallback = args[1];
+    return Promise.resolve({ id: 'mock-subscribe-live-ucp-' + Date.now(), close: vi.fn() });
+  },
+  kill: mockKill,
+  isConnected: true,
+};
+
+vi.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({
-    client: {
-      query: mockQuery,
-      // Mock other client properties/methods if the hook factory uses them
-      isConnected: true, 
-    },
+    client: mockSurrealDbClient,
     isConnected: true,
   }),
 }));
 
 describe('useCaseParticipants Hook', () => {
   beforeEach(() => {
-    mockQuery.mockReset();
+    mockQuery.mockReset(); // This is fine as mockQuery is already a vi.fn()
   });
 
   it('should return initial loading state and empty participants', () => {
@@ -120,7 +138,7 @@ describe('useCaseParticipants Hook', () => {
       return Promise.resolve([{ result: [{ id: 'creditor:1', name: 'Creditor Corp' }], status: 'OK' }]); // Creditors succeed
     });
     
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
     const { result } = renderHook(() => useCaseParticipants('case:test-user-error'));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -139,7 +157,7 @@ describe('useCaseParticipants Hook', () => {
       return Promise.resolve([{ result: [{ id: 'user:1', name: 'Alice Admin' }], status: 'OK' }]); // Users succeed
     });
 
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
     const { result } = renderHook(() => useCaseParticipants('case:test-creditor-error'));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -153,7 +171,7 @@ describe('useCaseParticipants Hook', () => {
     const MOCK_ERROR = new Error('Catastrophic query failure');
     mockQuery.mockRejectedValue(MOCK_ERROR); // General failure for all queries
 
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
     const { result } = renderHook(() => useCaseParticipants('case:test-general-error'));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -173,7 +191,7 @@ describe('useCaseParticipants Hook', () => {
     mockQuery.mockRejectedValue(new Error('Fetch failed'));
     const { result } = renderHook(() => useCaseParticipants('case:test-loading-failure'));
     expect(result.current.isLoading).toBe(true); // Initial
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     consoleErrorSpy.mockRestore();
   });

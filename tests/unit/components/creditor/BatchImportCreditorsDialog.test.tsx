@@ -30,7 +30,9 @@ describe('BatchImportCreditorsDialog', () => {
   it('renders correctly with download link and file selection button', () => {
     renderDialog();
     expect(screen.getByText('批量导入债权人')).toBeInTheDocument(); // Title
-    expect(screen.getByText('下载导入模板 (.csv)')).toBeInTheDocument();
+    const downloadLink = screen.getByText('下载导入模板 (.csv)');
+    expect(downloadLink).toBeInTheDocument();
+    expect(downloadLink.closest('a')).toHaveAttribute('href', '/templates/creditor_import_template.csv');
     expect(screen.getByText('选择文件')).toBeInTheDocument();
     expect(screen.getByText('未选择文件')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始导入' })).toBeDisabled();
@@ -86,5 +88,15 @@ describe('BatchImportCreditorsDialog', () => {
     // This depends on how CircularProgress is rendered; it might be an SVG or role="progressbar"
     // For simplicity, checking button text and disabled state is often enough.
     // expect(screen.getByRole('progressbar')).toBeInTheDocument(); // If CircularProgress has this role
+  });
+
+  // onClose Callback Test
+  it('calls onClose when the Cancel button is clicked', () => {
+    renderDialog();
+    // The cancel button might just be text "取消" or an icon, depending on MUI Dialog structure
+    // Assuming it's a button with text '取消'
+    const cancelButton = screen.getByRole('button', { name: '取消' });
+    fireEvent.click(cancelButton);
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 });

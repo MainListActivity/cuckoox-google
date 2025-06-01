@@ -1,17 +1,17 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'; // Added fireEvent
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '@/../src/i18n'; // Adjust path
-import SubmittedClaimDetailPage from '@/../src/pages/my-claims/[claimId]';
+import i18n from '@/src/i18n'; // Adjusted path
+import SubmittedClaimDetailPage from '@/src/pages/my-claims/[claimId]'; // Adjusted path
 
 // Mock useNavigate and useParams
 const mockNavigate = vi.fn();
 let mockClaimId: string | undefined = 'MOCK-CLAIM-ID-123'; // Default mock claimId
 
 vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom'); // Added type import
   return {
     ...actual,
     useNavigate: () => mockNavigate,
@@ -20,7 +20,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock ClaimDetailView
-vi.mock('../../../../../src/components/claim/ClaimDetailView', () => ({
+vi.mock('@/src/components/claim/ClaimDetailView', () => ({ // Adjusted path for consistency
   __esModule: true,
   default: vi.fn(({ claim }) => (
     <div data-testid="mocked-claim-detail-view">

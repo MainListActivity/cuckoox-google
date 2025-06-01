@@ -149,4 +149,23 @@ describe('AddCreditorDialog', () => {
       expect(mockOnSave).toHaveBeenCalledWith(expect.objectContaining(expectedData));
     });
   });
+
+  // onClose Callback Test
+  it('calls onClose when the Cancel button is clicked', () => {
+    renderDialog();
+    const cancelButton = screen.getByRole('button', { name: '取消' }); // Assuming '取消' is the text for Cancel
+    fireEvent.click(cancelButton);
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  // Example of how to test closing by pressing Escape, if applicable to your Dialog implementation
+  // it('calls onClose when Escape key is pressed', () => {
+  //   renderDialog();
+  //   // Dialog needs to be the active element or have a ref captured to send key events to it.
+  //   // This is a simplified example; actual implementation might vary.
+  //   // Typically, MUI Dialogs handle this, so you might trust MUI or test this at a higher integration level.
+  //   const dialogRoot = screen.getByRole('dialog'); // Get the dialog element
+  //   fireEvent.keyDown(dialogRoot, { key: 'Escape', code: 'Escape' });
+  //   expect(mockOnClose).toHaveBeenCalledTimes(1);
+  // });
 });

@@ -1,35 +1,43 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useConversationsList, useSystemNotifications } from '@/src/hooks/useMessageCenterData';
 import { ConversationSummary, CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '@/src/types/message';
-import { RecordId } from 'surrealdb.js';
+import { RecordId } from 'surrealdb'; // Changed from surrealdb.js
+import { vi } from 'vitest'; // Import vi
 
 // Mock the SurrealClient
-const mockQuery = jest.fn();
-const mockListenLive = jest.fn();
-const mockKill = jest.fn();
+const mockQuery = vi.fn(); // Use vi.fn()
+const mockListenLive = vi.fn(); // Use vi.fn()
+const mockKill = vi.fn(); // Use vi.fn()
 
 // Store the callback passed to listenLive to simulate events
 let liveCallback: ((actionEvent: { action: string; result: any }) => void) | null = null;
 
-jest.mock('../../../src/contexts/SurrealProvider', () => ({
+const mockSurrealDbClient = {
+  query: mockQuery, // Will be further customized in beforeEach or specific tests
+  select: vi.fn(), // Added for completeness, though not directly used by current hook structure
+  listenLive: (...args: any[]) => {
+    if (typeof args[1] === 'function') liveCallback = args[1];
+    return Promise.resolve({ id: 'mock-listen-live-msg-' + Date.now(), close: vi.fn() });
+  },
+  subscribeLive: (...args: any[]) => {
+    if (typeof args[1] === 'function') liveCallback = args[1];
+    return Promise.resolve({ id: 'mock-subscribe-live-msg-' + Date.now(), close: vi.fn() });
+  },
+  kill: mockKill,
+  isConnected: true,
+};
+
+vi.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({
-    client: {
-      query: mockQuery,
-      listenLive: (...args: any[]) => {
-        liveCallback = args[1]; 
-        return Promise.resolve({ result: 'mock-live-query-id-' + Math.random().toString(36).substr(2, 9) });
-      },
-      kill: mockKill,
-      isConnected: true,
-    },
+    client: mockSurrealDbClient,
     isConnected: true,
   }),
 }));
 
 // Mock useAuth if needed for userId (not strictly necessary if we pass userId directly)
-jest.mock('../../../src/contexts/AuthContext', () => ({
+vi.mock('../../../src/contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'user:test-user', name: 'Test User' }, // Example user
+    user: { id: 'user:test-user', name: 'Test User' },
     // ... other auth context values if needed by hooks directly (they don't seem to)
   }),
 }));
@@ -99,7 +107,7 @@ describe('useMessageCenterData Hooks', () => {
     it('should handle query error', async () => {
       const MOCK_ERROR = new Error('DB query failed');
       mockQuery.mockRejectedValueOnce(MOCK_ERROR);
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
       const { result } = renderHook(() => useConversationsList(mockUserId));
       
       await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -177,7 +185,7 @@ describe('useMessageCenterData Hooks', () => {
     it('should handle query error', async () => {
       const MOCK_ERROR = new Error('DB query failed for notifications');
       mockQuery.mockRejectedValueOnce(MOCK_ERROR);
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
       const { result } = renderHook(() => useSystemNotifications(mockUserId, mockCaseId));
       
       await waitFor(() => expect(result.current.isLoading).toBe(false));

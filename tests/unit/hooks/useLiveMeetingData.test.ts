@@ -1,25 +1,32 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useLiveMeetings, Meeting } from '@/src/hooks/useLiveMeetingData';
-import { RecordId } from 'surrealdb.js';
+import { RecordId } from 'surrealdb'; // Changed from surrealdb.js
+import { vi } from 'vitest'; // Import vi
 
 // Mock the SurrealClient
-const mockSelect = jest.fn();
-const mockQuery = jest.fn(); // For LIVE SELECT
-const mockListenLive = jest.fn();
-const mockKill = jest.fn();
+const mockSelect = vi.fn(); // Use vi.fn()
+const mockQuery = vi.fn(); // Use vi.fn() For LIVE SELECT
+const mockListenLive = vi.fn(); // Use vi.fn()
+const mockKill = vi.fn(); // Use vi.fn()
 
 // Store the callback passed to listenLive to simulate events
 let liveCallback: ((actionEvent: { action: string; result: Meeting }) => void) | null = null;
 
-jest.mock('../../../src/contexts/SurrealProvider', () => ({
+vi.mock('../../../src/contexts/SurrealProvider', () => ({ // Use vi.mock()
   useSurrealClient: () => ({
     client: {
       select: mockSelect,
       query: mockQuery,
-      listenLive: (...args: any[]) => {
-        // Store the callback to be triggered manually
-        liveCallback = args[1]; // The second argument to listenLive is the callback
-        return Promise.resolve({ id: 'mock-live-query-id' }); // Return a promise for consistency if needed
+      listenLive: (...args: any[]) => { // This is if client.listenLive is directly used by the hook
+        liveCallback = args[1];
+        return Promise.resolve({ id: 'mock-listen-live-id', close: vi.fn() });
+      },
+      subscribeLive: (...args: any[]) => { // This is likely what client.query("LIVE SELECT...") uses
+        liveCallback = args[1]; // callback is usually the second arg for subscribeLive too
+        return Promise.resolve({ // The object returned by subscribeLive
+          id: 'mock-subscribe-live-id', // A mock ID for the live query
+          close: vi.fn(), // Mock the close method for the live query object
+        });
       },
       kill: mockKill,
       isConnected: true,
@@ -48,12 +55,25 @@ describe('useLiveMeetings Hook', () => {
   beforeEach(() => {
     mockSelect.mockReset();
     mockQuery.mockReset();
-    mockListenLive.mockReset();
+    mockListenLive.mockReset(); // listenLive might not be directly used by this hook if query handles LIVE SELECT
     mockKill.mockReset();
     liveCallback = null;
 
     // Default successful mock implementations
-    mockQuery.mockResolvedValue([{ result: 'mock-live-query-id', status: 'OK' }]); // For LIVE SELECT
+    // Specific mock for LIVE SELECT query in tests that need it.
+    mockQuery.mockImplementation(async (queryStr, _vars, liveCallbackFn) => {
+      if (typeof queryStr === 'string' && queryStr.startsWith("LIVE SELECT")) {
+        if (liveCallbackFn) {
+          liveCallback = liveCallbackFn; // Capture the callback
+        }
+        // Return the object structure expected by the hook for a live query setup
+        return { id: 'mock-live-query-id-' + Date.now(), close: vi.fn() };
+      }
+      // Fallback for other types of queries (e.g., initial data fetch if separate)
+      // For this hook, initial data is fetched by client.select
+      return [{ result: [], status: 'OK' }];
+    });
+    mockSelect.mockResolvedValue([]); // Default for initial select
     mockKill.mockResolvedValue(undefined);
   });
 
@@ -82,7 +102,7 @@ describe('useLiveMeetings Hook', () => {
   });
 
   it('should handle initial fetch error', async () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
     mockSelect.mockRejectedValueOnce(new Error('Fetch failed'));
     const { result } = renderHook(() => useLiveMeetings('case:test-error'));
 
@@ -153,39 +173,60 @@ describe('useLiveMeetings Hook', () => {
     mockSelect.mockResolvedValueOnce([]);
     const { unmount } = renderHook(() => useLiveMeetings('case:test-unmount'));
 
-    await waitFor(() => expect(mockQuery).toHaveBeenCalled()); // Wait for live query setup
-    expect(mockKill).not.toHaveBeenCalled(); // Not yet
+    await waitFor(() => expect(mockQuery).toHaveBeenCalled());
+    const liveQueryId = (await mockQuery.mock.results[0].value).id; // Get the ID from the resolved live query
+    expect(mockKill).not.toHaveBeenCalled();
     unmount();
-    expect(mockKill).toHaveBeenCalledWith('mock-live-query-id');
+    expect(mockKill).toHaveBeenCalledWith(liveQueryId);
   });
 
   it('should kill and restart live query if caseId changes', async () => {
-    mockSelect.mockResolvedValueOnce([]); // Initial fetch for case1
+    let currentLiveQueryId = '';
+    mockSelect.mockResolvedValueOnce([]);
+
+    // Refined mockQuery for this specific test to capture live query IDs
+    mockQuery.mockImplementation(async (queryStr, _vars, liveCb) => {
+      if (typeof queryStr === 'string' && queryStr.startsWith("LIVE SELECT")) {
+        if (liveCb) liveCallback = liveCb;
+        currentLiveQueryId = 'live-id-' + queryStr.split("'")[1]; // Generate unique ID based on caseId
+        return { id: currentLiveQueryId, close: vi.fn() };
+      }
+      return [{ result: [], status: 'OK' }];
+    });
+
     const { rerender } = renderHook(({ caseId }) => useLiveMeetings(caseId), {
       initialProps: { caseId: 'case:test1' },
     });
 
-    await waitFor(() => expect(mockQuery).toHaveBeenCalledWith("LIVE SELECT * FROM meeting WHERE case_id = 'case:test1';"));
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledWith("LIVE SELECT * FROM meeting WHERE case_id = 'case:test1';", undefined, expect.any(Function)));
+    const firstLiveQueryId = currentLiveQueryId;
     
-    mockSelect.mockResolvedValueOnce([]); // For case2
-    mockQuery.mockClear(); // Clear previous LIVE SELECT call
-    mockKill.mockClear(); // Clear previous kill calls
+    mockSelect.mockResolvedValueOnce([]);
+    // mockQuery is already set up to generate new IDs
 
     rerender({ caseId: 'case:test2' });
 
-    await waitFor(() => expect(mockKill).toHaveBeenCalledWith('mock-live-query-id'));
+    await waitFor(() => expect(mockKill).toHaveBeenCalledWith(firstLiveQueryId));
     await waitFor(() => expect(mockSelect).toHaveBeenCalledWith("meeting:(WHERE case_id = 'case:test2' ORDER BY scheduled_time DESC)"));
-    await waitFor(() => expect(mockQuery).toHaveBeenCalledWith("LIVE SELECT * FROM meeting WHERE case_id = 'case:test2';"));
+    await waitFor(() => expect(mockQuery).toHaveBeenCalledWith("LIVE SELECT * FROM meeting WHERE case_id = 'case:test2';", undefined, expect.any(Function)));
+    expect(currentLiveQueryId).not.toBe(firstLiveQueryId); // Ensure a new live query ID was generated
   });
 
   it('should handle live query setup failure', async () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockSelect.mockResolvedValueOnce([]);
-    mockQuery.mockRejectedValueOnce(new Error('Live query setup failed')); // Fail LIVE SELECT
+    // Specific mock for this test to make LIVE SELECT fail
+    mockQuery.mockImplementation(async (queryStr) => {
+      if (typeof queryStr === 'string' && queryStr.startsWith("LIVE SELECT")) {
+        throw new Error('Live query setup failed');
+      }
+      return [{result: [], status: 'OK'}]; // for other queries if any
+    });
 
     const { result } = renderHook(() => useLiveMeetings('case:test-live-fail'));
     
-    await waitFor(() => expect(result.current).toEqual([])); // Should still return initial data or empty
+    await waitFor(() => expect(result.current.isLoading).toBe(false)); // isLoading should become false
+    expect(result.current).toEqual([]);
     expect(consoleErrorSpy).toHaveBeenCalledWith('Error setting up live meetings query:', expect.any(Error));
     consoleErrorSpy.mockRestore();
   });
