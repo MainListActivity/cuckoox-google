@@ -20,8 +20,8 @@ import {
   ListItemText,
   ListItemIcon,
   SvgIcon,
-  Tabs, // Added for tab structure
-  Tab,   // Added for tab structure
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Timeline,
@@ -30,8 +30,8 @@ import {
   TimelineConnector,
   TimelineContent,
   TimelineDot,
-  TimelineOppositeContent, // Optional for aligning text opposite the dot
-} from '@mui/lab'; // Import Timeline components
+  TimelineOppositeContent,
+} from '@mui/lab';
 import { 
   mdiArrowLeft, 
   mdiBookOpenOutline, 
@@ -39,20 +39,20 @@ import {
   mdiGavel, 
   mdiAccountGroup, 
   mdiCalendarClock,
-  mdiBank, // For closing_date
-  mdiFileSign, // For restructuring_decision_date, plan_submission_date
-  mdiCalendarAlert, // For delayed_plan_submission_date
-  mdiAccountMultiplePlus, // For first_creditor_meeting_date
-  mdiAccountMultipleCheck, // For second_creditor_meeting_date
-} from '@mdi/js'; // Added new icons for timeline
+  mdiBank,
+  mdiFileSign,
+  mdiCalendarAlert,
+  mdiAccountMultiplePlus,
+  mdiAccountMultipleCheck,
+} from '@mdi/js';
 
 // Import Dialogs
-import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/ModifyCaseStatusDialog'; // Corrected path
-import MeetingMinutesDialog from '@/src/components/case/MeetingMinutesDialog'; // Corrected path
-import type { QuillDelta } from '@/src/components/RichTextEditor'; // Import QuillDelta type
-import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added for showSuccess
-import { useAuth } from '@/src/contexts/AuthContext'; // Added for permission check
-import CaseMemberTab from '@/src/components/case/CaseMemberTab'; // Added for Case Member Management
+import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/ModifyCaseStatusDialog';
+import MeetingMinutesDialog from '@/src/components/case/MeetingMinutesDialog';
+import type { QuillDelta } from '@/src/components/RichTextEditor';
+import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { useAuth } from '@/src/contexts/AuthContext';
+import CaseMemberTab from '@/src/components/case/CaseMemberTab';
 
 // Define interfaces based on your SurrealDB schema
 interface Case {
@@ -98,7 +98,7 @@ const CaseDetailPage: React.FC = () => {
   const { t } = useTranslation(); 
   const { id } = useParams<{ id: string }>();
   const { surreal: client, isSuccess: isConnected } = useSurreal();
-  const { user, hasRole } = useAuth(); // Added hasRole for permission check
+  const { user, hasRole } = useAuth();
   const [caseDetail, setCaseDetail] = useState<Case | null>(null);
   const [caseLeadName, setCaseLeadName] = useState<string>('');
   const [filingMaterialContent, setFilingMaterialContent] = useState<string>('');
@@ -110,8 +110,10 @@ const CaseDetailPage: React.FC = () => {
   const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
   const [meetingMinutesOpen, setMeetingMinutesOpen] = useState(false);
   const [currentMeetingTitle, setCurrentMeetingTitle] = useState<string>('');
-  const [activeTab, setActiveTab] = useState(0); // State for active tab
+  const [activeTab, setActiveTab] = useState(0);
 
+  // Check if user is admin
+  const isAdmin = user?.github_id === '--admin--';
 
   // Handlers for dialogs
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -127,7 +129,7 @@ const CaseDetailPage: React.FC = () => {
   const handleOpenMeetingMinutes = () => {
     if (caseDetail) {
       let title = '';
-      const currentStage = displayCase.current_stage; // Use displayCase as it's already processed
+      const currentStage = displayCase.current_stage;
       if (currentStage === '债权人第一次会议') {
         title = t('first_creditors_meeting_minutes_title', '第一次债权人会议纪要');
       } else if (currentStage === '债权人第二次会议') {
@@ -150,7 +152,6 @@ const CaseDetailPage: React.FC = () => {
     showSuccess(t('meeting_minutes_save_success_mock', '会议纪要已（模拟）保存成功！'));
     setMeetingMinutesOpen(false);
   };
-
 
   useEffect(() => {
     if (!id || !isConnected) {
@@ -192,7 +193,6 @@ const CaseDetailPage: React.FC = () => {
         if (fetchedCase.filing_material_doc_id) {
           const docId = fetchedCase.filing_material_doc_id.toString();
           try {
-            // Use query instead of select to avoid type issues
             const docQuery = `SELECT * FROM ${docId}`;
             const docResult = await client.query<[Document[]]>(docQuery);
             
@@ -252,7 +252,7 @@ const CaseDetailPage: React.FC = () => {
     case_procedure: caseDetail.case_procedure || t('case_detail_procedure_unknown'),
     current_stage: caseDetail.procedure_phase || t('case_detail_stage_unknown'),
     filing_materials_status: filingMaterialContent ? t('case_detail_content_loaded') : t('case_detail_no_filing_material'),
-    details: t('case_detail_no_details') // Schema doesn't have details field
+    details: t('case_detail_no_details')
   };
 
   // Timeline data from case
@@ -271,23 +271,48 @@ const CaseDetailPage: React.FC = () => {
   .filter(event => event.date && event.date !== t('case_detail_date_unknown'))
   .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-
   return (
-    <Box sx={{ p: 3 }}>
-      <Button component={Link} to="/cases" startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>} sx={{ mb: 2 }}>
-        {t('case_detail_back_to_list_link')}
-      </Button>
-      <Typography variant="h4" component="h1" gutterBottom>
-        {t('case_detail_page_title_prefix')}: {displayCase.case_number}
-      </Typography>
-      <Typography variant="caption" color="text.secondary" display="block" gutterBottom sx={{ mb: 3 }}>
-        {t('case_detail_id_label')}: {displayCase.id}
-      </Typography>
+    <Box sx={{ 
+      p: 3,
+      height: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden'
+    }}>
+      <Box sx={{ flexShrink: 0 }}>
+        <Button component={Link} to="/cases" startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>} sx={{ mb: 2 }}>
+          {t('case_detail_back_to_list_link')}
+        </Button>
+        <Typography variant="h4" component="h1" gutterBottom>
+          {t('case_detail_page_title_prefix')}: {displayCase.case_number}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block" gutterBottom sx={{ mb: 3 }}>
+          {t('case_detail_id_label')}: {displayCase.id}
+        </Typography>
+      </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={3} sx={{ 
+        flexGrow: 1,
+        overflow: 'hidden',
+        height: 'calc(100% - 120px)'
+      }}>
         {/* Left Column: Basic Info & Timeline */}
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <Card sx={{ mb: 3 }}> {/* Basic Info Card */}
+        <Grid size={{ xs: 12, lg: 4 }} sx={{ 
+          height: '100%', 
+          overflow: 'auto',
+          pr: 1,
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            backgroundColor: 'background.paper',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: 'divider',
+            borderRadius: '4px',
+          },
+        }}>
+          <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
                 {t('case_detail_basic_info_title')}
@@ -315,14 +340,13 @@ const CaseDetailPage: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card> {/* Timeline Card */}
+          <Card>
             <CardContent>
               <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
                 {t('case_detail_timeline_title_key_dates', '关键时间点')}
               </Typography>
               {timelineEvents.length > 0 ? (
-                <Timeline position="right" sx={{ // Changed to "right" to avoid opposite content overlap issues on small screens
-                  // Remove padding to use full width
+                <Timeline position="right" sx={{
                   '& .MuiTimelineItem-root:before': {
                     flex: 0,
                     padding: 0,
@@ -355,86 +379,131 @@ const CaseDetailPage: React.FC = () => {
         </Grid>
 
         {/* Right Column: Filing Material & Actions */}
-        <Grid size={{ xs: 12, lg: 8 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 0 }}>
+        <Grid size={{ xs: 12, lg: 8 }} sx={{ 
+          height: '100%', 
+          display: 'flex', 
+          flexDirection: 'column',
+          overflow: 'hidden'
+        }}>
+          <Box sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider', 
+            flexShrink: 0
+          }}>
             <Tabs value={activeTab} onChange={handleTabChange} aria-label="case details tabs">
               <Tab label={t('case_details_tab_main', '案件详情')} />
               <Tab label={t('case_members_tab_label', '案件成员')} />
             </Tabs>
           </Box>
 
-          {/* Main Details Tab Content */}
-          {activeTab === 0 && (
-            <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0 }}> {/* Ensure card takes full height of grid item */}
-              <CardContent sx={{display: 'flex', flexDirection: 'column', height: '100%', p:3 }}>
-                <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
-                  {t('case_detail_filing_material_title')}
-                </Typography>
-                <Box sx={{
+          {/* Tab Content Container */}
+          <Box sx={{ 
+            flexGrow: 1, 
+            overflow: 'hidden', 
+            display: 'flex', 
+            flexDirection: 'column',
+            height: 'calc(100% - 48px)'
+          }}>
+            {/* Main Details Tab Content */}
+            {activeTab === 0 && (
+              <Card sx={{
+                height: '100%', 
+                borderTopLeftRadius: 0, 
+                borderTopRightRadius: 0, 
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column'
+              }}>
+                <CardContent sx={{
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  height: '100%', 
+                  p: 3, 
+                  overflow: 'hidden'
+                }}>
+                  <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
+                    {t('case_detail_filing_material_title')}
+                  </Typography>
+                  <Box sx={{
                     border: 1,
                     borderColor: 'divider',
                     borderRadius: 1,
                     p: 1,
-                    flexGrow: 1, // Allow editor to grow
-                    minHeight: '300px', // Minimum height for editor area
-                    display: 'flex', // To make RichTextEditor fill this box
+                    flexGrow: 1,
+                    minHeight: 0,
+                    display: 'flex',
                     flexDirection: 'column',
-                    '& .ql-container.ql-snow': { // Target Quill's container
+                    overflow: 'hidden',
+                    '& .ql-container.ql-snow': {
                       flexGrow: 1,
                       display: 'flex',
                       flexDirection: 'column',
+                      overflow: 'hidden',
                     },
-                    '& .ql-editor': { // Target Quill's editor area
+                    '& .ql-editor': {
                       flexGrow: 1,
-                      overflowY: 'auto', // Add scroll to editor if content overflows
-                      p: 1, // Ensure padding inside editor
+                      overflowY: 'auto',
+                      p: 2,
                     },
-                    '& .ProseMirror': { backgroundColor: 'transparent', minHeight: '100%', p:1 }
+                    '& .ProseMirror': { 
+                      backgroundColor: 'transparent', 
+                      minHeight: '100%', 
+                      p: 1 
+                    }
                   }}>
-                  <RichTextEditor
-                    value={filingMaterialContent}
-                    readOnly={true}
-                    placeholder={t('case_detail_filing_material_empty')}
-                  />
-                </Box>
-                <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  {/* // TODO: Access Control - Also check user permission for 'manage_meeting_minutes'. */}
-                  { (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议') && (
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
-                      onClick={handleOpenMeetingMinutes}
-                    >
-                      {t('case_detail_actions_meeting_minutes_button')}
-                    </Button>
-                  )}
-                  {hasRole('case_manager') && displayCase.current_stage !== t('case_status_closed', '结案') && (
-                    <Button
-                      variant="contained"
-                      color="secondary"
-                      startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
-                      onClick={handleOpenModifyStatus}
-                    >
-                      {t('case_detail_actions_change_status_button')}
-                    </Button>
-                  )}
-                </Box>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Case Members Tab Content */}
-          {activeTab === 1 && (
-             <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0 }}>
-                <CardContent sx={{p:3}}>
-                    <CaseMemberTab
-                        caseId={id as string}
-                        // currentUserIsOwner and currentUserId props removed
+                    <RichTextEditor
+                      value={filingMaterialContent}
+                      readOnly={true}
+                      placeholder={t('case_detail_filing_material_empty')}
                     />
+                  </Box>
+                  <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+                    {/* Admin can always modify status and meeting minutes */}
+                    {(isAdmin || (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议')) && (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
+                        onClick={handleOpenMeetingMinutes}
+                      >
+                        {t('case_detail_actions_meeting_minutes_button')}
+                      </Button>
+                    )}
+                    {(isAdmin || hasRole('case_manager')) && displayCase.current_stage !== t('case_status_closed', '结案') && (
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
+                        onClick={handleOpenModifyStatus}
+                      >
+                        {t('case_detail_actions_change_status_button')}
+                      </Button>
+                    )}
+                  </Box>
                 </CardContent>
-             </Card>
-          )}
+              </Card>
+            )}
+
+            {/* Case Members Tab Content */}
+            {activeTab === 1 && (
+              <Card sx={{
+                height: '100%', 
+                borderTopLeftRadius: 0, 
+                borderTopRightRadius: 0, 
+                overflow: 'auto'
+              }}>
+                <CardContent sx={{
+                  p: 3, 
+                  height: '100%', 
+                  overflow: 'auto'
+                }}>
+                  <CaseMemberTab
+                    caseId={id as string}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </Box>
         </Grid>
       </Grid>
 
@@ -446,10 +515,7 @@ const CaseDetailPage: React.FC = () => {
           currentCase={{ 
             id: caseDetail.id.toString(), 
             current_status: displayCase.current_stage as CaseStatus,
-            // Pass other necessary fields if ModifyCaseStatusDialog requires them
-            // e.g. case_procedure: displayCase.case_procedure
           }}
-          // onSave={handleSaveStatus} // You would need a save handler here
         />
       )}
 
@@ -459,18 +525,13 @@ const CaseDetailPage: React.FC = () => {
           onClose={() => setMeetingMinutesOpen(false)}
           caseInfo={{ 
             caseId: caseDetail.id.toString(), 
-            caseName: displayCase.name, // Use displayCase for consistency
-            // case_number: displayCase.case_number // if needed by dialog
+            caseName: displayCase.name,
           }}
-          meetingTitle={currentMeetingTitle} // Use state for dynamic title
-          existingMinutes={new Delta()} // Placeholder, replace with actual fetched minutes if available
+          meetingTitle={currentMeetingTitle}
+          existingMinutes={new Delta()}
           onSave={handleSaveMeetingMinutes}
         />
       )}
-
-      <Typography variant="caption" color="text.secondary" align="center" display="block" sx={{ mt: 4, fontStyle: 'italic' }}>
-        {t('case_detail_footer_info_1')} {t('case_detail_footer_info_2')}
-      </Typography>
     </Box>
   );
 };

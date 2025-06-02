@@ -22,6 +22,7 @@ import {
   Menu, // Added for action menu
   MenuItem, // Added for action menu
   ListItemIcon, // Added for menu item icons
+  Chip, // Added for role display
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -69,9 +70,13 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
 
 
   const isOwner = useMemo(() => {
+    // Admin users have owner privileges
+    if (user && user.github_id === '--admin--') {
+      return true;
+    }
     if (!currentUserId || !members || members.length === 0) return false;
     return members.some(member => member.id === currentUserId && member.roleInCase === 'owner');
-  }, [currentUserId, members]);
+  }, [currentUserId, members, user]);
 
   const loadMembers = useCallback(async () => {
     if (!caseId) return; // Do not load if caseId is not available
@@ -156,7 +161,11 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsChangingOwner(true);
     setError(null);
     try {
-      await changeCaseOwner(caseId, selectedMemberForMenu.id, currentUserId);
+      // Find current owner
+      const currentOwner = members.find(m => m.roleInCase === 'owner');
+      const currentOwnerUserId = currentOwner?.id || currentUserId;
+      
+      await changeCaseOwner(caseId, selectedMemberForMenu.id, currentOwnerUserId);
       loadMembers();
       showSuccess(t('case_members_success_owner_changed', `Ownership transferred to ${selectedMemberForMenu.userName}.`));
     } catch (err) {
@@ -244,14 +253,17 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
                   </>
                 }
               />
-              {isOwner && currentUserId && member.id !== currentUserId && (
-                <Box>
-                  <Tooltip title={t('actions_tooltip', "Actions")}>
-                    <IconButton edge="end" aria-label="actions" onClick={(e) => handleMenuOpen(e, member)}>
-                      <MoreVertIcon />
-                    </IconButton>
-                  </Tooltip>
-                </Box>
+              {isOwner && currentUserId && (
+                // Admin can modify anyone, regular owner can't modify themselves
+                (user?.github_id === '--admin--' || member.id !== currentUserId) && (
+                  <Box>
+                    <Tooltip title={t('actions_tooltip', "Actions")}>
+                      <IconButton edge="end" aria-label="actions" onClick={(e) => handleMenuOpen(e, member)}>
+                        <MoreVertIcon />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )
               )}
             </ListItem>
           ))}
