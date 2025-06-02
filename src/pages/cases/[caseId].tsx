@@ -365,7 +365,7 @@ const CaseDetailPage: React.FC = () => {
 
           {/* Main Details Tab Content */}
           {activeTab === 0 && (
-            <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0 }}> {/* Ensure card takes full height of grid item */}
+            <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}> {/* Ensure card takes full height of grid item */}
               <CardContent sx={{display: 'flex', flexDirection: 'column', height: '100%', p:3 }}>
                 <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
                   {t('case_detail_filing_material_title')}
@@ -426,7 +426,7 @@ const CaseDetailPage: React.FC = () => {
 
           {/* Case Members Tab Content */}
           {activeTab === 1 && (
-             <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0 }}>
+             <Card sx={{height: '100%', borderTopLeftRadius:0, borderTopRightRadius:0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
                 <CardContent sx={{p:3}}>
                     <CaseMemberTab
                         caseId={id as string}

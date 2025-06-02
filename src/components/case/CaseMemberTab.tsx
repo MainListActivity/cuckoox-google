@@ -34,7 +34,7 @@ import {
 import { CaseMember } from '@/src/types/caseMember';
 import { fetchCaseMembers, removeCaseMember, changeCaseOwner } from '@/src/services/caseMemberService'; // Added changeCaseOwner
 import AddCaseMemberDialog from './AddCaseMemberDialog';
-import { useAuth } from '@/src/contexts/AuthContext';
+import { useAuth } from '@/src/contexts/AuthContext'; // useAuth import
 import { useMemo, useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
 import { useTranslation } from 'react-i18next'; // For i18n
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // For notifications
@@ -45,8 +45,9 @@ interface CaseMemberTabProps {
 }
 
 const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
-  const { user } = useAuth(); // Get user from AuthContext
+  const { user, hasRole } = useAuth(); // Get user and hasRole from AuthContext
   const currentUserId = user?.id?.toString(); // Get current user's ID as string
+  const isAdmin = hasRole('admin'); // Determine if user is admin
 
   const [members, setMembers] = useState<CaseMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -155,8 +156,23 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     if (!selectedMemberForMenu || !currentUserId) return;
     setIsChangingOwner(true);
     setError(null);
+
+    let oldOwnerIdToUse = currentUserId;
+    if (isAdmin && !isOwner) {
+      const actualOldOwner = members.find(m => m.roleInCase === 'owner');
+      if (actualOldOwner) {
+        oldOwnerIdToUse = actualOldOwner.id;
+      } else {
+        // This case should ideally not happen if a case always has an owner
+        console.error("Admin is changing owner, but no current owner found in member list.");
+        showError(t('case_members_error_owner_change_failed', 'Failed to change owner: Current owner not found.'));
+        setIsChangingOwner(false);
+        return;
+      }
+    }
+
     try {
-      await changeCaseOwner(caseId, selectedMemberForMenu.id, currentUserId);
+      await changeCaseOwner(caseId, selectedMemberForMenu.id, oldOwnerIdToUse);
       loadMembers();
       showSuccess(t('case_members_success_owner_changed', `Ownership transferred to ${selectedMemberForMenu.userName}.`));
     } catch (err) {
@@ -197,7 +213,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
         <Typography variant="h6" component="div">
           Case Members ({members.length})
         </Typography>
-        {isOwner && ( // Use derived isOwner state
+        {(isOwner || isAdmin) && ( // Use derived isOwner state or isAdmin
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -244,7 +260,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
                   </>
                 }
               />
-              {isOwner && currentUserId && member.id !== currentUserId && (
+              {(isOwner || isAdmin) && currentUserId && member.id !== currentUserId && (
                 <Box>
                   <Tooltip title={t('actions_tooltip', "Actions")}>
                     <IconButton edge="end" aria-label="actions" onClick={(e) => handleMenuOpen(e, member)}>
