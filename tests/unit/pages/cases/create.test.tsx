@@ -156,7 +156,8 @@ describe('CreateCasePage', () => {
     // Check the announcement date
     const announcementDateInput = screen.getByLabelText(/公告时间/) as HTMLInputElement; // Adjust if label changes
     
-    const expectedDate = new Date(2023, 9, 26); // 2023-10-01 + 25 days
+    const expectedDate = new Date(2023, 9, 1); // 2023-10-01
+    expectedDate.setDate(expectedDate.getDate() + 25); // Add 25 days
     const expectedDateString = formatDate(expectedDate);
 
     await waitFor(() => {
