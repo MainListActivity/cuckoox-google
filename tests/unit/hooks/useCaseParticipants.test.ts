@@ -176,7 +176,12 @@ describe('useCaseParticipants Hook', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.participants).toEqual([]); // Should reset on general error
-    expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching case participants:', MOCK_ERROR);
+
+    // Check for both specific error messages
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching case users:', MOCK_ERROR);
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error fetching case creditors:', MOCK_ERROR);
+    expect(consoleErrorSpy).toHaveBeenCalledTimes(2); // Ensure it was called exactly twice
+
     consoleErrorSpy.mockRestore();
   });
 

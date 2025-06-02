@@ -5,31 +5,28 @@ import { RecordId } from 'surrealdb'; // Changed from surrealdb.js
 import { vi } from 'vitest'; // Import vi
 
 // Mock the SurrealClient
-const mockQuery = vi.fn(); // Use vi.fn()
-const mockListenLive = vi.fn(); // Use vi.fn()
-const mockKill = vi.fn(); // Use vi.fn()
+const mockQuery = vi.fn();
+const mockKill = vi.fn();
 
-// Store the callback passed to listenLive to simulate events
+// Store the callback passed to subscribeLive to simulate events
 let liveCallback: ((actionEvent: { action: string; result: any }) => void) | null = null;
 
+const mockSubscribeLiveFn = vi.fn((table, callback) => {
+  liveCallback = callback;
+  return Promise.resolve({ id: 'mock-subscribe-live-msg-' + Date.now(), close: vi.fn() });
+});
+
 const mockSurrealDbClient = {
-  query: mockQuery, // Will be further customized in beforeEach or specific tests
-  select: vi.fn(), // Added for completeness, though not directly used by current hook structure
-  listenLive: (...args: any[]) => {
-    if (typeof args[1] === 'function') liveCallback = args[1];
-    return Promise.resolve({ id: 'mock-listen-live-msg-' + Date.now(), close: vi.fn() });
-  },
-  subscribeLive: (...args: any[]) => {
-    if (typeof args[1] === 'function') liveCallback = args[1];
-    return Promise.resolve({ id: 'mock-subscribe-live-msg-' + Date.now(), close: vi.fn() });
-  },
+  query: mockQuery,
+  select: vi.fn(),
+  subscribeLive: mockSubscribeLiveFn, // Use the vi.fn() mock
   kill: mockKill,
   isConnected: true,
 };
 
 vi.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({
-    client: mockSurrealDbClient,
+    client: mockSurrealDbClient, // Ensure this uses the object with the vi.fn()
     isConnected: true,
   }),
 }));
@@ -45,9 +42,9 @@ vi.mock('../../../src/contexts/AuthContext', () => ({
 
 describe('useMessageCenterData Hooks', () => {
   beforeEach(() => {
-    mockQuery.mockReset();
-    mockListenLive.mockReset();
-    mockKill.mockReset();
+    mockQuery.mockClear(); // Use mockClear for vi.fn
+    mockSubscribeLiveFn.mockClear(); // Clear the new vi.fn mock
+    mockKill.mockClear(); // Use mockClear for vi.fn
     liveCallback = null;
     mockKill.mockResolvedValue(undefined); // Default success for kill
   });
@@ -120,18 +117,23 @@ describe('useMessageCenterData Hooks', () => {
     it('should trigger re-fetch on simulated live event', async () => {
       mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // Initial fetch
       const { result } = renderHook(() => useConversationsList(mockUserId));
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await waitFor(() => expect(result.current.isLoading).toBe(false)); // Wait for initial fetch
       
-      expect(mockQuery).toHaveBeenCalledTimes(2); // 1 for initial data, 1 for LIVE SELECT
-      expect(liveCallback).not.toBeNull();
+      expect(mockQuery).toHaveBeenCalledTimes(1); // Initial data fetch
+      expect(mockSubscribeLiveFn).toHaveBeenCalledTimes(1); // Live subscription setup
+      expect(liveCallback).not.toBeNull(); // Callback should be captured
 
-      mockQuery.mockResolvedValueOnce([{ result: [{ id: 'conv:new', participants: [], updated_at: new Date().toISOString(), unread_count: 1 }], status: 'OK' }]); // Re-fetch response
+      // Simulate data for the re-fetch
+      mockQuery.mockResolvedValueOnce([{ result: [{ id: 'conv:new', participants: [], updated_at: new Date().toISOString(),last_message_snippet: 'New Message', unread_count: 1 }], status: 'OK' }]);
+
       act(() => {
-        if (liveCallback) liveCallback({ action: 'CREATE', result: {} }); // Simulate any event
+        if (liveCallback) liveCallback({ action: 'CREATE', result: {} }); // Simulate live event
       });
 
-      await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(3)); // 2 initial + 1 re-fetch
-      expect(result.current.conversations.length).toBe(1); // Assuming re-fetch populates
+      // Wait for the re-fetch to complete and update the state
+      await waitFor(() => expect(result.current.conversations.length).toBe(1));
+      expect(mockQuery).toHaveBeenCalledTimes(2); // Initial fetch + re-fetch
+      expect(result.current.conversations[0].id).toEqual(new RecordId('conv', 'new')); // RecordId comparison
     });
   });
 
@@ -198,20 +200,22 @@ describe('useMessageCenterData Hooks', () => {
      it('should trigger re-fetch on simulated live event for notifications', async () => {
       mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // Initial fetch
       const { result } = renderHook(() => useSystemNotifications(mockUserId, mockCaseId));
-      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await waitFor(() => expect(result.current.isLoading).toBe(false)); // Wait for initial fetch
       
-      expect(mockQuery).toHaveBeenCalledTimes(2); // 1 initial, 1 LIVE
-      expect(liveCallback).not.toBeNull();
+      expect(mockQuery).toHaveBeenCalledTimes(1); // Initial data fetch
+      expect(mockSubscribeLiveFn).toHaveBeenCalledTimes(1); // Live subscription setup
+      expect(liveCallback).not.toBeNull(); // Callback should be captured
 
       const newNotification = { id: 'notif:new', type: 'BUSINESS_NOTIFICATION', content: 'New live notif', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_read: false, target_user_id: mockUserId, sender_name: 'Live System' };
       mockQuery.mockResolvedValueOnce([{ result: [newNotification], status: 'OK' }]); // Re-fetch response
       
       act(() => {
-        if (liveCallback) liveCallback({ action: 'CREATE', result: {} }); // Simulate event
+        if (liveCallback) liveCallback({ action: 'CREATE', result: {} }); // Simulate live event
       });
 
-      await waitFor(() => expect(mockQuery).toHaveBeenCalledTimes(3)); 
-      expect(result.current.notifications.length).toBe(1);
+      // Wait for the re-fetch to complete and update the state
+      await waitFor(() => expect(result.current.notifications.length).toBe(1));
+      expect(mockQuery).toHaveBeenCalledTimes(2); // Initial fetch + re-fetch
       expect(result.current.notifications[0].content).toBe('New live notif');
     });
   });

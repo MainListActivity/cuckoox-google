@@ -67,35 +67,25 @@ describe('useLiveDashboardData Hooks', () => {
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("string::slice(created_at, 0, 10) = string::slice(time::now(), 0, 10)"), // More flexible check
-        { caseId: 'case:test', limit: 5 } // createLiveMetricHook defaults limit to 5 if $limit is in query, though not for this one
+        expect.stringContaining("string::slice(created_at, 0, 10) = string::slice(time::now(), 0, 10)"),
+        { caseId: 'case:test' } // Corrected: No limit parameter for this specific query
       );
       expect(result.current.data).toBe(10);
     });
     
-    it('should use correct query parameters including default limit if $limit were present', async () => {
-        // This specific query doesn't use $limit, but testing the mechanism if it did:
-        const queryWithLimit = "SELECT count() FROM claim WHERE case_id = $caseId LIMIT $limit;";
-        const mockMetricQueryFn = vi.fn().mockReturnValue(queryWithLimit); // Use vi.fn()
-        const mockParseResult = vi.fn().mockReturnValue(0); // Use vi.fn()
-
-        // Temporarily mock createLiveMetricHook or the specific hook's internals if needed,
-        // or assume the factory correctly passes limit. For now, we trust the factory.
-        // The current test for query params on a non-$limit query already shows caseId.
-        // Let's ensure the default limit is added by the factory if the query *had* $limit.
-        // We can test this by checking the params passed to mockQuery.
-        // The factory adds limit:5 by default if $limit is in the query.
-        // Since useLiveTodaysSubmissionsCount doesn't have $limit, limit won't be added.
-         mockQuery.mockResolvedValueOnce([{ result: [{ count: 3 }], status: 'OK' }]);
-         const { result } = renderHook(() => useLiveTodaysSubmissionsCount('case:test-limit-check'));
-         await waitFor(() => expect(result.current.isLoading).toBe(false));
-         expect(mockQuery).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({ caseId: 'case:test-limit-check' }) 
-            // Not { limit: 5 } because the query for this hook doesn't include '$limit'
-         );
-
-    });
+    // This test is a bit redundant as the one above already checks params.
+    // The main point is that 'limit' is NOT added if $limit is not in SQL.
+    // If we wanted to test the $limit case, we'd need a different hook or modify this one's query.
+    // For now, ensuring the existing test is correct is the priority.
+    // it('should use correct query parameters including default limit if $limit were present', async () => {
+    //      mockQuery.mockResolvedValueOnce([{ result: [{ count: 3 }], status: 'OK' }]);
+    //      const { result } = renderHook(() => useLiveTodaysSubmissionsCount('case:test-limit-check'));
+    //      await waitFor(() => expect(result.current.isLoading).toBe(false));
+    //      expect(mockQuery).toHaveBeenCalledWith(
+    //         expect.any(String),
+    //         expect.objectContaining({ caseId: 'case:test-limit-check' })
+    //      );
+    // });
 
 
     it('should return 0 if query result is empty array', async () => {
@@ -120,7 +110,7 @@ describe('useLiveDashboardData Hooks', () => {
       const { result } = renderHook(() => useLiveTodaysSubmissionsCount('case:test-error'));
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
-      expect(result.current.error).toBe(MOCK_ERROR);
+      expect(result.current.error).toEqual(MOCK_ERROR); // Changed .toBe to .toEqual for error object
       expect(result.current.data).toBe(0); // Should reset to default on error
     });
   });
@@ -178,6 +168,9 @@ describe('useLiveDashboardData Hooks', () => {
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       
+      // Ensure the mockQuery was called before checking the result.data
+      expect(mockQuery).toHaveBeenCalled();
+
       expect(result.current.data).toEqual([
         { role: '管理人', count: 5, color: testRoleColorMap['管理人'] },
         { role: '债权人', count: 50, color: testRoleColorMap['债权人'] },

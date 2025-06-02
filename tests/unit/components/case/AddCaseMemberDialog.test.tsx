@@ -3,15 +3,16 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import AddCaseMemberDialog from '@/src/components/case/AddCaseMemberDialog';
 import * as caseMemberService from '@/src/services/caseMemberService'; // To mock its functions
+import { vi } from 'vitest';
 
 // Mock the caseMemberService
-jest.mock('@/src/services/caseMemberService');
+vi.mock('@/src/services/caseMemberService');
 
-const mockSearchSystemUsers = caseMemberService.searchSystemUsers as jest.Mock;
-const mockAddCaseMember = caseMemberService.addCaseMember as jest.Mock;
+const mockSearchSystemUsers = caseMemberService.searchSystemUsers as vi.Mock;
+const mockAddCaseMember = caseMemberService.addCaseMember as vi.Mock;
 
-const mockOnClose = jest.fn();
-const mockOnMemberAdded = jest.fn();
+const mockOnClose = vi.fn();
+const mockOnMemberAdded = vi.fn();
 
 const systemUsersMock: caseMemberService.SystemUser[] = [
   { id: 'user:001', name: 'Alice Admin', email: 'alice@example.com', avatarUrl: 'avatar_alice.png' },
@@ -20,7 +21,7 @@ const systemUsersMock: caseMemberService.SystemUser[] = [
 
 describe('AddCaseMemberDialog', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockSearchSystemUsers.mockResolvedValue([]); // Default to no results
     mockAddCaseMember.mockResolvedValue({
       id: 'user:002',

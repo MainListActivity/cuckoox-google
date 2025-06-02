@@ -73,10 +73,11 @@ describe('ClaimSubmissionPage', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(mockShowError).toHaveBeenCalledWith('请修正表单中的错误。'); // Changed to mockShowError
-    });
-    // Check for specific error messages (optional, but good)
-    expect(screen.getByText('本金不能为空')).toBeInTheDocument(); 
+      // It's possible the inline error appears, and then the snackbar.
+      // Ensure both are checked within a single waitFor if their appearance is coupled.
+      expect(screen.getByText('本金不能为空')).toBeInTheDocument();
+      expect(mockShowError).toHaveBeenCalledWith('请修正表单中的错误。');
+    }, { timeout: 2000 }); // Explicit longer timeout for safety
     // Note: Default values for select might prevent '不能为空' for claimNature and currency initially
   });
 

@@ -72,26 +72,16 @@ const mockCasesData = [
   { id: 'case003', case_number: 'BK-2023-003', case_lead_name: 'Carol H.', case_procedure: '破产重整', creator_name: 'Jane Roe', current_stage: '债权人第一次会议' as const, acceptance_date: '2023-03-10' },
 ];
 
+// Define mockSurrealContextValue in the describe scope
+let mockSurrealContextValue: Partial<SurrealContextType>;
+
 // Helper function to render the component with necessary providers
-const renderCaseListPage = (cases = mockCasesData) => {
-  // Need to replace the mockCases in the actual component if it's not fetched via a mockable hook
-  // For this example, we assume the component uses the imported mockCases or a global one that can be spied upon/replaced.
-  // If CaseListPage internally defines mockCases and doesn't expose a way to inject them,
-  // testing different data states (e.g., empty list) is harder.
-  // For now, we'll rely on the component's own mockData for some tests and pass custom for others if possible.
-  
-  // To test with specific data, especially empty data, the component should ideally fetch data via a hook.
-  // Let's assume we can't directly inject data for this test structure and rely on the component's internal mock.
-  // The provided component uses its own 'mockCases' constant.
-
-  // Define a default mock Surreal context value outside render helper to be accessible in beforeEach
-  let mockSurrealContextValue: Partial<SurrealContextType>;
-
-
+const renderCaseListPage = () => { // Removed 'cases' parameter as it's not used to inject data directly
+  // The component will fetch data via the mocked SurrealContext's query method.
   return render(
     <ThemeProvider theme={theme}>
       <BrowserRouter>
-        {/* <I18nextProvider i18n={i18n}> // Using jest.mock for useTranslation */}
+        {/* <I18nextProvider i18n={i18n}> // Using vi.mock for useTranslation */}
         <SurrealContext.Provider value={mockSurrealContextValue as SurrealContextType}>
           <SnackbarProvider> {/* Use the actual provider if useSnackbar is complex, or mock it fully */}
             <CaseListPage />
@@ -110,9 +100,9 @@ describe('CaseListPage', () => {
     mockShowError.mockClear();
 
     // Setup mockSurrealContextValue here to ensure it's fresh for each test
-    mockSurrealContextValue = {
+    mockSurrealContextValue = { // This will now correctly refer to the outer-scoped variable
       surreal: {
-        query: vi.fn().mockResolvedValue([mockCasesData]),
+        query: vi.fn().mockResolvedValue([mockCasesData]), // Default to returning mockCasesData
         select: vi.fn(),
         create: vi.fn(),
         update: vi.fn(),
@@ -167,19 +157,24 @@ describe('CaseListPage', () => {
     expect(screen.getByText('操作')).toBeInTheDocument();
   });
 
-  it('renders a list of mock cases', () => {
-    renderCaseListPage(); // Uses the component's internal mockCases
-    // Check for data from one of the mock cases
-    expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
-    expect(screen.getByText('Alice Manager')).toBeInTheDocument();
-    expect(screen.getByText('破产清算')).toBeInTheDocument();
-    expect(screen.getByText('债权申报')).toBeInTheDocument();
-
-    expect(screen.getByText('BK-2023-002')).toBeInTheDocument();
+  it('renders a list of mock cases', async () => { // Made async
+    renderCaseListPage();
+    // Data is fetched via mocked query, so need to wait for it.
+    await waitFor(() => {
+      expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
+      // The mockCasesData has case_lead_name, not case_lead_name like 'Alice Manager'. Assuming component displays 'case_lead_name'.
+      expect(screen.getByText('Alice M.')).toBeInTheDocument();
+      expect(screen.getByText('破产清算')).toBeInTheDocument();
+      expect(screen.getByText('债权申报')).toBeInTheDocument();
+      expect(screen.getByText('BK-2023-002')).toBeInTheDocument();
+    });
   });
 
-  it('renders action buttons for each case row', () => {
+  it('renders action buttons for each case row', async () => { // Made async
     renderCaseListPage();
+    await waitFor(() => { // Wait for cases to render
+      expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
+    });
     // For the first case (BK-2023-001)
     const firstRowActions = screen.getAllByRole('row').find(row => row.textContent?.includes('BK-2023-001'));
     expect(firstRowActions).not.toBeNull();
@@ -200,23 +195,21 @@ describe('CaseListPage', () => {
     }
   });
   
-  it('shows "暂无案件数据" when no cases are provided (conceptual - requires ability to modify data source)', () => {
-    // This test is tricky because the component uses an internal mockCases.
-    // To properly test this, mockCases should be fetched via a mockable hook or prop.
-    // For now, this test is more of a placeholder for that capability.
-    // If we could do: renderCaseListPage([]), and the component used that prop:
-    // renderCaseListPage([]); // If component could take cases as prop or from mockable hook
-    // expect(screen.getByText('暂无案件数据')).toBeInTheDocument();
-    // For now, we'll skip this or assume it needs component refactoring for testability.
-    // Alternatively, if the component's internal mockCases can be spied on and replaced:
-    // const actualMockCases = require('../../../../src/pages/cases/index').mockCases; // This won't work due to ES module
-    // For now, we can only test the default state which has cases.
-    expect(true).toBe(true); // Placeholder for this conceptual test
+  it('shows "暂无案件数据" when no cases are provided', async () => { // Made async
+    // Override the default query mock for this specific test
+    (mockSurrealContextValue.surreal.query as vi.Mock).mockResolvedValueOnce([[]]); // Return empty array
+    renderCaseListPage();
+    await waitFor(() => {
+      expect(screen.getByText('暂无案件数据')).toBeInTheDocument();
+    });
   });
 
   describe('Dialog Interactions', () => {
-    it('Modify Status Dialog opens and closes', () => {
+    it('Modify Status Dialog opens and closes', async () => { // Made async
       renderCaseListPage();
+      await waitFor(() => { // Wait for cases to render
+        expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
+      });
       const modifyButton = screen.getAllByRole('button', { name: /修改状态/i })[0]; // Get first modify button
       fireEvent.click(modifyButton);
 
@@ -232,8 +225,11 @@ describe('CaseListPage', () => {
       });
     });
 
-    it('Meeting Minutes Dialog opens, saves, and closes for appropriate case', () => {
+    it('Meeting Minutes Dialog opens, saves, and closes for appropriate case', async () => { // Made async
       renderCaseListPage();
+      await waitFor(() => { // Wait for cases to render
+        expect(screen.getByText('BK-2023-003')).toBeInTheDocument();
+      });
       // Find the row for 'BK-2023-003' which should have the meeting minutes button
       const caseRow = screen.getAllByRole('row').find(row => row.textContent?.includes('BK-2023-003'));
       expect(caseRow).toBeDefined();

@@ -35,11 +35,14 @@ vi.mock('react-i18next', () => ({
 
 // Mock react-router-dom
 const mockNavigate = vi.fn(); // Use vi.fn()
-vi.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'), // Keep this if you only want to mock parts
-  useNavigate: () => mockNavigate,
-  useLocation: () => ({ state: null, pathname: '/select-case' }),
-}));
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => ({ state: null, pathname: '/select-case' }),
+  };
+});
 
 const mockUser: AppUser = {
   id: 'user:testUser' as unknown as RecordId, // Casting for simplicity

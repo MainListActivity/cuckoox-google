@@ -23,9 +23,12 @@ DEFINE FIELD last_login_case_id ON user TYPE option<record<case>>;
 -- Define Cases Table
 DEFINE TABLE case SCHEMAFULL
   PERMISSIONS
-    FOR select FULL -- Permissions can be refined by user_case_role links
+    FOR select WHERE ($auth.roles CONTAINS 'admin') OR
+                      EXISTS(
+                        SELECT value id FROM user_case_role WHERE user_id = $auth.id AND case_id = id LIMIT 1
+                      )
     FOR create WHERE $auth.roles CONTAINS 'admin' OR $auth.roles CONTAINS 'case_manager' -- Example roles
-    FOR update, delete WHERE $auth.roles CONTAINS 'admin' OR ($auth.roles CONTAINS 'case_manager' AND created_by_user = $auth.id OR case_lead_user_id = $auth.id);
+    FOR update, delete WHERE $auth.roles CONTAINS 'admin' OR ($auth.roles CONTAINS 'case_manager' AND (created_by_user = $auth.id OR case_lead_user_id = $auth.id));
 
 DEFINE FIELD name ON case TYPE string;
 DEFINE FIELD case_number ON case TYPE string;

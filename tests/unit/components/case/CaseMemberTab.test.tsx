@@ -6,20 +6,21 @@ import * as caseMemberService from '@/src/services/caseMemberService';
 import { AuthContext, AppUser } from '@/src/contexts/AuthContext';
 import { CaseMember } from '@/src/types/caseMember';
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Import useSnackbar
+import { vi } from 'vitest';
 
 // Mock services
-jest.mock('@/src/services/caseMemberService');
-const mockFetchCaseMembers = caseMemberService.fetchCaseMembers as jest.Mock;
-const mockRemoveCaseMember = caseMemberService.removeCaseMember as jest.Mock;
-const mockChangeCaseOwner = caseMemberService.changeCaseOwner as jest.Mock;
+vi.mock('@/src/services/caseMemberService');
+const mockFetchCaseMembers = caseMemberService.fetchCaseMembers as vi.Mock;
+const mockRemoveCaseMember = caseMemberService.removeCaseMember as vi.Mock;
+const mockChangeCaseOwner = caseMemberService.changeCaseOwner as vi.Mock;
 
 // Mock useSnackbar
-jest.mock('@/src/contexts/SnackbarContext');
-const mockShowSuccess = jest.fn();
-const mockShowError = jest.fn();
+vi.mock('@/src/contexts/SnackbarContext');
+const mockShowSuccess = vi.fn();
+const mockShowError = vi.fn();
 
 // Mock useTranslation - basic mock, extend if more specific translations are needed
-jest.mock('react-i18next', () => ({
+vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, defaultValue?: string) => defaultValue || key,
   }),
@@ -40,16 +41,16 @@ const renderWithAuth = (ui: React.ReactElement, authContextValue: Partial<AuthCo
     isLoggedIn: true,
     user: null,
     oidcUser: null,
-    setAuthState: jest.fn(),
-    logout: jest.fn(),
+    setAuthState: vi.fn(),
+    logout: vi.fn(),
     isLoading: false,
     selectedCaseId: mockCaseId,
     userCases: [],
     currentUserCaseRoles: [],
     isCaseLoading: false,
-    selectCase: jest.fn(),
+    selectCase: vi.fn(),
     hasRole: (roleName: string) => authContextValue.user?.github_id === 'ownergh' && roleName === 'case_manager', // Example role check
-    refreshUserCasesAndRoles: jest.fn(),
+    refreshUserCasesAndRoles: vi.fn(),
     navMenuItems: [],
     isMenuLoading: false,
     ...authContextValue, // Spread provided values, overriding defaults
@@ -86,14 +87,14 @@ describe('CaseMemberTab', () => {
   let currentMockMembers: CaseMember[];
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     currentMockMembers = JSON.parse(JSON.stringify(initialMockMembers)); // Deep copy for mutable tests
     mockFetchCaseMembers.mockImplementation(async () => {
       return JSON.parse(JSON.stringify(currentMockMembers)); // Return deep copy
     });
     mockRemoveCaseMember.mockResolvedValue(undefined);
     mockChangeCaseOwner.mockResolvedValue(undefined);
-    (useSnackbar as jest.Mock).mockReturnValue({ showSuccess: mockShowSuccess, showError: mockShowError });
+    (useSnackbar as vi.Mock).mockReturnValue({ showSuccess: mockShowSuccess, showError: mockShowError });
 
 
     mockAuthContextValue = {
