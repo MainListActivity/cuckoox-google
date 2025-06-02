@@ -137,8 +137,8 @@ const CaseSelectionPage: React.FC = () => {
     
     try {
       await selectCase(caseToSelect.id.toString());
-      // Refresh user cases and roles after selection
-      await refreshUserCasesAndRoles();
+      // The line below was removed as per instruction to fix redirect issue
+      // await refreshUserCasesAndRoles();
       
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
