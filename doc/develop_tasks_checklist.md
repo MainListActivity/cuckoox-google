@@ -141,6 +141,23 @@ This checklist outlines the development tasks required to build the CuckooX plat
         - [ ] Write unit tests for `CaseMemberTab.tsx`, `AddCaseMemberDialog.tsx`, `ConfirmRemoveMemberDialog.tsx`.
         - [ ] Write unit tests for `caseMemberService.ts` functions (mocking API responses).
         - [ ] Write unit tests for any new context/store reducers/actions related to case members.
+    - [ ] **Change Case Owner Functionality:**
+        - [ ] **Service Layer (`caseMemberService.ts`):**
+            - [ ] Implement `changeCaseOwner(caseId: string, newOwnerUserId: string, currentOwnerUserId: string): Promise<void>`.
+                - [ ] Mock logic: In `mockCaseMembersDB`, find the `newOwnerUserId` for the `caseId` and change their `roleInCase` to 'owner'.
+                - [ ] Find the `currentOwnerUserId` for the `caseId` and change their `roleInCase` to 'member'.
+                - [ ] Ensure only one 'owner' per case remains in the mock data.
+        - [ ] **UI Implementation (`CaseMemberTab.tsx`):**
+            - [ ] For each member in the list who is not the `currentUserId` and not already an 'owner':
+                - [ ] If the current user *is* the 'owner', add a UI element (e.g., an option in a `MoreVert` IconButton menu, or a dedicated button/icon like `mdiAccountStar`) labeled "Make Owner" / "指定为新的拥有人".
+            - [ ] Clicking this action should open a confirmation dialog: "您确定要将 [Member Name] 指定为新的案件拥有人吗？您将变为普通成员。" (Are you sure you want to make [Member Name] the new case owner? You will become a regular member.)
+            - [ ] Upon confirmation, call `caseMemberService.changeCaseOwner` with `caseId`, the target member's ID, and the current owner's ID.
+            - [ ] On successful API call, refresh the member list (call `loadMembers()`) to reflect the role changes.
+            - [ ] Display appropriate success or error notifications.
+        - [ ] **State Management & UI Updates (`CaseMemberTab.tsx` & `AuthContext` if applicable):**
+            - [ ] After changing owner and refreshing members, ensure the `isOwner` derived state in `CaseMemberTab.tsx` updates correctly. If the current user was the owner and transferred ownership, they should no longer see owner controls.
+            - [ ] If the current user *becomes* the owner (though this flow is initiated by an existing owner), their UI should update to show owner controls (this scenario is less direct, as the action is on another user).
+            - [ ] Consider if `AuthContext` needs any specific update if the current user's role within the *currently selected case* changes so drastically (e.g., from owner to member). For now, a refresh of case-specific data in `CaseMemberTab` might be sufficient.
 
 ## 3. 债权人管理 (Creditor Management)
 

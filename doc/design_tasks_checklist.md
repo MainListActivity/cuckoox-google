@@ -95,6 +95,13 @@
             - [ ] Clicking the remove button triggers a confirmation modal.
                 - [ ] *Note: Confirmation dialog should be Material Design compliant. Example text: "您确定要移除该成员吗？此操作无法撤销。" Buttons: "确认移除", "取消".*
             - [ ] Design feedback message upon successful removal or error.
+        - [ ] **2.7.4. 变更拥有人界面 (Change Owner UI):**
+            - [ ] Design an action/option (e.g., a menu item like '指定为新的拥有人' or 'Make Owner' using a relevant vector icon like `mdiAccountStar` or `mdiCrown`) next to each 'Case Member' in the member list.
+                - [ ] *Note: This action should only be visible to the current 'Case Owner'.*
+                - [ ] *Note: This action should not be available for the 'Case Owner' themselves or for members who are already 'Case Owner' (if multiple owners were ever allowed, though current product doc implies single owner).*
+            - [ ] This action should trigger a confirmation dialog (e.g., '您确定要将 [Member Name] 指定为新的案件拥有人吗？您将变为普通成员。').
+                - [ ] *Note: Dialog should be Material Design compliant. Buttons: "确认变更", "取消".*
+            - [ ] Upon confirmation, the UI should reflect the role changes in the member list immediately (or after a refresh), updating both the previous and new owner's displayed roles.
 
 - [x] **3. 债权人管理 (Creditor Management)**
     - [x] **Note:** All views within this module must be responsive, use Tailwind CSS, support dark/light modes, and use vector icons.

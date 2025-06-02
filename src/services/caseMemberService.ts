@@ -104,3 +104,47 @@ export const searchSystemUsers = async (query: string): Promise<SystemUser[]> =>
     (user.email && user.email.toLowerCase().includes(query.toLowerCase()))
   );
 };
+
+export const changeCaseOwner = async (caseId: string, newOwnerUserId: string, oldOwnerUserId: string): Promise<void> => {
+  console.log(`[Mock API] Changing owner for case ${caseId}. New owner: ${newOwnerUserId}, Old owner: ${oldOwnerUserId}`);
+  await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
+
+  // It's crucial to modify the actual objects in mockCaseMembersDB for changes to persist in the mock.
+  let newOwnerFound = false;
+  let oldOwnerDemoted = false;
+
+  mockCaseMembersDB.forEach(member => {
+    if (member.caseId === caseId) {
+      if (member.id === newOwnerUserId) {
+        if (member.roleInCase === 'owner') {
+          // Target is already an owner, this shouldn't happen if UI is correct
+          console.warn(`[Mock API] User ${newOwnerUserId} is already an owner of case ${caseId}. No change made to this user.`);
+          // throw new Error('Target user is already an owner.'); // Or handle more gracefully
+        }
+        member.roleInCase = 'owner';
+        newOwnerFound = true;
+        console.log(`[Mock API] User ${newOwnerUserId} is now owner of case ${caseId}`);
+      } else if (member.id === oldOwnerUserId) {
+        if (member.roleInCase !== 'owner') {
+          // This implies the current user (initiator) was not an owner, which UI should prevent.
+          console.warn(`[Mock API] User ${oldOwnerUserId} was not an owner of case ${caseId}. Role changed to member anyway.`);
+        }
+        member.roleInCase = 'member'; // Demote old owner to member
+        oldOwnerDemoted = true;
+        console.log(`[Mock API] User ${oldOwnerUserId} is now member of case ${caseId}`);
+      }
+    }
+  });
+
+  if (!newOwnerFound) {
+    console.error(`[Mock API] New owner (userId: ${newOwnerUserId}) not found in case ${caseId}.`);
+    throw new Error('New potential owner not found in the case.');
+  }
+  if (!oldOwnerDemoted && oldOwnerUserId !== newOwnerUserId) { // oldOwnerUserId could be same if an admin is forcing an owner on a caseless user.
+    // This case might be less critical if we allow an admin to force change owner,
+    // but for user-initiated transfer, old owner must exist and be demoted.
+    console.warn(`[Mock API] Old owner (userId: ${oldOwnerUserId}) was not found or not demoted in case ${caseId}. This might be an issue if it wasn't intended.`);
+    // For a stricter mock, you might throw: throw new Error('Current owner not found or not demoted in the case.');
+  }
+  return;
+};
