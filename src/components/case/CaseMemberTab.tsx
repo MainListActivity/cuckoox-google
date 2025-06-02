@@ -19,13 +19,25 @@ import {
   Divider,
   Paper,
   Tooltip,
+  Menu, // Added for action menu
+  MenuItem, // Added for action menu
+  ListItemIcon, // Added for menu item icons
 } from '@mui/material';
-import { Add as AddIcon, Delete as DeleteIcon, AdminPanelSettings as AdminIcon, Person as PersonIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  AdminPanelSettings as AdminIcon,
+  Person as PersonIcon,
+  MoreVert as MoreVertIcon, // Added for action menu
+  SupervisorAccount as MakeOwnerIcon, // Added for make owner action
+} from '@mui/icons-material';
 import { CaseMember } from '@/src/types/caseMember';
-import { fetchCaseMembers, removeCaseMember } from '@/src/services/caseMemberService';
+import { fetchCaseMembers, removeCaseMember, changeCaseOwner } from '@/src/services/caseMemberService'; // Added changeCaseOwner
 import AddCaseMemberDialog from './AddCaseMemberDialog';
-import { useAuth } from '@/src/contexts/AuthContext'; // Import useAuth
-import { useMemo } from 'react'; // Import useMemo
+import { useAuth } from '@/src/contexts/AuthContext';
+import { useMemo, useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
+import { useTranslation } from 'react-i18next'; // For i18n
+import { useSnackbar } from '@/src/contexts/SnackbarContext'; // For notifications
 
 interface CaseMemberTabProps {
   caseId: string;
@@ -40,11 +52,22 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
+
+  // State for Remove Member Dialog
   const [removeConfirmDialogOpen, setRemoveConfirmDialogOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<CaseMember | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
 
-  // Determine if the current user is an owner of this case
+  // State for Change Owner Menu & Dialog
+  const [anchorEl, setAnchorEl] = ReactUseState<null | HTMLElement>(null);
+  const [selectedMemberForMenu, setSelectedMemberForMenu] = ReactUseState<CaseMember | null>(null);
+  const [changeOwnerConfirmDialogOpen, setChangeOwnerConfirmDialogOpen] = ReactUseState(false);
+  const [isChangingOwner, setIsChangingOwner] = ReactUseState(false);
+
+  const { t } = useTranslation(); // For i18n
+  const { showSuccess, showError } = useSnackbar(); // For notifications
+
+
   const isOwner = useMemo(() => {
     if (!currentUserId || !members || members.length === 0) return false;
     return members.some(member => member.id === currentUserId && member.roleInCase === 'owner');
@@ -59,11 +82,12 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
       setMembers(fetchedMembers);
     } catch (err) {
       console.error('Failed to fetch case members:', err);
-      setError((err as Error).message || 'Failed to load members.');
+      setError((err as Error).message || t('case_members_error_load_failed', 'Failed to load members.'));
+      showError(t('case_members_error_load_failed', 'Failed to load members.'));
     } finally {
       setIsLoading(false);
     }
-  }, [caseId]);
+  }, [caseId, t, showError]);
 
   useEffect(() => {
     if (caseId) {
@@ -71,47 +95,78 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     }
   }, [caseId, loadMembers]);
 
-  const handleOpenAddMemberDialog = () => {
-    setAddMemberDialogOpen(true);
-  };
-
-  const handleCloseAddMemberDialog = () => {
-    setAddMemberDialogOpen(false);
-  };
-
+  // Add Member Dialog Handlers
+  const handleOpenAddMemberDialog = () => setAddMemberDialogOpen(true);
+  const handleCloseAddMemberDialog = () => setAddMemberDialogOpen(false);
   const handleMemberAdded = (newMember: CaseMember) => {
-    // Optimistically update UI or re-fetch
-    // setMembers(prev => [...prev, newMember]);
-    loadMembers(); // Re-fetch for simplicity in mock environment
+    loadMembers();
     setAddMemberDialogOpen(false);
+    showSuccess(t('case_members_success_added', `${newMember.userName} has been added.`));
   };
 
+  // Remove Member Dialog Handlers
   const handleOpenRemoveConfirmDialog = (member: CaseMember) => {
     setMemberToRemove(member);
     setRemoveConfirmDialogOpen(true);
   };
-
   const handleCloseRemoveConfirmDialog = () => {
     setMemberToRemove(null);
     setRemoveConfirmDialogOpen(false);
   };
-
   const handleRemoveMember = async () => {
     if (!memberToRemove) return;
-
     setIsRemovingMember(true);
     setError(null);
     try {
       await removeCaseMember(caseId, memberToRemove.id);
-      // Optimistically update UI or re-fetch
-      // setMembers(prev => prev.filter(m => m.id !== memberToRemove.id));
-      loadMembers(); // Re-fetch
+      loadMembers();
+      showSuccess(t('case_members_success_removed', `${memberToRemove.userName} has been removed.`));
     } catch (err) {
       console.error('Failed to remove member:', err);
-      setError((err as Error).message || 'Failed to remove member.');
+      const errorMsg = (err as Error).message || t('case_members_error_remove_failed', 'Failed to remove member.');
+      setError(errorMsg);
+      showError(errorMsg);
     } finally {
       setIsRemovingMember(false);
       handleCloseRemoveConfirmDialog();
+    }
+  };
+
+  // Change Owner Menu & Dialog Handlers
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, member: CaseMember) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedMemberForMenu(member);
+  };
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedMemberForMenu(null);
+  };
+  const handleOpenChangeOwnerConfirmDialog = () => {
+    if (!selectedMemberForMenu) return;
+    setChangeOwnerConfirmDialogOpen(true);
+    handleMenuClose(); // Close the menu
+  };
+  const handleCloseChangeOwnerConfirmDialog = () => {
+    setChangeOwnerConfirmDialogOpen(false);
+    setSelectedMemberForMenu(null); // Clear selection
+  };
+
+  const handleChangeOwner = async () => {
+    if (!selectedMemberForMenu || !currentUserId) return;
+    setIsChangingOwner(true);
+    setError(null);
+    try {
+      await changeCaseOwner(caseId, selectedMemberForMenu.id, currentUserId);
+      loadMembers();
+      showSuccess(t('case_members_success_owner_changed', `Ownership transferred to ${selectedMemberForMenu.userName}.`));
+    } catch (err) {
+      console.error('Failed to change owner:', err);
+      const errorMsg = (err as Error).message || t('case_members_error_owner_change_failed', 'Failed to change owner.');
+      setError(errorMsg);
+      showError(errorMsg);
+    } finally {
+      setIsChangingOwner(false);
+      handleCloseChangeOwnerConfirmDialog();
     }
   };
 
@@ -163,67 +218,152 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
           {members.map((member) => (
             <ListItem
               key={member.id}
-              secondaryAction={
-                isOwner && currentUserId && member.id !== currentUserId ? (
-                  // Owner can remove other members.
-                  // Backend will prevent removing last owner.
-                  <Tooltip title="Remove member">
-                    <IconButton edge="end" aria-label="delete" onClick={() => handleOpenRemoveConfirmDialog(member)}>
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
-                ) : null
-              }
+              disablePadding
               sx={{ '&:hover': { backgroundColor: 'action.hover' }, borderRadius: 1, mb: 1 }}
             >
-              <ListItemAvatar>
+              <ListItemAvatar sx={{pl:1.5}}>
                 <Avatar src={member.avatarUrl}>
-                    {/* Display AdminIcon if owner, PersonIcon otherwise */}
                     {member.roleInCase === 'owner' ? <AdminIcon /> : <PersonIcon />}
                 </Avatar>
               </ListItemAvatar>
               <ListItemText
-                primary={member.userName}
+                primary={
+                  <Box component="span" display="flex" alignItems="center">
+                    {member.userName}
+                    {member.roleInCase === 'owner' && (
+                      <Chip icon={<AdminIcon />} label={t('role_owner', 'Owner')} size="small" color="primary" sx={{ ml: 1 }} variant="outlined"/>
+                    )}
+                     {member.roleInCase === 'member' && (
+                      <Chip icon={<PersonIcon />} label={t('role_member', 'Member')} size="small" sx={{ ml: 1 }} variant="outlined"/>
+                    )}
+                  </Box>
+                }
                 secondary={
                   <>
-                    <Typography component="span" variant="body2" color="text.primary">
-                      {member.roleInCase === 'owner' ? 'Case Owner' : 'Case Member'}
-                    </Typography>
-                    {member.userEmail && ` - ${member.userEmail}`}
+                    {member.userEmail || t('no_email_provided', 'No email provided')}
                   </>
                 }
               />
+              {isOwner && currentUserId && member.id !== currentUserId && (
+                <Box>
+                  <Tooltip title={t('actions_tooltip', "Actions")}>
+                    <IconButton edge="end" aria-label="actions" onClick={(e) => handleMenuOpen(e, member)}>
+                      <MoreVertIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              )}
             </ListItem>
           ))}
         </List>
       )}
 
-      {caseId && <AddCaseMemberDialog // Ensure caseId is available before rendering dialog
+      {/* Action Menu for each member */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        PaperProps={{
+            elevation: 1,
+            sx: {
+              overflow: 'visible',
+              filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+              mt: 1.5,
+              '& .MuiAvatar-root': {
+                width: 32,
+                height: 32,
+                ml: -0.5,
+                mr: 1,
+              },
+              '&:before': {
+                content: '""',
+                display: 'block',
+                position: 'absolute',
+                top: 0,
+                right: 14,
+                width: 10,
+                height: 10,
+                bgcolor: 'background.paper',
+                transform: 'translateY(-50%) rotate(45deg)',
+                zIndex: 0,
+              },
+            },
+          }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        {selectedMemberForMenu?.roleInCase === 'member' && (
+           <MenuItem onClick={handleOpenChangeOwnerConfirmDialog}>
+            <ListItemIcon>
+              <MakeOwnerIcon fontSize="small" />
+            </ListItemIcon>
+            {t('make_owner_action', 'Make Case Owner')}
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => {
+          if (selectedMemberForMenu) handleOpenRemoveConfirmDialog(selectedMemberForMenu);
+          handleMenuClose();
+        }}>
+          <ListItemIcon>
+            <DeleteIcon fontSize="small" color="error"/>
+          </ListItemIcon>
+          <Typography color="error">{t('remove_member_action', 'Remove Member')}</Typography>
+        </MenuItem>
+      </Menu>
+
+
+      {caseId && <AddCaseMemberDialog
         open={addMemberDialogOpen}
         onClose={handleCloseAddMemberDialog}
         caseId={caseId}
         onMemberAdded={handleMemberAdded}
       />}
 
+      {/* Remove Member Confirmation Dialog */}
       {memberToRemove && (
         <Dialog
           open={removeConfirmDialogOpen}
           onClose={handleCloseRemoveConfirmDialog}
-          aria-labelledby="alert-dialog-title"
-          aria-describedby="alert-dialog-description"
+          aria-labelledby="remove-confirm-dialog-title"
+          aria-describedby="remove-confirm-dialog-description"
         >
-          <DialogTitle id="alert-dialog-title">Confirm Removal</DialogTitle>
+          <DialogTitle id="remove-confirm-dialog-title">{t('confirm_removal_title', 'Confirm Removal')}</DialogTitle>
           <DialogContent>
-            <DialogContentText id="alert-dialog-description">
-              Are you sure you want to remove <strong>{memberToRemove.userName}</strong> from this case?
+            <DialogContentText id="remove-confirm-dialog-description">
+              {t('confirm_removal_text', `Are you sure you want to remove ${memberToRemove.userName} from this case?`)}
             </DialogContentText>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseRemoveConfirmDialog} disabled={isRemovingMember}>
-              Cancel
+              {t('cancel_button', 'Cancel')}
             </Button>
             <Button onClick={handleRemoveMember} color="error" autoFocus disabled={isRemovingMember}>
-              {isRemovingMember ? <CircularProgress size={24} /> : 'Remove'}
+              {isRemovingMember ? <CircularProgress size={24} /> : t('remove_button', 'Remove')}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      )}
+
+      {/* Change Owner Confirmation Dialog */}
+      {selectedMemberForMenu && (
+        <Dialog
+          open={changeOwnerConfirmDialogOpen}
+          onClose={handleCloseChangeOwnerConfirmDialog}
+          aria-labelledby="change-owner-confirm-dialog-title"
+          aria-describedby="change-owner-confirm-dialog-description"
+        >
+          <DialogTitle id="change-owner-confirm-dialog-title">{t('confirm_change_owner_title', 'Confirm Ownership Change')}</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="change-owner-confirm-dialog-description">
+              {t('confirm_change_owner_text', `Are you sure you want to make ${selectedMemberForMenu.userName} the new case owner? You will become a regular member.`)}
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseChangeOwnerConfirmDialog} disabled={isChangingOwner}>
+             {t('cancel_button', 'Cancel')}
+            </Button>
+            <Button onClick={handleChangeOwner} color="primary" autoFocus disabled={isChangingOwner}>
+              {isChangingOwner ? <CircularProgress size={24} /> : t('confirm_change_button', 'Confirm Change')}
             </Button>
           </DialogActions>
         </Dialog>

@@ -51,6 +51,7 @@ import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/Modify
 import MeetingMinutesDialog from '@/src/components/case/MeetingMinutesDialog'; // Corrected path
 import type { QuillDelta } from '@/src/components/RichTextEditor'; // Import QuillDelta type
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Added for showSuccess
+import { useAuth } from '@/src/contexts/AuthContext'; // Added for permission check
 import CaseMemberTab from '@/src/components/case/CaseMemberTab'; // Added for Case Member Management
 
 // Define interfaces based on your SurrealDB schema
@@ -97,6 +98,7 @@ const CaseDetailPage: React.FC = () => {
   const { t } = useTranslation(); 
   const { id } = useParams<{ id: string }>();
   const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const { user, hasRole } = useAuth(); // Added hasRole for permission check
   const [caseDetail, setCaseDetail] = useState<Case | null>(null);
   const [caseLeadName, setCaseLeadName] = useState<string>('');
   const [filingMaterialContent, setFilingMaterialContent] = useState<string>('');
@@ -407,15 +409,16 @@ const CaseDetailPage: React.FC = () => {
                       {t('case_detail_actions_meeting_minutes_button')}
                     </Button>
                   )}
-                  {/* // TODO: Access Control - Visibility and enabled state depend on user role and case status. */}
-                  <Button 
-                    variant="contained" 
-                    color="secondary"
-                    startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
-                    onClick={handleOpenModifyStatus}
-                  >
-                    {t('case_detail_actions_change_status_button')}
-                  </Button>
+                  {hasRole('case_manager') && displayCase.current_stage !== t('case_status_closed', '结案') && (
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
+                      onClick={handleOpenModifyStatus}
+                    >
+                      {t('case_detail_actions_change_status_button')}
+                    </Button>
+                  )}
                 </Box>
               </CardContent>
             </Card>
