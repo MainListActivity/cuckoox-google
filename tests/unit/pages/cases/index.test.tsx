@@ -7,7 +7,21 @@ import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/src/i18n';
 import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
-import { SurrealContext, SurrealContextType } from '@/src/contexts/SurrealProvider'; // Added
+import { Context as SurrealContext, useSurreal } from '@/src/contexts/SurrealProvider';
+import type Surreal from 'surrealdb';
+
+// Define the context type based on the SurrealProvider implementation
+interface SurrealContextType {
+  surreal: Surreal;
+  isConnecting: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  error: Error | null;
+  connect: () => Promise<boolean>;
+  disconnect: () => Promise<void>;
+  signin: (auth: any) => Promise<any>;
+  signout: () => Promise<void>;
+}
 
 // Mock child components (Dialogs)
 vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
@@ -118,13 +132,15 @@ describe('CaseListPage', () => {
         authenticate: vi.fn(),
         sync: vi.fn(),
         close: vi.fn(),
-      },
-      isConnected: true,
-      isLoading: false,
+      } as any,
+      isConnecting: false,
+      isSuccess: true,
+      isError: false,
       error: null,
-      dbInfo: null,
-      connect: vi.fn(),
-      signout: vi.fn(),
+      connect: vi.fn().mockResolvedValue(true),
+      disconnect: vi.fn().mockResolvedValue(undefined),
+      signin: vi.fn().mockResolvedValue({}),
+      signout: vi.fn().mockResolvedValue(undefined),
     };
     // Any other necessary resets
   });
