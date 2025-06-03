@@ -20,7 +20,7 @@ const LoginPage = React.lazy(() => import('@/src/pages/login'));
 const DashboardPage = React.lazy(() => import('@/src/pages/dashboard/index'));
 const CaseListPage = React.lazy(() => import('@/src/pages/cases/index'));
 const CaseDetailPage = React.lazy(() => import('@/src/pages/cases/[caseId]'));
-const CreditorListPage = React.lazy(() => import('@/src/pages/creditors'));
+const CreditorListPage = React.lazy(() => import('@/src/pages/creditors/index')); // MODIFIED PATH
 const ClaimListPage = React.lazy(() => import('@/src/pages/claims/index'));
 const ClaimSubmissionPage = React.lazy(() => import('@/src/pages/claims/submit'));
 const ClaimAttachmentPage = React.lazy(() => import('@/src/pages/claims/attachment'));

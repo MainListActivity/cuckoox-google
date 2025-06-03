@@ -33,6 +33,7 @@ export interface Case {
   id: RecordId; // e.g., case:xxxx
   name: string;
   case_number?: string;
+  status?: string; // For case process status, e.g., "立案"
   // Add other case properties as needed
 }
 
@@ -71,9 +72,14 @@ interface AuthContextType {
   // Menu specific state and functions
   navMenuItems: NavItemType[] | null;
   isMenuLoading: boolean;
+
+  // Navigation state
+  navigateTo: string | null;
+  clearNavigateTo: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const CREDITOR_MANAGEMENT_PATH = '/creditors'; // Define target path
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const {surreal:client,signout} = useSurreal(); // ADDED
@@ -88,6 +94,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isCaseLoading, setIsCaseLoading] = useState<boolean>(false);
   const [navMenuItems, setNavMenuItems] = useState<NavItemType[] | null>(null);
   const [isMenuLoading, setIsMenuLoading] = useState<boolean>(false);
+  const [navigateTo, setNavigateTo] = useState<string | null>(null); // Navigation state
+
+  const clearNavigateTo = () => setNavigateTo(null);
 
   useEffect(() => {
     const checkCurrentUser = async () => {
@@ -466,6 +475,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [selectedCaseId, currentUserCaseRoles, user]); // Added user as dependency
 
+  // Effect for automatic navigation to creditor management
+  useEffect(() => {
+    if (isLoggedIn && selectedCaseId && userCases.length > 0 && navMenuItems && !isCaseLoading && !isMenuLoading) {
+      const selectedCase = userCases.find(c => c.id.toString() === selectedCaseId);
+      if (selectedCase && selectedCase.status === '立案') {
+        const canNavigateToCreditors = navMenuItems.some(item => item.path === CREDITOR_MANAGEMENT_PATH);
+        if (canNavigateToCreditors) {
+          // Check if already on the creditors page to prevent navigation loop
+          // This requires access to current location, which is not ideal in context.
+          // The consuming component (App.tsx) will handle preventing re-navigation if already there.
+          setNavigateTo(CREDITOR_MANAGEMENT_PATH);
+        }
+      }
+    }
+  }, [isLoggedIn, selectedCaseId, userCases, navMenuItems, isCaseLoading, isMenuLoading]);
+
+
   const hasRole = (roleName: string): boolean => {
     if (roleName === 'admin') {
       return user ? user.github_id === '--admin--' : false;
@@ -481,7 +507,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <AuthContext.Provider value={{ 
       isLoggedIn, user, oidcUser, setAuthState, logout, isLoading,
       selectedCaseId, userCases, currentUserCaseRoles, isCaseLoading, selectCase, hasRole, refreshUserCasesAndRoles,
-      navMenuItems, isMenuLoading // Expose new menu state
+      navMenuItems, isMenuLoading, // Expose new menu state
+      navigateTo, clearNavigateTo // Expose navigation state and clear function
     }}>
       {children}
     </AuthContext.Provider>
