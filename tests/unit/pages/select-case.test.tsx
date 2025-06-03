@@ -35,11 +35,14 @@ vi.mock('react-i18next', () => ({
 
 // Mock react-router-dom
 const mockNavigate = vi.fn(); // Use vi.fn()
-vi.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'), // Keep this if you only want to mock parts
-  useNavigate: () => mockNavigate,
-  useLocation: () => ({ state: null, pathname: '/select-case' }),
-}));
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => ({ state: null, pathname: '/select-case' }),
+  };
+});
 
 const mockUser: AppUser = {
   id: 'user:testUser' as unknown as RecordId, // Casting for simplicity
@@ -117,20 +120,18 @@ describe('CaseSelectionPage', () => {
 
     mockSurrealContextValue = {
       surreal: {
-        query: vi.fn().mockImplementation((query) => { // Use vi.fn()
-          // This mock simulates the query made by CaseSelectionPage to fetch cases
-          // It should return an array, where the first element is the array of results
-          if (query.includes('SELECT id, name, case_number, case_procedure, procedure_phase, acceptance_date, case_manager_name FROM case WHERE id IN')) {
-            return Promise.resolve([mockCases]); // Simulate successful case data fetch
+        query: vi.fn().mockImplementation(async (queryString) => {
+          // New query fetches directly from 'case' table
+          if (queryString.trim().toUpperCase().startsWith('SELECT') && queryString.trim().toUpperCase().endsWith('FROM CASE;')) {
+            // Default behavior: return mockCases
+            // Specific tests can override this with .mockResolvedValueOnce for different scenarios
+            return Promise.resolve([mockCases]);
           }
-          // This mock simulates the query made by CaseSelectionPage to fetch user_case_role
-           if (query.includes('FROM user_case_role WHERE user_id =')) {
-            return Promise.resolve([mockCases.map(c => ({ case_id: c.id.toString() }))]);
-          }
-          return Promise.resolve([[]]); // Default empty result
+          // Fallback for any other queries, though this test should only make the one above.
+          return Promise.resolve([[]]);
         }),
-        select: vi.fn(), // Use vi.fn()
-        create: vi.fn(), // Use vi.fn()
+        select: vi.fn(),
+        create: vi.fn(),
         update: vi.fn(), // Use vi.fn()
         merge: vi.fn(), // Use vi.fn()
         delete: vi.fn(), // Use vi.fn()
@@ -176,17 +177,16 @@ describe('CaseSelectionPage', () => {
   });
 
   test('renders no cases available message', async () => {
-    mockSurrealContextValue.surreal.query = vi.fn() // Use vi.fn()
-        .mockResolvedValueOnce([[]]) // For user_case_role query
-        .mockResolvedValueOnce([[]]); // For case details query
+    // Override the default mock for this specific test
+    (mockSurrealContextValue.surreal.query as vi.Mock).mockResolvedValueOnce([[]]);
     renderWithProviders(<CaseSelectionPage />);
     await waitFor(() => {
       expect(screen.getByText('You have not been assigned to any cases.')).toBeInTheDocument();
     });
   });
 
-  test('handles error when fetching user_case_role', async () => {
-    mockSurrealContextValue.surreal.query = vi.fn().mockRejectedValueOnce(new Error('DB Error fetching user_case_role')); // Use vi.fn()
+  test('handles error when fetching cases', async () => { // Renamed test
+    (mockSurrealContextValue.surreal.query as vi.Mock).mockRejectedValueOnce(new Error('DB Error fetching cases'));
     renderWithProviders(<CaseSelectionPage />);
     await waitFor(() => {
       expect(screen.getByText('Failed to load case list.')).toBeInTheDocument();
@@ -194,17 +194,7 @@ describe('CaseSelectionPage', () => {
     });
   });
 
-  test('handles error when fetching case details', async () => {
-    // First query for user_case_role succeeds
-    mockSurrealContextValue.surreal.query = vi.fn() // Use vi.fn()
-        .mockResolvedValueOnce([mockCases.map(c => ({ case_id: c.id.toString() }))]) // user_case_role
-        .mockRejectedValueOnce(new Error('DB Error fetching case details')); // case details
-    renderWithProviders(<CaseSelectionPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Failed to load case list.')).toBeInTheDocument();
-      expect(mockSnackbarContextValue.showError).toHaveBeenCalledWith('Failed to load case list.');
-    });
-  });
+  // Removed 'handles error when fetching case details' as it's redundant with the new query structure
 
   test('displays cases and allows selection', async () => {
     renderWithProviders(<CaseSelectionPage />);

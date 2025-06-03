@@ -72,9 +72,9 @@ describe('ClaimListPage (Admin Claim Review)', () => {
         expect(screen.getByRole('button', { name: /批量驳回/i })).toBeInTheDocument();
 
         // Check for some table headers (MUI specific query might be needed if labels are complex)
-        expect(screen.getByText('债权人信息')).toBeInTheDocument();
-        expect(screen.getByText('债权编号')).toBeInTheDocument();
-        expect(screen.getByText('审核状态')).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: '债权人信息' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: '债权编号' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: '审核状态' })).toBeInTheDocument(); // More specific query for header
 
         // Check for some mock data rendering
         expect(screen.getByText('Acme Corp (组织)')).toBeInTheDocument();
@@ -173,10 +173,11 @@ describe('ClaimListPage (Admin Claim Review)', () => {
 
             fireEvent.click(screen.getByRole('button', { name: /批量驳回/i }));
 
-            const dialogTitle = await screen.findByText('批量驳回原因');
+            // More specific query for dialog title
+            const dialogTitle = await screen.findByRole('heading', { name: '批量驳回原因' });
             expect(dialogTitle).toBeInTheDocument();
 
-            const reasonTextarea = screen.getByLabelText(/驳回原因/i) as HTMLTextAreaElement;
+            const reasonTextarea = screen.getByLabelText(/驳回原因/i) as HTMLTextAreaElement; // This should be specific enough
             fireEvent.change(reasonTextarea, { target: { value: 'Test Rejection Reason' } });
 
             const confirmButton = screen.getByRole('button', { name: /确认驳回/i });
@@ -197,14 +198,23 @@ describe('ClaimListPage (Admin Claim Review)', () => {
     // Row Actions Test
     it('navigates to review page when review/view link is clicked', () => {
         renderComponent();
-        // Find the first "审核债权" or "查看详情" link/button
-        const reviewLink = screen.getAllByRole('link').find(link =>
-            link.getAttribute('href')?.includes('/admin/claims/')
+    // Find the row for "CL-2023-001" which corresponds to claim001
+    const claimRow = screen.getAllByRole('row').find(row => row.textContent?.includes('CL-2023-001'));
+    expect(claimRow).toBeDefined();
+
+    // Find the review/details link within that specific row
+    // This assumes the link has text "审核债权" or "查看详情" or a specific href structure.
+    // Adjust if the link text or role is different (e.g., a button with an icon).
+    const reviewLink = within(claimRow!).getAllByRole('link').find(link =>
+      link.getAttribute('href') === `/admin/claims/claim001/review` ||
+      link.textContent?.includes('审核债权') ||
+      link.textContent?.includes('查看详情')
         );
+    // A more robust query might be getByRole('link', { name: /审核债权|查看详情/i }) if text is reliable
+
         expect(reviewLink).toBeDefined();
         fireEvent.click(reviewLink!);
 
-        // Example: for claim001 (first in mock data)
         expect(mockNavigate).toHaveBeenCalledWith('/admin/claims/claim001/review');
     });
 });

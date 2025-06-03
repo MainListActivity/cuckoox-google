@@ -76,22 +76,27 @@ const CaseSelectionPage: React.FC = () => {
       setError(null);
 
       try {
-        // Query to get all cases the user is associated with, including case details
+        // Query to get all accessible cases directly
         const query = `
           SELECT 
-            case_id.* as case_details,
-            role_id.name as role_name
-          FROM user_case_role 
-          WHERE user_id = $userId
-          FETCH case_id, role_id
+            id,
+            name,
+            case_number,
+            case_procedure,
+            procedure_phase,
+            acceptance_date,
+            case_manager_name,
+            created_at,
+            updated_at
+          FROM case;
         `;
         
-        const result = await client.query(query, { userId: user.id });
+        const result = await client.query(query); // Removed userId parameter
         
         if (result && result[0] && Array.isArray(result[0])) {
           // Transform the results to match our ExtendedCase interface
-          const userCases: ExtendedCase[] = result[0].map((item: any) => {
-            const caseDetails = item.case_details || {};
+          // Each item in result[0] is now directly a case object
+          const userCases: ExtendedCase[] = result[0].map((caseDetails: any) => {
             return {
               id: caseDetails.id,
               name: caseDetails.name || t('unnamed_case', '未命名案件'),
@@ -105,7 +110,7 @@ const CaseSelectionPage: React.FC = () => {
             };
           });
 
-          // Remove duplicates (in case user has multiple roles in same case)
+          // Remove duplicates (though less likely with direct case query, kept for safety)
           const uniqueCases = Array.from(
             new Map(userCases.map(c => [c.id.toString(), c])).values()
           );
@@ -132,8 +137,8 @@ const CaseSelectionPage: React.FC = () => {
     
     try {
       await selectCase(caseToSelect.id.toString());
-      // Refresh user cases and roles after selection
-      await refreshUserCasesAndRoles();
+      // The line below was removed as per instruction to fix redirect issue
+      // await refreshUserCasesAndRoles();
       
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });

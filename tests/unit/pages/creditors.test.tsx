@@ -11,14 +11,14 @@ import { SnackbarContext, SnackbarContextType } from '@/src/contexts/SnackbarCon
 import { RecordId } from 'surrealdb';
 
 // Mock papaparse
-jest.mock('papaparse', () => ({
-  parse: jest.fn(),
+vi.mock('papaparse', () => ({
+  parse: vi.fn(),
 }));
 
 // Mock i18n (already in other files, but good to have it explicitly for page tests too)
 // If you have a central test setup for i18n, this might not be needed in every file.
 // For this example, we keep it explicit.
-const mockT = jest.fn((key, options) => {
+const mockT = vi.fn((key, options) => {
   if (options) {
     // Crude interpolation for testing, replace with more sophisticated if needed
     let message = key;
@@ -30,7 +30,7 @@ const mockT = jest.fn((key, options) => {
   return key;
 });
 
-jest.mock('react-i18next', () => ({
+vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
   }),
@@ -39,9 +39,9 @@ jest.mock('react-i18next', () => ({
 
 
 // Mock react-router-dom (if any navigation calls are made from the page directly)
-const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', () => ({
+  ...vi.importActual('react-router-dom'),
   useNavigate: () => mockNavigate,
 }));
 
@@ -81,7 +81,7 @@ const renderCreditorListPage = () => {
 
 describe('CreditorListPage', () => {
   beforeEach(() => {
-    jest.clearAllMocks(); // Clears all mocks, including Papa.parse
+    vi.clearAllMocks(); // Clears all mocks, including Papa.parse
 
     mockAuthContextValue = {
       selectedCaseId: 'case:123' as unknown as RecordId, // Mock selected case
@@ -93,9 +93,9 @@ describe('CreditorListPage', () => {
 
     mockSurrealContextValue = {
       surreal: {
-        query: jest.fn().mockResolvedValue([[]]), // Default to empty successful fetch
-        create: jest.fn().mockResolvedValue([{ id: 'creditor:newid', ...mockCreditors[0] }]), // Mock create
-        delete: jest.fn().mockResolvedValue(undefined), // Mock delete
+        query: vi.fn().mockResolvedValue([[]]), // Default to empty successful fetch
+        create: vi.fn().mockResolvedValue([{ id: 'creditor:newid', ...mockCreditors[0] }]), // Mock create
+        delete: vi.fn().mockResolvedValue(undefined), // Mock delete
         // Add other surreal client methods if needed by the component
       },
       isConnected: true,
@@ -103,27 +103,28 @@ describe('CreditorListPage', () => {
     };
 
     mockSnackbarContextValue = {
-      showSuccess: jest.fn(),
-      showError: jest.fn(),
-      showInfo: jest.fn(),
-      showWarning: jest.fn(),
+      showSuccess: vi.fn(),
+      showError: vi.fn(),
+      showInfo: vi.fn(),
+      showWarning: vi.fn(),
     };
 
     // Reset t mock calls
     mockT.mockClear();
+    mockNavigate.mockClear(); // Reset navigation mock calls
   });
 
   describe('Initial Render & Data Fetching (Read)', () => {
     it('shows loading state initially', async () => {
       // Override surreal query to be pending indefinitely for this test
-      mockSurrealContextValue.surreal!.query = jest.fn(() => new Promise(() => {}));
+      mockSurrealContextValue.surreal!.query = vi.fn(() => new Promise(() => {}));
       renderCreditorListPage();
       expect(screen.getByText('loading_creditors', { exact: false })).toBeInTheDocument(); // Using exact:false for key
       expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
 
     it('fetches and displays creditors successfully', async () => {
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([mockCreditors]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([mockCreditors]);
       renderCreditorListPage();
 
       await waitFor(() => {
@@ -138,7 +139,7 @@ describe('CreditorListPage', () => {
 
     it('displays an error message if fetching creditors fails', async () => {
       const errorMessage = 'Failed to fetch creditors';
-      mockSurrealContextValue.surreal!.query = jest.fn().mockRejectedValueOnce(new Error(errorMessage));
+      mockSurrealContextValue.surreal!.query = vi.fn().mockRejectedValueOnce(new Error(errorMessage));
       renderCreditorListPage();
 
       await waitFor(() => {
@@ -148,7 +149,7 @@ describe('CreditorListPage', () => {
     });
 
     it('displays "no creditors found" message if fetch returns empty list', async () => {
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[]]); // Empty list
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[]]); // Empty list
       renderCreditorListPage();
 
       await waitFor(() => {
@@ -159,7 +160,7 @@ describe('CreditorListPage', () => {
     it('displays specific error if no case is selected', async () => {
         mockAuthContextValue.selectedCaseId = null;
         // query should not even be called if selectedCaseId is null by fetchCreditors logic
-        mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[]]);
+        mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[]]);
         renderCreditorListPage();
 
         await waitFor(() => {
@@ -177,7 +178,7 @@ describe('CreditorListPage', () => {
   describe('Add Creditor (Create)', () => {
     it('opens AddCreditorDialog, creates a new creditor, refreshes list, and shows success', async () => {
       // Initial fetch
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([mockCreditors]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([mockCreditors]);
       renderCreditorListPage();
       await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
 
@@ -229,10 +230,10 @@ describe('CreditorListPage', () => {
 
       // Mock the create call
       const createdRecord = { ...newCreditorData, id: 'creditor:newlyCreated', case_id: 'case:123', created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-      mockSurrealContextValue.surreal!.create = jest.fn().mockResolvedValueOnce([createdRecord]);
+      mockSurrealContextValue.surreal!.create = vi.fn().mockResolvedValueOnce([createdRecord]);
 
       // Mock the second fetchCreditors call (after successful creation)
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[...mockCreditors, createdRecord]]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[...mockCreditors, createdRecord]]);
 
       fireEvent.click(screen.getByRole('button', { name: '保存' })); // Save button in dialog
 
@@ -269,7 +270,7 @@ describe('CreditorListPage', () => {
       fireEvent.change(screen.getByLabelText(/名称/), { target: { value: newCreditorData.name } });
       fireEvent.change(screen.getByLabelText(/ID/), { target: { value: newCreditorData.identifier } });
 
-      mockSurrealContextValue.surreal!.create = jest.fn().mockRejectedValueOnce(new Error('Create failed'));
+      mockSurrealContextValue.surreal!.create = vi.fn().mockRejectedValueOnce(new Error('Create failed'));
 
       fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
@@ -285,7 +286,7 @@ describe('CreditorListPage', () => {
     it('opens AddCreditorDialog in edit mode, updates creditor, refreshes list, and shows success', async () => {
       const initialCreditor = mockCreditors[0];
       // Mock for initial fetch for this specific test
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[initialCreditor]]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[initialCreditor]]);
       renderCreditorListPage();
       await waitFor(() => expect(screen.getByText(initialCreditor.name)).toBeInTheDocument());
 
@@ -297,13 +298,13 @@ describe('CreditorListPage', () => {
       fireEvent.change(screen.getByLabelText(/名称/), { target: { value: updatedName } });
 
       // Setup mocks for the sequence: UPDATE query, then SELECT query (for refresh)
-      const updateOperationMock = jest.fn().mockResolvedValueOnce([[{ ...initialCreditor, name: updatedName }]]);
-      const refreshOperationMock = jest.fn().mockResolvedValueOnce([[{ ...initialCreditor, name: updatedName }]]);
+      const updateOperationMock = vi.fn().mockResolvedValueOnce([[{ ...initialCreditor, name: updatedName }]]);
+      const refreshOperationMock = vi.fn().mockResolvedValueOnce([[{ ...initialCreditor, name: updatedName }]]);
 
       // Chain these for subsequent calls to client.query after the initial load's query
       // The initial load has already used one 'call' to the page's client.query reference.
       // So we re-assign query to a new mock for the operations within this interaction.
-      mockSurrealContextValue.surreal!.query = jest.fn()
+      mockSurrealContextValue.surreal!.query = vi.fn()
           .mockImplementationOnce(updateOperationMock)  // For UPDATE $id MERGE $data
           .mockImplementationOnce(refreshOperationMock); // For SELECT ... (fetchCreditors)
 
@@ -335,7 +336,7 @@ describe('CreditorListPage', () => {
     it('shows error if updating creditor fails', async () => {
       const initialCreditor = mockCreditors[0];
       // Mock for initial fetch
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[initialCreditor]]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[initialCreditor]]);
       renderCreditorListPage();
       await waitFor(() => expect(screen.getByText(initialCreditor.name)).toBeInTheDocument());
 
@@ -346,7 +347,7 @@ describe('CreditorListPage', () => {
       fireEvent.change(screen.getByLabelText(/名称/), { target: { value: 'Attempted Update' } });
 
       // Mock the update call to fail. This will be the next call to query.
-      const updateFailureMock = jest.fn().mockRejectedValueOnce(new Error('Update failed'));
+      const updateFailureMock = vi.fn().mockRejectedValueOnce(new Error('Update failed'));
       mockSurrealContextValue.surreal!.query = updateFailureMock;
 
       fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -372,7 +373,7 @@ describe('CreditorListPage', () => {
     it('deletes a creditor, refreshes list, and shows success', async () => {
       const creditorToDelete = mockCreditors[0];
       // Mock for initial fetch
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[creditorToDelete, mockCreditors[1]]]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[creditorToDelete, mockCreditors[1]]]);
       renderCreditorListPage();
 
       await waitFor(() => expect(screen.getByText(creditorToDelete.name)).toBeInTheDocument());
@@ -386,11 +387,11 @@ describe('CreditorListPage', () => {
       fireEvent.click(screen.getByRole('button', { name: '确认删除' })); // Assuming '确认删除' is the confirm button text
 
       // Mock the delete call (client.delete)
-      mockSurrealContextValue.surreal!.delete = jest.fn().mockResolvedValueOnce(undefined);
+      mockSurrealContextValue.surreal!.delete = vi.fn().mockResolvedValueOnce(undefined);
 
       // Mock the subsequent fetchCreditors call (client.query)
       // It should return the list without the deleted creditor
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[mockCreditors[1]]]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[mockCreditors[1]]]);
 
 
       await waitFor(() => {
@@ -415,7 +416,7 @@ describe('CreditorListPage', () => {
 
     it('shows error if deleting creditor fails', async () => {
       const creditorToDelete = mockCreditors[0];
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[creditorToDelete]]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[creditorToDelete]]);
       renderCreditorListPage();
       await waitFor(() => expect(screen.getByText(creditorToDelete.name)).toBeInTheDocument());
 
@@ -423,7 +424,7 @@ describe('CreditorListPage', () => {
       fireEvent.click(deleteButton);
       await screen.findByText('delete_creditor_dialog_title', { exact: false });
 
-      mockSurrealContextValue.surreal!.delete = jest.fn().mockRejectedValueOnce(new Error('Delete failed'));
+      mockSurrealContextValue.surreal!.delete = vi.fn().mockRejectedValueOnce(new Error('Delete failed'));
       // Store the current mock for query to ensure it's not called again for refresh
       const queryMockBeforeDeleteAttempt = mockSurrealContextValue.surreal!.query;
 
@@ -454,7 +455,7 @@ describe('CreditorListPage', () => {
 
     beforeEach(() => {
       // Reset Papa.parse mock before each test in this describe block
-      (Papa.parse as jest.Mock).mockReset();
+      (Papa.parse as vi.Mock).mockReset();
     });
 
     it('successfully imports valid CSV data, refreshes list, and shows success summary', async () => {
@@ -471,18 +472,18 @@ describe('CreditorListPage', () => {
       await waitFor(() => expect(screen.getByText('已选文件: creditors.csv')).toBeInTheDocument());
 
       // Mock Papa.parse for this test
-      (Papa.parse as jest.Mock).mockImplementation((_, config) => {
+      (Papa.parse as vi.Mock).mockImplementation((_, config) => {
         config.complete({ data: mockValidCSVData, errors: [], meta: {} });
       });
 
       // Mock client.create for each valid row
-      mockSurrealContextValue.surreal!.create = jest.fn().mockResolvedValue([{}]); // Assume successful creation for each
+      mockSurrealContextValue.surreal!.create = vi.fn().mockResolvedValue([{}]); // Assume successful creation for each
 
       // Mock the fetchCreditors call after import
       const importedCreditorsForFetch = mockValidCSVData.map((row, i) => ({
         id: `creditor:csv${i}`, type: row['类别'], name: row['名称'], identifier: row['ID/统一码'], case_id: 'case:123'
       }));
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([importedCreditorsForFetch]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([importedCreditorsForFetch]);
 
       fireEvent.click(screen.getByRole('button', { name: '开始导入' }));
 
@@ -519,12 +520,12 @@ describe('CreditorListPage', () => {
       fireEvent.change(fileInput);
 
       const mixedData = [mockValidCSVData[0], mockInvalidCSVRow, mockValidCSVData[1]];
-      (Papa.parse as jest.Mock).mockImplementation((_, config) => {
+      (Papa.parse as vi.Mock).mockImplementation((_, config) => {
         config.complete({ data: mixedData, errors: [], meta: {} });
       });
 
-      mockSurrealContextValue.surreal!.create = jest.fn().mockResolvedValue([{}]);
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([[]]); // For refresh
+      mockSurrealContextValue.surreal!.create = vi.fn().mockResolvedValue([{}]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([[]]); // For refresh
 
       fireEvent.click(screen.getByRole('button', { name: '开始导入' }));
 
@@ -550,12 +551,12 @@ describe('CreditorListPage', () => {
       Object.defineProperty(fileInput, 'files', { value: [file] });
       fireEvent.change(fileInput);
 
-      (Papa.parse as jest.Mock).mockImplementation((_, config) => {
+      (Papa.parse as vi.Mock).mockImplementation((_, config) => {
         config.error({ message: 'Parse error' } as Papa.ParseError);
       });
 
-      const createMock = mockSurrealContextValue.surreal!.create = jest.fn();
-      const queryMock = mockSurrealContextValue.surreal!.query = jest.fn();
+      const createMock = mockSurrealContextValue.surreal!.create = vi.fn();
+      const queryMock = mockSurrealContextValue.surreal!.query = vi.fn();
 
 
       fireEvent.click(screen.getByRole('button', { name: '开始导入' }));
@@ -570,7 +571,7 @@ describe('CreditorListPage', () => {
 
   describe('Search and Filtering', () => {
     it('filters creditors based on search term', async () => {
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([mockCreditors]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([mockCreditors]);
       renderCreditorListPage();
 
       await waitFor(() => {
@@ -596,7 +597,7 @@ describe('CreditorListPage', () => {
 
   describe('Selection', () => {
     it('selects and deselects individual creditors and "select all"', async () => {
-      mockSurrealContextValue.surreal!.query = jest.fn().mockResolvedValueOnce([mockCreditors]);
+      mockSurrealContextValue.surreal!.query = vi.fn().mockResolvedValueOnce([mockCreditors]);
       renderCreditorListPage();
       await waitFor(() => expect(screen.getByText('Acme Corp')).toBeInTheDocument());
 

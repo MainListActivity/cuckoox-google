@@ -77,7 +77,8 @@ describe('MyClaimsPage', () => {
     renderComponent();
     const rowForClaim002 = screen.getByText('CLAIM-002').closest('tr');
     expect(rowForClaim002).not.toBeNull();
-    const withdrawButtonForClaim002 = within(rowForClaim002!).getByTitle('撤回');
+    // Changed getByTitle to getByLabelText as a common MUI pattern for IconButtons
+    const withdrawButtonForClaim002 = within(rowForClaim002!).getByLabelText('撤回');
     expect(withdrawButtonForClaim002).toBeDisabled();
   });
 
@@ -85,7 +86,7 @@ describe('MyClaimsPage', () => {
     renderComponent();
     const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
     expect(rowForClaim001).not.toBeNull();
-    const withdrawButtonForClaim001 = within(rowForClaim001!).getByTitle('撤回');
+    const withdrawButtonForClaim001 = within(rowForClaim001!).getByLabelText('撤回');
     expect(withdrawButtonForClaim001).not.toBeDisabled();
   });
   
@@ -93,12 +94,12 @@ describe('MyClaimsPage', () => {
     renderComponent();
     const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
     expect(rowForClaim001).not.toBeNull();
-    const editButtonForClaim001 = within(rowForClaim001!).getByTitle('编辑');
+    const editButtonForClaim001 = within(rowForClaim001!).getByLabelText('编辑');
     expect(editButtonForClaim001).toBeDisabled();
 
     const rowForClaim002 = screen.getByText('CLAIM-002').closest('tr');
     expect(rowForClaim002).not.toBeNull();
-    const editButtonForClaim002 = within(rowForClaim002!).getByTitle('编辑');
+    const editButtonForClaim002 = within(rowForClaim002!).getByLabelText('编辑');
     expect(editButtonForClaim002).toBeDisabled();
   });
 
@@ -106,12 +107,12 @@ describe('MyClaimsPage', () => {
     renderComponent();
     const rowForClaim003 = screen.getByText('CLAIM-003').closest('tr');
     expect(rowForClaim003).not.toBeNull();
-    const editButtonForClaim003 = within(rowForClaim003!).getByTitle('编辑');
+    const editButtonForClaim003 = within(rowForClaim003!).getByLabelText('编辑');
     expect(editButtonForClaim003).not.toBeDisabled();
 
     const rowForClaim004 = screen.getByText('CLAIM-004').closest('tr');
     expect(rowForClaim004).not.toBeNull();
-    const editButtonForClaim004 = within(rowForClaim004!).getByTitle('编辑');
+    const editButtonForClaim004 = within(rowForClaim004!).getByLabelText('编辑');
     expect(editButtonForClaim004).not.toBeDisabled();
   });
 
@@ -120,7 +121,7 @@ describe('MyClaimsPage', () => {
     renderComponent();
     const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
     expect(rowForClaim001).not.toBeNull();
-    const viewDetailsButton = within(rowForClaim001!).getByTitle('查看详情');
+    const viewDetailsButton = within(rowForClaim001!).getByLabelText('查看详情');
     fireEvent.click(viewDetailsButton);
     expect(mockNavigate).toHaveBeenCalledWith(`/my-claims/${mockClaimsData[0].id}/submitted`);
   });
@@ -129,7 +130,7 @@ describe('MyClaimsPage', () => {
     renderComponent();
     const rowForClaim003 = screen.getByText('CLAIM-003').closest('tr');
     expect(rowForClaim003).not.toBeNull();
-    const editButtonForClaim003 = within(rowForClaim003!).getByTitle('编辑');
+    const editButtonForClaim003 = within(rowForClaim003!).getByLabelText('编辑');
     fireEvent.click(editButtonForClaim003);
     expect(mockNavigate).toHaveBeenCalledWith(`/claims/submit/${mockClaimsData[2].id}`);
   });
@@ -146,7 +147,7 @@ describe('MyClaimsPage', () => {
     renderComponent();
     const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
     expect(rowForClaim001).not.toBeNull();
-    const withdrawButtonForClaim001 = within(rowForClaim001!).getByTitle('撤回');
+    const withdrawButtonForClaim001 = within(rowForClaim001!).getByLabelText('撤回');
     fireEvent.click(withdrawButtonForClaim001);
     
     await waitFor(() => {
@@ -159,7 +160,7 @@ describe('MyClaimsPage', () => {
     // Test the actual click on a disabled button (which shouldn't call the handler or snackbar)
     const rowForClaim002 = screen.getByText('CLAIM-002').closest('tr'); // '审核通过' status
     expect(rowForClaim002).not.toBeNull();
-    const withdrawButtonForClaim002 = within(rowForClaim002!).getByTitle('撤回');
+    const withdrawButtonForClaim002 = within(rowForClaim002!).getByLabelText('撤回');
     expect(withdrawButtonForClaim002).toBeDisabled();
     fireEvent.click(withdrawButtonForClaim002); // Attempt to click disabled button
 

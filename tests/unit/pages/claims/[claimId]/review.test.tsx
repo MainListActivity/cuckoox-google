@@ -122,9 +122,21 @@ describe('ClaimReviewDetailPage', () => {
             await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
 
             // initialMockClaimData has '待审核' status and asserted_details
-            expect(screen.getByLabelText(/审核认定债权性质/).closest('div')?.querySelector('input')).toHaveValue('货款');
-            expect(screen.getByLabelText(/审核认定本金/).closest('div')?.querySelector('input')).toHaveValue('120000'); // principal
-            expect(screen.getByLabelText(/审核状态/).closest('div')?.querySelector('input')).toHaveValue(''); // Status should be empty to force selection
+            // For MUI Select, check the displayed value, not a hidden input if that's the case.
+            // Assuming the label is associated with the select's display element or its FormControl.
+            expect(screen.getByLabelText(/审核认定债权性质/)).toHaveTextContent('货款'); // Check displayed text for Select
+            expect(screen.getByLabelText(/审核认定本金/)).toHaveValue(120000); // For TextField input
+
+            // For an empty Select, its text content might be a zero-width space or rely on placeholder.
+            // If it's a native select or a specific MUI setup, .value might work.
+            // Let's assume it displays nothing or a placeholder that isn't '货款' or '120000'
+            const statusSelectDisplay = screen.getByLabelText(/审核状态/);
+            // More robust: check it doesn't have a specific value selected if it should be empty
+            // For example, if '审核通过' is an option:
+            // expect(within(statusSelectDisplay).queryByText('审核通过')).not.toBeInTheDocument();
+            // Or check its direct text content if it's simple
+            expect(statusSelectDisplay.textContent || "").toBe(""); // Or check for a specific placeholder if any
+
         });
 
         it('shows validation errors in modal if required fields are empty on submit', async () => {
@@ -153,21 +165,22 @@ describe('ClaimReviewDetailPage', () => {
             await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
 
             // Fill the modal form
-            fireEvent.change(screen.getByLabelText(/审核认定债权性质/).closest('div')!.querySelector('input')!, { target: { value: '服务费' } }); // This is simplified, real MUI select needs proper interaction
-            // Simulate selecting from MUI Select
-            const natureSelect = screen.getByLabelText(/审核认定债权性质/).parentElement!;
-            fireEvent.mouseDown(natureSelect);
+            // Interact with "审核认定债权性质" Select
+            const natureSelectControl = screen.getByLabelText(/审核认定债权性质/);
+            fireEvent.mouseDown(natureSelectControl);
             const serviceFeeOption = await screen.findByRole('option', { name: '服务费' });
             fireEvent.click(serviceFeeOption);
 
-            const statusSelect = screen.getByLabelText(/审核状态/).parentElement!;
-            fireEvent.mouseDown(statusSelect);
+            // Interact with "审核状态" Select
+            const statusSelectControl = screen.getByLabelText(/审核状态/);
+            fireEvent.mouseDown(statusSelectControl);
             const approvedOption = await screen.findByRole('option', { name: '审核通过' });
             fireEvent.click(approvedOption);
 
             fireEvent.change(screen.getByLabelText(/审核认定本金/), { target: { value: '100000' } });
             fireEvent.change(screen.getByLabelText(/审核认定利息/), { target: { value: '1000' } });
-            fireEvent.change(screen.getByLabelText(/审核意见\/备注/), { target: { value: '审核通过，材料齐全。' } });
+            // For RichTextEditor mock, the interaction is simplified
+            fireEvent.change(screen.getByTestId('mocked-rich-text-editor'), { target: { value: '审核通过，材料齐全。' } });
 
             // Mock window.confirm
             const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => true);

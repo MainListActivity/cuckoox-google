@@ -117,7 +117,7 @@ const renderWithAuthProvider = (initialUser: AppUser | null = null, initialOidcU
   // Mock initial state of authService.getUser and db.select for initial load
   if (initialUser && initialUser.github_id !== '--admin--' && initialOidcUser) {
     (authService.getUser as vi.Mock).mockResolvedValue(initialOidcUser);
-    (db.select as vi.Mock).mockImplementation((recordId: string) => {
+    (mockSurrealClient.select as vi.Mock).mockImplementation((recordId: string) => {
       if (recordId === initialUser.id) {
         return Promise.resolve([initialUser]);
       }
@@ -129,10 +129,10 @@ const renderWithAuthProvider = (initialUser: AppUser | null = null, initialOidcU
      // Admin user might be set directly via setAuthState or a similar mechanism not tied to OIDC getUser
   } else {
     (authService.getUser as vi.Mock).mockResolvedValue(null);
-    (db.select as vi.Mock).mockResolvedValue([]);
+    (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
   }
   
-  // Mock db.query for loadUserCasesAndRoles to prevent errors, return empty by default
+  // Mock mockSurrealClient.query for loadUserCasesAndRoles to prevent errors, return empty by default
   (mockSurrealClient.query as vi.Mock).mockResolvedValue([[]]); // Simulates no cases/roles
 
   const renderResult = render(
@@ -144,11 +144,13 @@ const renderWithAuthProvider = (initialUser: AppUser | null = null, initialOidcU
   // If an initial user is provided, we need to manually set the state
   // as if the login process (setAuthState) has already occurred.
   // This bypasses the useEffect in AuthProvider for initial load simulation for tests.
-  if (initialUser) {
-    act(() => {
-        capturedAuthContext.setAuthState(initialUser, initialOidcUser);
-    });
-  }
+  // if (initialUser) {
+  //   act(() => {
+  //       capturedAuthContext.setAuthState(initialUser, initialOidcUser);
+  //   });
+  // }
+  // Let AuthProvider's own useEffect handle initial load based on mocks.
+  // Ensure tests await any state changes from this initial load if necessary.
   
   return renderResult;
 };
@@ -176,8 +178,14 @@ describe('AuthContext', () => {
 
   describe('hasRole', () => {
     describe('Admin User', () => {
-      beforeEach(() => {
+      beforeEach(async () => { // Make beforeEach async
+        // Simulate admin user being in localStorage for AuthProvider to pick up
+        localStorageMock.setItem('cuckoox-user', JSON.stringify(mockAdminUser));
+        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+        // Pass mockAdminUser to ensure mocks for authService.getUser are set correctly (returns null for admin)
         renderWithAuthProvider(mockAdminUser);
+        // Wait for AuthProvider's useEffect to process localStorage and set state
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
       });
 
       it('should return true for "admin" roleName when user is admin', () => {
@@ -193,43 +201,72 @@ describe('AuthContext', () => {
       const caseManagerRole: Role = { id: 'role:cm', name: 'caseManager' };
       const otherRole: Role = { id: 'role:or', name: 'otherRole' };
 
-      it('should return true if user has the role in the selected case', async () => {
+      // Helper for OIDC user setup within these tests
+      async function setupOidcUserAndRoles(roles: Role[], selectedCase: string | null = 'case:123') {
+        // Ensure mocks for initial load are set correctly by renderWithAuthProvider
+        (authService.getUser as vi.Mock).mockResolvedValue(mockOidcClientUser);
+        (mockSurrealClient.select as vi.Mock).mockImplementation((recordId: string) => {
+          if (recordId === mockOidcUser.id) {
+            return Promise.resolve([mockOidcUser]);
+          }
+          return Promise.resolve([]);
+        });
+        // Simulate that loadUserCasesAndRoles (called by AuthProvider's useEffect or setAuthState)
+        // will eventually populate these.
+        // For tests, we might need to mock the query that loadUserCasesAndRoles makes,
+        // or directly set the outcome via capturedAuthContext after AuthProvider has initialized.
+        (mockSurrealClient.query as vi.Mock).mockImplementation(async (query) => {
+          if (query.includes('SELECT out.*.role_id')) { // Mock for roles query
+            return [roles.map(r => ({ out: { role_id: r} }))]
+          }
+          return [[]]; // Default for other queries
+        });
+
         renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
         
-        // Simulate selecting a case and having roles
-        await act(async () => {
-          capturedAuthContext.setCurrentUserCaseRoles([caseManagerRole, otherRole]);
-          capturedAuthContext.setSelectedCaseId('case:123');
+        // Wait for AuthProvider to initialize and set the user
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+        await waitFor(() => expect(capturedAuthContext.user?.id).toBe(mockOidcUser.id));
+
+        // After user is set, simulate setting roles and case (as if loaded by loadUserCasesAndRoles)
+        // This part might need adjustment based on how loadUserCasesAndRoles actually sets these.
+        // If loadUserCasesAndRoles is robustly mocked via mockSurrealClient.query, this direct setting might not be needed.
+        act(() => { // Use act for direct state updates if still necessary
+            capturedAuthContext.setCurrentUserCaseRoles(roles);
+            capturedAuthContext.setSelectedCaseId(selectedCase);
         });
+         // Add a final waitFor to ensure all updates from act are processed
+        await waitFor(() => expect(capturedAuthContext.selectedCaseId === selectedCase).toBe(true));
+      }
+
+      it('should return true if user has the role in the selected case', async () => {
+        await setupOidcUserAndRoles([caseManagerRole, otherRole], 'case:123');
         expect(capturedAuthContext.hasRole('caseManager')).toBe(true);
       });
 
       it('should return false if user does not have the role in the selected case', async () => {
-        renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
-        await act(async () => {
-          capturedAuthContext.setCurrentUserCaseRoles([otherRole]);
-           capturedAuthContext.setSelectedCaseId('case:123');
-        });
+        await setupOidcUserAndRoles([otherRole], 'case:123');
         expect(capturedAuthContext.hasRole('caseManager')).toBe(false);
       });
 
       it('should return false if no case is selected, even if user has roles conceptually', async () => {
-        renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
-        await act(async () => {
-          capturedAuthContext.setCurrentUserCaseRoles([caseManagerRole]);
-          capturedAuthContext.setSelectedCaseId(null); // No case selected
-        });
+        await setupOidcUserAndRoles([caseManagerRole], null); // No case selected
         expect(capturedAuthContext.hasRole('caseManager')).toBe(false);
       });
-       it('should return false for "admin" roleName when user is a regular user', () => {
-        renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
+
+      it('should return false for "admin" roleName when user is a regular user', async () => {
+        await setupOidcUserAndRoles([]); // No specific roles needed for this check
         expect(capturedAuthContext.hasRole('admin')).toBe(false);
       });
     });
 
     describe('No User', () => {
-       beforeEach(() => {
+       beforeEach(async () => { // Make async
+        (authService.getUser as vi.Mock).mockResolvedValue(null);
+        (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
         renderWithAuthProvider(null); // No user logged in
+        // Wait for AuthProvider to confirm no user is logged in
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(false));
       });
 
       it('should return false for "admin" roleName when no user is logged in', () => {
@@ -245,11 +282,11 @@ describe('AuthContext', () => {
   describe('logout', () => {
     describe('Admin Logout', () => {
       beforeEach(async () => {
-        renderWithAuthProvider(mockAdminUser); // Sets up admin user
-        await act(async () => { // Ensure initial state is set
-          capturedAuthContext.setAuthState(mockAdminUser, null);
-        });
-        (mockSurrealClient.signout as vi.Mock).mockResolvedValue(undefined); // Reset mock for specific test
+        localStorageMock.setItem('cuckoox-user', JSON.stringify(mockAdminUser));
+        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+        renderWithAuthProvider(mockAdminUser);
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+        (mockSurrealClient.signout as vi.Mock).mockResolvedValue(undefined);
       });
 
       it('should call surreal.signout, not call authService.logoutRedirect, and clear client state', async () => {
@@ -286,11 +323,16 @@ describe('AuthContext', () => {
 
     describe('OIDC User Logout', () => {
       beforeEach(async () => {
+        (authService.getUser as vi.Mock).mockResolvedValue(mockOidcClientUser);
+        (mockSurrealClient.select as vi.Mock).mockImplementation((recordId: string) =>
+          recordId === mockOidcUser.id ? Promise.resolve([mockOidcUser]) : Promise.resolve([])
+        );
+        localStorageMock.setItem('cuckoox-user', JSON.stringify(mockOidcUser)); // Simulate user was logged in
+        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+
         renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
-         await act(async () => { // Ensure initial state is set
-          capturedAuthContext.setAuthState(mockOidcUser, mockOidcClientUser);
-        });
-        (authService.logoutRedirect as vi.Mock).mockResolvedValue(undefined); // Reset mock
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+        (authService.logoutRedirect as vi.Mock).mockResolvedValue(undefined);
       });
 
       it('should call authService.logoutRedirect, not call surreal.signout, and clear client state', async () => {
@@ -324,10 +366,11 @@ describe('AuthContext', () => {
 
     describe('Logout with no active user', () => {
       beforeEach(async () => {
-        renderWithAuthProvider(null); // No user
-         await act(async () => { // Ensure initial state is set
-          capturedAuthContext.setAuthState(null, null);
-        });
+        (authService.getUser as vi.Mock).mockResolvedValue(null);
+        (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
+        localStorageMock.clear(); // Ensure no pre-existing session in local storage
+        renderWithAuthProvider(null);
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(false));
       });
 
       it('should not call db.signout or authService.logoutRedirect, and clear client state', async () => {

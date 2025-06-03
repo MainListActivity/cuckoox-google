@@ -17,9 +17,9 @@ vi.mock('react-router-dom', async () => {
 });
 
 const mockSetAuthState = vi.fn();
-const mockUseAuth = vi.fn();
+const mockUseAuthFn = vi.fn(); // Renamed from mockUseAuth
 vi.mock('../../../src/contexts/AuthContext', () => ({
-  useAuth: mockUseAuth,
+  useAuth: () => mockUseAuthFn(), // Factory returns a function that calls mockUseAuthFn
   // Assuming AppUser might be re-exported or used by LoginPage.test.tsx directly
 }));
 
@@ -63,7 +63,7 @@ const setupMockLocation = (isAdmin: boolean, state: any = null) => {
 
 // Helper to set up useAuth mock
 const setupMockAuth = (isLoggedIn: boolean, isLoading: boolean, user: AppUser | null) => {
-  mockUseAuth.mockReturnValue({
+  mockUseAuthFn.mockReturnValue({ // Changed to mockUseAuthFn
     isLoggedIn,
     isLoading,
     setAuthState: mockSetAuthState,
