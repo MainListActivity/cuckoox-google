@@ -14,7 +14,7 @@ import {
   Divider,
   Box,
 } from '@mui/material';
-import type { Creditor } from '@/src/pages/creditors'; // Import Creditor type
+import type { Creditor } from './types'; // MODIFIED PATH
 
 interface PrintWaybillsDialogProps {
   open: boolean;

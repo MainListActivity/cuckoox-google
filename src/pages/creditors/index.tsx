@@ -22,6 +22,7 @@ import {
   Tooltip, // Added for clarity on icon buttons
   CircularProgress, // Added for loading state
   Alert, // Added for error state
+  TablePagination, // Added for pagination
 } from '@mui/material';
 import { 
   mdiAccountPlusOutline, 
@@ -33,42 +34,43 @@ import {
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import PrintWaybillsDialog from '@/src/components/creditor/PrintWaybillsDialog';
-// Changed CreditorData to CreditorFormData in import from AddCreditorDialog
-import AddCreditorDialog, { CreditorFormData } from '@/src/components/creditor/AddCreditorDialog'; 
-import BatchImportCreditorsDialog from '@/src/components/creditor/BatchImportCreditorsDialog';
+import PrintWaybillsDialog from './PrintWaybillsDialog'; // MODIFIED PATH
+import AddCreditorDialog from './AddCreditorDialog'; // MODIFIED PATH
+import type { CreditorFormData } from './types'; // MODIFIED PATH for type
+import type { Creditor } from './types'; // MODIFIED PATH for type
+import BatchImportCreditorsDialog from './BatchImportCreditorsDialog'; // MODIFIED PATH
 import ConfirmDeleteDialog from '@/src/components/common/ConfirmDeleteDialog';
 import { useAuth } from '@/src/contexts/AuthContext'; // Added
 import { useSurreal } from '@/src/contexts/SurrealProvider'; // Added
 import { RecordId } from 'surrealdb'; // Added
+import { useDebounce } from '@/src/hooks/useDebounce'; // ADDED
 
-// Define Creditor type for clarity
-export interface Creditor {
-  id: string; // RecordId as string e.g. "creditor:xxxx"
-  type: '组织' | '个人';
-  name: string;
-  identifier: string;
-  contact_person_name: string;
-  contact_person_phone: string;
-  address: string;
-  case_id?: string | RecordId; // Added
-  created_at?: string; // Added
-  updated_at?: string; // Added
-}
+// Creditor interface moved to ./types.ts
 
 // Mock data removed
 
 const CreditorListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError } = useSnackbar(); // Added showError
-  const { selectedCaseId } = useAuth(); // Added
+  const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
   const { surreal: client, isConnected: isDbConnected } = useSurreal(); // Added
+
+  // Determine if the user has management permissions
+  // For now, system admin (user?.github_id === '--admin--') or users with 'case_manager' role for the selected case.
+  // Assuming hasRole('admin') covers the system admin case.
+  const canManageCreditors = hasRole('admin') || hasRole('case_manager');
 
   const [creditors, setCreditors] = useState<Creditor[]>([]); // Initialize with empty array
   const [isLoading, setIsLoading] = useState<boolean>(true); // Added
   const [error, setError] = useState<string | null>(null); // Added
   const [selectedCreditorIds, setSelectedCreditorIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 500); // ADDED
+
+  // Pagination states
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
+  const [totalCreditors, setTotalCreditors] = useState<number>(0);
   
   // Dialog states
   const [printWaybillsDialogOpen, setPrintWaybillsDialogOpen] = useState<boolean>(false);
@@ -80,9 +82,10 @@ const CreditorListPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [creditorToDelete, setCreditorToDelete] = useState<Creditor | null>(null);
 
-  const fetchCreditors = React.useCallback(async () => {
+  const fetchCreditors = React.useCallback(async (currentPage: number, currentRowsPerPage: number, currentSearchTerm: string) => {
     if (!selectedCaseId || !client || !isDbConnected) {
       setCreditors([]);
+      setTotalCreditors(0);
       setIsLoading(false);
       if (!selectedCaseId && client && isDbConnected) {
         setError(t('error_no_case_selected', '请先选择一个案件。'));
@@ -101,35 +104,84 @@ const CreditorListPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const query = 'SELECT id, type, name, identifier, contact_person_name, contact_person_phone, address, created_at, case_id FROM creditor WHERE case_id = $caseId ORDER BY created_at DESC;';
-      const result: unknown = await client.query(query, { caseId: selectedCaseId });
+      let dataQuery = 'SELECT id, type, name, identifier, contact_person_name, contact_person_phone, address, created_at, case_id FROM creditor WHERE case_id = $caseId';
+      let countQuery = 'SELECT count() AS total FROM creditor WHERE case_id = $caseId';
+      const queryParams: Record<string, unknown> = {
+        caseId: selectedCaseId,
+      };
 
-      const fetchedData = Array.isArray(result) && result.length > 0 && Array.isArray(result[0])
-                          ? result[0] as Creditor[]
+      if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+        const searchCondition = `AND (name CONTAINS $searchTerm OR identifier CONTAINS $searchTerm OR contact_person_name CONTAINS $searchTerm OR contact_person_phone CONTAINS $searchTerm OR address CONTAINS $searchTerm)`;
+        dataQuery += ` ${searchCondition}`;
+        countQuery += ` ${searchCondition}`;
+        queryParams.searchTerm = currentSearchTerm;
+      }
+
+      dataQuery += ' ORDER BY created_at DESC LIMIT $limit START $start;';
+      queryParams.limit = currentRowsPerPage;
+      queryParams.start = currentPage * currentRowsPerPage;
+
+      countQuery += ' GROUP ALL;';
+
+      // Fetch paginated data
+      const dataResult: unknown = await client.query(dataQuery, queryParams);
+      const fetchedData = Array.isArray(dataResult) && dataResult.length > 0 && Array.isArray(dataResult[0])
+                          ? dataResult[0] as Creditor[]
                           : [];
-
       const formattedCreditors: Creditor[] = fetchedData.map((cred: any) => ({
         ...cred,
         id: typeof cred.id === 'string' ? cred.id : (cred.id as RecordId).toString(),
       }));
       setCreditors(formattedCreditors);
+
+      // Fetch total count
+      // Remove limit and start params for count query, only keep caseId and searchTerm (if applicable)
+      const countQueryParams: Record<string, unknown> = { caseId: selectedCaseId };
+      if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+        countQueryParams.searchTerm = currentSearchTerm;
+      }
+      const countResult: unknown = await client.query(countQuery, countQueryParams);
+
+      // SurrealDB's count() GROUP ALL returns an array with an object, e.g., [{ total: 50 }]
+      // If no records, it might return an empty array or an array with an object where total is 0 or undefined.
+      const total = Array.isArray(countResult) && countResult.length > 0 && countResult[0] && typeof (countResult[0] as any).total === 'number'
+                    ? (countResult[0] as any).total
+                    : 0;
+      setTotalCreditors(total);
+
     } catch (err) {
       console.error("Error fetching creditors:", err);
       const errorMessage = t('error_fetching_creditors', '获取债权人列表失败。');
       setError(errorMessage);
       showError(errorMessage);
+      setCreditors([]); // Clear data on error
+      setTotalCreditors(0); // Reset total on error
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, client, isDbConnected, t, showError]);
+  }, [selectedCaseId, client, isDbConnected, t, showError]); // searchTerm is not needed in useCallback deps as it's passed as arg
 
   useEffect(() => {
-    fetchCreditors();
-  }, [fetchCreditors]);
+    // Reset page to 0 when debouncedSearchTerm changes
+    setPage(0);
+  }, [debouncedSearchTerm]);
+
+  useEffect(() => {
+    fetchCreditors(page, rowsPerPage, debouncedSearchTerm);
+  }, [fetchCreditors, page, rowsPerPage, debouncedSearchTerm]);
+
+  const handleChangePage = (event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0); // Reset to first page when rows per page changes
+  };
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      const newSelecteds = filteredCreditors.map((n) => n.id);
+      const newSelecteds = creditors.map((n) => n.id); // Use creditors instead of filteredCreditors
       setSelectedCreditorIds(newSelecteds);
       return;
     }
@@ -157,13 +209,7 @@ const CreditorListPage: React.FC = () => {
 
   const isSelected = (id: string) => selectedCreditorIds.indexOf(id) !== -1;
 
-  const filteredCreditors = creditors.filter(creditor => // Use state variable 'creditors'
-    creditor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    creditor.identifier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (creditor.contact_person_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    (creditor.contact_person_phone || '').includes(searchTerm) ||
-    (creditor.address?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-  );
+  // filteredCreditors is removed, use 'creditors' directly from state which is now backend-filtered
 
   const handleOpenPrintWaybillsDialog = () => {
     if (selectedCreditorIds.length > 0) {
@@ -213,7 +259,7 @@ const CreditorListPage: React.FC = () => {
         });
 
         showSuccess(t('creditor_updated_success', '债权人已成功更新'));
-        fetchCreditors(); // Refresh the list
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the list with current debounced search term
         handleCloseAddCreditorDialog();
       } catch (err) {
         console.error("Error updating creditor:", err);
@@ -249,9 +295,9 @@ const CreditorListPage: React.FC = () => {
         // client.create typically returns an array with the created record(s)
         console.log("Creditor created successfully:", result);
         showSuccess(t('creditor_added_success', '债权人已成功添加'));
-        fetchCreditors(); // Refresh the creditor list
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the creditor list with current debounced search term
         handleCloseAddCreditorDialog();
-      } catch (err) {
+      } catch (err)
         console.error("Error creating creditor:", err);
         showError(t('creditor_add_failed', '添加债权人失败'));
       }
@@ -329,7 +375,7 @@ const CreditorListPage: React.FC = () => {
 
         setIsBatchProcessing(false);
         setBatchImportOpen(false); // Close dialog
-        fetchCreditors(); // Refresh the main list
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the main list with current debounced search term
 
         if (failedImports > 0) {
           showError(t('batch_import_summary_with_errors',
@@ -391,7 +437,7 @@ const CreditorListPage: React.FC = () => {
       }
 
       showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
-      fetchCreditors(); // Refresh the list
+      fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the list with current debounced search term
     } catch (err) {
       console.error("Error deleting creditor:", err);
       showError(t('creditor_delete_failed', '删除债权人失败'));
@@ -422,21 +468,22 @@ const CreditorListPage: React.FC = () => {
           sx={{ minWidth: '300px', flexGrow: { xs:1, sm: 0.5, md:0.3 } }} // Responsive grow
         />
         <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', gap:1}}> {/* Allow buttons to wrap and add gap */}
-          {/* // TODO: Access Control - This button should be visible/enabled based on user role (e.g., has 'create_creditor' permission). */}
-          <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiAccountPlusOutline} /></SvgIcon>} onClick={handleOpenAddCreditorDialog}>
-            {t('add_single_creditor_button', '添加单个债权人')}
-          </Button>
-          {/* // TODO: Access Control - This button should be visible/enabled based on user role (e.g., has 'import_creditors' permission). */}
-          <Button variant="outlined" color="secondary" startIcon={<SvgIcon><path d={mdiFileImportOutline} /></SvgIcon>} onClick={handleOpenBatchImportDialog}>
-            {t('batch_import_creditors_button', '批量导入债权人')}
-          </Button>
-          {/* // TODO: Access Control - This button should be visible/enabled based on user role (e.g., has 'print_waybills' permission). */}
+          {canManageCreditors && (
+            <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiAccountPlusOutline} /></SvgIcon>} onClick={handleOpenAddCreditorDialog}>
+              {t('add_single_creditor_button', '添加单个债权人')}
+            </Button>
+          )}
+          {canManageCreditors && (
+            <Button variant="outlined" color="secondary" startIcon={<SvgIcon><path d={mdiFileImportOutline} /></SvgIcon>} onClick={handleOpenBatchImportDialog}>
+              {t('batch_import_creditors_button', '批量导入债权人')}
+            </Button>
+          )}
           <Button
             variant="contained" 
             color="secondary" 
             startIcon={<SvgIcon><path d={mdiPrinterOutline} /></SvgIcon>}
             onClick={handleOpenPrintWaybillsDialog}
-            disabled={selectedCreditorIds.length === 0}
+            disabled={!canManageCreditors || selectedCreditorIds.length === 0}
           >
             {t('print_waybill_button', '打印快递单号')}
           </Button>
@@ -451,8 +498,8 @@ const CreditorListPage: React.FC = () => {
                 <TableCell padding="checkbox">
                   <Checkbox
                     color="primary"
-                    indeterminate={selectedCreditorIds.length > 0 && selectedCreditorIds.length < filteredCreditors.length}
-                    checked={filteredCreditors.length > 0 && selectedCreditorIds.length === filteredCreditors.length}
+                    indeterminate={selectedCreditorIds.length > 0 && selectedCreditorIds.length < creditors.length}
+                    checked={creditors.length > 0 && selectedCreditorIds.length === creditors.length}
                     onChange={handleSelectAllClick}
                     inputProps={{ 'aria-label': t('select_all_creditors_aria_label', 'select all creditors') }}
                   />
@@ -481,10 +528,10 @@ const CreditorListPage: React.FC = () => {
                     <Alert severity="error" sx={{ justifyContent: 'center' }}>{error}</Alert>
                   </TableCell>
                 </TableRow>
-              ) : filteredCreditors.length === 0 ? (
-                <TableRow><TableCell colSpan={9} align="center"><Typography sx={{p:2}}>{t('no_creditors_found', '暂无债权人数据或无匹配结果')}</Typography></TableCell></TableRow>
+              ) : creditors.length === 0 ? ( // Use creditors instead of filteredCreditors
+                <TableRow><TableCell colSpan={9} align="center"><Typography sx={{p:2}}>{debouncedSearchTerm ? t('no_matching_creditors_found', '没有找到匹配的债权人') : t('no_creditors_found', '暂无债权人数据')}</Typography></TableCell></TableRow>
               ) : (
-                filteredCreditors.map((creditor, index) => {
+                creditors.map((creditor, index) => { // Use creditors instead of filteredCreditors
                   const isItemSelected = isSelected(creditor.id);
                 const labelId = `creditor-table-checkbox-${index}`;
                 return (
@@ -514,34 +561,36 @@ const CreditorListPage: React.FC = () => {
                     <TableCell>{creditor.address}</TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={0} justifyContent="center">
-                        {/* // TODO: Access Control - This button's visibility/enabled state should depend on user role (e.g., has 'edit_creditor' permission). */}
-                        <Tooltip title={t('edit_creditor_tooltip', '编辑')}>
-                          <IconButton
-                            color="primary"
-                            size="small"
-                            aria-label="edit creditor"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenEditCreditorDialog(creditor);
-                            }}
-                          >
-                            <SvgIcon fontSize="small"><path d={mdiPencilOutline} /></SvgIcon>
-                          </IconButton>
-                        </Tooltip>
-                        {/* // TODO: Access Control - This button's visibility/enabled state should depend on user role (e.g., has 'delete_creditor' permission). */}
-                        <Tooltip title={t('delete_creditor_tooltip', '删除')}>
-                          <IconButton
-                            color="error"
-                            size="small"
-                            aria-label="delete creditor"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDeleteDialog(creditor);
-                            }}
-                          >
-                            <SvgIcon fontSize="small"><path d={mdiDeleteOutline} /></SvgIcon>
-                          </IconButton>
-                        </Tooltip>
+                        {canManageCreditors && (
+                          <Tooltip title={t('edit_creditor_tooltip', '编辑')}>
+                            <IconButton
+                              color="primary"
+                              size="small"
+                              aria-label="edit creditor"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditCreditorDialog(creditor);
+                              }}
+                            >
+                              <SvgIcon fontSize="small"><path d={mdiPencilOutline} /></SvgIcon>
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {canManageCreditors && (
+                          <Tooltip title={t('delete_creditor_tooltip', '删除')}>
+                            <IconButton
+                              color="error"
+                              size="small"
+                              aria-label="delete creditor"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenDeleteDialog(creditor);
+                              }}
+                            >
+                              <SvgIcon fontSize="small"><path d={mdiDeleteOutline} /></SvgIcon>
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -550,7 +599,25 @@ const CreditorListPage: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-        {/* TODO: Implement Pagination Controls here */}
+        <TablePagination
+          component="div"
+          count={totalCreditors}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={handleChangePage}
+          onRowsPerPageChange={handleChangeRowsPerPage}
+          rowsPerPageOptions={[5, 10, 25, 50]} // Standard options
+          labelRowsPerPage={t('table_pagination_rows_per_page', '每页行数:')}
+          labelDisplayedRows={({ from, to, count }) =>
+            t('table_pagination_displayed_rows', `第 ${from} 到 ${to} 条 / 共 ${count !== -1 ? count : `超过 ${to}`} 条`, { from, to, count})
+          }
+          backIconButtonProps={{
+            'aria-label': t('table_pagination_previous_page_aria_label', '上一页'),
+          }}
+          nextIconButtonProps={{
+            'aria-label': t('table_pagination_next_page_aria_label', '下一页'),
+          }}
+        />
       </Paper>
       <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
         {t('creditor_list_footer_note_1', '债权人管理页面。当案件处于立案阶段且用户有权限时，将自动进入此菜单。')}
