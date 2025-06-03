@@ -53,7 +53,7 @@ const CreditorListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError } = useSnackbar(); // Added showError
   const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
-  const { surreal: client, isConnected: isDbConnected } = useSurreal(); // Added
+  const { surreal: client, isSuccess: isDbConnected } = useSurreal(); // Added
 
   // Determine if the user has management permissions
   // For now, system admin (user?.github_id === '--admin--') or users with 'case_manager' role for the selected case.
