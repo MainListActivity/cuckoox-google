@@ -297,10 +297,10 @@ const CreditorListPage: React.FC = () => {
         showSuccess(t('creditor_added_success', '债权人已成功添加'));
         fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the creditor list with current debounced search term
         handleCloseAddCreditorDialog();
-      } catch (err)
+      } catch (err) { // ADDED opening brace
         console.error("Error creating creditor:", err);
         showError(t('creditor_add_failed', '添加债权人失败'));
-      }
+      } // ADDED closing brace
     }
   };
 

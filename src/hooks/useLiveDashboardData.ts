@@ -175,7 +175,7 @@ function createLiveMetricHook<TResultType, TDataType>(
         
         // Determine the live query based on debugName or a new parameter if more granularity is needed.
         // For now, all hooks use the 'claim' table for live updates, except user_activity which is commented.
-        let liveSelectQuery = `LIVE SELECT * FROM claim WHERE case_id = $caseId;`;
+        const liveSelectQuery = `LIVE SELECT * FROM claim WHERE case_id = $caseId;`;
         // Example: if (debugName === "UsersOnlineByRoleChartData") {
         //   liveSelectQuery = `LIVE SELECT * FROM user_activity WHERE case_id = $caseId;`;
         // }

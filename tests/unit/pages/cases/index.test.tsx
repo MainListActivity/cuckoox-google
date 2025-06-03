@@ -19,13 +19,28 @@ interface SurrealContextType {
   error: Error | null;
   connect: () => Promise<boolean>;
   disconnect: () => Promise<void>;
-  signin: (auth: any) => Promise<any>;
+  signin: (auth: unknown) => Promise<string | void>; // MODIFIED
   signout: () => Promise<void>;
+}
+
+// Define simplified prop types for mocked dialogs
+interface MockModifyCaseStatusDialogProps {
+  open: boolean;
+  onClose: () => void;
+  currentCase: { id: string; current_status: string; } | null;
+}
+
+interface MockMeetingMinutesDialogProps {
+  open: boolean;
+  onClose: () => void;
+  caseInfo: { caseId: string; caseName: string; };
+  meetingTitle: string;
+  onSave: (delta: { ops: { insert: string }[] }, title: string) => void;
 }
 
 // Mock child components (Dialogs)
 vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
-  default: (props: any) => (
+  default: (props: MockModifyCaseStatusDialogProps) => ( // MODIFIED
     <div data-testid="mock-modify-status-dialog" data-open={props.open}>
       Mock ModifyCaseStatusDialog - Case ID: {props.currentCase?.id}
       <button onClick={props.onClose}>Close Modify</button>
@@ -34,7 +49,7 @@ vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
 }));
 
 vi.mock('../../../../src/components/case/MeetingMinutesDialog', () => ({
-  default: (props: any) => (
+  default: (props: MockMeetingMinutesDialogProps) => ( // MODIFIED
     <div data-testid="mock-meeting-minutes-dialog" data-open={props.open}>
       Mock MeetingMinutesDialog - Case ID: {props.caseInfo?.caseId} - Title: {props.meetingTitle}
       <button onClick={props.onClose}>Close Minutes</button>
@@ -61,8 +76,8 @@ vi.mock('../../../../src/contexts/SnackbarContext', async () => {
 vi.mock('react-i18next', async () => {
   const actual = await vi.importActual('react-i18next');
 
-  const mockT = (key: string, options?: any) => {
-    if (options && options.title) return options.title;
+  const mockT = (key: string, options?: Record<string, unknown>) => { // MODIFIED
+    if (options && options.title) return options.title as string; // Ensure title is treated as string
     if (key === 'first_creditors_meeting_minutes_title') return '第一次债权人会议纪要';
     if (key === 'second_creditors_meeting_minutes_title') return '第二次债权人会议纪要';
     if (key === 'meeting_minutes_generic_title') return '会议纪要';
@@ -171,7 +186,7 @@ describe('CaseListPage', () => {
         authenticate: vi.fn(),
         sync: vi.fn(),
         close: vi.fn(),
-      } as any,
+      } as Partial<Surreal>, // MODIFIED
       isConnecting: false,
       isSuccess: true,
       isError: false,
