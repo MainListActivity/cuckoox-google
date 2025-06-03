@@ -19,13 +19,28 @@ interface SurrealContextType {
   error: Error | null;
   connect: () => Promise<boolean>;
   disconnect: () => Promise<void>;
-  signin: (auth: any) => Promise<any>;
+  signin: (auth: unknown) => Promise<string | void>; // MODIFIED
   signout: () => Promise<void>;
+}
+
+// Define simplified prop types for mocked dialogs
+interface MockModifyCaseStatusDialogProps {
+  open: boolean;
+  onClose: () => void;
+  currentCase: { id: string; current_status: string; } | null;
+}
+
+interface MockMeetingMinutesDialogProps {
+  open: boolean;
+  onClose: () => void;
+  caseInfo: { caseId: string; caseName: string; };
+  meetingTitle: string;
+  onSave: (delta: { ops: { insert: string }[] }, title: string) => void;
 }
 
 // Mock child components (Dialogs)
 vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
-  default: (props: any) => (
+  default: (props: MockModifyCaseStatusDialogProps) => ( // MODIFIED
     <div data-testid="mock-modify-status-dialog" data-open={props.open}>
       Mock ModifyCaseStatusDialog - Case ID: {props.currentCase?.id}
       <button onClick={props.onClose}>Close Modify</button>
@@ -34,7 +49,7 @@ vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
 }));
 
 vi.mock('../../../../src/components/case/MeetingMinutesDialog', () => ({
-  default: (props: any) => (
+  default: (props: MockMeetingMinutesDialogProps) => ( // MODIFIED
     <div data-testid="mock-meeting-minutes-dialog" data-open={props.open}>
       Mock MeetingMinutesDialog - Case ID: {props.caseInfo?.caseId} - Title: {props.meetingTitle}
       <button onClick={props.onClose}>Close Minutes</button>
@@ -60,18 +75,57 @@ vi.mock('../../../../src/contexts/SnackbarContext', async () => {
 // Mock useTranslation
 vi.mock('react-i18next', async () => {
   const actual = await vi.importActual('react-i18next');
+
+  const mockT = (key: string, options?: Record<string, unknown>) => { // MODIFIED
+    if (options && options.title) return options.title as string; // Ensure title is treated as string
+    if (key === 'first_creditors_meeting_minutes_title') return '第一次债权人会议纪要';
+    if (key === 'second_creditors_meeting_minutes_title') return '第二次债权人会议纪要';
+    if (key === 'meeting_minutes_generic_title') return '会议纪要';
+    if (key === 'meeting_minutes_save_success_mock') return '会议纪要已（模拟）保存成功！';
+    // Add other specific key translations from your existing mock
+    if (key === 'unassigned') return '未分配';
+    if (key === 'system') return '系统';
+    if (key === 'error_fetching_cases') return '获取案件列表失败';
+    if (key === 'total_cases') return '总案件数';
+    if (key === 'active_cases') return '进行中';
+    if (key === 'completed_cases') return '已完成';
+    if (key === 'pending_review') return '待审核';
+    if (key === 'case_management') return '案件管理';
+    if (key === 'case_management_desc') return '管理和跟踪所有破产案件的进展情况';
+    if (key === 'search_cases') return '搜索案件...';
+    if (key === 'filter') return '筛选';
+    if (key === 'export') return '导出';
+    if (key === 'create_new_case') return '创建新案件';
+    if (key === 'loading_cases') return '正在加载案件列表...';
+    if (key === 'case_number') return '案件编号';
+    if (key === 'case_procedure') return '案件程序';
+    if (key === 'case_lead') return '案件负责人';
+    if (key === 'creator') return '创建人';
+    if (key === 'acceptance_date') return '受理时间';
+    if (key === 'current_stage') return '程序进程';
+    if (key === 'actions') return '操作';
+    if (key === 'no_cases') return '暂无案件数据';
+    if (key === 'view_details') return '查看详情';
+    if (key === 'view_documents') return '查看材料';
+    if (key === 'modify_status') return '修改状态';
+    if (key === 'meeting_minutes') return '会议纪要';
+    if (key === 'print') return '打印';
+    if (key === 'download_report') return '下载报告';
+    if (key === 'archive_case') return '归档案件';
+    return key; // Default fallback
+  };
+
+  const mockI18n = {
+    changeLanguage: vi.fn(),
+    // Add any other i18n properties your component might rely on,
+    // ensuring they are stable references if necessary.
+  };
+
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string, options?: any) => {
-        if (options && options.title) return options.title;
-        if (key === 'first_creditors_meeting_minutes_title') return '第一次债权人会议纪要';
-        if (key === 'second_creditors_meeting_minutes_title') return '第二次债权人会议纪要';
-        if (key === 'meeting_minutes_generic_title') return '会议纪要';
-        if (key === 'meeting_minutes_save_success_mock') return '会议纪要已（模拟）保存成功！';
-        return key;
-      },
-      i18n: { changeLanguage: vi.fn() }
+      t: mockT, // Use the stable mockT
+      i18n: mockI18n, // Use the stable mockI18n
     }),
   };
 });
@@ -132,7 +186,7 @@ describe('CaseListPage', () => {
         authenticate: vi.fn(),
         sync: vi.fn(),
         close: vi.fn(),
-      } as any,
+      } as Partial<Surreal>, // MODIFIED
       isConnecting: false,
       isSuccess: true,
       isError: false,

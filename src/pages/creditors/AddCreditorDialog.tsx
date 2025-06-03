@@ -16,25 +16,16 @@ import {
   SelectChangeEvent,
 } from '@mui/material';
 
-// Using Creditor type from creditors page for consistency
-import { Creditor } from '@/src/pages/creditors';
+// Using Creditor type from local types file
+import type { Creditor, CreditorFormData } from './types'; // MODIFIED PATH
 
-// Form data type with camelCase property names for form handling
-export type CreditorFormData = {
-  id?: string;
-  category: string; // Maps to Creditor.type
-  name: string;
-  identifier: string;
-  contactPersonName: string; // Maps to Creditor.contact_person_name
-  contactInfo: string; // Maps to Creditor.contact_person_phone
-  address: string;
-};
+// Form data type `CreditorFormData` moved to ./types.ts
 
 interface AddCreditorDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (creditorData: CreditorFormData) => void;
-  existingCreditor?: Creditor | null; // Changed type to Creditor
+  existingCreditor?: Creditor | null;
 }
 
 // Initial form data constant
@@ -128,7 +119,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
       <DialogContent dividers>
         {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
         <Grid container spacing={2} sx={{pt:1}}> {/* Added padding top for better spacing with error alert */}
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid item xs={12} sm={6}>
             <FormControl fullWidth variant="outlined" required error={formError && !creditorData.category ? true : undefined}>
               <InputLabel id="category-select-label">{t('creditor_form_category_label', '类别')}</InputLabel>
               <Select
@@ -145,7 +136,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               </Select>
             </FormControl>
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid item xs={12} sm={6}>
             <TextField
               required
               id="name"
@@ -157,7 +148,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid size={12}>
+          <Grid item xs={12}>
             <TextField
               required
               id="identifier"
@@ -169,7 +160,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid item xs={12} sm={6}>
             <TextField
               id="contactPersonName"
               name="contactPersonName"
@@ -180,7 +171,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid item xs={12} sm={6}>
             <TextField
               id="contactInfo"
               name="contactInfo"
@@ -191,7 +182,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid size={12}>
+          <Grid item xs={12}>
             <TextField
               id="address"
               name="address"

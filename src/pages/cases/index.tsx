@@ -63,27 +63,30 @@ import MeetingMinutesDialog from '@/src/components/case/MeetingMinutesDialog';
 import { QuillDelta } from '@/src/components/RichTextEditor';
 
 // Define interfaces based on SurrealDB schema
-interface Case {
+// Interface for the direct output of the SurrealDB query in fetchCases
+interface RawCaseData {
   id: RecordId;
-  name: string;
-  case_number: string;
-  case_manager_name: string;
-  case_procedure: string;
-  acceptance_date: string;
-  procedure_phase: string;
+  name?: string;
+  case_number?: string;
+  case_manager_name?: string;
+  case_procedure?: string;
+  acceptance_date?: string;
+  procedure_phase?: string;
   created_by_user: RecordId;
   case_lead_user_id?: RecordId;
-  created_at: string;
-  updated_at: string;
+  created_at?: string;
+  updated_at?: string;
+  creator_name?: string;
+  case_lead_name?: string;
 }
 
-interface User {
-  id: RecordId;
-  name: string;
-  email?: string;
-}
+// Interface 'Case' might be redundant if CaseItem and RawCaseData cover needs,
+// or could represent a more canonical model of a case if needed elsewhere.
+// (Interface Case removed as it's unused after ESLint check)
 
-// Define a type for our case items with joined user data
+// (Interface User removed as it's unused after ESLint check)
+
+// Define a type for our case items displayed in the table (after transformation)
 interface CaseItem {
   id: string;
   case_number: string;
@@ -146,7 +149,7 @@ const CaseListPage: React.FC = () => {
         const result = await client.query(query);
         
         if (result && result[0]) {
-          const casesData = result[0] as any[];
+          const casesData = result[0] as RawCaseData[]; // MODIFIED: Use RawCaseData[]
           
           // Transform the data to match our CaseItem interface
           const transformedCases: CaseItem[] = casesData.map(caseData => ({
