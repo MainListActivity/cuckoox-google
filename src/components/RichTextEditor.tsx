@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Quill from 'quill';
-import type { Delta } from 'quill/core';
-import { useSurreal } from '@/src/hooks/useSurreal'; // Import useSurreal
+import type { Delta as QuillDeltaType } from 'quill/core';
+import { useSurrealClient as useSurreal } from '@/src/contexts/SurrealProvider';
 import 'quill/dist/quill.snow.css';
 import '@/src/styles/quill-theme.css';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ if (icons && !icons['attach']) {
 }
 
 // Export Delta type
-export type QuillDelta = Delta;
+export type QuillDelta = QuillDeltaType;
 
 interface RichTextEditorProps {
   value: QuillDelta | string; // Accept initial HTML string or a Delta object
@@ -228,7 +228,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
 
     // Create new handler
-    const handler = async (delta: Delta, oldDelta: Delta, source: any) => {
+    const handler = async (delta: QuillDeltaType, oldDelta: QuillDeltaType, source: any) => {
       const currentContents = editor.getContents();
       
       if (onChange) {
@@ -270,43 +270,41 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const editor = quillRef.current;
 
     const handleLiveChange = (data: any) => {
-      if (data.action === 'CREATE' && data.result && data.result.docId === documentId) {
-        // Handle incoming deltas
-        if (data.result.delta && data.result.userId !== userId) { // Only apply deltas from other users
-          if (quillRef.current) {
-            quillRef.current.updateContents(data.result.delta, 'api');
-          }
+      // Ensure data and data.result are defined and data.result has expected properties
+      // Assuming the delta content is in a field like 'deltaContent' within data.result
+      if (data && data.result && typeof data.result.docId === 'string' && data.result.docId === documentId) {
+        if (data.action === 'CREATE') { // Listen for CREATE events
+            const incomingDeltaRecord = data.result as { deltaContent?: QuillDeltaType, userId?: string };
+            if (incomingDeltaRecord.deltaContent && incomingDeltaRecord.userId !== userId) {
+                if (quillRef.current) {
+                    quillRef.current.updateContents(incomingDeltaRecord.deltaContent, 'api');
+                }
+            }
         }
-        // Handle incoming cursor updates (to be implemented)
-        // if (data.result.cursor && data.result.userId !== userId) {
-        //   updateRemoteCursor(data.result.cursor);
-        // }
       }
     };
 
     // Live query for new deltas related to the current document
-    // This assumes deltas are stored in a 'delta' table/collection
-    // and have a 'docId' field and a timestamp 'ts' for ordering if necessary.
     const liveQuery = `LIVE SELECT * FROM delta WHERE docId = '${documentId}' ORDER BY ts ASC`;
 
     let liveQueryId: string | null = null;
 
     const setupLiveQuery = async () => {
+      if (!surreal) return;
       try {
-        // Check if the document exists. If not, create it.
-        // This step might be handled differently based on application flow.
-        const doc = await surreal.select(`document:${documentId}`);
-        if (!doc) {
-          await surreal.create(`document:${documentId}`, { content: { ops: [] } }); // Initialize with empty Delta
+        const docSnapshot = await surreal.select(`document:${documentId}`) as Array<{ content?: QuillDeltaType }>;
+        if (!docSnapshot || docSnapshot.length === 0) {
+          await surreal.create(`document:${documentId}`, { content: { ops: [] } });
         }
 
-        // Subscribe to deltas
-        const result = await surreal.query(liveQuery);
-        if (result && result.length > 0 && typeof result[0].result === 'string') {
-          liveQueryId = result[0].result;
-          surreal.listenLive(liveQueryId, handleLiveChange);
+        // Assuming query returns: [{ result: "live-query-uuid" }]
+        const queryResult = await surreal.query(liveQuery) as Array<{ result: string }>;
+        if (queryResult && queryResult.length > 0 && queryResult[0] && typeof queryResult[0].result === 'string') {
+          liveQueryId = queryResult[0].result;
+          // Use type assertion for listenLive
+          (surreal as any).listenLive(liveQueryId, handleLiveChange);
         } else {
-          console.error('Failed to setup live query for deltas.');
+          console.error('Failed to setup live query for deltas or parse result.');
         }
       } catch (error) {
         console.error('Failed to setup live query or create document:', error);
@@ -317,38 +315,50 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const fetchInitialContentAndSubscribe = async () => {
         if (!quillRef.current || !surreal || !documentId) return;
         try {
-            // Fetch all deltas for the document and apply them
-            // This is a simplified way to reconstruct the document.
-            // A snapshotting mechanism would be better for performance with many deltas.
-            const deltasResult: any[] = await surreal.select(`delta WHERE docId = '${documentId}' ORDER BY ts ASC`);
+            // Assuming 'delta' records have a field named 'deltaContent' storing the actual QuillDelta
+            type DeltaRecord = { id?: any; deltaContent?: QuillDeltaType; [key: string]: any };
+            const deltasResult = await surreal.select<DeltaRecord>(`delta WHERE docId = '${documentId}' ORDER BY ts ASC`);
+            
             if (deltasResult && deltasResult.length > 0) {
-                const initialDeltas = deltasResult.map(d => d.delta);
-                // Combine all deltas into one to set initial content
-                const combinedDelta = initialDeltas.reduce((acc, current) => acc.compose(current), new Quill.sources.API().delta());
-                if (quillRef.current) {
-                    quillRef.current.setContents(combinedDelta, 'api');
-                }
-            } else {
-                 // If no deltas, check for a snapshot or initialize empty
-                const doc = await surreal.select(`document:${documentId}`);
-                if (doc && (doc as any).content) {
+                const initialDeltas = deltasResult.filter(d => d.deltaContent).map(d => d.deltaContent as QuillDeltaType);
+                if (initialDeltas.length > 0) {
+                    const DeltaStatic = Quill.import('delta');
+                    const combinedDelta = initialDeltas.reduce((acc, current) => acc.compose(new DeltaStatic(current)), new DeltaStatic());
                     if (quillRef.current) {
-                        quillRef.current.setContents((doc as any).content, 'api');
+                        quillRef.current.setContents(combinedDelta, 'api');
                     }
                 } else {
-                    // Initialize with empty content if document is new or has no content
-                    if (quillRef.current) {
+                    // Fallback to document snapshot if deltas are present but none have deltaContent
+                    type DocumentSnapshot = { content?: QuillDeltaType };
+                    const docSnapshotArray = await surreal.select<DocumentSnapshot>(`document:${documentId}`);
+                    const docSnapshot = docSnapshotArray && docSnapshotArray.length > 0 ? docSnapshotArray[0] : null;
+                    if (docSnapshot && docSnapshot.content) {
+                        if (quillRef.current) {
+                            quillRef.current.setContents(docSnapshot.content, 'api');
+                        }
+                    } else if (quillRef.current) {
                         quillRef.current.setContents({ ops: [] } as any, 'api');
                     }
                 }
+            } else {
+                 type DocumentSnapshot = { content?: QuillDeltaType };
+                 const docSnapshotArray = await surreal.select<DocumentSnapshot>(`document:${documentId}`);
+                 const docSnapshot = docSnapshotArray && docSnapshotArray.length > 0 ? docSnapshotArray[0] : null;
+                if (docSnapshot && docSnapshot.content) {
+                    if (quillRef.current) {
+                        quillRef.current.setContents(docSnapshot.content, 'api');
+                    }
+                } else if (quillRef.current) {
+                    quillRef.current.setContents({ ops: [] } as any, 'api');
+                }
             }
         } catch (error) {
-            console.error('Failed to fetch initial deltas:', error);
+            console.error('Failed to fetch initial deltas or document snapshot:', error);
             if (quillRef.current) {
-              quillRef.current.setText('Error loading document.', 'api');
+              quillRef.current.setText(t('error_loading_document', 'Error loading document.'), 'api');
             }
         } finally {
-            setupLiveQuery(); // Setup live query after attempting to load initial content
+            setupLiveQuery();
         }
     };
 
@@ -356,10 +366,11 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     return () => {
       if (liveQueryId && surreal) {
-        surreal.kill(liveQueryId);
+        // Use type assertion for kill
+        (surreal as any).kill(liveQueryId as string);
       }
     };
-  }, [isInitialized, surreal, documentId]); // Add surreal and documentId to dependencies
+  }, [isInitialized, surreal, documentId, userId, t]); // Added userId and t
 
   // Update editor content when value prop changes
   // Effect for handling local selection changes and sending cursor updates
@@ -369,17 +380,15 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const editor = quillRef.current;
 
     const selectionChangeHandler = async (range: any, oldRange: any, source: string) => {
-      if (source === 'user' && range && surreal) { // Check surreal instance
+      if (source === 'user' && range && surreal) {
         try {
-          // Record for cursor position: `cursor:<docId>:<userId>`
           const cursorId = `cursor:${documentId}:${userId}`;
-          // Use `change` to create or update the cursor position.
-          // SurrealDB's `change` method with `diff` true can be efficient here if supported well by the client.
-          // Otherwise, a simple create/update by ID is fine.
-          await surreal.change(cursorId, {
+          // Use type assertion for change, or use update/merge if available and appropriate
+          // Using merge as a common alternative for create/update semantics
+          await (surreal as any).merge(cursorId, { // Changed to merge
             docId: documentId,
             userId: userId,
-            userName: userName, // Include userName
+            userName: userName,
             range: range,
             ts: new Date().toISOString(),
           });
@@ -391,9 +400,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     editor.on('selection-change', selectionChangeHandler);
 
-    // Cleanup: remove user's cursor information when editor is unmounted or user leaves
     const cleanupCursor = async () => {
-      if (surreal) { // Check surreal instance
+      if (surreal) {
         try {
           const cursorId = `cursor:${documentId}:${userId}`;
           await surreal.delete(cursorId);
@@ -403,9 +411,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }
     };
 
-
     window.addEventListener('beforeunload', cleanupCursor);
-
 
     return () => {
       editor.off('selection-change', selectionChangeHandler);
@@ -506,10 +512,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     let liveCursorQueryId: string | null = null;
 
     const handleRemoteCursorChange = (data: any) => {
-      if (data.result && data.result.docId === documentId && data.result.userId !== userId) {
+      // Ensure data and data.result are defined and data.result has expected properties
+      if (data && data.result && typeof data.result.docId === 'string' && data.result.docId === documentId && data.result.userId !== userId) {
         const { userId: remoteUserId, userName: remoteUserName, range, ts } = data.result;
 
-        // Assign a color using the new USER_COLORS palette and hash function
         const userHash = remoteUserId.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
         const color = USER_COLORS[userHash % USER_COLORS.length];
 
@@ -531,12 +537,14 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const setupLiveCursorQuery = async () => {
       if (!surreal) return;
       try {
-        const result = await surreal.query(liveCursorQuery);
-        if (result && result.length > 0 && typeof result[0].result === 'string') {
-          liveCursorQueryId = result[0].result;
-          surreal.listenLive(liveCursorQueryId, handleRemoteCursorChange);
+        // Assuming query returns: [{ result: "live-query-uuid" }]
+        const queryResult = await surreal.query(liveCursorQuery) as Array<{ result: string }>;
+        if (queryResult && queryResult.length > 0 && queryResult[0] && typeof queryResult[0].result === 'string') {
+          liveCursorQueryId = queryResult[0].result;
+          // Use type assertion for listenLive
+          (surreal as any).listenLive(liveCursorQueryId, handleRemoteCursorChange);
         } else {
-          console.error('Failed to setup live query for remote cursors.');
+          console.error('Failed to setup live query for remote cursors or parse result.');
         }
       } catch (error) {
         console.error('Error setting up live query for remote cursors:', error);
@@ -547,9 +555,9 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
     return () => {
       if (liveCursorQueryId && surreal) {
-        surreal.kill(liveCursorQueryId);
+        // Use type assertion for kill
+        (surreal as any).kill(liveCursorQueryId as string);
       }
-      // Clear remote cursors on unmount
       document.querySelectorAll('.remote-cursor').forEach(el => el.remove());
       document.querySelectorAll('.remote-selection').forEach(el => el.remove());
     };

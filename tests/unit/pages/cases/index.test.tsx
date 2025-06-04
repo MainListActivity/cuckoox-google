@@ -1,13 +1,10 @@
-import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import CaseListPage from '@/src/pages/cases/index';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router-dom';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n';
 import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
-import { Context as SurrealContext, useSurreal } from '@/src/contexts/SurrealProvider';
+import { Context as SurrealContext } from '@/src/contexts/SurrealProvider';
 import type Surreal from 'surrealdb';
 
 // Define the context type based on the SurrealProvider implementation
@@ -19,7 +16,7 @@ interface SurrealContextType {
   error: Error | null;
   connect: () => Promise<boolean>;
   disconnect: () => Promise<void>;
-  signin: (auth: unknown) => Promise<string | void>; // MODIFIED
+  signin: (auth: unknown) => Promise<any>;
   signout: () => Promise<void>;
 }
 
@@ -141,21 +138,19 @@ const mockCasesData = [
 ];
 
 // Define mockSurrealContextValue in the describe scope
-let mockSurrealContextValue: Partial<SurrealContextType>;
+let mockSurrealContextValue: SurrealContextType;
 
 // Helper function to render the component with necessary providers
-const renderCaseListPage = () => { // Removed 'cases' parameter as it's not used to inject data directly
-  // The component will fetch data via the mocked SurrealContext's query method.
+const renderCaseListPage = () => {
   return render(
     <ThemeProvider theme={theme}>
       <BrowserRouter>
-        {/* <I18nextProvider i18n={i18n}> // Using vi.mock for useTranslation */}
+        {/* Ensure mockSurrealContextValue is fully typed or cast correctly at the point of use */}
         <SurrealContext.Provider value={mockSurrealContextValue as SurrealContextType}>
-          <SnackbarProvider> {/* Use the actual provider if useSnackbar is complex, or mock it fully */}
+          <SnackbarProvider>
             <CaseListPage />
           </SnackbarProvider>
         </SurrealContext.Provider>
-        {/* </I18nextProvider> */}
       </BrowserRouter>
     </ThemeProvider>
   );
@@ -163,40 +158,38 @@ const renderCaseListPage = () => { // Removed 'cases' parameter as it's not used
 
 describe('CaseListPage', () => {
   beforeEach(() => {
-    // Reset mocks before each test
     mockShowSuccess.mockClear();
     mockShowError.mockClear();
 
-    // Setup mockSurrealContextValue here to ensure it's fresh for each test
-    mockSurrealContextValue = { // This will now correctly refer to the outer-scoped variable
+    mockSurrealContextValue = {
       surreal: {
-        query: vi.fn().mockResolvedValue([mockCasesData]), // Default to returning mockCasesData
-        select: vi.fn(),
-        create: vi.fn(),
-        update: vi.fn(),
-        merge: vi.fn(),
-        delete: vi.fn(),
-        live: vi.fn(),
+        query: vi.fn().mockResolvedValue([mockCasesData]),
+        select: vi.fn().mockResolvedValue([]), // Add mock for select
+        create: vi.fn().mockResolvedValue({}),  // Add mock for create
+        update: vi.fn().mockResolvedValue({}),  // Add mock for update
+        merge: vi.fn().mockResolvedValue({}),   // Add mock for merge
+        delete: vi.fn().mockResolvedValue({}),  // Add mock for delete
+        live: vi.fn(),   // Mock other methods if potentially called, even if not directly by CaseListPage
         kill: vi.fn(),
         let: vi.fn(),
         unset: vi.fn(),
-        signup: vi.fn(),
-        signin: vi.fn(),
-        invalidate: vi.fn(),
-        authenticate: vi.fn(),
-        sync: vi.fn(),
-        close: vi.fn(),
-      } as Partial<Surreal>, // MODIFIED
+        signup: vi.fn().mockResolvedValue({}),
+        signin: vi.fn().mockResolvedValue({}), // Ensure this matches the context type
+        invalidate: vi.fn().mockResolvedValue(undefined),
+        authenticate: vi.fn().mockResolvedValue(''),
+        sync: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        // Ensure all methods expected by Surreal type are here or use a more robust mock for Surreal class
+      } as unknown as Surreal, // Cast to Surreal, assuming all necessary methods are mocked
       isConnecting: false,
       isSuccess: true,
       isError: false,
       error: null,
       connect: vi.fn().mockResolvedValue(true),
       disconnect: vi.fn().mockResolvedValue(undefined),
-      signin: vi.fn().mockResolvedValue({}),
+      signin: vi.fn().mockResolvedValue({}), // Matches updated SurrealContextType
       signout: vi.fn().mockResolvedValue(undefined),
     };
-    // Any other necessary resets
   });
 
   it('renders page title "案件列表"', () => {
@@ -267,7 +260,7 @@ describe('CaseListPage', () => {
   
   it('shows "暂无案件数据" when no cases are provided', async () => { // Made async
     // Override the default query mock for this specific test
-    (mockSurrealContextValue.surreal.query as vi.Mock).mockResolvedValueOnce([[]]); // Return empty array
+    (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([[]]); // Return empty array
     renderCaseListPage();
     await waitFor(() => {
       expect(screen.getByText('暂无案件数据')).toBeInTheDocument();

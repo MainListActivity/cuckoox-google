@@ -52,7 +52,7 @@ interface UserCaseRoleDetails {
   role_details: Role;  // Populated by SurrealDB FETCH
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   isLoggedIn: boolean;
   user: AppUser | null;
   oidcUser: OidcUser | null;
@@ -78,7 +78,7 @@ interface AuthContextType {
   clearNavigateTo: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const CREDITOR_MANAGEMENT_PATH = '/creditors'; // Define target path
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {

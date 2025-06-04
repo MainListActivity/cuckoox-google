@@ -32,7 +32,7 @@ interface SurrealProviderProps {
 }
 
 // Create the SurrealContext
-interface SurrealContextValue {
+export interface SurrealContextValue {
     surreal: Surreal;
     /** Whether the connection is pending */
     isConnecting: boolean;
@@ -191,7 +191,7 @@ export function useSurrealClient() {
 
 // Re-export common TanStack Query hooks for convenience, typed for SurrealDB
 export function useSurrealQuery<TData = unknown, TError = Error>(
-    queryKey: string | readonly unknown[],
+    queryKey: readonly unknown[],
     queryFn: (client: Surreal) => Promise<TData>,
     options?: Omit<Parameters<typeof useQuery<TData, TError>>[0], 'queryKey' | 'queryFn'>
 ) {
