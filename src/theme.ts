@@ -37,7 +37,6 @@ declare module '@mui/material/styles' {
   }
 }
 
-
 // Define the light palette
 const lightPalette: PaletteOptions = {
   primary: {
@@ -85,35 +84,35 @@ const lightPalette: PaletteOptions = {
 // Define the dark palette
 const darkPalette: PaletteOptions = {
   primary: {
-    main: teal[300], // Teal family - Lighter shade for dark mode
-    light: teal[200],
-    dark: teal[400],
+    main: teal[500], // 更新为与设计稿一致的 teal[500]
+    light: teal[300],
+    dark: teal[700],
   },
   secondary: {
-    main: cyan[400], // From localDarkTheme, can adjust if needed
-    light: cyan[300],
-    dark: cyan[500],
+    main: teal[200], // 更新为与设计稿一致的 teal[200]
+    light: teal[100],
+    dark: teal[300],
   },
   background: {
-    default: '#121212', // Dark mode background from localDarkTheme
-    paper: '#1e1e1e',   // Dark mode paper from localDarkTheme
+    default: '#121212', // 与设计稿一致的暗色背景
+    paper: '#1e1e1e',   // 与设计稿一致的暗色纸张背景
   },
   text: {
-    primary: '#ffffff',        // White text for dark mode
-    secondary: grey[400],    // Lighter grey for secondary text
+    primary: '#ffffff',        // 白色文本用于暗色模式
+    secondary: 'rgba(255, 255, 255, 0.7)', // 与设计稿一致的次要文本颜色
     disabled: grey[600],
   },
-  warning: { // Consistent with localDarkTheme
+  warning: { // 保持一致的警告颜色
     main: yellow[700],
     light: yellow[500],
     dark: yellow[800],
   },
-  info: { // Consistent with localDarkTheme's blue usage for info
+  info: { // 保持一致的信息颜色
     main: blue[300], 
     light: blue[200],
     dark: blue[400],
   },
-  statBlue: { main: cyan[400], light: cyan[300], dark: cyan[500] }, // Using cyan as in localDarkTheme for consistency
+  statBlue: { main: cyan[400], light: cyan[300], dark: cyan[500] },
   statGreen: { main: green[400], light: green[300], dark: green[500] },
   statYellow: { main: yellow[400], light: yellow[300], dark: yellow[500] },
   statPurple: { main: purple[300], light: purple[200], dark: purple[400] },
@@ -135,7 +134,15 @@ export const getAppTheme = (mode: 'light' | 'dark') => {
       ...selectedPalette,
     },
     typography: {
-      fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      fontFamily: [
+        '-apple-system',
+        'BlinkMacSystemFont',
+        '"Segoe UI"',
+        'Roboto',
+        '"Helvetica Neue"',
+        'Arial',
+        'sans-serif',
+      ].join(','),
       h1: { 
         fontWeight: 700, 
         letterSpacing: '0.05em', 
@@ -178,10 +185,50 @@ export const getAppTheme = (mode: 'light' | 'dark') => {
           }),
         },
       },
+      MuiDrawer: {
+        styleOverrides: {
+          paper: ({ theme }) => ({
+            backgroundColor: mode === 'dark' ? teal[900] : teal[700],
+            color: '#ffffff',
+          }),
+        },
+      },
+      MuiAppBar: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            backgroundColor: mode === 'dark' ? 'transparent' : '#f6f6f6',
+            color: mode === 'dark' ? '#ffffff' : 'rgba(0, 0, 0, 0.87)',
+            boxShadow: 'none',
+            borderBottom: mode === 'dark' 
+              ? '1px solid rgba(255, 255, 255, 0.12)' 
+              : '1px solid rgba(0, 0, 0, 0.12)',
+          }),
+        },
+      },
+      MuiListItemButton: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            borderRadius: 1,
+            '&:hover': {
+              backgroundColor: alpha(theme.palette.primary.main, 0.08),
+            },
+            '&.Mui-selected': {
+              backgroundColor: alpha(theme.palette.primary.main, 0.16),
+              '&:hover': {
+                backgroundColor: alpha(theme.palette.primary.main, 0.24),
+              },
+            },
+          }),
+        },
+      },
     },
   });
 };
 
+// 导出深色主题和亮色主题
+export const darkTheme = getAppTheme('dark');
+export const lightTheme = getAppTheme('light');
+
 // Export a default theme (e.g., light theme) for convenience or initial load
-const defaultTheme = getAppTheme('light');
+const defaultTheme = getAppTheme('dark'); // 默认使用深色模式
 export default defaultTheme;

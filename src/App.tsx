@@ -128,6 +128,23 @@ function App() {
         );
     }
 
+    // 首页路由单独处理，不在Layout中显示
+    if (location.pathname === '/') {
+        return (
+            <CustomThemeProvider>
+                <SnackbarProvider>
+                    <CaseStatusProvider>
+                        <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
+                            <Routes>
+                                <Route path="/" element={<HomePage />} />
+                            </Routes>
+                        </Suspense>
+                    </CaseStatusProvider>
+                </SnackbarProvider>
+            </CustomThemeProvider>
+        );
+    }
+
     return (
         <CustomThemeProvider>
             <SnackbarProvider>
@@ -135,7 +152,6 @@ function App() {
                     <Layout>
                         <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
                             <Routes>
-                                <Route path="/" element={<HomePage /> as ReactNode} />
                                 <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />

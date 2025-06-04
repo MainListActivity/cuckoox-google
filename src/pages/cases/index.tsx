@@ -108,6 +108,14 @@ const CaseListPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 表头单元格的通用样式
+  const tableHeadCellStyle = {
+    fontWeight: 600, 
+    backgroundColor: theme.palette.mode === 'dark' 
+      ? alpha(theme.palette.background.paper, 0.6) 
+      : '#f6f6f6'
+  };
+
   // State for dialogs
   const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
   const [meetingMinutesOpen, setMeetingMinutesOpen] = useState(false);
@@ -479,25 +487,25 @@ const CaseListPage: React.FC = () => {
               <Table stickyHeader aria-label="case list table">
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                    <TableCell sx={tableHeadCellStyle}>
                       {t('case_number', '案件编号')}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                    <TableCell sx={tableHeadCellStyle}>
                       {t('case_procedure', '案件程序')}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                    <TableCell sx={tableHeadCellStyle}>
                       {t('case_lead', '案件负责人')}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                    <TableCell sx={tableHeadCellStyle}>
                       {t('creator', '创建人')}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                    <TableCell sx={tableHeadCellStyle}>
                       {t('acceptance_date', '受理时间')}
                     </TableCell>
-                    <TableCell sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                    <TableCell sx={tableHeadCellStyle}>
                       {t('current_stage', '程序进程')}
                     </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 600, backgroundColor: '#f6f6f6' }}>
+                    <TableCell align="center" sx={tableHeadCellStyle}>
                       {t('actions', '操作')}
                     </TableCell>
                   </TableRow>

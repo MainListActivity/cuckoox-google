@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,9 @@ import {
   Grow,
   SvgIcon,
   Chip,
+  AppBar,
+  Toolbar,
+  alpha,
 } from '@mui/material';
 import {
   mdiFileDocumentMultiple,
@@ -33,15 +36,25 @@ import {
   mdiSecurity,
   mdiFormatQuoteClose,
   mdiStar,
+  mdiLogin,
+  mdiViewDashboard,
 } from '@mdi/js';
 
 const HomePage: React.FC = () => {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+
+  // 自动重定向已登录用户到仪表盘
+  useEffect(() => {
+    // 如果需要自动重定向已登录用户，取消下面的注释
+    // if (isLoggedIn) {
+    //   navigate('/dashboard');
+    // }
+  }, [isLoggedIn, navigate]);
 
   const features = [
     {
@@ -121,7 +134,57 @@ const HomePage: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: theme.palette.background.default }}>
+    <Box sx={{ 
+      minHeight: '100vh', 
+      backgroundColor: theme.palette.background.default,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* 顶部导航栏 */}
+      <AppBar 
+        position="fixed" 
+        color="transparent" 
+        elevation={0}
+        sx={{ 
+          backgroundColor: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        <Toolbar>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 700 }}>
+            CuckooX
+          </Typography>
+          {isLoggedIn ? (
+            <Stack direction="row" spacing={2}>
+              <Button 
+                variant="outlined" 
+                onClick={() => navigate('/dashboard')} 
+                startIcon={<SvgIcon><path d={mdiViewDashboard} /></SvgIcon>}
+              >
+                {t('go_to_dashboard', '进入仪表盘')}
+              </Button>
+              <Button 
+                variant="contained" 
+                color="primary" 
+                onClick={() => navigate('/cases')}
+              >
+                {t('view_cases', '查看案件')}
+              </Button>
+            </Stack>
+          ) : (
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={() => navigate('/login')}
+              startIcon={<SvgIcon><path d={mdiLogin} /></SvgIcon>}
+            >
+              {t('login', '登录')}
+            </Button>
+          )}
+        </Toolbar>
+      </AppBar>
+      <Toolbar /> {/* 占位，防止内容被AppBar覆盖 */}
+
       {/* Hero Section */}
       <Box
         sx={{
@@ -224,7 +287,7 @@ const HomePage: React.FC = () => {
                     }}
                     endIcon={<SvgIcon><path d={mdiArrowRight} /></SvgIcon>}
                   >
-                    {t('go_to_dashboard', 'Go to Dashboard')}
+                    {t('go_to_dashboard', '进入仪表盘')}
                   </Button>
                   <Button
                     variant="outlined"
@@ -247,7 +310,7 @@ const HomePage: React.FC = () => {
                       transition: 'all 0.3s ease',
                     }}
                   >
-                    {t('view_cases', 'View Cases')}
+                    {t('view_cases', '查看案件')}
                   </Button>
                 </Stack>
               ) : (
@@ -273,7 +336,7 @@ const HomePage: React.FC = () => {
                     }}
                   endIcon={<SvgIcon><path d={mdiArrowRight} /></SvgIcon>}
                 >
-                  {t('get_started', 'Get Started')}
+                  {t('get_started', '立即开始')}
                 </Button>
               )}
             </Box>
@@ -415,7 +478,14 @@ const HomePage: React.FC = () => {
       </Container>
 
       {/* Benefits Section */}
-      <Box sx={{ backgroundColor: '#f6f6f6', py: { xs: 8, md: 12 } }}>
+      <Box sx={{ 
+        backgroundColor: theme.palette.mode === 'dark' 
+          ? alpha(theme.palette.background.paper, 0.2)  
+          : alpha(theme.palette.primary.light, 0.05),
+        py: { xs: 8, md: 12 },
+        borderTop: `1px solid ${alpha(theme.palette.divider, 0.05)}`,
+        borderBottom: `1px solid ${alpha(theme.palette.divider, 0.05)}`,
+      }}>
         <Container maxWidth="lg">
           <Box textAlign="center" mb={8}>
             <Typography
@@ -439,8 +509,23 @@ const HomePage: React.FC = () => {
                   sx={{
                     p: 4,
                     height: '100%',
-                    backgroundColor: 'transparent',
+                    backgroundColor: theme.palette.mode === 'dark'
+                      ? alpha(theme.palette.background.paper, 0.1)
+                      : alpha(theme.palette.background.paper, 0.8),
+                    borderRadius: 4,
+                    border: `1px solid ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.2 : 0.1)}`,
                     textAlign: 'center',
+                    transition: 'all 0.3s ease',
+                    boxShadow: theme.palette.mode === 'dark'
+                      ? `0 4px 20px ${alpha(theme.palette.common.black, 0.2)}`
+                      : `0 4px 20px ${alpha(theme.palette.common.black, 0.05)}`,
+                    '&:hover': {
+                      transform: 'translateY(-8px)',
+                      boxShadow: theme.palette.mode === 'dark'
+                        ? `0 8px 30px ${alpha(theme.palette.common.black, 0.3)}`
+                        : `0 8px 30px ${alpha(theme.palette.common.black, 0.1)}`,
+                      borderColor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.3 : 0.2),
+                    }
                   }}
                 >
                   <Box
@@ -454,6 +539,7 @@ const HomePage: React.FC = () => {
                       justifyContent: 'center',
                       mx: 'auto',
                       mb: 3,
+                      boxShadow: `0 4px 10px ${alpha(theme.palette.primary.main, 0.3)}`,
                     }}
                   >
                     <SvgIcon sx={{ fontSize: 32, color: 'white' }}>
@@ -555,43 +641,93 @@ const HomePage: React.FC = () => {
       </Box>
 
       {/* CTA Section */}
-      {!isLoggedIn && (
-        <Box
-          sx={{
-            background: 'linear-gradient(135deg, #00ACC1 0%, #0097A7 100%)',
-            color: 'white',
-            py: { xs: 6, md: 8 },
-            textAlign: 'center',
-            position: 'relative',
-            overflow: 'hidden',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'url("https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=20")',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              opacity: 0.1,
-            },
-          }}
-        >
-          <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
-            <Typography
-              variant="h3"
-              sx={{
-                fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.5rem' },
-                fontWeight: 700,
-                mb: 3,
-              }}
-            >
-              {t('ready_to_get_started', 'Ready to Get Started?')}
-            </Typography>
-            <Typography variant="h6" sx={{ mb: 4, opacity: 0.95 }}>
-              {t('cta_subtitle', 'Join thousands of professionals using CuckooX to streamline their bankruptcy management')}
-            </Typography>
+      <Box
+        sx={{
+          background: 'linear-gradient(135deg, #00ACC1 0%, #0097A7 100%)',
+          color: 'white',
+          py: { xs: 6, md: 8 },
+          textAlign: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'url("https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=20")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.1,
+          },
+        }}
+      >
+        <Container maxWidth="md" sx={{ position: 'relative', zIndex: 1 }}>
+          <Typography
+            variant="h3"
+            sx={{
+              fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.5rem' },
+              fontWeight: 700,
+              mb: 3,
+            }}
+          >
+            {isLoggedIn 
+              ? t('welcome_back', '欢迎回来')
+              : t('ready_to_get_started', '准备好开始了吗？')}
+          </Typography>
+          <Typography variant="h6" sx={{ mb: 4, opacity: 0.95 }}>
+            {isLoggedIn 
+              ? t('continue_to_app', '继续使用CuckooX管理您的破产案件')
+              : t('cta_subtitle', '加入数千名使用CuckooX简化破产管理的专业人士')}
+          </Typography>
+          {isLoggedIn ? (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} justifyContent="center">
+              <Button
+                variant="contained"
+                size="large"
+                onClick={() => navigate('/dashboard')}
+                sx={{
+                  backgroundColor: 'white',
+                  color: '#00ACC1',
+                  px: 5,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  fontWeight: 600,
+                  borderRadius: 3,
+                  '&:hover': {
+                    backgroundColor: 'rgba(255,255,255,0.9)',
+                    transform: 'scale(1.05)',
+                  },
+                  transition: 'all 0.3s ease',
+                }}
+                startIcon={<SvgIcon><path d={mdiViewDashboard} /></SvgIcon>}
+              >
+                {t('go_to_dashboard', '进入仪表盘')}
+              </Button>
+              <Button
+                variant="outlined"
+                size="large"
+                onClick={() => navigate('/cases')}
+                sx={{
+                  borderColor: 'white',
+                  color: 'white',
+                  px: 5,
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  fontWeight: 600,
+                  borderRadius: 3,
+                  borderWidth: 2,
+                  '&:hover': {
+                    borderColor: 'white',
+                    backgroundColor: 'rgba(255,255,255,0.1)',
+                  },
+                }}
+              >
+                {t('view_cases', '查看案件')}
+              </Button>
+            </Stack>
+          ) : (
             <Button
               variant="contained"
               size="large"
@@ -610,12 +746,13 @@ const HomePage: React.FC = () => {
                 },
                 transition: 'all 0.3s ease',
               }}
+              startIcon={<SvgIcon><path d={mdiLogin} /></SvgIcon>}
             >
-              {t('sign_up_free', 'Sign Up Free')}
+              {t('sign_up_free', '免费注册')}
             </Button>
-          </Container>
-        </Box>
-      )}
+          )}
+        </Container>
+      </Box>
     </Box>
   );
 };
