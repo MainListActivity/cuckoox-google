@@ -1,0 +1,364 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 测试指南
+
+## 测试策略
+
+### 测试层级
+
+1. **单元测试** - 组件和函数级别测试
+2. **集成测试** - 页面和功能模块测试
+
+### 测试工具
+
+- **单元测试**: Vitest + React Testing Library
+
+## 运行测试
+
+### 基本命令
+
+```bash
+# 运行所有单元测试
+npm run test:run
+
+# 运行特定测试用例
+npx vitest --run --testNamePattern="CaseListPage renders search field and filter button" tests/unit/pages/cases/index.test.tsx
+
+# 运行测试UI界面
+npm run test:ui
+
+```
+
+### 代码提交前检查
+
+```bash
+# 1. 运行ESLint检查
+npx eslint src/**/*.tsx
+
+# 2. 运行所有单元测试
+npm run test:run
+
+# 3. 确保所有测试通过后再提交代码
+```
+
+## 单元测试规范
+
+### 测试文件结构
+
+```
+tests/
+├── unit/                # 单元测试
+│   ├── components/      # 组件测试
+│   │   ├── Layout.test.tsx
+│   │   └── RichTextEditor.test.tsx
+│   ├── pages/           # 页面测试
+│   │   ├── cases/
+│   │   │   ├── index.test.tsx
+│   │   │   └── [caseId].test.tsx
+│   │   └── creditors/
+│   ├── services/        # 服务测试
+│   │   ├── caseService.test.ts
+│   │   └── claimService.test.ts
+│   └── hooks/           # Hook测试
+└── e2e/                 # E2E测试
+    ├── auth.spec.ts
+    ├── cases.spec.ts
+    └── claims.spec.ts
+```
+
+### 测试命名规范
+
+```typescript
+// 描述性测试名称，使用中文说明具体功能
+describe('CaseListPage', () => {
+  it('renders search field and filter button', () => {
+    // 测试搜索字段和筛选按钮的渲染
+  });
+  
+  it('displays case list correctly', () => {
+    // 测试案件列表正确显示
+  });
+  
+  it('handles create case button click', () => {
+    // 测试创建案件按钮点击事件
+  });
+});
+```
+
+### 组件测试模式
+
+```typescript
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { ThemeProvider } from '@mui/material/styles';
+import CaseListPage from '@/pages/cases/index';
+import { createTheme } from '@mui/material/styles';
+
+const renderWithTheme = (component: React.ReactElement) => {
+  const theme = createTheme();
+  return render(
+    <ThemeProvider theme={theme}>
+      {component}
+    </ThemeProvider>
+  );
+};
+
+describe('CaseListPage', () => {
+  it('renders search field and filter button', () => {
+    renderWithTheme(<CaseListPage />);
+    
+    expect(screen.getByPlaceholderText('搜索案件...')).toBeInTheDocument();
+    expect(screen.getByText('创建案件')).toBeInTheDocument();
+  });
+  
+  it('calls onCreateCase when create button is clicked', () => {
+    const mockOnCreate = vi.fn();
+    renderWithTheme(<CaseListPage onCreateCase={mockOnCreate} />);
+    
+    fireEvent.click(screen.getByText('创建案件'));
+    expect(mockOnCreate).toHaveBeenCalled();
+  });
+});
+```
+
+### 服务测试模式
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { caseService } from '@/services/caseService';
+
+// Mock SurrealDB
+vi.mock('surrealdb');
+
+describe('caseService', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+  
+  it('creates case successfully', async () => {
+    const mockCaseData = {
+      case_number: 'TEST001',
+      responsible_person: 'test@example.com',
+      case_procedure: '破产',
+      acceptance_date: '2024-01-01'
+    };
+    
+    const result = await caseService.createCase(mockCaseData);
+    
+    expect(result).toHaveProperty('id');
+    expect(result.case_number).toBe('TEST001');
+  });
+  
+  it('handles case creation error', async () => {
+    const invalidData = {};
+    
+    await expect(caseService.createCase(invalidData)).rejects.toThrow();
+  });
+});
+```
+
+### Hook测试模式
+
+```typescript
+import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect } from 'vitest';
+import { useAuth } from '@/contexts/AuthContext';
+
+describe('useAuth', () => {
+  it('initializes with loading state', () => {
+    const { result } = renderHook(() => useAuth());
+    
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.user).toBe(null);
+  });
+  
+  it('handles login successfully', async () => {
+    const { result } = renderHook(() => useAuth());
+    
+    await act(async () => {
+      await result.current.login('test@example.com', 'password');
+    });
+    
+    expect(result.current.isAuthenticated).toBe(true);
+    expect(result.current.user).toBeTruthy();
+  });
+});
+```
+
+## E2E测试规范
+
+### 页面对象模式
+
+```typescript
+// e2e/pages/CaseListPage.ts
+export class CaseListPage {
+  constructor(private page: Page) {}
+  
+  async goto() {
+    await this.page.goto('/cases');
+  }
+  
+  async searchCase(query: string) {
+    await this.page.fill('[placeholder="搜索案件..."]', query);
+    await this.page.press('[placeholder="搜索案件..."]', 'Enter');
+  }
+  
+  async createCase() {
+    await this.page.click('text=创建案件');
+  }
+  
+  async expectCaseVisible(caseNumber: string) {
+    await expect(this.page.locator(`text=${caseNumber}`)).toBeVisible();
+  }
+}
+```
+
+### E2E测试用例
+
+```typescript
+// e2e/cases.spec.ts
+import { test, expect } from '@playwright/test';
+import { CaseListPage } from './pages/CaseListPage';
+
+test.describe('案件管理', () => {
+  test('用户可以查看案件列表', async ({ page }) => {
+    const caseListPage = new CaseListPage(page);
+    
+    await caseListPage.goto();
+    await caseListPage.expectCaseVisible('TEST001');
+  });
+  
+  test('用户可以搜索案件', async ({ page }) => {
+    const caseListPage = new CaseListPage(page);
+    
+    await caseListPage.goto();
+    await caseListPage.searchCase('TEST001');
+    await caseListPage.expectCaseVisible('TEST001');
+  });
+  
+  test('用户可以创建新案件', async ({ page }) => {
+    const caseListPage = new CaseListPage(page);
+    
+    await caseListPage.goto();
+    await caseListPage.createCase();
+    
+    // 验证创建案件对话框打开
+    await expect(page.locator('[role="dialog"]')).toBeVisible();
+  });
+});
+```
+
+## Mock数据管理
+
+### 测试数据结构
+
+```typescript
+// tests/mocks/data.ts
+export const mockCases = [
+  {
+    id: 'case1',
+    case_number: 'TEST001',
+    responsible_person: 'test@example.com',
+    case_procedure: '破产',
+    acceptance_date: '2024-01-01',
+    process_stage: '立案',
+    creator: 'admin@example.com'
+  }
+];
+
+export const mockCreditors = [
+  {
+    id: 'creditor1',
+    case_id: 'case1',
+    type: '组织',
+    name: '测试公司',
+    id_number: '91110000000000000X',
+    contact_name: '张三',
+    contact_info: '13800138000',
+    address: '北京市朝阳区'
+  }
+];
+```
+
+### Mock服务
+
+```typescript
+// tests/mocks/handlers.ts
+import { rest } from 'msw';
+import { mockCases, mockCreditors } from './data';
+
+export const handlers = [
+  rest.get('/api/cases', (req, res, ctx) => {
+    return res(ctx.json(mockCases));
+  }),
+  
+  rest.post('/api/cases', (req, res, ctx) => {
+    const newCase = { id: 'new-case', ...req.body };
+    return res(ctx.json(newCase));
+  }),
+  
+  rest.get('/api/creditors', (req, res, ctx) => {
+    const caseId = req.url.searchParams.get('case_id');
+    const filteredCreditors = mockCreditors.filter(c => c.case_id === caseId);
+    return res(ctx.json(filteredCreditors));
+  })
+];
+```
+
+## 覆盖率要求
+
+### 最低覆盖率标准
+
+- **组件测试**: 80%以上
+- **服务测试**: 90%以上
+- **关键业务流程**: 100%
+
+### 覆盖率检查
+
+```bash
+# 生成覆盖率报告
+npm run test:run -- --coverage
+
+# 查看详细覆盖率报告
+open coverage/index.html
+```
+
+## 持续集成
+
+### GitHub Actions配置
+
+```yaml
+# .github/workflows/test.yml
+name: Test
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run ESLint
+        run: npm run lint
+      
+      - name: Run unit tests
+        run: npm run test:run
+      
+      - name: Run E2E tests
+        run: npm run test:e2e
+```
+
+## 重要配置文件
+
+- [package.json](mdc:package.json) - 测试脚本配置
+- [playwright.config.ts](mdc:playwright.config.ts) - Playwright配置
+- [tests/](mdc:tests) - 测试文件目录

@@ -2,7 +2,7 @@
 // TODO: Access Control - This page should be accessible only to users with 'admin' or specific claim review roles.
 // TODO: Access Control - Data loaded should be verified against case access permissions.
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
+import { useParams, Link as RouterLink } from 'react-router-dom'; // Removed useNavigate
 import {
   Box,
   Typography,
@@ -24,7 +24,7 @@ import {
   InputLabel,
   Chip,
   FormHelperText,
-  Link as MuiLink, // For external links if any
+  // Link as MuiLink, // Removed unused import
   List,
   ListItem,
   ListItemText,
@@ -39,13 +39,14 @@ import {
   mdiArrowLeft,
   mdiPencilOutline, // For "开始审核" / "修改审核结果" FAB
   mdiCheckDecagramOutline, // For "提交审核" button in modal
-  mdiCommentTextOutline, // For internal notes
-  mdiFileDocumentOutline, // For attachments
+  // mdiCommentTextOutline, // Removed unused import
+  // mdiFileDocumentOutline, // Removed unused import
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor'; // Assuming QuillDelta is exported
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { Delta } from 'quill/core'; // For initializing editor content
+import { useAuth } from '@/src/contexts/AuthContext'; // Added useAuth import
 
 // Define a type for the claim data structure for better type safety
 interface AssertedDetails {
@@ -132,8 +133,9 @@ const initialMockClaimData: ClaimDataType = {
 const ClaimReviewDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const { id: claimIdFromParams } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // Removed unused variable
   const { showSuccess, showError } = useSnackbar();
+  const { user } = useAuth(); // Get user from AuthContext
 
   // TODO: Fetch actual claim data based on claimIdFromParams
   const [claimData, setClaimData] = useState<ClaimDataType | null>(null);
@@ -283,6 +285,9 @@ const ClaimReviewDetailPage: React.FC = () => {
     );
   }
 
+  const editorUserId = user?.id ? String(user.id) : "unknown-user";
+  const editorUserName = (user as any)?.name || user?.email || "Unknown User";
+
 
   return (
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -337,7 +342,13 @@ const ClaimReviewDetailPage: React.FC = () => {
                       <ListItem sx={{flexDirection: 'column', alignItems: 'flex-start'}}>
                         <Typography variant="caption" color="text.secondary">{t('admin_supplemental_material_label', '管理人补充材料')}:</Typography>
                         <Box sx={{ mt:1, p:1, border: '1px solid', borderColor: 'divider', borderRadius:1, width:'100%', maxHeight:150, overflowY:'auto'}}>
-                          <RichTextEditor value={claimData.admin_attachments_content} readOnly={true} />
+                          <RichTextEditor
+                            value={claimData.admin_attachments_content}
+                            readOnly={true}
+                            documentId={`claim-${claimData.id}-admin-attachments-readonly`}
+                            userId={editorUserId}
+                            userName={editorUserName}
+                          />
                         </Box>
                       </ListItem>
                   )}
@@ -354,7 +365,13 @@ const ClaimReviewDetailPage: React.FC = () => {
                     <Button size="small" disabled>{t('view_history_button_placeholder', '查看历史版本 (未来功能)')}</Button>
                   </Stack>
                   <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 250, p: 1, bgcolor: 'action.hover' }}>
-                    <RichTextEditor value={claimData.asserted_details.attachments_content} readOnly={true} />
+                    <RichTextEditor
+                      value={claimData.asserted_details.attachments_content}
+                      readOnly={true}
+                      documentId={`claim-${claimData.id}-asserted-attachments-readonly`}
+                      userId={editorUserId}
+                      userName={editorUserName}
+                    />
                   </Box>
                 </Paper>
 
@@ -365,6 +382,9 @@ const ClaimReviewDetailPage: React.FC = () => {
                         value={adminInternalNotes}
                         onChange={setAdminInternalNotes}
                         placeholder={t('admin_internal_notes_placeholder', '输入内部审核备注，此内容对债权人不可见...')}
+                        documentId={`claim-${claimData.id}-internal-notes`}
+                        userId={editorUserId}
+                        userName={editorUserName}
                     />
                   </Box>
                   <Typography variant="caption" color="text.secondary" sx={{mt:1, display:'block'}}>{t('admin_internal_notes_disclaimer', '此备注仅为管理员内部记录，不作为官方审核意见的一部分。')}</Typography>
@@ -482,6 +502,9 @@ const ClaimReviewDetailPage: React.FC = () => {
                   <RichTextEditor
                       value={modalAdminSupplementalAttachmentsContent}
                       onChange={setModalAdminSupplementalAttachmentsContent}
+                      documentId={`claim-${claimData.id}-modal-supplemental`}
+                      userId={editorUserId}
+                      userName={editorUserName}
                   />
                 </Box>
               </Grid>

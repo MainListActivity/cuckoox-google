@@ -7,7 +7,6 @@ import {
   Paper,
   Typography,
   Button,
-  Alert,
   Grid,
 } from '@mui/material';
 import PageContainer from '@/src/components/PageContainer';
@@ -27,6 +26,11 @@ const ClaimAttachmentPage: React.FC = () => {
     currency: 'CNY', // TODO: Fetch based on claimId
     nature: '普通债权', // TODO: Fetch based on claimId
   };
+
+  // TODO: Get actual userId and userName from auth context
+  const currentUserId = 'placeholder-user-id'; // Placeholder for userId
+  const currentUserName = 'Placeholder User'; // Placeholder for userName
+
 
   const handleSaveDraft = () => {
     // Simulate API call
@@ -108,7 +112,13 @@ const ClaimAttachmentPage: React.FC = () => {
           }}>
             {/* TODO: Configure RichTextEditor for image uploads to MinIO (via backend service). */}
             {/* TODO: Configure RichTextEditor for other file attachments (links/icons, via backend service). */}
-            <RichTextEditor value={editorContent} onChange={setEditorContent} />
+            <RichTextEditor
+              value={editorContent}
+              onChange={setEditorContent}
+              documentId={`claim-attachment-${claimId}`}
+              userId={currentUserId}
+              userName={currentUserName}
+            />
           </Box>
           <Typography variant="caption" color="text.secondary">
             请在此处详细说明债权情况，并上传相关证明文件（如合同、发票、银行流水、判决书等）。支持图片、PDF、Word、Excel等文件格式。

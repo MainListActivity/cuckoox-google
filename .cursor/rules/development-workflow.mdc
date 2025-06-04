@@ -1,0 +1,279 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 开发工作流程
+
+## 项目快速上手
+
+### 环境准备
+
+1. **Node.js**: 确保安装 Node.js 18+
+2. **包管理器**: 使用 npm
+3. **编辑器**: 推荐使用支持TypeScript的编辑器
+4. **Git配置**: 
+   ```bash
+   git config user.email '1025988443@qq.com'
+   git config user.name 'MainListActivity'
+   ```
+
+### 启动项目
+
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+
+# 运行测试
+npm run test:run
+
+# 代码检查
+npm run lint
+```
+
+## 代码提交流程
+
+### 提交前检查清单
+
+1. ✅ **ESLint检查通过**
+   ```bash
+   npx eslint src/**/*.tsx
+   ```
+
+2. ✅ **所有单元测试通过**
+   ```bash
+   npm run test:run
+   ```
+
+3. ✅ **页面功能正常**
+   - 在浏览器中预览功能
+   - 确保深色/亮色模式正常切换
+   - 检查响应式布局
+
+4. ✅ **代码符合规范**
+   - 使用MUI组件
+   - 遵循TypeScript类型定义
+   - 图标使用@mdi/js矢量图标
+   - 图片使用Unsplash链接
+
+## 开发规范速查
+
+### 技术栈选择
+
+| 用途 | 技术选择 | 说明 |
+|------|----------|------|
+| UI组件 | MUI v7 | 必须使用，遵循Material Design |
+| 图标 | @mdi/js | 矢量图标，支持主题切换 |
+| 图片 | Unsplash | 开源图片网站链接 |
+| 富文本 | QuillJS v2 | 支持图片上传和文件附件 |
+| 数据库 | SurrealDB | 实时数据库，支持Live Query |
+| 文件存储 | MinIO | S3协议兼容 |
+| 状态管理 | React Context + TanStack Query | 认证状态 + 数据缓存 |
+| 测试 | Vitest + Playwright | 单元测试 + E2E测试 |
+
+### 主题系统
+
+- **默认模式**: 深色模式
+- **主色系**: Material Design Teal
+- **切换位置**: 右上角
+- **响应式**: 支持多设备分辨率
+- **组件适配**: 所有组件必须支持主题切换
+
+### 代码组织
+
+```
+src/
+├── App.tsx              # 路由配置
+├── theme.ts             # 主题配置
+├── components/          # 可复用组件
+│   ├── Layout.tsx       # 主布局
+│   ├── RichTextEditor.tsx # 富文本编辑器
+│   └── GlobalLoader.tsx # 全局加载器
+├── pages/               # 页面组件
+│   ├── cases/           # 案件管理
+│   ├── creditors/       # 债权人管理
+│   ├── claims/          # 债权申报/审核
+│   └── dashboard/       # 数据大屏
+├── contexts/            # 状态管理
+│   ├── AuthContext.tsx  # 用户认证
+│   └── ThemeContext.tsx # 主题状态
+├── services/            # API服务
+│   ├── caseService.ts   # 案件服务
+│   └── claimService.ts  # 债权服务
+├── hooks/               # 自定义Hooks
+├── types/               # TypeScript类型
+└── styles/              # 样式文件
+```
+
+## 功能开发指南
+
+### 新页面开发
+
+1. **创建页面组件**
+   ```typescript
+   // src/pages/newPage/index.tsx
+   import { Container, Typography } from '@mui/material';
+   
+   export default function NewPage() {
+     return (
+       <Container>
+         <Typography variant="h4">新页面</Typography>
+       </Container>
+     );
+   }
+   ```
+
+2. **添加路由配置**
+   ```typescript
+   // src/App.tsx
+   const NewPage = lazy(() => import('./pages/newPage'));
+   
+   // 在路由中添加
+   <Route path="/new" element={<NewPage />} />
+   ```
+
+3. **编写单元测试**
+   ```typescript
+   // tests/unit/pages/newPage.test.tsx
+   describe('NewPage', () => {
+     it('renders correctly', () => {
+       render(<NewPage />);
+       expect(screen.getByText('新页面')).toBeInTheDocument();
+     });
+   });
+   ```
+
+### 新组件开发
+
+1. **组件设计原则**
+   - 支持深色/亮色模式
+   - 响应式设计
+   - TypeScript类型定义
+   - 可访问性支持
+
+2. **组件模板**
+   ```typescript
+   import { useTheme } from '@mui/material/styles';
+   import { Box, BoxProps } from '@mui/material';
+   
+   interface NewComponentProps extends BoxProps {
+     // 自定义属性
+   }
+   
+   export default function NewComponent(props: NewComponentProps) {
+     const theme = useTheme();
+     
+     return (
+       <Box {...props}>
+         {/* 组件内容 */}
+       </Box>
+     );
+   }
+   ```
+
+### API服务开发
+
+1. **服务文件结构**
+   ```typescript
+   // src/services/newService.ts
+   export interface DataType {
+     id: string;
+     name: string;
+   }
+   
+   export const fetchData = async (): Promise<DataType[]> => {
+     // API调用逻辑
+   };
+   
+   export const createData = async (data: DataType): Promise<DataType> => {
+     // 创建数据逻辑
+   };
+   ```
+
+2. **使用TanStack Query**
+   ```typescript
+   import { useQuery } from '@tanstack/react-query';
+   import { fetchData } from '@/services/newService';
+   
+   export const useData = () => {
+     return useQuery({
+       queryKey: ['data'],
+       queryFn: fetchData,
+     });
+   };
+   ```
+
+## 常见问题解决
+
+### 1. 主题切换问题
+
+确保组件使用主题变量：
+```typescript
+const theme = useTheme();
+const backgroundColor = theme.palette.background.default;
+```
+
+### 2. 图标显示问题
+
+使用MDI图标库：
+```typescript
+import Icon from '@mdi/react';
+import { mdiAccount } from '@mdi/js';
+
+<Icon path={mdiAccount} size={1} color={theme.palette.text.primary} />
+```
+
+### 3. 响应式布局问题
+
+使用MUI断点系统：
+```typescript
+import { useMediaQuery } from '@mui/material';
+
+const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+```
+
+### 4. 测试失败问题
+
+确保测试环境配置正确：
+```typescript
+// 使用测试专用的渲染函数
+const renderWithProviders = (component) => {
+  return render(
+    <ThemeProvider theme={theme}>
+      <AuthProvider>
+        {component}
+      </AuthProvider>
+    </ThemeProvider>
+  );
+};
+```
+
+## 参考资料
+
+### 核心文档
+
+- [project-overview.mdc](mdc:.cursor/rules/project-overview.mdc) - 项目概述
+- [coding-standards.mdc](mdc:.cursor/rules/coding-standards.mdc) - 编码规范
+- [business-logic.mdc](mdc:.cursor/rules/business-logic.mdc) - 业务逻辑
+- [component-patterns.mdc](mdc:.cursor/rules/component-patterns.mdc) - 组件模式
+- [api-patterns.mdc](mdc:.cursor/rules/api-patterns.mdc) - API模式
+- [testing-guidelines.mdc](mdc:.cursor/rules/testing-guidelines.mdc) - 测试指南
+
+### 项目文档
+
+- [doc/规范.md](mdc:doc/规范.md) - 详细开发规范
+- [doc/产品说明文档-jules.md](mdc:doc/产品说明文档-jules.md) - 产品需求文档
+- [doc/design_tasks_checklist.md](mdc:doc/design_tasks_checklist.md) - 设计任务清单
+- [doc/develop_tasks_checklist.md](mdc:doc/develop_tasks_checklist.md) - 开发任务清单
+
+### 外部资源
+
+- [Material-UI官方文档](mdc:https:/mui.com)
+- [Material Design指南](mdc:https:/m2.material.io/design)
+- [SurrealDB文档](mdc:https:/surrealdb.com/docs)
+- [MDI图标库](mdc:https:/materialdesignicons.com)
+- [Unsplash图片](mdc:https:/unsplash.com)
+

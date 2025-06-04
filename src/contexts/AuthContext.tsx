@@ -24,8 +24,8 @@ export interface NavItemType {
   path: string;
   labelKey: string; // Key for i18n translation
   iconName: string; // String key to map to an MDI icon (e.g., 'mdiViewDashboard')
-  requiredRoles?: string[]; // Optional: roles that can see this specific item (for client-side mock filtering)
-  children?: NavItemType[]; // For future sub-menus
+  requiredRoles?: readonly string[]; // 修改为只读数组
+  children?: readonly NavItemType[]; // 修改为只读数组
 }
 // END NavItemType definition
 
@@ -52,7 +52,7 @@ interface UserCaseRoleDetails {
   role_details: Role;  // Populated by SurrealDB FETCH
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   isLoggedIn: boolean;
   user: AppUser | null;
   oidcUser: OidcUser | null;
@@ -78,7 +78,7 @@ interface AuthContextType {
   clearNavigateTo: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const CREDITOR_MANAGEMENT_PATH = '/creditors'; // Define target path
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -283,54 +283,121 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // 菜单配置常量
+  const ALL_NAV_ITEMS = [
+    { 
+      id: 'dashboard', 
+      path: '/dashboard', 
+      labelKey: 'nav_dashboard', 
+      iconName: 'mdiViewDashboard', 
+      requiredRoles: ['case_manager', 'admin', 'creditor_representative'] 
+    },
+    { 
+      id: 'cases', 
+      path: '/cases', 
+      labelKey: 'nav_case_management', 
+      iconName: 'mdiBriefcase', 
+      requiredRoles: ['case_manager', 'admin'] 
+    },
+    { 
+      id: 'creditors', 
+      path: '/creditors', 
+      labelKey: 'nav_creditor_management', 
+      iconName: 'mdiAccountGroup', 
+      requiredRoles: ['case_manager', 'admin'] 
+    },
+    { 
+      id: 'claims_list', 
+      path: '/claims', 
+      labelKey: 'nav_claim_management', 
+      iconName: 'mdiFileDocumentOutline', 
+      requiredRoles: ['case_manager', 'admin'] 
+    },
+    { 
+      id: 'my_claims', 
+      path: '/my-claims', 
+      labelKey: 'nav_my_claims', 
+      iconName: 'mdiFileDocumentSearchOutline', 
+      requiredRoles: ['creditor_representative'] 
+    },
+    { 
+      id: 'claims_submit', 
+      path: '/claims/submit', 
+      labelKey: 'nav_claim_submission', 
+      iconName: 'mdiFileUploadOutline', 
+      requiredRoles: ['creditor_representative'] 
+    },
+    { 
+      id: 'claim_dashboard', 
+      path: '/claim-dashboard', 
+      labelKey: 'nav_claim_dashboard', 
+      iconName: 'mdiChartBar', 
+      requiredRoles: ['case_manager', 'admin'] 
+    },
+    { 
+      id: 'online_meetings', 
+      path: '/online-meetings', 
+      labelKey: 'nav_online_meetings', 
+      iconName: 'mdiVideo', 
+      requiredRoles: ['case_manager', 'admin', 'creditor_representative'] 
+    },
+    { 
+      id: 'messages', 
+      path: '/messages', 
+      labelKey: 'nav_message_center', 
+      iconName: 'mdiMessageTextOutline', 
+      requiredRoles: ['case_manager', 'admin', 'creditor_representative'] 
+    },
+    { 
+      id: 'admin_home', 
+      path: '/admin', 
+      labelKey: 'nav_system_management', 
+      iconName: 'mdiCog', 
+      requiredRoles: ['admin'] 
+    }
+  ] as const;
+
+  // 菜单权限逻辑
+  const getAccessibleMenuItems = (userRoles: readonly Role[], isAdmin: boolean): NavItemType[] => {
+    if (isAdmin) return [...ALL_NAV_ITEMS]; // 创建一个新的数组
+    const userRoleNames = userRoles.map(role => role.name);
+    return ALL_NAV_ITEMS.filter(item => {
+      if (!item.requiredRoles?.length) return true;
+      return item.requiredRoles.some(requiredRole => userRoleNames.includes(requiredRole));
+    }) as NavItemType[]; // 类型断言为非只读数组
+  };
+
+  // 更新菜单状态
   const fetchAndUpdateMenuPermissions = async (currentRoles: Role[]) => {
-    // Check if user is admin (github_id === '--admin--')
-    const isAdmin = user && user.github_id === '--admin--';
-    
-    if (!isAdmin && (!currentRoles || currentRoles.length === 0)) {
-      setNavMenuItems([]); // No roles, no menu items for non-admin users
+    if (!user) {
+      setNavMenuItems([]);
       return;
     }
-    
+
+    const isAdmin = user.github_id === '--admin--';
     setIsMenuLoading(true);
-    console.log("Fetching menu permissions for roles:", currentRoles.map(r => r.name));
-
-    // ** MOCK IMPLEMENTATION - Replace with actual API call later **
-    const mockAllNavItems: NavItemType[] = [
-      { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard', requiredRoles: ['case_manager', 'admin', 'creditor_representative'] },
-      { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase', requiredRoles: ['case_manager', 'admin'] },
-      { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountGroup', requiredRoles: ['case_manager', 'admin'] },
-      { id: 'claims_list', path: '/claims', labelKey: 'nav_claim_management', iconName: 'mdiFileDocumentOutline', requiredRoles: ['case_manager', 'admin'] },
-      { id: 'my_claims', path: '/my-claims', labelKey: 'nav_my_claims', iconName: 'mdiFileDocumentSearchOutline', requiredRoles: ['creditor_representative'] },
-      { id: 'claims_submit', path: '/claims/submit', labelKey: 'nav_claim_submission', iconName: 'mdiFileUploadOutline', requiredRoles: ['creditor_representative'] },
-      { id: 'claim_dashboard', path: '/claim-dashboard', labelKey: 'nav_claim_dashboard', iconName: 'mdiChartBar', requiredRoles: ['case_manager', 'admin'] },
-      { id: 'online_meetings', path: '/online-meetings', labelKey: 'nav_online_meetings', iconName: 'mdiVideo', requiredRoles: ['case_manager', 'admin', 'creditor_representative'] },
-      { id: 'messages', path: '/messages', labelKey: 'nav_message_center', iconName: 'mdiMessageTextOutline', requiredRoles: ['case_manager', 'admin', 'creditor_representative'] },
-      { id: 'admin_home', path: '/admin', labelKey: 'nav_system_management', iconName: 'mdiCog', requiredRoles: ['admin'] },
-    ];
-
-    let filteredNavItems: NavItemType[];
     
-    if (isAdmin) {
-      // Admin users get all menu items without filtering
-      filteredNavItems = mockAllNavItems;
-      console.log("Admin user detected, returning all menu items");
-    } else {
-      // Non-admin users get filtered menu items based on their roles
-      const userRoleNames = currentRoles.map(role => role.name);
-      filteredNavItems = mockAllNavItems.filter(item => {
-        if (!item.requiredRoles || item.requiredRoles.length === 0) return true; // No specific roles required
-        return item.requiredRoles.some(requiredRole => userRoleNames.includes(requiredRole));
+    try {
+      if (!isAdmin && (!currentRoles?.length)) {
+        console.log('No roles assigned - returning empty menu');
+        setNavMenuItems([]);
+        return;
+      }
+      
+      const accessibleMenuItems = getAccessibleMenuItems(currentRoles, isAdmin);
+      
+      setNavMenuItems(accessibleMenuItems);
+      console.log('Menu items updated:', {
+        userRoles: isAdmin ? ['admin'] : currentRoles.map(r => r.name),
+        menuCount: accessibleMenuItems.length
       });
-    }
-    // End of Mock Implementation
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
 
-    setNavMenuItems(filteredNavItems);
-    setIsMenuLoading(false);
-    console.log("Updated navMenuItems:", filteredNavItems);
+    } catch (error) {
+      console.error('Error updating menu permissions:', error);
+      setNavMenuItems([]);
+    } finally {
+      setIsMenuLoading(false);
+    }
   };
   
   // Helper function to update last selected case in DB
@@ -430,33 +497,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    // 检查是否有用户会话
+    if (!user) {
+      console.warn("Logout called without a user session.");
+      clearAuthState();
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
-    const isAdmin = user && user.github_id === '--admin--';
+    const isAdmin = user.github_id === '--admin--';
 
     try {
+      // 统一先清理本地存储和状态
+      clearAuthState();
+
+      // 根据用户类型执行不同的登出操作
       if (isAdmin) {
-        try {
-          await signout(); // MODIFIED db.signout to client.signout
-          console.log('Admin user signed out from SurrealDB.');
-        } catch (e) {
-          console.error('Error during SurrealDB signout:', e);
-          // Continue with client-side logout even if server signout fails
-        }
-        // For admin, client-side cleanup is handled in finally block
-      } else if (user) { // Regular OIDC user
-        await authService.logoutRedirect(); // This will redirect
-        // Post-redirect, OIDC library and app's initial load logic handle state.
-        // The finally block here ensures immediate client state cleanup
-        // in case the redirect is slow or has issues, or for non-redirect scenarios.
+        await signout();
+        console.log('Admin user signed out from SurrealDB.');
       } else {
-        console.warn("Logout called without a user session.");
+        await authService.logoutRedirect();
       }
     } catch (error) {
-      // This catches errors primarily from authService.logoutRedirect() or db.signout()
+      // 统一错误处理
       console.error("Error during logout process:", error);
     } finally {
-      // Clear all client-side state for any logout type or if logout was called without user
-      clearAuthState();
       setIsLoading(false);
     }
   };
@@ -493,13 +559,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const hasRole = (roleName: string): boolean => {
-    if (roleName === 'admin') {
-      return user ? user.github_id === '--admin--' : false;
+    // 如果没有用户登录,直接返回false
+    if (!user) {
+      return false;
     }
-    // Existing logic for case-specific roles
+
+    // 检查是否为管理员
+    if (user.github_id === '--admin--') {
+      return true; // 管理员拥有所有权限
+    }
+
+    // 对于普通用户,需要检查具体角色权限
+    if (roleName === 'admin') {
+      return false; // 非管理员用户没有admin权限
+    }
+
+    // 其他角色权限判断
+    // 如果没有选择案件或没有角色,返回false
     if (!selectedCaseId || currentUserCaseRoles.length === 0) {
       return false;
     }
+
+    // 检查用户在当前案件中是否拥有指定角色
     return currentUserCaseRoles.some(role => role.name === roleName);
   };
 

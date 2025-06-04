@@ -1,0 +1,82 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 编码规范
+
+## 基本开发流程
+
+1. **提交代码前必须执行单元测试**
+   - 运行命令: `npm run test:run`
+   - 确保ESLint检查通过: `npx eslint xxx.tsx`
+   - 所有测试必须通过才能提交代码
+
+2. **单元测试执行**
+   - 运行所有测试: `npm run test:run`
+   - 运行特定测试: `npx vitest --run --testNamePattern="测试用例名称" tests/unit/path/to/test.tsx`
+
+## UI设计规范
+
+### 响应式设计
+- 必须考虑不同设备分辨率（Android、iOS、PC全屏、PC 600x800）
+- 使用MUI的响应式断点系统
+- 优先移动端设计 (Mobile First)
+
+### 图标和图片
+- **图标**: 使用在线矢量图标库 (@mdi/js)
+- **图片**: 使用Unsplash开源图片网站链接
+- 所有图标必须是矢量格式，支持主题切换
+
+### 主题系统
+- **默认模式**: 深色模式
+- **切换位置**: 右上角
+- **主色系**: Material Design Teal色系
+- **背景色**: 亮色模式使用 #f6f6f6
+- **菜单设计**: 左侧菜单使用重点色突出显示，顶部AppBar与主视图融为一体
+
+## 技术规范
+
+### UI组件库
+- **主要组件库**: MUI v7
+- **Grid组件使用语法**:
+```typescript
+import { Grid } from '@mui/material';
+
+<Grid container spacing={2}>
+  <Grid size={8}>
+    <Item>size=8</Item>
+  </Grid>
+  <Grid size={4}>
+    <Item>size=4</Item>
+  </Grid>
+</Grid>
+```
+
+### 数据库
+- **SurrealDB**: 参考实现 `https://github.com/Odonno/surrealdb-presence-demo`
+- 利用SurrealDB的实时消息能力实现数据同步
+
+### 代码质量
+- **ESLint**: 提交前必须通过ESLint检查
+- **单元测试**: 所有功能模块必须编写单元测试
+- **目录结构**: 使用ReactJS官方推荐的结构
+
+### 富文本编辑
+- **编辑器**: QuillJS v2
+- **图片存储**: 上传到MinIO，编辑器中直接预览
+- **文件附件**: 支持下载链接形式
+
+## Git配置
+
+```shell
+git config user.email '1025988443@qq.com'
+git config user.name 'MainListActivity'
+```
+
+## 重要文件
+
+- [规范.md](mdc:doc/规范.md) - 详细开发规范
+- [src/theme.ts](mdc:src/theme.ts) - 主题配置
+- [package.json](mdc:package.json) - 项目依赖配置
+- [.eslintrc.json](mdc:.eslintrc.json) - ESLint配置
