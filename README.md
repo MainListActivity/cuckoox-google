@@ -6,6 +6,12 @@ This contains everything you need to run your app locally.
 
 **Prerequisites:**  Node.js
 
+ssh-keygen -t rsa -b 2048 -C "1025988443@qq.com" -f ~/.ssh/cuckoox
+
+git config --global user.email "1025988443@qq.com"
+git config --global user.name "MainActivity"
+git config --global core.sshCommand "ssh -i ~/.ssh/cuckoox"
+
 
 1. Install dependencies:
    `npm install`
