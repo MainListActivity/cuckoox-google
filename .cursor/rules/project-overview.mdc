@@ -1,0 +1,61 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# CuckooX 破产案件全生命周期管理平台
+
+## 项目概述
+
+这是一个为破产案件管理人提供的全面、高效的案件管理和分析平台。平台支持对破产案件的整体流程和全生命周期进行精细化管理，包括案件立案、债权申报、债权审核、会议管理以及数据可视化分析。
+
+## 技术栈
+
+- **前端框架**: React 19 + TypeScript
+- **UI组件库**: Material-UI (MUI) v7
+- **路由**: React Router DOM v6
+- **状态管理**: React Context API + TanStack Query
+- **数据库**: SurrealDB (实时数据库)
+- **文件存储**: MinIO (S3协议)
+- **富文本编辑**: QuillJS
+- **认证**: OIDC (GitHub登录) + SurrealDB直接登录
+- **样式**: MUI + CSS变量 (支持深色/亮色模式)
+- **图标**: Material Design Icons (@mdi/js)
+- **图片**: Unsplash开源图片
+- **测试**: Vitest + Playwright
+- **构建工具**: Vite
+
+## 核心模块
+
+1. **案件管理** - 案件创建、状态管理、详情查看
+2. **债权人管理** - 债权人录入、批量导入、打印快递单
+3. **债权申报** - 债权人申报债权、附件材料编辑
+4. **债权审核** - 管理人审核债权、批量操作
+5. **数据大屏** - 实时数据可视化、图表展示
+6. **在线会议** - 会议安排、纪要编辑
+7. **消息中心** - IM聊天、系统提醒、通知管理
+8. **身份管理** - 角色权限配置（管理员功能）
+
+## 项目结构
+
+- [src/App.tsx](mdc:src/App.tsx) - 主应用组件，包含路由配置
+- [src/components/](mdc:src/components) - 可复用组件
+- [src/pages/](mdc:src/pages) - 页面组件
+- [src/contexts/](mdc:src/contexts) - React Context状态管理
+- [src/services/](mdc:src/services) - API服务层
+- [src/hooks/](mdc:src/hooks) - 自定义React Hooks
+- [src/types/](mdc:src/types) - TypeScript类型定义
+- [src/theme.ts](mdc:src/theme.ts) - MUI主题配置
+- [doc/](mdc:doc) - 项目文档
+- [tests/](mdc:tests) - 单元测试
+- [e2e/](mdc:e2e) - E2E测试
+
+## 权限体系
+
+- **admin** - 超级管理员，拥有完整系统配置权限
+- **案件负责人** - 案件管理权限
+- **协办律师** - 协助处理案件
+- **债权审核员** - 债权审核权限
+- **债权人** - 债权申报权限
+
+权限通过身份管理模块配置，支持细粒度的菜单和操作权限控制。

@@ -1,0 +1,361 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# API服务模式
+
+## 服务层架构
+
+### 服务文件结构
+
+```
+src/services/
+├── authService.ts       # 用户认证服务
+├── caseService.ts       # 案件管理服务
+├── creditorService.ts   # 债权人管理服务
+├── claimService.ts      # 债权申报/审核服务
+├── meetingService.ts    # 会议管理服务
+├── messageService.ts    # 消息中心服务
+├── fileService.ts       # 文件上传服务
+├── dashboardService.ts  # 数据大屏服务
+└── roleService.ts       # 角色权限服务
+```
+
+## SurrealDB集成
+
+### 数据库连接
+
+参考 `https://github.com/Odonno/surrealdb-presence-demo` 实现：
+
+```typescript
+import Surreal from 'surrealdb';
+
+// 数据库连接配置
+const db = new Surreal();
+await db.connect('ws://localhost:8000/rpc');
+await db.use({ namespace: 'cuckoox', database: 'bankruptcy' });
+```
+
+### 实时查询
+
+利用SurrealDB的Live Query功能：
+
+```typescript
+// 实时监听数据变化
+const liveQuery = await db.live('SELECT * FROM claims WHERE case_id = $case_id', {
+  case_id: selectedCase
+});
+
+liveQuery.subscribe((action, result) => {
+  // 处理实时数据更新
+  updateClaimsList(result);
+});
+```
+
+## 认证服务
+
+### GitHub OIDC
+
+```typescript
+// authService.ts
+import { UserManager } from 'oidc-client-ts';
+
+export const oidcConfig = {
+  authority: process.env.VITE_OIDC_AUTHORITY,
+  client_id: process.env.VITE_OIDC_CLIENT_ID,
+  redirect_uri: `${window.location.origin}/callback`,
+  response_type: 'code',
+  scope: 'openid profile email',
+};
+
+export const userManager = new UserManager(oidcConfig);
+```
+
+### SurrealDB直接登录
+
+```typescript
+// 管理员直接登录
+export const adminLogin = async (username: string, password: string) => {
+  const response = await db.signin({
+    username,
+    password,
+  });
+  return response;
+};
+```
+
+## 案件服务
+
+### 案件CRUD操作
+
+```typescript
+// caseService.ts
+export interface CaseData {
+  id?: string;
+  case_number: string;
+  responsible_person: string;
+  case_procedure: string;
+  acceptance_date: string;
+  process_stage: string;
+  creator: string;
+  filing_materials: string; // QuillJS content
+}
+
+export const createCase = async (caseData: CaseData): Promise<CaseData> => {
+  const result = await db.create('cases', caseData);
+  // 创建案件机器人账号
+  await createCaseBot(result.id);
+  return result;
+};
+
+export const updateCaseStatus = async (
+  caseId: string, 
+  newStatus: string, 
+  additionalData?: any
+): Promise<void> => {
+  await db.merge(caseId, {
+    process_stage: newStatus,
+    ...additionalData
+  });
+};
+```
+
+### 案件状态流转
+
+```typescript
+// 状态流转规则
+export const getValidNextStatuses = (currentStatus: string): string[] => {
+  const statusMap = {
+    '立案': ['公告'],
+    '公告': ['债权申报'],
+    '债权申报': ['债权人第一次会议'],
+    '债权人第一次会议': ['破产清算', '裁定重整'],
+    '裁定重整': ['提交重整计划', '延迟提交重整计划'],
+    '提交重整计划': ['债权人第二次会议'],
+    '延迟提交重整计划': ['债权人第二次会议'],
+  };
+  
+  return statusMap[currentStatus] || ['结案'];
+};
+```
+
+## 债权服务
+
+### 债权申报
+
+```typescript
+// claimService.ts
+export interface ClaimData {
+  id?: string;
+  case_id: string;
+  creditor_id: string;
+  claim_nature: string;
+  principal: number;
+  interest: number;
+  other_fees: number;
+  total_amount: number;
+  currency: string;
+  description?: string;
+  attachments: string; // QuillJS content
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  audit_result?: AuditResult;
+}
+
+export const submitClaim = async (claimData: ClaimData): Promise<ClaimData> => {
+  const result = await db.create('claims', {
+    ...claimData,
+    status: 'submitted',
+    submit_time: new Date().toISOString()
+  });
+  return result;
+};
+```
+
+### 债权审核
+
+```typescript
+export interface AuditResult {
+  auditor_id: string;
+  audit_nature: string;
+  audit_principal: number;
+  audit_interest: number;
+  audit_other_fees: number;
+  audit_total: number;
+  audit_status: string;
+  audit_opinion: string;
+  additional_materials?: string; // QuillJS content
+  audit_time: string;
+}
+
+export const auditClaim = async (
+  claimId: string, 
+  auditResult: AuditResult
+): Promise<void> => {
+  await db.merge(claimId, {
+    audit_result: auditResult,
+    status: auditResult.audit_status === '认定' ? 'approved' : 'rejected'
+  });
+};
+```
+
+## 文件服务
+
+### MinIO集成
+
+```typescript
+// fileService.ts
+export const uploadImage = async (file: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch('/api/upload/image', {
+    method: 'POST',
+    body: formData,
+  });
+  
+  const { url } = await response.json();
+  return url;
+};
+
+export const uploadAttachment = async (file: File): Promise<FileAttachment> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  const response = await fetch('/api/upload/attachment', {
+    method: 'POST',
+    body: formData,
+  });
+  
+  return await response.json();
+};
+```
+
+## 数据大屏服务
+
+### 实时指标
+
+```typescript
+// dashboardService.ts
+export const useLiveMetrics = (caseId: string) => {
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  
+  useEffect(() => {
+    const liveQuery = db.live(`
+      SELECT 
+        count() as total_claims,
+        count(status = 'submitted') as pending_claims,
+        count(status = 'approved') as approved_claims,
+        sum(total_amount) as total_amount
+      FROM claims 
+      WHERE case_id = $case_id
+      GROUP BY case_id
+    `, { case_id: caseId });
+    
+    liveQuery.subscribe((action, result) => {
+      setMetrics(result[0]);
+    });
+    
+    return () => liveQuery.unsubscribe();
+  }, [caseId]);
+  
+  return metrics;
+};
+```
+
+## 错误处理
+
+### 统一错误处理
+
+```typescript
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export const handleApiError = (error: any): ApiError => {
+  if (error instanceof ApiError) {
+    return error;
+  }
+  
+  // SurrealDB错误处理
+  if (error.code) {
+    return new ApiError(error.message, 400, error.code);
+  }
+  
+  return new ApiError('网络错误，请稍后重试', 500);
+};
+```
+
+### 重试机制
+
+```typescript
+import { useQuery } from '@tanstack/react-query';
+
+export const useApiQuery = <T>(
+  key: string[],
+  queryFn: () => Promise<T>,
+  options?: any
+) => {
+  return useQuery({
+    queryKey: key,
+    queryFn,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    staleTime: 5 * 60 * 1000, // 5分钟
+    ...options,
+  });
+};
+```
+
+## 数据缓存
+
+### TanStack Query配置
+
+```typescript
+import { QueryClient } from '@tanstack/react-query';
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5分钟
+      cacheTime: 10 * 60 * 1000, // 10分钟
+      retry: 3,
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
+```
+
+## Mock数据
+
+### 开发阶段Mock服务
+
+```typescript
+// 开发环境下使用Mock数据
+export const mockApiCall = <T>(data: T, delay = 1000): Promise<T> => {
+  return new Promise((resolve) => {
+    setTimeout(() => resolve(data), delay);
+  });
+};
+
+// 根据环境变量决定是否使用Mock
+export const apiCall = process.env.NODE_ENV === 'development' 
+  ? mockApiCall 
+  : realApiCall;
+```
+
+## 重要服务文件
+
+- [src/services/](mdc:src/services) - 服务层目录
+- [src/hooks/](mdc:src/hooks) - 自定义Hooks目录
+- [src/types/](mdc:src/types) - 类型定义目录

@@ -1,0 +1,242 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# 组件开发模式
+
+## 通用组件架构
+
+### 组件文件结构
+
+```
+src/components/
+├── common/          # 通用组件
+│   ├── Layout/      # 布局组件
+│   ├── RichTextEditor/ # 富文本编辑器
+│   ├── DataTable/   # 数据表格
+│   └── GlobalLoader/ # 全局加载器
+├── forms/           # 表单组件
+├── charts/          # 图表组件
+└── dialogs/         # 对话框组件
+```
+
+### 重要的通用组件
+
+- [src/components/Layout.tsx](mdc:src/components/Layout.tsx) - 主布局组件
+- [src/components/RichTextEditor.tsx](mdc:src/components/RichTextEditor.tsx) - QuillJS富文本编辑器
+- [src/components/GlobalLoader.tsx](mdc:src/components/GlobalLoader.tsx) - 全局加载状态
+- [src/components/GlobalError.tsx](mdc:src/components/GlobalError.tsx) - 全局错误处理
+
+## 样式和主题
+
+### MUI主题系统
+
+```typescript
+// 使用主题
+import { useTheme } from '@mui/material/styles';
+
+const theme = useTheme();
+const isDark = theme.palette.mode === 'dark';
+```
+
+### CSS变量支持
+
+所有组件必须支持深色/亮色模式切换，使用CSS变量：
+
+```css
+.component {
+  background-color: var(--mui-palette-background-default);
+  color: var(--mui-palette-text-primary);
+}
+```
+
+### 主题配置文件
+
+- [src/theme.ts](mdc:src/theme.ts) - MUI主题配置，包含Teal色系
+- [src/contexts/ThemeContext.tsx](mdc:src/contexts/ThemeContext.tsx) - 主题状态管理
+
+## 表单组件模式
+
+### 表单验证
+
+使用MUI的表单组件，结合自定义验证：
+
+```typescript
+import { TextField, Button } from '@mui/material';
+
+// 标准表单字段
+<TextField
+  fullWidth
+  label="字段名称"
+  value={value}
+  onChange={handleChange}
+  error={!!error}
+  helperText={error}
+  variant="outlined"
+/>
+```
+
+### 日期选择器
+
+使用MUI的DatePicker组件，确保本地化：
+
+```typescript
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+```
+
+## 数据表格模式
+
+### 响应式表格
+
+```typescript
+// 使用MUI的Table组件，支持响应式
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow,
+  Paper 
+} from '@mui/material';
+```
+
+### 表格操作
+
+- 使用矢量图标表示操作按钮
+- 支持批量选择和操作
+- 提供搜索和筛选功能
+
+## 对话框模式
+
+### 标准对话框结构
+
+```typescript
+import { 
+  Dialog, 
+  DialogTitle, 
+  DialogContent, 
+  DialogActions, 
+  Button 
+} from '@mui/material';
+
+// 确认对话框
+<Dialog open={open} onClose={onClose}>
+  <DialogTitle>对话框标题</DialogTitle>
+  <DialogContent>
+    对话框内容
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={onClose}>取消</Button>
+    <Button onClick={onConfirm} variant="contained">确认</Button>
+  </DialogActions>
+</Dialog>
+```
+
+## 富文本编辑器
+
+### QuillJS集成
+
+- [src/components/RichTextEditor.tsx](mdc:src/components/RichTextEditor.tsx) - 统一的富文本编辑器组件
+- 支持图片上传到MinIO
+- 支持文件附件管理
+- 主题适配深色/亮色模式
+
+### 使用方式
+
+```typescript
+import RichTextEditor from '@/components/RichTextEditor';
+
+<RichTextEditor
+  value={content}
+  onChange={setContent}
+  placeholder="请输入内容..."
+  readOnly={false}
+/>
+```
+
+## 图表组件
+
+### 使用MUI X Charts
+
+```typescript
+import { PieChart, LineChart, BarChart } from '@mui/x-charts';
+
+// 确保图表支持主题切换
+const chartTheme = {
+  palette: theme.palette.mode === 'dark' ? ['#80cbc4', '#4db6ac'] : ['#26a69a', '#009688']
+};
+```
+
+## 状态管理模式
+
+### Context模式
+
+- [src/contexts/AuthContext.tsx](mdc:src/contexts/AuthContext.tsx) - 用户认证状态
+- [src/contexts/ThemeContext.tsx](mdc:src/contexts/ThemeContext.tsx) - 主题状态
+- [src/contexts/SnackbarContext.tsx](mdc:src/contexts/SnackbarContext.tsx) - 通知消息
+
+### 数据获取
+
+使用TanStack Query进行数据管理：
+
+```typescript
+import { useQuery, useMutation } from '@tanstack/react-query';
+
+const { data, isLoading, error } = useQuery({
+  queryKey: ['key'],
+  queryFn: fetchData
+});
+```
+
+## 图标使用规范
+
+### Material Design Icons
+
+```typescript
+import Icon from '@mdi/react';
+import { mdiAccount, mdiSettings } from '@mdi/js';
+
+<Icon path={mdiAccount} size={1} />
+```
+
+### 图标主题适配
+
+所有图标必须支持主题切换，使用当前主题的颜色：
+
+```typescript
+<Icon 
+  path={mdiAccount} 
+  size={1} 
+  color={theme.palette.text.primary}
+/>
+```
+
+## 响应式设计
+
+### 断点使用
+
+使用MUI的断点系统：
+
+```typescript
+import { useMediaQuery } from '@mui/material';
+
+const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+```
+
+### Grid布局
+
+```typescript
+import { Grid } from '@mui/material';
+
+<Grid container spacing={2}>
+  <Grid size={{ xs: 12, md: 8 }}>
+    主内容
+  </Grid>
+  <Grid size={{ xs: 12, md: 4 }}>
+    侧边栏
+  </Grid>
+</Grid>
+```
+

@@ -1,14 +1,15 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n'; // Adjust path if your i18n setup is elsewhere
+import i18n from '@/src/i18n';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import CreditorListPage, { Creditor } from '@/src/pages/creditors';
 import { AuthContext, AuthContextType } from '@/src/contexts/AuthContext';
 import { SurrealContext, SurrealContextType } from '@/src/contexts/SurrealProvider';
-import { SnackbarContext, SnackbarContextType } from '@/src/contexts/SnackbarContext';
 import { RecordId } from 'surrealdb';
+import Papa from 'papaparse';
 
 // Mock papaparse
 vi.mock('papaparse', () => ({
@@ -580,14 +581,20 @@ describe('CreditorListPage', () => {
       });
 
       const searchInput = screen.getByLabelText('search_creditors_label', { exact: false });
-      fireEvent.change(searchInput, { target: { value: 'Acme' } });
+      
+      await act(async () => {
+        fireEvent.change(searchInput, { target: { value: 'Acme' } });
+      });
 
       await waitFor(() => {
         expect(screen.getByText('Acme Corp')).toBeInTheDocument();
         expect(screen.queryByText('Beta LLC')).not.toBeInTheDocument();
       });
 
-      fireEvent.change(searchInput, { target: { value: 'ID002' } });
+      await act(async () => {
+        fireEvent.change(searchInput, { target: { value: 'ID002' } });
+      });
+      
       await waitFor(() => {
         expect(screen.queryByText('Acme Corp')).not.toBeInTheDocument();
         expect(screen.getByText('Beta LLC')).toBeInTheDocument();

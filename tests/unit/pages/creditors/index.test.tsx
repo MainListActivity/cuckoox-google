@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
-import { describe, test, expect, beforeEach, vi, afterEach, Mock } from 'vitest';
+import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
+import { type Mock } from 'vitest';
 import '@testing-library/jest-dom';
 import CreditorListPage from '@/src/pages/creditors';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -437,12 +438,15 @@ describe('CreditorListPage', () => {
       expect(mockAddCreditorDialog).toHaveBeenCalledWith(expect.objectContaining({ open: true, existingCreditor: null }));
 
       const saveButtonInDialog = within(dialog).getByRole('button', { name: 'Save Creditor' });
-      fireEvent.click(saveButtonInDialog);
+      
+      await act(async () => {
+        fireEvent.click(saveButtonInDialog);
+      });
       
       await waitFor(() => {
         expect(mockShowSuccess).toHaveBeenCalledWith('creditor_added_success');
-      });
-      await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument(), { timeout: 4000 });
+        expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      }, { timeout: 4000 });
       expect(await screen.findByText('New/Edited Creditor')).toBeInTheDocument();
       
       await waitFor(() => {
@@ -460,7 +464,10 @@ describe('CreditorListPage', () => {
       if (!parentRow) return;
 
       const editButton = within(parentRow).getByRole('button', { name: 'edit creditor' });
-      fireEvent.click(editButton);
+      
+      await act(async () => {
+        fireEvent.click(editButton);
+      });
       
       const dialog = await screen.findByTestId('mock-add-creditor-dialog');
       expect(dialog).toBeVisible();
@@ -515,7 +522,10 @@ describe('CreditorListPage', () => {
       expect(checkboxes.length).toBeGreaterThanOrEqual(initialMockCreditors.length + 1);
       const firstRowCheckbox = checkboxes[1]; 
       expect(firstRowCheckbox).not.toBeUndefined();
-      fireEvent.click(firstRowCheckbox);
+      
+      await act(async () => {
+        fireEvent.click(firstRowCheckbox);
+      });
 
       const printButton = screen.getByRole('button', { name: 'print_waybill_button' });
       expect(printButton).not.toBeDisabled();
@@ -547,7 +557,10 @@ describe('CreditorListPage', () => {
       if (!parentRow) return;
 
       const deleteButton = within(parentRow).getByRole('button', { name: 'delete creditor' });
-      fireEvent.click(deleteButton);
+      
+      await act(async () => {
+        fireEvent.click(deleteButton);
+      });
 
       const dialog = await screen.findByTestId('mock-confirm-delete-dialog');
       expect(dialog).toBeVisible();
@@ -557,7 +570,9 @@ describe('CreditorListPage', () => {
       }));
 
       const confirmButtonInDialog = within(dialog).getByRole('button', { name: 'Confirm Delete' });
-      fireEvent.click(confirmButtonInDialog);
+      await act(async () => {
+        fireEvent.click(confirmButtonInDialog);
+      });
 
       await waitFor(() => {
         expect(mockShowSuccess).toHaveBeenCalledWith('creditor_deleted_success');

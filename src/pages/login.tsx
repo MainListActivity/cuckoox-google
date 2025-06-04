@@ -9,7 +9,6 @@ import GlobalLoader from '@/src/components/GlobalLoader';
 import PageContainer from '@/src/components/PageContainer';
 import {
   Box,
-  Paper,
   Typography,
   TextField,
   Button,
@@ -73,21 +72,20 @@ const LoginPage: React.FC = () => {
       if (!adminUsername || !adminPassword) {
         throw new Error(t('error_admin_credentials_required', 'Username and password are required.'));
       }
-      
       await client.signin({
-        username: adminUsername,
-        password: adminPassword,
+        user: adminUsername,
+        pass: adminPassword,
+        NS: import.meta.env.VITE_SURREALDB_NAMESPACE,
+        DB: import.meta.env.VITE_SURREALDB_DATABASE,
+        SC: 'account'
       });
 
       console.log('Admin successfully signed into SurrealDB via form.');
 
       const adminAppUser: AppUser = {
-        id: new RecordId('user', `admin_${adminUsername}`),
+        id: new RecordId('user', `admin_${adminUsername}`), // Keep RecordId
         github_id: '--admin--',
-        name: t('administrator_name_generic', {username: adminUsername}),
-        email: `admin-${adminUsername}@example.com`,
-        created_at: new Date(),
-        updated_at: new Date(),
+        name: t('administrator_name_generic', {username: adminUsername})
       };
 
       setAuthState(adminAppUser, null);
@@ -115,6 +113,12 @@ const LoginPage: React.FC = () => {
 
   if (isAuthContextLoading && !isProcessingAdminLogin) {
     return <GlobalLoader message={t('loading_session', 'Loading session...')} />;
+  }
+
+  if (isProcessingAdminLogin) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+      <Typography>{t('admin_login_attempt_loading', 'Attempting admin login...')}</Typography>
+    </Box>;
   }
   
   if (isLoggedIn && !isAuthContextLoading && !isAdminLoginAttempt) {
