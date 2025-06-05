@@ -9,6 +9,7 @@ import {useTranslation} from 'react-i18next';
 import { CustomThemeProvider } from '@/src/contexts/ThemeContext'; // Import our ThemeProvider
 import { SnackbarProvider } from '@/src/contexts/SnackbarContext'; // Import SnackbarProvider
 import { CaseStatusProvider } from '@/src/contexts/CaseStatusContext'; // <-- ADDED
+import { LayoutProvider } from '@/src/contexts/LayoutContext'; // Import LayoutProvider
 import Layout from '@/src/components/Layout';
 import ProtectedRoute from '@/src/components/ProtectedRoute';
 import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
@@ -149,7 +150,8 @@ function App() {
         <CustomThemeProvider>
             <SnackbarProvider>
                 <CaseStatusProvider> {/* <-- ADDED WRAPPER */}
-                    <Layout>
+                    <LayoutProvider> {/* <-- ADDED LAYOUT PROVIDER */}
+                        <Layout>
                         <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')} />}>
                             <Routes>
                                 <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
@@ -182,6 +184,7 @@ function App() {
                             </Routes>
                         </Suspense>
                     </Layout>
+                </LayoutProvider> {/* <-- ADDED LAYOUT PROVIDER */}
                 </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
             </SnackbarProvider>
         </CustomThemeProvider>

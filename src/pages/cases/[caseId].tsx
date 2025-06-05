@@ -2,48 +2,30 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useSurreal } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
-import RichTextEditor from '@/src/components/RichTextEditor';
+import FullscreenRichTextEditor from '@/src/components/FullscreenRichTextEditor';
+import DocumentCenterLayout, { CaseInfo, TimelineEvent, Comment } from '@/src/components/DocumentCenterLayout';
 import { Delta } from 'quill/core';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
   Typography,
   Button,
-  Grid,
-  Card,
-  CardContent,
   CircularProgress,
   Alert,
-  Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   SvgIcon,
   Tabs,
   Tab,
 } from '@mui/material';
-import {
-  Timeline,
-  TimelineItem,
-  TimelineSeparator,
-  TimelineConnector,
-  TimelineContent,
-  TimelineDot,
-  TimelineOppositeContent,
-} from '@mui/lab';
 import { 
   mdiArrowLeft, 
   mdiBookOpenOutline, 
   mdiSync, 
   mdiGavel, 
   mdiAccountGroup, 
-  mdiCalendarClock,
-  mdiBank,
-  mdiFileSign,
-  mdiCalendarAlert,
-  mdiAccountMultiplePlus,
-  mdiAccountMultipleCheck,
+  mdiCalendarAlert, 
+  mdiAccountMultiplePlus, 
+  mdiFileSign, 
+  mdiFileDocumentOutline,
 } from '@mdi/js';
 
 // Import Dialogs
@@ -88,11 +70,11 @@ interface Document {
   updated_at: string;
 }
 
-interface User {
-  id: RecordId;
-  name: string;
-  email?: string;
-}
+// interface User {
+//   id: RecordId;
+//   name: string;
+//   email?: string;
+// }
 
 const CaseDetailPage: React.FC = () => {
   const { t } = useTranslation(); 
@@ -111,9 +93,18 @@ const CaseDetailPage: React.FC = () => {
   const [meetingMinutesOpen, setMeetingMinutesOpen] = useState(false);
   const [currentMeetingTitle, setCurrentMeetingTitle] = useState<string>('');
   const [activeTab, setActiveTab] = useState(0);
+  const [comments] = useState<Comment[]>([]);
 
   // Check if user is admin
   const isAdmin = user?.github_id === '--admin--';
+
+  // Handler for filing material content change
+  const handleFilingMaterialChange = (newContent: QuillDelta) => {
+    // TODO: Save the content to the database
+    console.log('Filing material content changed:', newContent);
+    // For now, we'll just update the local state
+    setFilingMaterialContent(JSON.stringify(newContent));
+  };
 
   // Handlers for dialogs
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -151,6 +142,101 @@ const CaseDetailPage: React.FC = () => {
     // TODO: Implement actual API call to save meeting minutes
     showSuccess(t('meeting_minutes_save_success_mock', '会议纪要已（模拟）保存成功！'));
     setMeetingMinutesOpen(false);
+  };
+
+  // 创建案件信息数据
+  const createCaseInfo = (): CaseInfo | undefined => {
+    if (!caseDetail) return undefined;
+    
+    const displayCase = {
+      name: caseDetail.name || t('case_detail_unnamed_case'),
+      case_number: caseDetail.case_number || `BK-N/A-${caseDetail.id.toString().slice(caseDetail.id.toString().indexOf(':') + 1).slice(-4)}`,
+      case_lead_name: caseLeadName,
+      acceptance_date: caseDetail.acceptance_date ? new Date(caseDetail.acceptance_date).toISOString().split('T')[0] : t('case_detail_date_unknown'),
+      case_procedure: caseDetail.case_procedure || t('case_detail_procedure_unknown'),
+      current_stage: caseDetail.procedure_phase || t('case_detail_stage_unknown'),
+    };
+    
+    return {
+      id: caseDetail.id.toString(),
+      name: displayCase.name,
+      case_number: displayCase.case_number,
+      case_lead_name: displayCase.case_lead_name,
+      case_procedure: displayCase.case_procedure,
+      acceptance_date: displayCase.acceptance_date,
+      current_stage: displayCase.current_stage,
+      avatar: {
+        text: '案',
+        color: '#00897B'
+      }
+    };
+  };
+
+  // 创建时间线数据
+  const createTimeline = (): TimelineEvent[] => {
+    if (!caseDetail) return [];
+    
+    const events: TimelineEvent[] = [
+      {
+        date: caseDetail.acceptance_date ? new Date(caseDetail.acceptance_date).toISOString().split('T')[0] : '',
+        title: '案件受理',
+        icon: mdiGavel,
+        color: 'success',
+        completed: true
+      }
+    ];
+
+    if (caseDetail.announcement_date) {
+      events.push({
+        date: new Date(caseDetail.announcement_date).toISOString().split('T')[0],
+        title: '首次公告',
+        icon: mdiFileDocumentOutline,
+        color: 'success',
+        completed: true
+      });
+    }
+
+    if (caseDetail.claim_submission_start_date) {
+      events.push({
+        date: new Date(caseDetail.claim_submission_start_date).toISOString().split('T')[0],
+        title: '债权申报开始',
+        icon: mdiAccountMultiplePlus,
+        color: 'info',
+        completed: true
+      });
+    }
+
+    if (caseDetail.claim_submission_end_date) {
+      events.push({
+        date: new Date(caseDetail.claim_submission_end_date).toISOString().split('T')[0],
+        title: '债权申报截止',
+        icon: mdiCalendarAlert,
+        color: 'warning',
+        completed: false
+      });
+    }
+
+    if (caseDetail.first_creditor_meeting_date) {
+      events.push({
+        date: new Date(caseDetail.first_creditor_meeting_date).toISOString().split('T')[0],
+        title: '债权人第一次会议',
+        icon: mdiAccountGroup,
+        color: 'primary',
+        completed: true
+      });
+    }
+
+    if (caseDetail.closing_date) {
+      events.push({
+        date: new Date(caseDetail.closing_date).toISOString().split('T')[0],
+        title: '案件办结',
+        icon: mdiFileSign,
+        color: 'success',
+        completed: true
+      });
+    }
+
+    return events.filter(event => event.date).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
   useEffect(() => {
@@ -255,257 +341,124 @@ const CaseDetailPage: React.FC = () => {
     details: t('case_detail_no_details')
   };
 
-  // Timeline data from case
-  const timelineEvents = [
-    { date: displayCase.acceptance_date, title: t('timeline_event_case_accepted', '案件受理'), icon: mdiGavel, color: 'primary' as const },
-    ...(displayCase.announcement_date ? [{ date: displayCase.announcement_date, title: t('timeline_event_first_announcement', '首次公告'), icon: mdiCalendarClock, color: 'secondary' as const }] : []),
-    ...(displayCase.claim_start_date ? [{ date: displayCase.claim_start_date, title: t('timeline_event_claim_submission_start', '债权申报开始'), icon: mdiAccountGroup, color: 'info' as const }] : []),
-    ...(displayCase.claim_end_date ? [{ date: displayCase.claim_end_date, title: t('timeline_event_claim_submission_end', '债权申报截止'), icon: mdiAccountGroup, color: 'warning' as const }] : []),
-    ...(caseDetail?.first_creditor_meeting_date ? [{ date: new Date(caseDetail.first_creditor_meeting_date).toISOString().split('T')[0], title: t('timeline_event_first_creditor_meeting', '第一次债权人会议'), icon: mdiAccountMultiplePlus, color: 'success' as const }] : []),
-    ...(caseDetail?.reorganization_ruling_date ? [{ date: new Date(caseDetail.reorganization_ruling_date).toISOString().split('T')[0], title: t('timeline_event_reorganization_ruling', '重整裁定'), icon: mdiFileSign, color: 'primary' as const }] : []),
-    ...(caseDetail?.reorganization_plan_submission_date ? [{ date: new Date(caseDetail.reorganization_plan_submission_date).toISOString().split('T')[0], title: t('timeline_event_reorganization_plan_submission', '重整计划提交'), icon: mdiFileSign, color: 'secondary' as const }] : []),
-    ...(caseDetail?.delayed_reorganization_plan_submission_date ? [{ date: new Date(caseDetail.delayed_reorganization_plan_submission_date).toISOString().split('T')[0], title: t('timeline_event_delayed_reorganization_plan_submission', '重整计划延期提交'), icon: mdiCalendarAlert, color: 'warning' as const }] : []),
-    ...(caseDetail?.second_creditor_meeting_date ? [{ date: new Date(caseDetail.second_creditor_meeting_date).toISOString().split('T')[0], title: t('timeline_event_second_creditor_meeting', '第二次债权人会议'), icon: mdiAccountMultipleCheck, color: 'success' as const }] : []),
-    ...(caseDetail?.closing_date ? [{ date: new Date(caseDetail.closing_date).toISOString().split('T')[0], title: t('timeline_event_closing_date', '案件办结'), icon: mdiBank, color: 'info' as const }] : []),
-  ]
-  .filter(event => event.date && event.date !== t('case_detail_date_unknown'))
-  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
 
   return (
-    <Box sx={{ 
-      p: 3,
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden'
-    }}>
-      <Box sx={{ flexShrink: 0 }}>
-        <Button component={Link} to="/cases" startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>} sx={{ mb: 2 }}>
-          {t('case_detail_back_to_list_link')}
-        </Button>
-        <Typography variant="h4" component="h1" gutterBottom>
-          {t('case_detail_page_title_prefix')}: {displayCase.case_number}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" display="block" gutterBottom sx={{ mb: 3 }}>
-          {t('case_detail_id_label')}: {displayCase.id}
-        </Typography>
-      </Box>
-
-      <Grid container spacing={3} sx={{ 
-        flexGrow: 1,
-        overflow: 'hidden',
-        height: 'calc(100% - 120px)'
+    <DocumentCenterLayout
+      caseInfo={createCaseInfo()}
+      timeline={createTimeline()}
+      comments={comments}
+      showCasePanel={true}
+      showCommentPanel={comments.length > 0}
+    >
+      <Box sx={{ 
+        width: '100%',
+        maxWidth: 800,
+        mx: 'auto',
+        mt: 2,
+        p: 3,
+        backgroundColor: 'background.paper',
+        borderRadius: 2,
+        boxShadow: 3,
       }}>
-        {/* Left Column: Basic Info & Timeline */}
-        <Grid size={{ xs: 12, lg: 4 }} sx={{ 
-          height: '100%', 
-          overflow: 'auto',
-          pr: 1,
-          '&::-webkit-scrollbar': {
-            width: '8px',
-          },
-          '&::-webkit-scrollbar-track': {
-            backgroundColor: 'background.paper',
-          },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: 'divider',
-            borderRadius: '4px',
-          },
-        }}>
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
-                {t('case_detail_basic_info_title')}
-              </Typography>
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_name_label')}: </Typography>
-                <Typography variant="body1" component="span">{displayCase.name}</Typography>
-              </Box>
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_procedure_label', '案件程序')}: </Typography>
-                <Typography variant="body1" component="span">{displayCase.case_procedure}</Typography>
-              </Box>
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_lead_label')}: </Typography>
-                <Typography variant="body1" component="span">{displayCase.case_lead_name}</Typography>
-              </Box>
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold', mr:1 }}>{t('case_detail_current_stage_label')}: </Typography>
-                <Chip size="small" label={displayCase.current_stage} color="primary" variant="outlined" />
-              </Box>
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="subtitle2" component="span" color="text.secondary" sx={{ fontWeight: 'bold' }}>{t('case_detail_details_label')}: </Typography>
-                <Typography variant="body1" component="span" sx={{whiteSpace: 'pre-wrap'}}>{displayCase.details}</Typography>
-              </Box>
-            </CardContent>
-          </Card>
+        {/* 简化的顶部导航 */}
+        <Box sx={{ mb: 3 }}>
+          <Button component={Link} to="/cases" startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>} size="small">
+            {t('case_detail_back_to_list_link')}
+          </Button>
+        </Box>
 
-          <Card>
-            <CardContent>
-              <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
-                {t('case_detail_timeline_title_key_dates', '关键时间点')}
-              </Typography>
-              {timelineEvents.length > 0 ? (
-                <Timeline position="right" sx={{
-                  '& .MuiTimelineItem-root:before': {
-                    flex: 0,
-                    padding: 0,
-                  },
-                }}>
-                  {timelineEvents.map((event, index) => (
-                    <TimelineItem key={index}>
-                      <TimelineOppositeContent sx={{ display: { xs: 'none', sm: 'block' }, m: 'auto 0' }} align="right" variant="body2" color="text.secondary">
-                        {event.date}
-                      </TimelineOppositeContent>
-                      <TimelineSeparator>
-                        <TimelineConnector sx={{ bgcolor: `${event.color}.main` }}/>
-                        <TimelineDot color={event.color as "primary" | "secondary" | "error" | "info" | "success" | "warning" | "grey"} variant="outlined">
-                           <SvgIcon fontSize="small"><path d={event.icon} /></SvgIcon>
-                        </TimelineDot>
-                        {index < timelineEvents.length - 1 && <TimelineConnector sx={{ bgcolor: `${event.color}.main` }}/>}
-                      </TimelineSeparator>
-                      <TimelineContent sx={{ py: '12px', px: 2 }}>
-                        <Typography variant="h6" component="span">{event.title}</Typography>
-                        <Typography sx={{ display: { xs: 'block', sm: 'none' } }} color="text.secondary">{event.date}</Typography>
-                      </TimelineContent>
-                    </TimelineItem>
-                  ))}
-                </Timeline>
-              ) : (
-                <Typography variant="body2" color="text.secondary">{t('case_detail_no_timeline_events', '暂无关键时间点记录')}</Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Right Column: Filing Material & Actions */}
-        <Grid size={{ xs: 12, lg: 8 }} sx={{ 
-          height: '100%', 
-          display: 'flex', 
+        {/* 主要文档编辑区域 */}
+        <Box sx={{ 
+          flex: 1,
+          display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden'
+          minHeight: 0,
         }}>
+          {/* 标签页 */}
           <Box sx={{ 
             borderBottom: 1, 
             borderColor: 'divider', 
-            flexShrink: 0
+            flexShrink: 0,
+            mb: 2
           }}>
             <Tabs value={activeTab} onChange={handleTabChange} aria-label="case details tabs">
-              <Tab label={t('case_details_tab_main', '案件详情')} />
+              <Tab label={t('case_details_tab_main', '立案材料')} />
               <Tab label={t('case_members_tab_label', '案件成员')} />
             </Tabs>
           </Box>
 
-          {/* Tab Content Container */}
-          <Box sx={{ 
-            flexGrow: 1, 
-            overflow: 'hidden', 
-            display: 'flex', 
-            flexDirection: 'column',
-            height: 'calc(100% - 48px)'
-          }}>
-            {/* Main Details Tab Content */}
-            {activeTab === 0 && (
-              <Card sx={{
-                height: '100%', 
-                borderTopLeftRadius: 0, 
-                borderTopRightRadius: 0, 
-                overflow: 'hidden',
+          {/* 标签页内容 */}
+          {activeTab === 0 && (
+            <Box sx={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              '& .ql-container.ql-snow': {
+                flexGrow: 1,
                 display: 'flex',
-                flexDirection: 'column'
-              }}>
-                <CardContent sx={{
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  height: '100%', 
-                  p: 3, 
-                  overflow: 'hidden'
-                }}>
-                  <Typography variant="h5" component="h2" gutterBottom borderBottom={1} borderColor="divider" pb={1} mb={2}>
-                    {t('case_detail_filing_material_title')}
-                  </Typography>
-                  <Box sx={{
-                    border: 1,
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    p: 1,
-                    flexGrow: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    '& .ql-container.ql-snow': {
-                      flexGrow: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      overflow: 'hidden',
-                    },
-                    '& .ql-editor': {
-                      flexGrow: 1,
-                      overflowY: 'auto',
-                      p: 2,
-                    },
-                    '& .ProseMirror': { 
-                      backgroundColor: 'transparent', 
-                      minHeight: '100%', 
-                      p: 1 
-                    }
-                  }}>
-                    <RichTextEditor
-                      value={filingMaterialContent}
-                      readOnly={true}
-                      placeholder={t('case_detail_filing_material_empty')}
-                    />
-                  </Box>
-                  <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', flexShrink: 0 }}>
-                    {/* Admin can always modify status and meeting minutes */}
-                    {(isAdmin || (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议')) && (
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
-                        onClick={handleOpenMeetingMinutes}
-                      >
-                        {t('case_detail_actions_meeting_minutes_button')}
-                      </Button>
-                    )}
-                    {(isAdmin || hasRole('case_manager')) && displayCase.current_stage !== t('case_status_closed', '结案') && (
-                      <Button
-                        variant="contained"
-                        color="secondary"
-                        startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
-                        onClick={handleOpenModifyStatus}
-                      >
-                        {t('case_detail_actions_change_status_button')}
-                      </Button>
-                    )}
-                  </Box>
-                </CardContent>
-              </Card>
-            )}
+                flexDirection: 'column',
+                overflow: 'hidden',
+                border: 'none',
+              },
+              '& .ql-editor': {
+                flexGrow: 1,
+                overflowY: 'auto',
+                p: 2,
+                minHeight: 'calc(100vh - 200px)',
+              },
+            }}>
+              <FullscreenRichTextEditor
+                value={filingMaterialContent}
+                onChange={handleFilingMaterialChange}
+                placeholder={t('case_detail_filing_material_empty')}
+                documentId={caseDetail?.filing_material_doc_id?.toString()}
+                userId={user?.id?.toString()}
+                userName={user?.name || user?.email}
+              />
+              
+              {/* 操作按钮 */}
+              <Box sx={{ mt: 3, display: 'flex', gap: 2, flexWrap: 'wrap', flexShrink: 0 }}>
+                {(isAdmin || (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议')) && (
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
+                    onClick={handleOpenMeetingMinutes}
+                  >
+                    {t('case_detail_actions_meeting_minutes_button')}
+                  </Button>
+                )}
+                {(isAdmin || hasRole('case_manager')) && displayCase.current_stage !== t('case_status_closed', '结案') && (
+                  <Button
+                    variant="contained"
+                    color="secondary"
+                    startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
+                    onClick={handleOpenModifyStatus}
+                  >
+                    {t('case_detail_actions_change_status_button')}
+                  </Button>
+                )}
+              </Box>
+            </Box>
+          )}
 
-            {/* Case Members Tab Content */}
-            {activeTab === 1 && (
-              <Card sx={{
-                height: '100%', 
-                borderTopLeftRadius: 0, 
-                borderTopRightRadius: 0, 
-                overflow: 'auto'
-              }}>
-                <CardContent sx={{
-                  p: 3, 
-                  height: '100%', 
-                  overflow: 'auto'
-                }}>
-                  <CaseMemberTab
-                    caseId={id as string}
-                  />
-                </CardContent>
-              </Card>
-            )}
-          </Box>
-        </Grid>
-      </Grid>
+          {/* 案件成员标签页内容 */}
+          {activeTab === 1 && (
+            <Box sx={{
+              flex: 1,
+              overflow: 'auto',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 3,
+            }}>
+              <CaseMemberTab caseId={id as string} />
+            </Box>
+                     )}
+        </Box>
+      </Box>
 
       {/* Dialogs */}
       {caseDetail && (
@@ -532,7 +485,7 @@ const CaseDetailPage: React.FC = () => {
           onSave={handleSaveMeetingMinutes}
         />
       )}
-    </Box>
+    </DocumentCenterLayout>
   );
 };
 

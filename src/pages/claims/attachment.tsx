@@ -10,7 +10,8 @@ import {
   Grid,
 } from '@mui/material';
 import PageContainer from '@/src/components/PageContainer';
-import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor';
+import FullscreenRichTextEditor from '@/src/components/FullscreenRichTextEditor';
+import { QuillDelta } from '@/src/components/RichTextEditor';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { Delta } from 'quill/core';
 
@@ -112,12 +113,37 @@ const ClaimAttachmentPage: React.FC = () => {
           }}>
             {/* TODO: Configure RichTextEditor for image uploads to MinIO (via backend service). */}
             {/* TODO: Configure RichTextEditor for other file attachments (links/icons, via backend service). */}
-            <RichTextEditor
+            <FullscreenRichTextEditor
               value={editorContent}
               onChange={setEditorContent}
               documentId={`claim-attachment-${claimId}`}
               userId={currentUserId}
               userName={currentUserName}
+              contextInfo={{
+                title: `债权申报 - ${claimId}`,
+                subtitle: '附件材料编辑',
+                avatar: {
+                  text: '债',
+                  color: '#1976d2'
+                },
+                details: [
+                  {
+                    label: '申报金额',
+                    value: placeholderClaimData.totalAmount,
+                    icon: 'M7,15H9C9,16.08 10.37,17 12,17C13.63,17 15,16.08 15,15C15,13.9 13.96,13.5 11.76,12.97C9.64,12.44 7,11.78 7,9C7,7.21 8.47,5.69 10.5,5.18V3H13.5V5.18C15.53,5.69 17,7.21 17,9H15C15,7.92 13.63,7 12,7C10.37,7 9,7.92 9,9C9,10.1 10.04,10.5 12.24,11.03C14.36,11.56 17,12.22 17,15C17,16.79 15.53,18.31 13.5,18.82V21H10.5V18.82C8.47,18.31 7,16.79 7,15Z'
+                  },
+                  {
+                    label: '债权性质',
+                    value: placeholderClaimData.nature,
+                    icon: 'M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.59,8.09L18,9.5L11,16.5Z'
+                  },
+                  {
+                    label: '申报时间',
+                    value: new Date().toLocaleDateString('zh-CN'),
+                    icon: 'M19,19H5V8H19M16,1V3H8V1H6V3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5C21,3.89 20.1,3 19,3H18V1M17,12H12V17H17V12Z'
+                  }
+                ]
+              }}
             />
           </Box>
           <Typography variant="caption" color="text.secondary">

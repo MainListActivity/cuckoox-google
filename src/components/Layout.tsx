@@ -1,6 +1,7 @@
 import React, { useState, ReactNode, useEffect, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, NavItemType } from '@/src/contexts/AuthContext';
+import { useLayout } from '@/src/contexts/LayoutContext';
 import { useTranslation } from 'react-i18next';
 import {
   AppBar,
@@ -9,7 +10,6 @@ import {
   Drawer as MuiDrawer,
   SwipeableDrawer,
   IconButton,
-  Switch,
   List,
   ListItemButton,
   Menu,
@@ -27,13 +27,11 @@ import {
   useMediaQuery,
   useTheme as useMuiTheme,
   Tooltip,
-  Avatar,
 } from '@mui/material';
 import SvgIcon from '@mui/material/SvgIcon';
 import { useTheme } from '@/src/contexts/ThemeContext';
 import {
   mdiMenu,
-  mdiMenuOpen,
   mdiWeatherSunny,
   mdiWeatherNight,
   mdiViewDashboard,
@@ -48,7 +46,6 @@ import {
   mdiTextBoxMultipleOutline,
   mdiFileUploadOutline,
   mdiBriefcaseSearchOutline,
-  mdiClose,
   mdiChevronLeft,
   mdiAccount,
 } from '@mdi/js';
@@ -131,10 +128,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { themeMode, toggleThemeMode, muiTheme:currentTheme } = muiTheme;
   const theme = useMuiTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isTablet = useMediaQuery(theme.breakpoints.down('lg'));
-  const [drawerOpen, setDrawerOpen] = useState(!isMobile);
+  const { isMenuCollapsed, toggleMenu, isDocumentCenterMode, isTemporaryMenuOpen } = useLayout();
+  const [drawerOpen, setDrawerOpen] = useState(!isMobile && !isMenuCollapsed);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
-  const { user, logout, navMenuItems, isMenuLoading, selectedCaseId, userCases, selectCase } = useAuth();
+  const { logout, navMenuItems, isMenuLoading, selectedCaseId, userCases, selectCase } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const hasAutoNavigatedRef = useRef(false);
@@ -196,7 +193,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (isMobile) {
       setMobileDrawerOpen(!mobileDrawerOpen);
     } else {
-      setDrawerOpen(!drawerOpen);
+      toggleMenu(); // 使用Layout context的方法
     }
   };
 
@@ -208,10 +205,31 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setMobileDrawerOpen(true);
   };
 
-  // Update drawer state when screen size changes
+  // Update drawer state when screen size changes or layout context changes
   useEffect(() => {
-    setDrawerOpen(!isMobile);
-  }, [isMobile]);
+    if (isDocumentCenterMode) {
+      // 在文档中心模式下，根据临时菜单状态决定抽屉开关
+      setDrawerOpen(!isMobile && isTemporaryMenuOpen);
+    } else {
+      // 在普通模式下，根据菜单折叠状态决定抽屉开关
+      setDrawerOpen(!isMobile && !isMenuCollapsed);
+    }
+  }, [isMobile, isMenuCollapsed, isDocumentCenterMode, isTemporaryMenuOpen]);
+
+  // 在文档中心模式下，点击菜单外区域时关闭临时菜单
+  useEffect(() => {
+    if (isDocumentCenterMode && isTemporaryMenuOpen) {
+      const handleClickOutside = (event: MouseEvent) => {
+        const target = event.target as Element;
+        if (!target.closest('[data-drawer-content]') && !target.closest('[data-menu-button]')) {
+          toggleMenu(); // 关闭临时菜单
+        }
+      };
+
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [isDocumentCenterMode, isTemporaryMenuOpen, toggleMenu]);
 
   // Drawer content component to reuse for both desktop and mobile
   const DrawerContent = () => (
@@ -306,33 +324,43 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <Box sx={{ 
+      display: 'flex', 
+      height: '100vh', 
+      overflow: 'hidden',
+      width: '100vw', // 添加视口宽度限制
+    }}>
       <AppBar
         position="fixed"
         elevation={0}
         sx={{
           zIndex: (theme: MuiTheme) => theme.zIndex.drawer + 1,
-          width: { 
+          width: isDocumentCenterMode ? '100%' : {
             xs: '100%',
             sm: `calc(100% - ${currentDrawerWidth}px)`
           },
-          ml: { 
+          ml: isDocumentCenterMode ? 0 : {
             xs: 0,
             sm: currentDrawerWidth
           },
           backgroundColor: currentTheme.palette.background.default,
           color: currentTheme.palette.text.primary,
           borderBottom: `1px solid ${alpha(currentTheme.palette.divider, 0.1)}`,
+          height: 64, // 固定工具栏高度
         }}
       >
-        <Toolbar sx={{ px: { xs: 1, sm: 3 } }}>
+        <Toolbar sx={{ 
+          px: { xs: 1, sm: 3 },
+          minHeight: '64px !important', // 确保工具栏高度
+        }}>
           <IconButton
             aria-label="toggle drawer"
             onClick={handleDrawerToggle}
             edge="start"
+            data-menu-button // 添加标识符用于点击外部检测
             sx={{ 
               mr: 2,
-              display: { sm: 'none' },
+              display: { xs: 'block', sm: isDocumentCenterMode ? 'block' : 'none' },
               color: currentTheme.palette.text.primary,
             }}
           >
@@ -442,7 +470,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </Toolbar>
       </AppBar>
 
-      {/* Desktop Drawer */}
+      {/* Desktop Drawer - 在文档中心模式下支持临时展开 */}
       {!isMobile && (
         <StyledDrawer 
           variant="permanent" 
@@ -450,6 +478,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           sx={{
             width: currentDrawerWidth,
             flexShrink: 0,
+            display: isDocumentCenterMode && !isTemporaryMenuOpen ? 'none' : 'block', // 文档模式下完全隐藏，除非临时展开
             '& .MuiDrawer-paper': {
               width: currentDrawerWidth,
               backgroundColor: theme.palette.primary.dark,
@@ -457,10 +486,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               borderRight: 'none',
               overflowX: 'hidden',
               height: '100vh',
+              zIndex: isDocumentCenterMode ? 1300 : 1200, // 文档模式下提高层级
             }
           }}
         >
-          <DrawerContent />
+          <div data-drawer-content> {/* 添加标识符用于点击外部检测 */}
+            <DrawerContent />
+          </div>
         </StyledDrawer>
       )}
 
@@ -472,7 +504,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           onClose={handleMobileDrawerClose}
           onOpen={handleMobileDrawerOpen}
           ModalProps={{
-            keepMounted: true, // Better open performance on mobile
+            keepMounted: true,
           }}
           sx={{
             '& .MuiDrawer-paper': {
@@ -481,6 +513,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               color: theme.palette.primary.contrastText,
               borderRight: 'none',
               height: '100vh',
+              zIndex: 1200,
             },
             '& .MuiBackdrop-root': {
               backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -497,13 +530,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           flexGrow: 1, 
           backgroundColor: currentTheme.palette.background.default,
           minHeight: '100vh',
-          p: { xs: 2, sm: 3 },
-          width: { 
+          p: isDocumentCenterMode ? 0 : { xs: 2, sm: 3 },
+          width: isDocumentCenterMode ? '100vw' : {
             xs: '100%',
             sm: `calc(100% - ${currentDrawerWidth}px)`
           },
-          mt: { xs: 7, sm: 8 },
+          ml: isDocumentCenterMode ? 0 : 0,
+          mt: 8, // 64px工具栏高度
           overflowX: 'hidden',
+          position: 'relative',
         }}
       >
         {children}
