@@ -29,17 +29,12 @@ vi.mock('../../../src/services/authService', () => ({
 }));
 
 const mockDbSignin = vi.fn();
-const mockConnect = vi.fn().mockResolvedValue(true);
-const mockDisconnect = vi.fn().mockResolvedValue(undefined);
-const mockSignout = vi.fn().mockResolvedValue(undefined);
-
-const mockSurreal = {
+const mockSurrealClient = {
   signin: mockDbSignin,
-  connect: mockConnect,
-} as unknown as Surreal;
+};
 
-vi.mock('../../../src/lib/surreal', () => ({
-  db: mockSurreal,
+vi.mock('../../../src/contexts/SurrealProvider', () => ({
+  useSurrealClient: () => mockSurrealClient,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -74,32 +69,7 @@ const setupMockAuth = (isLoggedIn: boolean, isLoading: boolean, user: AppUser | 
     setAuthState: mockSetAuthState,
     user,
   });
-  if(LoginPage.prototype) {
-    LoginPage.prototype.capturedAuthContext = { user };
-  }
 };
-
-// Helper function to wrap component with necessary providers
-const renderWithProviders = (children: React.ReactNode) => {
-  return render(
-    <SurrealContext.Provider
-      value={{
-        surreal: mockSurreal,
-        isConnecting: false,
-        isSuccess: true,
-        isError: false,
-        error: null,
-        connect: () => Promise.resolve(true),
-        disconnect: () => Promise.resolve(),
-        signin: mockDbSignin,
-        signout: () => Promise.resolve(),
-      }}
-    >
-      {children}
-    </SurrealContext.Provider>
-  );
-};
-
 
 describe('LoginPage', () => {
   beforeEach(() => {
@@ -110,7 +80,7 @@ describe('LoginPage', () => {
   describe('OIDC Login View (Default)', () => {
     beforeEach(() => {
       setupMockLocation(false);
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
     });
 
     it('should display the GitHub login button and not the admin form', () => {
@@ -124,12 +94,29 @@ describe('LoginPage', () => {
       fireEvent.click(screen.getByText('login_github_button'));
       expect(mockLoginRedirect).toHaveBeenCalledTimes(1);
     });
+
+    it('should display admin login link', () => {
+      expect(screen.getByText('admin_login_link')).toBeInTheDocument();
+    });
+
+    it('should navigate to admin login when admin link is clicked', () => {
+      fireEvent.click(screen.getByText('admin_login_link'));
+      expect(mockNavigate).toHaveBeenCalledWith('/login?admin=true');
+    });
+
+    it('should display login subtitle for regular login', () => {
+      expect(screen.getByText('login_subtitle')).toBeInTheDocument();
+    });
+
+    it('should display GitHub redirect info', () => {
+      expect(screen.getByText('login_github_redirect_info')).toBeInTheDocument();
+    });
   });
 
   describe('Admin Login View', () => {
     beforeEach(() => {
       setupMockLocation(true);
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
     });
 
     it('should display the admin login form and not the GitHub button as primary', () => {
@@ -139,13 +126,143 @@ describe('LoginPage', () => {
       expect(screen.queryByText('login_github_button')).not.toBeInTheDocument();
       expect(screen.getByText('back_to_oidc_login_link')).toBeInTheDocument();
     });
+
+    it('should display admin login subtitle', () => {
+      expect(screen.getByText('admin_login_subtitle')).toBeInTheDocument();
+    });
+
+    it('should navigate back to regular login when back link is clicked', () => {
+      fireEvent.click(screen.getByText('back_to_oidc_login_link'));
+      expect(mockNavigate).toHaveBeenCalledWith('/login');
+    });
+  });
+
+  describe('Password Visibility Toggle', () => {
+    beforeEach(() => {
+      setupMockLocation(true);
+      render(<LoginPage />);
+    });
+
+    it('should toggle password visibility when eye icon is clicked', () => {
+      const passwordField = screen.getByLabelText(/admin_password_label/i);
+      const toggleButton = screen.getByLabelText('toggle password visibility');
+
+      // Initially password should be hidden
+      expect(passwordField).toHaveAttribute('type', 'password');
+
+      // Click to show password
+      fireEvent.click(toggleButton);
+      expect(passwordField).toHaveAttribute('type', 'text');
+
+      // Click to hide password again
+      fireEvent.click(toggleButton);
+      expect(passwordField).toHaveAttribute('type', 'password');
+    });
+  });
+
+  describe('Form Validation', () => {
+    beforeEach(() => {
+      setupMockLocation(true);
+      render(<LoginPage />);
+    });
+
+    it('should show error when submitting empty form', async () => {
+      const form = document.querySelector('form')!;
+      
+      await act(async () => {
+        fireEvent.submit(form);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/error_admin_credentials_required/)).toBeInTheDocument();
+      });
+    });
+
+    it('should show error when submitting with empty username', async () => {
+      const passwordField = screen.getByLabelText(/admin_password_label/i);
+      const form = document.querySelector('form')!;
+
+      fireEvent.change(passwordField, { target: { value: 'password123' } });
+      
+      await act(async () => {
+        fireEvent.submit(form);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/error_admin_credentials_required/)).toBeInTheDocument();
+      });
+    });
+
+    it('should show error when submitting with empty password', async () => {
+      const usernameField = screen.getByRole('textbox', { name: /admin_username_label/i });
+      const form = document.querySelector('form')!;
+
+      fireEvent.change(usernameField, { target: { value: 'testadmin' } });
+      
+      await act(async () => {
+        fireEvent.submit(form);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/error_admin_credentials_required/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('OIDC Login Error Handling', () => {
+    beforeEach(() => {
+      setupMockLocation(false);
+    });
+
+    it('should display OIDC error from location state', () => {
+      setupMockLocation(false, { error: 'oidc_error_message' });
+      render(<LoginPage />);
+      
+      expect(screen.getByText('oidc_error_message')).toBeInTheDocument();
+    });
+
+    it('should handle OIDC login redirect error', async () => {
+      const errorMessage = 'OIDC redirect failed';
+      mockLoginRedirect.mockRejectedValue(new Error(errorMessage));
+      
+      render(<LoginPage />);
+      
+      await act(async () => {
+        fireEvent.click(screen.getByText('login_github_button'));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('error_oidc_init_failed')).toBeInTheDocument();
+      });
+    });
+
+    it('should not call OIDC login when admin login is processing', async () => {
+      setupMockLocation(false);
+      render(<LoginPage />);
+      
+      // Mock admin login processing state
+      setupMockAuth(false, false, null);
+      mockUseAuthFn.mockReturnValue({
+        isLoggedIn: false,
+        isLoading: false,
+        setAuthState: mockSetAuthState,
+        user: null,
+      });
+
+      // Simulate admin login processing by clicking GitHub button multiple times
+      const githubButton = screen.getByText('login_github_button');
+      fireEvent.click(githubButton);
+      fireEvent.click(githubButton);
+
+      expect(mockLoginRedirect).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('Admin Login Form - Successful Submission', () => {
     beforeEach(async () => {
       setupMockLocation(true);
       mockDbSignin.mockResolvedValue(undefined);
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
 
       await act(async () => {
         fireEvent.change(screen.getByRole('textbox', { name: /admin_username_label/i }), { 
@@ -161,11 +278,8 @@ describe('LoginPage', () => {
     it('should call db.signin with correct credentials and params', async () => {
       await waitFor(() => {
         expect(mockDbSignin).toHaveBeenCalledWith({
-          user: 'testadmin',
-          pass: 'password123',
-          NS: import.meta.env.VITE_SURREALDB_NAMESPACE,
-          DB: import.meta.env.VITE_SURREALDB_DATABASE,
-          SC: 'account',
+          username: 'testadmin',
+          password: 'password123',
         });
       });
     });
@@ -195,7 +309,7 @@ describe('LoginPage', () => {
     beforeEach(async () => {
       setupMockLocation(true);
       mockDbSignin.mockRejectedValue(new Error(errorMessage));
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
 
       await act(async () => {
         fireEvent.change(screen.getByRole('textbox', { name: /admin_username_label/i }), { 
@@ -229,7 +343,7 @@ describe('LoginPage', () => {
       let resolveSignin:any;
       mockDbSignin.mockImplementation(() => new Promise(resolve => { resolveSignin = resolve; }));
       
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
 
       fireEvent.change(screen.getByRole('textbox', { name: /admin_username_label/i }), { 
         target: { value: 'testadmin' } 
@@ -251,6 +365,15 @@ describe('LoginPage', () => {
         expect(screen.queryByText('admin_login_attempt_loading')).not.toBeInTheDocument();
       });
     });
+
+    it('should show loading state when auth context is loading', () => {
+      setupMockAuth(false, true, null);
+      setupMockLocation(false);
+      
+      render(<LoginPage />);
+      
+      expect(screen.getByText('loading_session')).toBeInTheDocument();
+    });
   });
 
   describe('Redirection - Already Logged-In OIDC User', () => {
@@ -259,7 +382,7 @@ describe('LoginPage', () => {
       setupMockAuth(true, false, oidcUser);
       setupMockLocation(false);
       
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
       
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true });
@@ -271,11 +394,21 @@ describe('LoginPage', () => {
       setupMockAuth(true, false, oidcUser);
       setupMockLocation(false, { from: { pathname: '/some/protected/route' } });
 
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/some/protected/route', { replace: true });
       });
+    });
+
+    it('should show redirecting message for logged in OIDC user', () => {
+      const oidcUser: AppUser = { id: new RecordId('user','123'), github_id: '123', name: 'Test User' };
+      setupMockAuth(true, false, oidcUser);
+      setupMockLocation(false);
+      
+      render(<LoginPage />);
+      
+      expect(screen.getByText('redirecting')).toBeInTheDocument();
     });
   });
 
@@ -285,11 +418,107 @@ describe('LoginPage', () => {
       setupMockAuth(true, false, adminUser);
       setupMockLocation(true); // Attempting to access ?admin=true
 
-      renderWithProviders(<LoginPage />);
+      render(<LoginPage />);
 
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/admin', { replace: true });
       });
+    });
+
+    it('should show redirecting admin message for logged in admin user', () => {
+      const adminUser: AppUser = { id: new RecordId('user','admin_super'), github_id: '--admin--', name: 'Super Admin' };
+      setupMockAuth(true, false, adminUser);
+      setupMockLocation(true);
+      
+      render(<LoginPage />);
+      
+      expect(screen.getByText('redirecting_admin')).toBeInTheDocument();
+    });
+  });
+
+  describe('UI Elements and Layout', () => {
+    it('should display CuckooX logo and title', () => {
+      setupMockLocation(false);
+      render(<LoginPage />);
+      
+      expect(screen.getByText('CuckooX')).toBeInTheDocument();
+    });
+
+    it('should display footer text', () => {
+      setupMockLocation(false);
+      render(<LoginPage />);
+      
+      expect(screen.getByText('login_footer_text')).toBeInTheDocument();
+    });
+
+    it('should display OR divider in OIDC login mode', () => {
+      setupMockLocation(false);
+      render(<LoginPage />);
+      expect(screen.getByText('or')).toBeInTheDocument();
+    });
+
+    it('should display OR divider in admin login mode', () => {
+      setupMockLocation(true);
+      render(<LoginPage />);
+      expect(screen.getByText('or')).toBeInTheDocument();
+    });
+  });
+
+  describe('Form Input Handling', () => {
+    beforeEach(() => {
+      setupMockLocation(true);
+      render(<LoginPage />);
+    });
+
+    it('should update username field value when typing', () => {
+      const usernameField = screen.getByRole('textbox', { name: /admin_username_label/i });
+      
+      fireEvent.change(usernameField, { target: { value: 'newusername' } });
+      
+      expect(usernameField).toHaveValue('newusername');
+    });
+
+    it('should update password field value when typing', () => {
+      const passwordField = screen.getByLabelText(/admin_password_label/i);
+      
+      fireEvent.change(passwordField, { target: { value: 'newpassword' } });
+      
+      expect(passwordField).toHaveValue('newpassword');
+    });
+
+    it('should clear error when starting new admin login attempt', async () => {
+      // First, create an error
+      mockDbSignin.mockRejectedValue(new Error('Test error'));
+      
+      await act(async () => {
+        fireEvent.change(screen.getByRole('textbox', { name: /admin_username_label/i }), { 
+          target: { value: 'test' } 
+        });
+        fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
+          target: { value: 'test' } 
+        });
+        fireEvent.click(screen.getByRole('button', { name: /admin_login_button/i }));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/error_admin_login_failed/)).toBeInTheDocument();
+      });
+
+      // Now mock success and try again
+      mockDbSignin.mockResolvedValue(undefined);
+      
+      await act(async () => {
+        fireEvent.change(screen.getByRole('textbox', { name: /admin_username_label/i }), { 
+          target: { value: 'newtest' } 
+        });
+        fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
+          target: { value: 'newtest' } 
+        });
+        fireEvent.click(screen.getByRole('button', { name: /admin_login_button/i }));
+      });
+
+      // Error should be cleared during new attempt
+      expect(screen.queryByText(/error_admin_login_failed/)).not.toBeInTheDocument();
     });
   });
 });

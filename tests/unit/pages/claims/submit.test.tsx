@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom'; // For useNavigate
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/src/i18n'; // Adjust path
@@ -39,6 +39,17 @@ vi.mock('../../../../src/contexts/SnackbarContext', async () => {
 describe('ClaimSubmissionPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    // Clean up any open handles
+    vi.clearAllMocks();
+    
+    // Force cleanup of any pending promises
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    // Clear any timers
+    vi.clearAllTimers();
   });
 
   const renderComponent = () => {

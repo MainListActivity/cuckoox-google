@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { Case } from '@/src/contexts/AuthContext'; // Import Case interface
@@ -91,15 +91,14 @@ const CaseSelectionPage: React.FC = () => {
           FROM case;
         `;
         
-        const result = await client.query(query); // Removed userId parameter
+        const result = await client.query(query);
         
         if (result && result[0] && Array.isArray(result[0])) {
           // Transform the results to match our ExtendedCase interface
-          // Each item in result[0] is now directly a case object
           const userCases: ExtendedCase[] = result[0].map((caseDetails: any) => {
             return {
               id: caseDetails.id,
-              name: caseDetails.name || t('unnamed_case', '未命名案件'),
+              name: caseDetails.name || '未命名案件',
               case_number: caseDetails.case_number,
               case_procedure: caseDetails.case_procedure,
               procedure_phase: caseDetails.procedure_phase,
@@ -110,7 +109,7 @@ const CaseSelectionPage: React.FC = () => {
             };
           });
 
-          // Remove duplicates (though less likely with direct case query, kept for safety)
+          // Remove duplicates
           const uniqueCases = Array.from(
             new Map(userCases.map(c => [c.id.toString(), c])).values()
           );
@@ -121,15 +120,15 @@ const CaseSelectionPage: React.FC = () => {
         }
       } catch (err) {
         console.error('Error fetching user cases:', err);
-        setError(t('error_loading_cases', '加载案件列表失败'));
-        showError(t('error_loading_cases', '加载案件列表失败'));
+        const errorMessage = '加载案件列表失败';
+        setError(errorMessage);
       } finally {
         setIsLoadingCases(false);
       }
     };
 
     fetchUserCases();
-  }, [isConnected, client, user, t, showError]);
+  }, [isConnected, client, user]);
 
   // Handle case selection
   const handleCaseSelect = async (caseToSelect: ExtendedCase) => {

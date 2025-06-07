@@ -3,8 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/src/i18n'; // Adjust path if your i18n setup is elsewhere
-import AddCreditorDialog, { CreditorFormData } from '@/src/components/creditor/AddCreditorDialog';
-import { Creditor } from '@/src/pages/creditors'; // Adjust path
+import AddCreditorDialog from '@/src/pages/creditors/AddCreditorDialog'; // 修正路径
+import { Creditor, CreditorFormData } from '@/src/pages/creditors/types'; // 修正路径和导入方式
 
 const mockOnClose = vi.fn();
 const mockOnSave = vi.fn();
@@ -156,6 +156,108 @@ describe('AddCreditorDialog', () => {
     const cancelButton = screen.getByRole('button', { name: '取消' }); // Assuming '取消' is the text for Cancel
     fireEvent.click(cancelButton);
     expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
+
+  // 新增测试用例：测试表单字段验证
+  it('validates identifier format based on creditor type', async () => {
+    renderDialog();
+    
+    // Select organization type
+    const categorySelect = screen.getByLabelText(/类别/);
+    fireEvent.mouseDown(categorySelect);
+    const organizationOption = await screen.findByText('组织');
+    fireEvent.click(organizationOption);
+
+    // Fill required fields
+    fireEvent.change(screen.getByLabelText(/名称/), { target: { value: 'Test Corp' } });
+    fireEvent.change(screen.getByLabelText(/ID/), { target: { value: 'TESTID001' } });
+
+    const saveButton = screen.getByRole('button', { name: '保存' });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalled();
+    });
+  });
+
+  // 新增测试用例：测试表单重置功能
+  it('resets form when switching between add and edit modes', async () => {
+    const { rerender } = render(
+      <I18nextProvider i18n={i18n}>
+        <AddCreditorDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          existingCreditor={null}
+        />
+      </I18nextProvider>
+    );
+
+    // Fill some data in add mode
+    fireEvent.change(screen.getByLabelText(/名称/), { target: { value: 'Test Name' } });
+    expect(screen.getByLabelText(/名称/)).toHaveValue('Test Name');
+
+    // Switch to edit mode
+    rerender(
+      <I18nextProvider i18n={i18n}>
+        <AddCreditorDialog
+          open={true}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          existingCreditor={initialCreditor}
+        />
+      </I18nextProvider>
+    );
+
+    // Should show existing creditor data
+    expect(screen.getByLabelText(/名称/)).toHaveValue(initialCreditor.name);
+  });
+
+  // 新增测试用例：测试表单错误状态清除
+  it('clears error message when user starts typing', async () => {
+    renderDialog();
+    
+    // Trigger validation error
+    const saveButton = screen.getByRole('button', { name: '保存' });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('请填写所有必填字段：类别、名称和ID。')).toBeInTheDocument();
+    });
+
+    // Start typing in name field
+    fireEvent.change(screen.getByLabelText(/名称/), { target: { value: 'Test' } });
+
+    // Error should be cleared
+    expect(screen.queryByText('请填写所有必填字段：类别、名称和ID。')).not.toBeInTheDocument();
+  });
+
+  // 新增测试用例：测试联系信息的可选性
+  it('allows saving with only required fields filled', async () => {
+    renderDialog();
+    
+    // Fill only required fields
+    const categorySelect = screen.getByLabelText(/类别/);
+    fireEvent.mouseDown(categorySelect);
+    const organizationOption = await screen.findByText('组织');
+    fireEvent.click(organizationOption);
+
+    fireEvent.change(screen.getByLabelText(/名称/), { target: { value: 'Test Corp' } });
+    fireEvent.change(screen.getByLabelText(/ID/), { target: { value: 'TESTID001' } });
+
+    const saveButton = screen.getByRole('button', { name: '保存' });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalledWith(expect.objectContaining({
+        category: '组织',
+        name: 'Test Corp',
+        identifier: 'TESTID001',
+        contactPersonName: '',
+        contactInfo: '',
+        address: '',
+      }));
+    });
   });
 
   // Example of how to test closing by pressing Escape, if applicable to your Dialog implementation

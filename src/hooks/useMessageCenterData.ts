@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
-import { RecordId } from 'surrealdb.js';
+import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { RecordId, Uuid } from 'surrealdb';
 import { 
   Message, 
   ConversationSummary, 
   CaseRobotReminderMessage, 
-  BusinessNotificationMessage,
-  IMMessage // For potential use in conversation last message
+  BusinessNotificationMessage
 } from '@/src/types/message';
 
 // --- useConversationsList Hook ---
@@ -29,14 +28,14 @@ interface RawConversationData {
 export function useConversationsList(userId: string | null): { 
   conversations: ConversationSummary[]; 
   isLoading: boolean; 
-  error: any; 
+  error: unknown; 
   setConversations: React.Dispatch<React.SetStateAction<ConversationSummary[]>>; // Added setter
 } {
-  const { client, isConnected } = useSurrealClient();
+  const { surreal: client, isSuccess: isConnected } = useSurreal();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<any>(null);
-  const liveQueryIdRef = useRef<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const liveQueryIdRef = useRef<Uuid | null>(null);
 
   const fetchConversations = useCallback(async (currentUserId: string) => {
     if (!client || !isConnected) return;
@@ -46,7 +45,7 @@ export function useConversationsList(userId: string | null): {
     try {
       // Placeholder Query: This is highly conceptual and needs schema alignment.
       // Fetching participant names might require additional queries or FETCH clauses if not denormalized.
-      const query = `
+      const _query = `
         SELECT
             id,
             participants, -- This would ideally be populated with user records using FETCH
@@ -71,8 +70,10 @@ export function useConversationsList(userId: string | null): {
 
       const result = await client.query<[RawConversationData[]]>(placeholderQuery, { userId: currentUserId });
       
-      if (result && result[0] && result[0].result) {
-        const parsedConversations: ConversationSummary[] = result[0].result.map(raw => {
+      const data = result?.[0];
+      if (data) {
+        const parsedConversations: ConversationSummary[] = data.map(raw => {
+          const id = typeof raw.id === 'string' ? new RecordId(raw.id.split(':')[0], raw.id.split(':')[1]) : raw.id;
           // Basic parsing, assuming participant names need fetching or are simplified
           const participantsSummary = raw.participants?.map(p => ({
             id: p.id,
@@ -88,7 +89,7 @@ export function useConversationsList(userId: string | null): {
                              (Array.isArray(raw.last_message_sender_name) && raw.last_message_sender_name[0]) ? raw.last_message_sender_name[0].sender_name : undefined;
 
           return {
-            id: raw.id,
+            id: id,
             participants: participantsSummary,
             last_message_snippet: snippet,
             last_message_timestamp: timestamp,
@@ -117,7 +118,7 @@ export function useConversationsList(userId: string | null): {
       // Simplified Live Query: Re-fetch all conversations on any change in 'conversation' or 'message' table.
       // This is not optimal but serves as a basic starting point.
       const setupLiveQueries = async () => {
-        const liveConversationQuery = `LIVE SELECT * FROM conversation WHERE $userId IN participants;`; // Simplified
+        const _liveConversationQuery = `LIVE SELECT * FROM conversation WHERE $userId IN participants;`; // Simplified
         const liveMessageQuery = `LIVE SELECT * FROM message;`; // Very broad, just for triggering re-fetch
 
         try {
@@ -126,10 +127,10 @@ export function useConversationsList(userId: string | null): {
 
           // For simplicity, we'll use one live query ID, re-fetching on either event.
           // A more robust solution might involve multiple live queries or more specific backend events.
-          const { result: qid } = (await client.query<[{result: string}]>(liveMessageQuery, {userId}))[0]; // Or use conversation query
-          if (qid && typeof qid === 'string') {
+          const { result: qid } = (await client.query<[{result: Uuid}]>(liveMessageQuery, {userId}))[0]; // Or use conversation query
+          if (qid) {
             liveQueryIdRef.current = qid;
-            client. subscribeLive(qid, () => {
+            client.subscribeLive(qid, () => {
               // console.log('Live event received, re-fetching conversations for user:', userId);
               fetchConversations(userId);
             });
@@ -143,7 +144,7 @@ export function useConversationsList(userId: string | null): {
       setConversations([]);
     }
     return () => { // Cleanup
-      if (liveQueryIdRef.current && client && client.isConnected) {
+      if (liveQueryIdRef.current && client && client.status === 'connected') {
         client.kill(liveQueryIdRef.current).catch( /* ignore */ );
         liveQueryIdRef.current = null;
       }
@@ -158,14 +159,14 @@ export function useConversationsList(userId: string | null): {
 export function useSystemNotifications(userId: string | null, caseId?: string | null): { 
   notifications: (CaseRobotReminderMessage | BusinessNotificationMessage)[]; 
   isLoading: boolean; 
-  error: any; 
+  error: unknown; 
   setNotifications: React.Dispatch<React.SetStateAction<(CaseRobotReminderMessage | BusinessNotificationMessage)[]>>; // Added setter
 } {
-  const { client, isConnected } = useSurrealClient();
+  const { surreal: client, isSuccess: isConnected } = useSurreal();
   const [notifications, setNotifications] = useState<(CaseRobotReminderMessage | BusinessNotificationMessage)[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<any>(null);
-  const liveQueryIdRef = useRef<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const liveQueryIdRef = useRef<Uuid | null>(null);
 
   const fetchNotifications = useCallback(async (currentUserId: string, currentCaseId?: string | null) => {
     if (!client || !isConnected) return;
@@ -202,8 +203,9 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
 
       const result = await client.query<[Message[]]>(query, params);
       
-      if (result && result[0] && result[0].result) {
-        const filteredNotifications = result[0].result.filter(
+      const data = result?.[0];
+      if (data) {
+        const filteredNotifications = data.filter(
           (msg): msg is CaseRobotReminderMessage | BusinessNotificationMessage =>
             msg.type === 'CASE_ROBOT_REMINDER' || msg.type === 'BUSINESS_NOTIFICATION'
         );
@@ -218,7 +220,7 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
     } finally {
       setIsLoading(false);
     }
-  }, [client, isConnected]); // Removed caseId from here, pass it to fetchNotifications
+  }, [client, isConnected, caseId]); // Added caseId to dependencies
 
   useEffect(() => {
     if (userId && client && isConnected) {
@@ -234,10 +236,10 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
           const params: { userId: string; caseId?: string | null } = { userId: userId };
           if (caseId !== undefined) params.caseId = caseId;
 
-          const { result: qid } = (await client.query<[{result: string}]>(liveQuery, params))[0];
-          if (qid && typeof qid === 'string') {
+          const { result: qid } = (await client.query<[{result: Uuid}]>(liveQuery, params))[0];
+          if (qid) {
             liveQueryIdRef.current = qid;
-            client. subscribeLive(qid, () => {
+            client.subscribeLive(qid, () => {
               // console.log('Live event for notifications, re-fetching for user:', userId, 'case:', caseId);
               fetchNotifications(userId, caseId); // Pass caseId here too
             });
@@ -251,8 +253,8 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
       setNotifications([]);
     }
     return () => { // Cleanup
-      if (liveQueryIdRef.current && client && client.isConnected) {
-        client.kill(liveQueryIdRef.current).catch( /*ignore*/ );
+      if (liveQueryIdRef.current && client && client.status === 'connected') {
+        client.kill(liveQueryIdRef.current).catch( /* ignore */ );
         liveQueryIdRef.current = null;
       }
     };

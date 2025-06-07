@@ -1,8 +1,8 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useConversationsList, useSystemNotifications } from '@/src/hooks/useMessageCenterData';
 import { ConversationSummary, CaseRobotReminderMessage, BusinessNotificationMessage, Message } from '@/src/types/message';
 import { RecordId } from 'surrealdb'; // Changed from surrealdb.js
-import { vi } from 'vitest'; // Import vi
 
 // Mock the SurrealClient
 const mockQuery = vi.fn();
@@ -21,13 +21,13 @@ const mockSurrealDbClient = {
   select: vi.fn(),
   subscribeLive: mockSubscribeLiveFn, // Use the vi.fn() mock
   kill: mockKill,
-  isConnected: true,
+  status: 'connected',
 };
 
 vi.mock('../../../src/contexts/SurrealProvider', () => ({
-  useSurrealClient: () => ({
-    client: mockSurrealDbClient, // Ensure this uses the object with the vi.fn()
-    isConnected: true,
+  useSurreal: () => ({
+    surreal: mockSurrealDbClient,
+    isSuccess: true,
   }),
 }));
 
@@ -61,7 +61,7 @@ describe('useMessageCenterData Hooks', () => {
     });
 
     it('should call query with correct placeholder SQL and userId', async () => {
-      mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]);
+      mockQuery.mockResolvedValueOnce([[]]);
       const { result } = renderHook(() => useConversationsList(mockUserId));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       expect(mockQuery).toHaveBeenCalledWith(
@@ -82,7 +82,7 @@ describe('useMessageCenterData Hooks', () => {
           unread_count: 1,
         }
       ];
-      mockQuery.mockResolvedValueOnce([{ result: rawData, status: 'OK' }]);
+      mockQuery.mockResolvedValueOnce([rawData]);
       const { result } = renderHook(() => useConversationsList(mockUserId));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       
@@ -95,7 +95,7 @@ describe('useMessageCenterData Hooks', () => {
     });
 
     it('should return empty array for empty DB result', async () => {
-      mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]);
+      mockQuery.mockResolvedValueOnce([[]]);
       const { result } = renderHook(() => useConversationsList(mockUserId));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       expect(result.current.conversations).toEqual([]);
@@ -115,16 +115,19 @@ describe('useMessageCenterData Hooks', () => {
     });
 
     it('should trigger re-fetch on simulated live event', async () => {
-      mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // Initial fetch
+      mockQuery
+        .mockResolvedValueOnce([[]]) // Initial data fetch
+        .mockResolvedValueOnce([{ result: 'live-query-id-123', status: 'OK' }]); // Live query setup
       const { result } = renderHook(() => useConversationsList(mockUserId));
       await waitFor(() => expect(result.current.isLoading).toBe(false)); // Wait for initial fetch
       
-      expect(mockQuery).toHaveBeenCalledTimes(1); // Initial data fetch
+      expect(mockQuery).toHaveBeenCalledTimes(2); // 1. Initial data fetch, 2. Live query setup
       expect(mockSubscribeLiveFn).toHaveBeenCalledTimes(1); // Live subscription setup
       expect(liveCallback).not.toBeNull(); // Callback should be captured
 
       // Simulate data for the re-fetch
-      mockQuery.mockResolvedValueOnce([{ result: [{ id: 'conv:new', participants: [], updated_at: new Date().toISOString(),last_message_snippet: 'New Message', unread_count: 1 }], status: 'OK' }]);
+      const refetchData = [{ id: new RecordId('conv', 'new'), participants: [], updated_at: new Date().toISOString(),last_message_snippet: 'New Message', unread_count: 1 }];
+      mockQuery.mockResolvedValueOnce([refetchData]);
 
       act(() => {
         if (liveCallback) liveCallback({ action: 'CREATE', result: {} }); // Simulate live event
@@ -132,8 +135,27 @@ describe('useMessageCenterData Hooks', () => {
 
       // Wait for the re-fetch to complete and update the state
       await waitFor(() => expect(result.current.conversations.length).toBe(1));
-      expect(mockQuery).toHaveBeenCalledTimes(2); // Initial fetch + re-fetch
+      expect(mockQuery).toHaveBeenCalledTimes(3); // +1 for re-fetch
       expect(result.current.conversations[0].id).toEqual(new RecordId('conv', 'new')); // RecordId comparison
+    });
+
+    it('should not fetch data if userId is null', () => {
+      const { result } = renderHook(() => useConversationsList(null));
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.conversations).toEqual([]);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it('should call cleanup function on unmount', async () => {
+      mockQuery
+        .mockResolvedValueOnce([[]]) // Initial data fetch
+        .mockResolvedValueOnce([{ result: 'live-query-id-123', status: 'OK' }]); // Live query setup
+
+      const { unmount } = renderHook(() => useConversationsList(mockUserId));
+      await waitFor(() => expect(mockSubscribeLiveFn).toHaveBeenCalled()); // Ensure live query is set up
+
+      unmount();
+      expect(mockKill).toHaveBeenCalledWith('live-query-id-123');
     });
   });
 
@@ -150,7 +172,7 @@ describe('useMessageCenterData Hooks', () => {
     });
 
     it('should call query with correct SQL and parameters (with caseId)', async () => {
-      mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]);
+      mockQuery.mockResolvedValueOnce([[]]);
       const { result } = renderHook(() => useSystemNotifications(mockUserId, mockCaseId));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       expect(mockQuery).toHaveBeenCalledWith(
@@ -160,7 +182,7 @@ describe('useMessageCenterData Hooks', () => {
     });
     
     it('should call query with correct SQL and parameters (without caseId)', async () => {
-      mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]);
+      mockQuery.mockResolvedValueOnce([[]]);
       const { result } = renderHook(() => useSystemNotifications(mockUserId, null)); // caseId is null
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       expect(mockQuery).toHaveBeenCalledWith(
@@ -175,7 +197,7 @@ describe('useMessageCenterData Hooks', () => {
         { id: 'notif2', type: 'BUSINESS_NOTIFICATION', sender_name: 'System', content: 'Update', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_read: true, target_user_id: mockUserId, severity: 'info' },
         { id: 'notif3', type: 'IM', content: 'IM message, should be filtered out', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_read: false, conversation_id: 'conv1', sender_id: 'user:other' } as any, // Cast to any to bypass strict type for testing filter
       ];
-      mockQuery.mockResolvedValueOnce([{ result: rawData, status: 'OK' }]);
+      mockQuery.mockResolvedValueOnce([rawData]);
       const { result } = renderHook(() => useSystemNotifications(mockUserId, mockCaseId));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       
@@ -197,17 +219,47 @@ describe('useMessageCenterData Hooks', () => {
       consoleErrorSpy.mockRestore();
     });
 
-     it('should trigger re-fetch on simulated live event for notifications', async () => {
-      mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // Initial fetch
+    it('should call query with correct SQL when caseId is undefined', async () => {
+      mockQuery.mockResolvedValueOnce([[]]);
+      const { result } = renderHook(() => useSystemNotifications(mockUserId, undefined)); // caseId is undefined
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining("(type = 'CASE_ROBOT_REMINDER' AND (case_id = $caseId OR $caseId = NONE))"),
+        { userId: mockUserId, caseId: undefined }
+      );
+    });
+
+    it('should not fetch data if userId is null', () => {
+      const { result } = renderHook(() => useSystemNotifications(null, mockCaseId));
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.notifications).toEqual([]);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
+    it('should call cleanup function on unmount', async () => {
+      mockQuery
+        .mockResolvedValueOnce([[]]) // Initial data fetch
+        .mockResolvedValueOnce([{ result: 'live-query-id-123', status: 'OK' }]); // Live query setup
+      const { unmount } = renderHook(() => useSystemNotifications(mockUserId, mockCaseId));
+      await waitFor(() => expect(mockSubscribeLiveFn).toHaveBeenCalled()); // Ensure live query is set up
+
+      unmount();
+      expect(mockKill).toHaveBeenCalledWith('live-query-id-123');
+    });
+
+    it('should trigger re-fetch on simulated live event for notifications', async () => {
+      mockQuery
+        .mockResolvedValueOnce([[]]) // Initial fetch
+        .mockResolvedValueOnce([{ result: 'live-query-id-789', status: 'OK' }]); // Live query setup
       const { result } = renderHook(() => useSystemNotifications(mockUserId, mockCaseId));
       await waitFor(() => expect(result.current.isLoading).toBe(false)); // Wait for initial fetch
       
-      expect(mockQuery).toHaveBeenCalledTimes(1); // Initial data fetch
+      expect(mockQuery).toHaveBeenCalledTimes(2); // 1. Initial data fetch, 2. Live query setup
       expect(mockSubscribeLiveFn).toHaveBeenCalledTimes(1); // Live subscription setup
       expect(liveCallback).not.toBeNull(); // Callback should be captured
 
       const newNotification = { id: 'notif:new', type: 'BUSINESS_NOTIFICATION', content: 'New live notif', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_read: false, target_user_id: mockUserId, sender_name: 'Live System' };
-      mockQuery.mockResolvedValueOnce([{ result: [newNotification], status: 'OK' }]); // Re-fetch response
+      mockQuery.mockResolvedValueOnce([[newNotification]]); // Re-fetch response
       
       act(() => {
         if (liveCallback) liveCallback({ action: 'CREATE', result: {} }); // Simulate live event
@@ -215,7 +267,7 @@ describe('useMessageCenterData Hooks', () => {
 
       // Wait for the re-fetch to complete and update the state
       await waitFor(() => expect(result.current.notifications.length).toBe(1));
-      expect(mockQuery).toHaveBeenCalledTimes(2); // Initial fetch + re-fetch
+      expect(mockQuery).toHaveBeenCalledTimes(3); // +1 for re-fetch
       expect(result.current.notifications[0].content).toBe('New live notif');
     });
   });

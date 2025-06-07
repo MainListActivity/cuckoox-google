@@ -22,29 +22,29 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
   const [severity, setSeverity] = useState<AlertColor>('success'); // Add severity state
   // const { currentTheme } = useTheme(); // Get current theme
 
-  const showSuccess = (newMessage: string) => {
+  const showSuccess = React.useCallback((newMessage: string) => {
     setMessage(newMessage);
     setSeverity('success');
     setOpen(true);
-  };
+  }, []);
 
-  const showError = (newMessage: string) => {
+  const showError = React.useCallback((newMessage: string) => {
     setMessage(newMessage);
     setSeverity('error');
     setOpen(true);
-  };
+  }, []);
 
-  const showWarning = (newMessage: string) => {
+  const showWarning = React.useCallback((newMessage: string) => {
     setMessage(newMessage);
     setSeverity('warning');
     setOpen(true);
-  };
+  }, []);
 
-  const showInfo = (newMessage: string) => {
+  const showInfo = React.useCallback((newMessage: string) => {
     setMessage(newMessage);
     setSeverity('info');
     setOpen(true);
-  };
+  }, []);
 
   const handleClose = (event?: React.SyntheticEvent | Event, reason?: string) => {
     if (reason === 'clickaway') {

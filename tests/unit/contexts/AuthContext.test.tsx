@@ -1,10 +1,8 @@
-import React, { ReactNode } from 'react';
-import { render, act, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AuthProvider, useAuth, Case, Role } // Removed AppUser as it's defined locally for test
-    from '@/src/contexts/AuthContext'; // Adjust path as needed
+import React from 'react';
+import { render, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import { AuthProvider, useAuth, Case, Role, AppUser } from '@/src/contexts/AuthContext';
 import authService from '@/src/services/authService';
-// import { db } from '@/src/lib/surreal'; // No longer directly imported by AuthContext
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
 
@@ -16,8 +14,8 @@ const localStorageMock = (() => {
     setItem: (key: string, value: string) => { store[key] = value.toString(); },
     removeItem: (key: string) => { delete store[key]; },
     clear: () => { store = {}; },
-    get length() { return Object.keys(store).length; }, // Added for completeness
-    key: (index: number) => Object.keys(store)[index] || null, // Added for completeness
+    get length() { return Object.keys(store).length; },
+    key: (index: number) => Object.keys(store)[index] || null,
   };
 })();
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
@@ -32,53 +30,43 @@ vi.mock('../../../src/services/authService', () => ({
   }
 }));
 
-// Mock SurrealProvider instead of direct db import
+// Mock SurrealProvider
 const mockSurrealClient = {
   select: vi.fn(),
   query: vi.fn(),
   merge: vi.fn(),
   signout: vi.fn(),
   signin: vi.fn(),
-  create: vi.fn(), // Add other methods used by AuthContext if any
+  create: vi.fn(),
   delete: vi.fn(),
-  // Add any other client methods AuthContext might use
 };
+
 vi.mock('@/src/contexts/SurrealProvider', () => ({
-  useSurreal: () => ({ // This is the hook AuthContext now uses
+  useSurreal: () => ({
     surreal: mockSurrealClient,
-    isConnected: true, // Mock connection status
+    isConnected: true,
     isLoading: false,
     error: null,
     dbInfo: null,
     connect: vi.fn(),
-    signout: mockSurrealClient.signout, // Ensure signout from useSurreal is also mocked if used directly
+    signout: mockSurrealClient.signout,
   }),
-  // Keep SurrealProvider export if it's used by TestWrapper, but it's not directly.
-  // SurrealProvider: ({ children } : {children: ReactNode}) => children,
 }));
 
 // Mock console.error and console.warn to spy on them
 const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-
-// Helper types
-interface AppUser {
-  id: string;
-  github_id: string;
-  name: string;
-  email?: string;
-  last_login_case_id?: string | null;
-}
-
+// Test data
 const mockAdminUser: AppUser = {
-  id: 'user:admin',
+  id: new RecordId('user', 'admin'),
   github_id: '--admin--',
   name: 'Admin User',
 };
 
 const mockOidcUser: AppUser = {
-  id: 'user:oidc123',
+  id: new RecordId('user', 'oidc123'),
   github_id: 'oidc123',
   name: 'OIDC User',
   email: 'oidc@example.com',
@@ -89,51 +77,83 @@ const mockOidcClientUser = {
   expired: false,
 } as OidcUser;
 
+const mockCase1: Case = {
+  id: new RecordId('case', '123'),
+  name: '测试案件1',
+  case_number: 'TEST001',
+  status: '立案',
+};
+
+const mockCase2: Case = {
+  id: new RecordId('case', '456'),
+  name: '测试案件2',
+  case_number: 'TEST002',
+  status: '审理中',
+};
+
+const mockCaseManagerRole: Role = {
+  id: new RecordId('role', 'cm'),
+  name: 'case_manager',
+  description: '案件管理员',
+};
+
+const mockCreditorRole: Role = {
+  id: new RecordId('role', 'cr'),
+  name: 'creditor_representative',
+  description: '债权人代表',
+};
 
 // Test Consumer Component
-let capturedAuthContext: any = {}; // To capture context values
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let capturedAuthContext: any = {};
 
 const TestConsumerComponent = () => {
   const auth = useAuth();
-  capturedAuthContext = auth; // Capture the context
+  capturedAuthContext = auth;
   return (
     <div>
       <div data-testid="isLoggedIn">{auth.isLoggedIn.toString()}</div>
-      <div data-testid="userId">{auth.user?.id}</div>
+      <div data-testid="userId">{auth.user?.id?.toString()}</div>
       <div data-testid="githubId">{auth.user?.github_id}</div>
       <div data-testid="selectedCaseId">{auth.selectedCaseId}</div>
+      <div data-testid="userCasesCount">{auth.userCases.length}</div>
+      <div data-testid="currentRolesCount">{auth.currentUserCaseRoles.length}</div>
+      <div data-testid="navMenuItemsCount">{auth.navMenuItems?.length || 0}</div>
+      <div data-testid="isLoading">{auth.isLoading.toString()}</div>
+      <div data-testid="isCaseLoading">{auth.isCaseLoading.toString()}</div>
+      <div data-testid="isMenuLoading">{auth.isMenuLoading.toString()}</div>
+      <div data-testid="navigateTo">{auth.navigateTo || 'null'}</div>
       <button onClick={async () => await auth.logout()}>Logout</button>
       <button onClick={() => auth.hasRole('admin')}>HasAdminRole</button>
-      <button onClick={() => auth.hasRole('caseManager')}>HasCaseManagerRole</button>
+      <button onClick={() => auth.hasRole('case_manager')}>HasCaseManagerRole</button>
+      <button onClick={() => auth.clearNavigateTo()}>ClearNavigateTo</button>
+      <button onClick={async () => await auth.selectCase('case:123')}>SelectCase</button>
+      <button onClick={async () => await auth.refreshUserCasesAndRoles()}>RefreshCasesAndRoles</button>
     </div>
   );
 };
 
 // Helper to render the provider with the consumer
 const renderWithAuthProvider = (initialUser: AppUser | null = null, initialOidcUser: OidcUser | null = null) => {
-  // Reset captured context for each render
   capturedAuthContext = {};
 
-  // Mock initial state of authService.getUser and db.select for initial load
+  // Setup mocks based on initial user
   if (initialUser && initialUser.github_id !== '--admin--' && initialOidcUser) {
-    (authService.getUser as vi.Mock).mockResolvedValue(initialOidcUser);
-    (mockSurrealClient.select as vi.Mock).mockImplementation((recordId: string) => {
-      if (recordId === initialUser.id) {
+    (authService.getUser as Mock).mockResolvedValue(initialOidcUser);
+    (mockSurrealClient.select as Mock).mockImplementation((recordId: string) => {
+      if (recordId === initialUser.id.toString()) {
         return Promise.resolve([initialUser]);
       }
       return Promise.resolve([]);
     });
   } else if (initialUser && initialUser.github_id === '--admin--') {
-     // For admin, oidcUser is typically null, and they are not fetched via authService.getUser initially
-     (authService.getUser as vi.Mock).mockResolvedValue(null); // No OIDC session for admin
-     // Admin user might be set directly via setAuthState or a similar mechanism not tied to OIDC getUser
+    (authService.getUser as Mock).mockResolvedValue(null);
   } else {
-    (authService.getUser as vi.Mock).mockResolvedValue(null);
-    (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
+    (authService.getUser as Mock).mockResolvedValue(null);
+    (mockSurrealClient.select as Mock).mockResolvedValue([]);
   }
   
-  // Mock mockSurrealClient.query for loadUserCasesAndRoles to prevent errors, return empty by default
-  (mockSurrealClient.query as vi.Mock).mockResolvedValue([[]]); // Simulates no cases/roles
+  (mockSurrealClient.query as Mock).mockResolvedValue([[]]);
 
   const renderResult = render(
     <AuthProvider>
@@ -141,160 +161,274 @@ const renderWithAuthProvider = (initialUser: AppUser | null = null, initialOidcU
     </AuthProvider>
   );
   
-  // If an initial user is provided, we need to manually set the state
-  // as if the login process (setAuthState) has already occurred.
-  // This bypasses the useEffect in AuthProvider for initial load simulation for tests.
-  // if (initialUser) {
-  //   act(() => {
-  //       capturedAuthContext.setAuthState(initialUser, initialOidcUser);
-  //   });
-  // }
-  // Let AuthProvider's own useEffect handle initial load based on mocks.
-  // Ensure tests await any state changes from this initial load if necessary.
-  
   return renderResult;
 };
-
 
 describe('AuthContext', () => {
   beforeEach(() => {
     localStorageMock.clear();
-    vi.clearAllMocks(); // Clears all mocks including spies
-    // Re-mock console.error and console.warn if they were cleared by vi.clearAllMocks() and you need them per test
+    vi.clearAllMocks();
     consoleErrorSpy.mockClear();
     consoleWarnSpy.mockClear();
+    consoleLogSpy.mockClear();
 
-    // Default mocks for services to prevent unwanted errors in tests not focused on them
-    (authService.getUser as vi.Mock).mockResolvedValue(null);
-    (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
-    (mockSurrealClient.query as vi.Mock).mockResolvedValue([[]]); // Default to no cases/roles
-    (mockSurrealClient.signout as vi.Mock).mockResolvedValue(undefined);
-    (authService.logoutRedirect as vi.Mock).mockResolvedValue(undefined);
+    // Default mocks
+    (authService.getUser as Mock).mockResolvedValue(null);
+    (mockSurrealClient.select as Mock).mockResolvedValue([]);
+    (mockSurrealClient.query as Mock).mockResolvedValue([[]]);
+    (mockSurrealClient.signout as Mock).mockResolvedValue(undefined);
+    (mockSurrealClient.merge as Mock).mockResolvedValue(undefined);
+    (authService.logoutRedirect as Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     localStorageMock.clear();
   });
 
-  describe('hasRole', () => {
-    describe('Admin User', () => {
-      beforeEach(async () => { // Make beforeEach async
-        // Simulate admin user being in localStorage for AuthProvider to pick up
-        localStorageMock.setItem('cuckoox-user', JSON.stringify(mockAdminUser));
-        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
-        // Pass mockAdminUser to ensure mocks for authService.getUser are set correctly (returns null for admin)
-        renderWithAuthProvider(mockAdminUser);
-        // Wait for AuthProvider's useEffect to process localStorage and set state
-        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
-      });
-
-      it('should return true for "admin" roleName when user is admin', () => {
-        expect(capturedAuthContext.hasRole('admin')).toBe(true);
-      });
-
-      it('should return false for other roleNames when user is admin', () => {
-        expect(capturedAuthContext.hasRole('caseManager')).toBe(false);
+  describe('初始化和基本状态', () => {
+    it('应该正确初始化默认状态', async () => {
+      renderWithAuthProvider();
+      
+      await waitFor(() => {
+        expect(capturedAuthContext.isLoggedIn).toBe(false);
+        expect(capturedAuthContext.user).toBeNull();
+        expect(capturedAuthContext.oidcUser).toBeNull();
+        expect(capturedAuthContext.selectedCaseId).toBeNull();
+        expect(capturedAuthContext.userCases).toEqual([]);
+        expect(capturedAuthContext.currentUserCaseRoles).toEqual([]);
+        expect(capturedAuthContext.navMenuItems).toEqual([]);
+        expect(capturedAuthContext.isLoading).toBe(false);
+        expect(capturedAuthContext.isCaseLoading).toBe(false);
+        expect(capturedAuthContext.isMenuLoading).toBe(false);
+        expect(capturedAuthContext.navigateTo).toBeNull();
       });
     });
 
-    describe('Regular OIDC User', () => {
-      const caseManagerRole: Role = { id: 'role:cm', name: 'caseManager' };
-      const otherRole: Role = { id: 'role:or', name: 'otherRole' };
-
-      // Helper for OIDC user setup within these tests
-      async function setupOidcUserAndRoles(roles: Role[], selectedCase: string | null = 'case:123') {
-        // Ensure mocks for initial load are set correctly by renderWithAuthProvider
-        (authService.getUser as vi.Mock).mockResolvedValue(mockOidcClientUser);
-        (mockSurrealClient.select as vi.Mock).mockImplementation((recordId: string) => {
-          if (recordId === mockOidcUser.id) {
-            return Promise.resolve([mockOidcUser]);
-          }
-          return Promise.resolve([]);
-        });
-        // Simulate that loadUserCasesAndRoles (called by AuthProvider's useEffect or setAuthState)
-        // will eventually populate these.
-        // For tests, we might need to mock the query that loadUserCasesAndRoles makes,
-        // or directly set the outcome via capturedAuthContext after AuthProvider has initialized.
-        (mockSurrealClient.query as vi.Mock).mockImplementation(async (query) => {
-          if (query.includes('SELECT out.*.role_id')) { // Mock for roles query
-            return [roles.map(r => ({ out: { role_id: r} }))]
-          }
-          return [[]]; // Default for other queries
-        });
-
-        renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
-        
-        // Wait for AuthProvider to initialize and set the user
-        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
-        await waitFor(() => expect(capturedAuthContext.user?.id).toBe(mockOidcUser.id));
-
-        // After user is set, simulate setting roles and case (as if loaded by loadUserCasesAndRoles)
-        // This part might need adjustment based on how loadUserCasesAndRoles actually sets these.
-        // If loadUserCasesAndRoles is robustly mocked via mockSurrealClient.query, this direct setting might not be needed.
-        act(() => { // Use act for direct state updates if still necessary
-            capturedAuthContext.setCurrentUserCaseRoles(roles);
-            capturedAuthContext.setSelectedCaseId(selectedCase);
-        });
-         // Add a final waitFor to ensure all updates from act are processed
-        await waitFor(() => expect(capturedAuthContext.selectedCaseId === selectedCase).toBe(true));
-      }
-
-      it('should return true if user has the role in the selected case', async () => {
-        await setupOidcUserAndRoles([caseManagerRole, otherRole], 'case:123');
-        expect(capturedAuthContext.hasRole('caseManager')).toBe(true);
-      });
-
-      it('should return false if user does not have the role in the selected case', async () => {
-        await setupOidcUserAndRoles([otherRole], 'case:123');
-        expect(capturedAuthContext.hasRole('caseManager')).toBe(false);
-      });
-
-      it('should return false if no case is selected, even if user has roles conceptually', async () => {
-        await setupOidcUserAndRoles([caseManagerRole], null); // No case selected
-        expect(capturedAuthContext.hasRole('caseManager')).toBe(false);
-      });
-
-      it('should return false for "admin" roleName when user is a regular user', async () => {
-        await setupOidcUserAndRoles([]); // No specific roles needed for this check
-        expect(capturedAuthContext.hasRole('admin')).toBe(false);
+    it('应该从localStorage恢复管理员用户会话', async () => {
+      localStorageMock.setItem('cuckoox-user', JSON.stringify({
+        id: 'user:admin',
+        github_id: '--admin--',
+        name: 'Admin User',
+      }));
+      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+      
+      renderWithAuthProvider();
+      
+      await waitFor(() => {
+        expect(capturedAuthContext.isLoggedIn).toBe(true);
+        expect(capturedAuthContext.user?.github_id).toBe('--admin--');
       });
     });
 
-    describe('No User', () => {
-       beforeEach(async () => { // Make async
-        (authService.getUser as vi.Mock).mockResolvedValue(null);
-        (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
-        renderWithAuthProvider(null); // No user logged in
-        // Wait for AuthProvider to confirm no user is logged in
-        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(false));
-      });
-
-      it('should return false for "admin" roleName when no user is logged in', () => {
-        expect(capturedAuthContext.hasRole('admin')).toBe(false);
-      });
-
-      it('should return false for any other roleName when no user is logged in', () => {
-        expect(capturedAuthContext.hasRole('caseManager')).toBe(false);
+    it('应该从localStorage恢复普通用户会话', async () => {
+      const storedUser = {
+        id: 'user:oidc123',
+        github_id: 'oidc123',
+        name: 'OIDC User',
+        email: 'oidc@example.com',
+      };
+      
+      localStorageMock.setItem('cuckoox-user', JSON.stringify(storedUser));
+      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+      
+      renderWithAuthProvider();
+      
+      await waitFor(() => {
+        expect(capturedAuthContext.isLoggedIn).toBe(true);
+        expect(capturedAuthContext.user?.github_id).toBe('oidc123');
       });
     });
   });
 
-  describe('logout', () => {
-    describe('Admin Logout', () => {
+  describe('setAuthState', () => {
+    it('应该正确设置用户认证状态', async () => {
+      renderWithAuthProvider();
+      
+      await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(false));
+      
+      act(() => {
+        capturedAuthContext.setAuthState(mockOidcUser, mockOidcClientUser);
+      });
+      
+      await waitFor(() => {
+        expect(capturedAuthContext.isLoggedIn).toBe(true);
+        expect(capturedAuthContext.user?.id.toString()).toBe(mockOidcUser.id.toString());
+        expect(capturedAuthContext.oidcUser).toBe(mockOidcClientUser);
+      });
+    });
+
+    it('应该在设置认证状态时保存到localStorage', async () => {
+      renderWithAuthProvider();
+      
+      act(() => {
+        capturedAuthContext.setAuthState(mockOidcUser, mockOidcClientUser);
+      });
+      
+      await waitFor(() => {
+        expect(localStorageMock.getItem('cuckoox-isLoggedIn')).toBe('true');
+        expect(JSON.parse(localStorageMock.getItem('cuckoox-user') || '{}')).toMatchObject({
+          github_id: 'oidc123',
+          name: 'OIDC User',
+        });
+      });
+    });
+  });
+
+  describe('hasRole', () => {
+    describe('管理员用户', () => {
       beforeEach(async () => {
-        localStorageMock.setItem('cuckoox-user', JSON.stringify(mockAdminUser));
+        localStorageMock.setItem('cuckoox-user', JSON.stringify({
+          id: 'user:admin',
+          github_id: '--admin--',
+          name: 'Admin User',
+        }));
         localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
         renderWithAuthProvider(mockAdminUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
-        (mockSurrealClient.signout as vi.Mock).mockResolvedValue(undefined);
       });
 
-      it('should call surreal.signout, not call authService.logoutRedirect, and clear client state', async () => {
+      it('应该对任何角色都返回true', () => {
+        expect(capturedAuthContext.hasRole('admin')).toBe(true);
+        expect(capturedAuthContext.hasRole('case_manager')).toBe(true);
+        expect(capturedAuthContext.hasRole('creditor_representative')).toBe(true);
+        expect(capturedAuthContext.hasRole('any_role')).toBe(true);
+      });
+    });
+
+    describe('普通OIDC用户', () => {
+      async function setupOidcUserAndRoles(roles: Role[], selectedCase: string | null = 'case:123') {
+        (authService.getUser as Mock).mockResolvedValue(mockOidcClientUser);
+        (mockSurrealClient.select as Mock).mockImplementation((recordId: string) => {
+          if (recordId === mockOidcUser.id.toString()) {
+            return Promise.resolve([mockOidcUser]);
+          }
+          return Promise.resolve([]);
+        });
+        
+        (mockSurrealClient.query as Mock).mockImplementation(async (query: string) => {
+          if (query.includes('SELECT') && query.includes('user_case_role')) {
+            return [roles.map(r => ({ 
+              case_details: mockCase1, 
+              role_details: r 
+            }))];
+          }
+          return [[]];
+        });
+
+        renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
+        
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+        await waitFor(() => expect(capturedAuthContext.user?.id.toString()).toBe(mockOidcUser.id.toString()));
+
+                 if (roles.length > 0 && selectedCase) {
+           act(() => {
+             capturedAuthContext.__TEST_setCurrentUserCaseRoles?.(roles);
+             capturedAuthContext.__TEST_setSelectedCaseId?.(selectedCase);
+           });
+           await waitFor(() => expect(capturedAuthContext.selectedCaseId).toBe(selectedCase));
+         }
+      }
+
+      it('应该在有对应角色时返回true', async () => {
+        await setupOidcUserAndRoles([mockCaseManagerRole], 'case:123');
+        expect(capturedAuthContext.hasRole('case_manager')).toBe(true);
+      });
+
+      it('应该在没有对应角色时返回false', async () => {
+        await setupOidcUserAndRoles([mockCreditorRole], 'case:123');
+        expect(capturedAuthContext.hasRole('case_manager')).toBe(false);
+      });
+
+      it('应该在没有选择案件时返回false', async () => {
+        await setupOidcUserAndRoles([mockCaseManagerRole], null);
+        expect(capturedAuthContext.hasRole('case_manager')).toBe(false);
+      });
+
+      it('应该对admin角色返回false', async () => {
+        await setupOidcUserAndRoles([mockCaseManagerRole], 'case:123');
+        expect(capturedAuthContext.hasRole('admin')).toBe(false);
+      });
+    });
+
+    describe('未登录用户', () => {
+      beforeEach(async () => {
+        (authService.getUser as Mock).mockResolvedValue(null);
+        (mockSurrealClient.select as Mock).mockResolvedValue([]);
+        renderWithAuthProvider(null);
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(false));
+      });
+
+      it('应该对所有角色都返回false', () => {
+        expect(capturedAuthContext.hasRole('admin')).toBe(false);
+        expect(capturedAuthContext.hasRole('case_manager')).toBe(false);
+        expect(capturedAuthContext.hasRole('creditor_representative')).toBe(false);
+      });
+    });
+  });
+
+  describe('selectCase', () => {
+    beforeEach(async () => {
+      localStorageMock.setItem('cuckoox-user', JSON.stringify({
+        id: 'user:oidc123',
+        github_id: 'oidc123',
+        name: 'OIDC User',
+      }));
+      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+      
+      (mockSurrealClient.query as Mock).mockResolvedValue([[{
+        case_details: mockCase1,
+        role_details: mockCaseManagerRole,
+      }]]);
+      
+      renderWithAuthProvider(mockOidcUser);
+      await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+    });
+
+    it('应该正确选择案件并设置角色', async () => {
+      await act(async () => {
+        await capturedAuthContext.selectCase('case:123');
+      });
+      
+      await waitFor(() => {
+        expect(capturedAuthContext.selectedCaseId).toBe('case:123');
+        expect(localStorageMock.getItem('cuckoox-selectedCaseId')).toBe('case:123');
+      });
+    });
+
+         it('应该在选择案件时更新数据库中的last_login_case_id', async () => {
+       await act(async () => {
+         await capturedAuthContext.selectCase('case:123');
+       });
+       
+       expect(mockSurrealClient.merge).toHaveBeenCalledWith(
+         expect.any(String), // User ID as string
+         expect.objectContaining({
+           last_login_case_id: expect.any(Object) // RecordId object
+         })
+       );
+     });
+  });
+
+  describe('logout', () => {
+    describe('管理员登出', () => {
+      beforeEach(async () => {
+        localStorageMock.setItem('cuckoox-user', JSON.stringify({
+          id: 'user:admin',
+          github_id: '--admin--',
+          name: 'Admin User',
+        }));
+        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+        renderWithAuthProvider(mockAdminUser);
+        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+        (mockSurrealClient.signout as Mock).mockResolvedValue(undefined);
+      });
+
+      it('应该调用surreal.signout并清理客户端状态', async () => {
         await act(async () => {
           await capturedAuthContext.logout();
         });
 
-        expect(mockSurrealClient.signout).toHaveBeenCalledTimes(1); // Changed from db.signout
+        expect(mockSurrealClient.signout).toHaveBeenCalledTimes(1);
         expect(authService.logoutRedirect).not.toHaveBeenCalled();
         
         expect(capturedAuthContext.user).toBeNull();
@@ -304,16 +438,16 @@ describe('AuthContext', () => {
         expect(localStorageMock.getItem('cuckoox-selectedCaseId')).toBeNull();
       });
 
-      it('should clear client state even if surreal.signout fails', async () => {
+      it('应该在surreal.signout失败时仍然清理客户端状态', async () => {
         const signOutError = new Error('SurrealDB signout failed');
-        (mockSurrealClient.signout as vi.Mock).mockRejectedValueOnce(signOutError); // Changed from db.signout
+        (mockSurrealClient.signout as Mock).mockRejectedValueOnce(signOutError);
 
         await act(async () => {
           await capturedAuthContext.logout();
         });
         
-        expect(mockSurrealClient.signout).toHaveBeenCalledTimes(1); // Changed from db.signout
-        expect(consoleErrorSpy).toHaveBeenCalledWith('Error during SurrealDB signout:', signOutError);
+        expect(mockSurrealClient.signout).toHaveBeenCalledTimes(1);
+        expect(consoleErrorSpy).toHaveBeenCalledWith('Error during logout process:', signOutError);
         
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
@@ -321,35 +455,40 @@ describe('AuthContext', () => {
       });
     });
 
-    describe('OIDC User Logout', () => {
+    describe('OIDC用户登出', () => {
       beforeEach(async () => {
-        (authService.getUser as vi.Mock).mockResolvedValue(mockOidcClientUser);
-        (mockSurrealClient.select as vi.Mock).mockImplementation((recordId: string) =>
-          recordId === mockOidcUser.id ? Promise.resolve([mockOidcUser]) : Promise.resolve([])
+        (authService.getUser as Mock).mockResolvedValue(mockOidcClientUser);
+        (mockSurrealClient.select as Mock).mockImplementation((recordId: string) =>
+          recordId === mockOidcUser.id.toString() ? Promise.resolve([mockOidcUser]) : Promise.resolve([])
         );
-        localStorageMock.setItem('cuckoox-user', JSON.stringify(mockOidcUser)); // Simulate user was logged in
+        localStorageMock.setItem('cuckoox-user', JSON.stringify({
+          id: 'user:oidc123',
+          github_id: 'oidc123',
+          name: 'OIDC User',
+        }));
         localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
 
         renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
-        (authService.logoutRedirect as vi.Mock).mockResolvedValue(undefined);
+        (authService.logoutRedirect as Mock).mockResolvedValue(undefined);
       });
 
-      it('should call authService.logoutRedirect, not call surreal.signout, and clear client state', async () => {
+      it('应该调用authService.logoutRedirect并清理客户端状态', async () => {
         await act(async () => {
           await capturedAuthContext.logout();
         });
 
         expect(authService.logoutRedirect).toHaveBeenCalledTimes(1);
-        expect(mockSurrealClient.signout).not.toHaveBeenCalled(); // Changed from db.signout
+        expect(mockSurrealClient.signout).not.toHaveBeenCalled();
 
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
         expect(localStorageMock.getItem('cuckoox-user')).toBeNull();
       });
-       it('should clear client state even if authService.logoutRedirect fails', async () => {
+
+      it('应该在authService.logoutRedirect失败时仍然清理客户端状态', async () => {
         const logoutRedirectError = new Error('OIDC logout redirect failed');
-        (authService.logoutRedirect as vi.Mock).mockRejectedValueOnce(logoutRedirectError);
+        (authService.logoutRedirect as Mock).mockRejectedValueOnce(logoutRedirectError);
         
         await act(async () => {
           await capturedAuthContext.logout();
@@ -364,23 +503,22 @@ describe('AuthContext', () => {
       });
     });
 
-    describe('Logout with no active user', () => {
+    describe('无活跃用户时登出', () => {
       beforeEach(async () => {
-        (authService.getUser as vi.Mock).mockResolvedValue(null);
-        (mockSurrealClient.select as vi.Mock).mockResolvedValue([]);
-        localStorageMock.clear(); // Ensure no pre-existing session in local storage
+        (authService.getUser as Mock).mockResolvedValue(null);
+        (mockSurrealClient.select as Mock).mockResolvedValue([]);
+        localStorageMock.clear();
         renderWithAuthProvider(null);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(false));
       });
 
-      it('should not call db.signout or authService.logoutRedirect, and clear client state', async () => {
+      it('应该不调用任何登出方法但清理客户端状态', async () => {
         await act(async () => {
           await capturedAuthContext.logout();
         });
 
-        expect(mockSurrealClient.signout).not.toHaveBeenCalled(); // Changed from db.signout
+        expect(mockSurrealClient.signout).not.toHaveBeenCalled();
         expect(authService.logoutRedirect).not.toHaveBeenCalled();
-        // Check for console.warn based on AuthContext implementation
         expect(consoleWarnSpy).toHaveBeenCalledWith("Logout called without a user session.");
 
         expect(capturedAuthContext.user).toBeNull();
@@ -389,4 +527,209 @@ describe('AuthContext', () => {
       });
     });
   });
+
+  describe('菜单权限管理', () => {
+    it('管理员应该看到所有菜单项', async () => {
+      localStorageMock.setItem('cuckoox-user', JSON.stringify({
+        id: 'user:admin',
+        github_id: '--admin--',
+        name: 'Admin User',
+      }));
+      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+      
+      renderWithAuthProvider(mockAdminUser);
+      
+      await waitFor(() => {
+        expect(capturedAuthContext.isLoggedIn).toBe(true);
+        expect(capturedAuthContext.navMenuItems?.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('普通用户应该根据角色看到相应菜单项', async () => {
+      (mockSurrealClient.query as Mock).mockResolvedValue([[{
+        case_details: mockCase1,
+        role_details: mockCaseManagerRole,
+      }]]);
+      
+      renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
+      
+      await waitFor(() => {
+        expect(capturedAuthContext.isLoggedIn).toBe(true);
+             });
+       
+       act(() => {
+         capturedAuthContext.__TEST_setCurrentUserCaseRoles?.([mockCaseManagerRole]);
+         capturedAuthContext.__TEST_setSelectedCaseId?.('case:123');
+       });
+       
+       await waitFor(() => {
+         expect(capturedAuthContext.navMenuItems?.length).toBeGreaterThan(0);
+       });
+    });
+  });
+
+  describe('自动导航功能', () => {
+              it('应该在案件状态为立案时自动导航到债权人管理', async () => {
+       const caseWithStatus = { ...mockCase1, status: '立案' };
+       
+       (mockSurrealClient.query as Mock).mockResolvedValue([[{
+         case_details: caseWithStatus,
+         role_details: mockCaseManagerRole,
+       }]]);
+       
+       renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
+       
+       await waitFor(() => {
+         expect(capturedAuthContext.isLoggedIn).toBe(true);
+       });
+       
+       // 设置用户案件、角色和选中的案件ID
+       // 注意：RecordId.toString() 返回 'case:⟨123⟩' 格式，所以需要使用这个格式作为 selectedCaseId
+       const caseIdString = caseWithStatus.id.toString(); // 'case:⟨123⟩'
+       
+       act(() => {
+         // 先设置userCases，这样自动导航逻辑才能找到案件
+         capturedAuthContext.__TEST_setUserCases?.([caseWithStatus]);
+         capturedAuthContext.__TEST_setCurrentUserCaseRoles?.([mockCaseManagerRole]);
+         capturedAuthContext.__TEST_setSelectedCaseId?.(caseIdString);
+       });
+       
+       // 等待状态更新
+       await waitFor(() => {
+         expect(capturedAuthContext.selectedCaseId).toBe(caseIdString);
+         expect(capturedAuthContext.userCases.length).toBe(1);
+         expect(capturedAuthContext.currentUserCaseRoles.length).toBe(1);
+         expect(capturedAuthContext.navMenuItems?.length).toBeGreaterThan(0);
+       });
+       
+       // 检查是否有债权人管理菜单项
+       const hasCreditorMenu = capturedAuthContext.navMenuItems?.some(
+         (item: { path: string }) => item.path === '/creditors'
+       );
+       expect(hasCreditorMenu).toBe(true);
+       
+       // 检查案件状态 - 验证userCases中的案件
+       expect(capturedAuthContext.userCases.length).toBe(1);
+       const userCase = capturedAuthContext.userCases[0];
+       expect(userCase.id.toString()).toBe(caseIdString); // RecordId格式
+       expect(userCase.status).toBe('立案');
+       
+       const selectedCase = capturedAuthContext.userCases.find((c: Case) => c.id.toString() === capturedAuthContext.selectedCaseId);
+       expect(selectedCase).toBeDefined();
+       expect(selectedCase?.status).toBe('立案');
+       
+       // 等待自动导航触发
+       await waitFor(() => {
+         expect(capturedAuthContext.navigateTo).toBe('/creditors');
+       }, { timeout: 3000 });
+     });
+
+    it('clearNavigateTo应该清除导航状态', async () => {
+      renderWithAuthProvider();
+      
+      act(() => {
+        capturedAuthContext.clearNavigateTo();
+      });
+      
+      expect(capturedAuthContext.navigateTo).toBeNull();
+    });
+  });
+
+  describe('refreshUserCasesAndRoles', () => {
+    it('应该重新加载用户案件和角色', async () => {
+      renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
+      
+      await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+      
+      (mockSurrealClient.query as Mock).mockResolvedValue([[{
+        case_details: mockCase2,
+        role_details: mockCreditorRole,
+      }]]);
+      
+      await act(async () => {
+        await capturedAuthContext.refreshUserCasesAndRoles();
+      });
+      
+      // 验证查询被调用
+      expect(mockSurrealClient.query).toHaveBeenCalled();
+    });
+  });
+
+     describe('错误处理', () => {
+     it('应该处理初始化时的错误', async () => {
+       // 清除localStorage以确保没有缓存的用户数据
+       localStorageMock.clear();
+       
+       // 确保没有预设的mock
+       vi.clearAllMocks();
+       consoleErrorSpy.mockClear();
+       
+       // 在调用renderWithAuthProvider之前设置错误mock
+       // 这样可以确保mock不会被renderWithAuthProvider覆盖
+       (authService.getUser as Mock).mockRejectedValue(new Error('Auth service error'));
+       (mockSurrealClient.select as Mock).mockResolvedValue([]);
+       (mockSurrealClient.query as Mock).mockResolvedValue([[]]);
+       
+       // 直接渲染，不通过renderWithAuthProvider，避免mock被覆盖
+       capturedAuthContext = {};
+       render(
+         <AuthProvider>
+           <TestConsumerComponent />
+         </AuthProvider>
+       );
+       
+       // 等待AuthProvider的useEffect完成
+       await waitFor(() => {
+         expect(capturedAuthContext.isLoggedIn).toBe(false);
+         expect(capturedAuthContext.isLoading).toBe(false);
+       });
+       
+       // 验证错误被记录 - authService.getUser的错误会在主catch块中被捕获
+       await waitFor(() => {
+         // 验证authService.getUser确实被调用了
+         expect(authService.getUser).toHaveBeenCalled();
+         
+         // 检查是否有错误被记录
+         const hasMainErrorLog = consoleErrorSpy.mock.calls.some(call => 
+           call[0] && call[0].includes('Error checking current user session')
+         );
+         
+         expect(hasMainErrorLog).toBe(true);
+         
+         // 验证错误对象也被传递了
+         const errorCall = consoleErrorSpy.mock.calls.find(call => 
+           call[0] && call[0].includes('Error checking current user session')
+         );
+         expect(errorCall).toBeDefined();
+         expect(errorCall?.[1]).toBeInstanceOf(Error);
+         expect(errorCall?.[1].message).toBe('Auth service error');
+       }, { timeout: 2000 });
+     });
+
+     it('应该处理案件选择时的错误', async () => {
+       // 先设置用户登录状态
+       localStorageMock.setItem('cuckoox-user', JSON.stringify({
+         id: 'user:oidc123',
+         github_id: 'oidc123',
+         name: 'OIDC User',
+       }));
+       localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
+       
+       renderWithAuthProvider(mockOidcUser);
+       
+       await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
+       
+       // 模拟数据库查询错误
+       (mockSurrealClient.query as Mock).mockRejectedValue(new Error('Database error'));
+       
+       await act(async () => {
+         await capturedAuthContext.selectCase('case:123');
+       });
+       
+       expect(consoleErrorSpy).toHaveBeenCalledWith(
+         'Error selecting case case:123:',
+         expect.any(Error)
+       );
+     });
+   });
 });

@@ -51,7 +51,7 @@ import { useDebounce } from '@/src/hooks/useDebounce'; // ADDED
 
 const CreditorListPage: React.FC = () => {
   const { t } = useTranslation();
-  const { showSuccess, showError } = useSnackbar(); // Added showError
+  const { showSuccess, showError, showInfo } = useSnackbar(); // Added showError and showInfo
   const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
   const { surreal: client, isSuccess: isDbConnected } = useSurreal(); // Added
 
@@ -159,7 +159,7 @@ const CreditorListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, client, isDbConnected, t, showError]); // searchTerm is not needed in useCallback deps as it's passed as arg
+  }, [selectedCaseId, client, isDbConnected, t]); // Removed showError from deps to prevent infinite loops
 
   useEffect(() => {
     // Reset page to 0 when debouncedSearchTerm changes

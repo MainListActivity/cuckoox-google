@@ -76,6 +76,11 @@ export interface AuthContextType {
   // Navigation state
   navigateTo: string | null;
   clearNavigateTo: () => void;
+
+  // Test-only methods (only available in test environment)
+  __TEST_setCurrentUserCaseRoles?: (roles: Role[]) => void;
+  __TEST_setSelectedCaseId?: (caseId: string | null) => void;
+  __TEST_setUserCases?: (cases: Case[]) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -584,12 +589,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return currentUserCaseRoles.some(role => role.name === roleName);
   };
 
+  // Test-only methods
+  const __TEST_setCurrentUserCaseRoles = process.env.NODE_ENV === 'test' ? setCurrentUserCaseRoles : undefined;
+  const __TEST_setSelectedCaseId = process.env.NODE_ENV === 'test' ? setSelectedCaseId : undefined;
+  const __TEST_setUserCases = process.env.NODE_ENV === 'test' ? setUserCases : undefined;
+
   return (
     <AuthContext.Provider value={{ 
       isLoggedIn, user, oidcUser, setAuthState, logout, isLoading,
       selectedCaseId, userCases, currentUserCaseRoles, isCaseLoading, selectCase, hasRole, refreshUserCasesAndRoles,
       navMenuItems, isMenuLoading, // Expose new menu state
-      navigateTo, clearNavigateTo // Expose navigation state and clear function
+      navigateTo, clearNavigateTo, // Expose navigation state and clear function
+      __TEST_setCurrentUserCaseRoles, __TEST_setSelectedCaseId, __TEST_setUserCases // Expose test-only methods
     }}>
       {children}
     </AuthContext.Provider>

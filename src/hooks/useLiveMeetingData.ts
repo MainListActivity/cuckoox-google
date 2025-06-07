@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // Adjust path as needed
-import { RecordId } from 'surrealdb.js'; // For typing RecordId
+import { useState, useEffect } from 'react';
+import { useSurreal } from '@/src/contexts/SurrealProvider'; // Adjust path as needed
+import { RecordId, Uuid } from 'surrealdb';
 
 // Interface for Meeting data, aligning with expected DB structure
-export interface Meeting {
-  id: RecordId | string; // SurrealDB record ID
-  case_id: RecordId | string; // Link to the case
+export interface Meeting extends Record<string, any> {
+  id: RecordId;
+  case_id: RecordId;
   title: string;
-  type: string; // e.g., '债权人第一次会议', '临时会议'
-  scheduled_time: string; // ISO 8601 string (e.g., "2023-10-26T10:00:00Z")
+  type: string;
+  scheduled_time: string;
   duration_minutes?: number;
   status: '已安排' | '进行中' | '已结束' | '已取消';
   conference_link: string;
@@ -18,125 +18,97 @@ export interface Meeting {
   minutes_delta_json?: string | null;
   created_at?: string;
   updated_at?: string;
-  attendees?: MeetingAttendee[]; // Added attendees field
-  attendee_ids?: (RecordId | string)[]; // Field to store attendee IDs in DB
+  attendees?: MeetingAttendee[];
+  attendee_ids?: RecordId[];
 }
 
 // Define MeetingAttendee interface
 export interface MeetingAttendee {
-  id: string; // Record link for user or creditor
+  id: RecordId;
   name: string;
-  type: 'user' | 'creditor'; // To distinguish attendee type
-  // 'group' property will be added by useCaseParticipants hook, not part of DB model for MeetingAttendee directly
+  type: 'user' | 'creditor';
 }
 
-
 export function useLiveMeetings(caseId: string | null): Meeting[] {
-  const { client, isConnected } = useSurrealClient();
+  const { surreal: client, isSuccess: isConnected } = useSurreal();
   const [meetingsList, setMeetingsList] = useState<Meeting[]>([]);
   const [error, setError] = useState<any>(null);
-  const liveQueryIdRef = useRef<string | null>(null);
 
-  const fetchMeetings = useCallback(async (currentCaseId: string) => {
-    if (!client || !isConnected) {
-      // console.warn('Surreal client not connected, skipping meeting fetch.');
-      return;
-    }
-    try {
-      // console.log(`Fetching meetings for case_id: ${currentCaseId}`);
-      const result = await client.select<Meeting[]>(`meeting:(WHERE case_id = '${currentCaseId}' ORDER BY scheduled_time DESC)`);
-      // console.log('Raw meetings result:', result);
-      setMeetingsList(result || []);
-      setError(null);
-    } catch (e) {
-      console.error('Error fetching meetings:', e);
-      setError(e);
-      setMeetingsList([]);
-    }
-  }, [client, isConnected]);
+  const sortMeetings = (meetings: Meeting[]): Meeting[] => {
+    return [...meetings].sort((a, b) => new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime());
+  };
 
   useEffect(() => {
     if (!client || !isConnected || !caseId) {
       setMeetingsList([]);
-      if (liveQueryIdRef.current) {
-        client.kill(liveQueryIdRef.current).then(() => {
-          liveQueryIdRef.current = null;
-        }).catch(killError => {
-          console.error(`Error killing live query ${liveQueryIdRef.current}:`, killError);
-        });
-      }
       return;
     }
 
-    fetchMeetings(caseId); // Initial fetch
-
-    const setupLiveQuery = async () => {
-      if (liveQueryIdRef.current) { // Kill previous query if caseId changes
-        try {
-          await client.kill(liveQueryIdRef.current);
-          liveQueryIdRef.current = null;
-        } catch (killError) {
-          console.error(`Error killing previous live query ${liveQueryIdRef.current}:`, killError);
-        }
-      }
-
+    let isMounted = true;
+    let liveQueryId: Uuid | null = null;
+    const setupLiveSubscription = async () => {
       try {
-        const liveSelectQuery = `LIVE SELECT * FROM meeting WHERE case_id = '${caseId}';`;
-        const queryResponse = await client.query<[{ result: string }]>(liveSelectQuery);
-        const qid = queryResponse && queryResponse[0] && queryResponse[0].result;
+        // Step 1: Fetch initial data and sort it
+        const queryResult = await client.query<[{ result: Meeting[] }]>('SELECT * FROM meeting WHERE case_id = $caseId', { caseId });
+        if (!isMounted) return;
+        const initialMeetings = queryResult && queryResult[0] && queryResult[0].result ? queryResult[0].result : [];
+        setMeetingsList(sortMeetings(initialMeetings));
+        setError(null);
 
-        if (qid && typeof qid === 'string') {
-          liveQueryIdRef.current = qid;
-          client. subscribeLive<Meeting>(liveQueryIdRef.current, (actionEvent) => {
-            const { action, result: meetingData } = actionEvent;
-            // console.log(`Live event on meeting query ${liveQueryIdRef.current}:`, action, meetingData);
-            
-            setMeetingsList(prevMeetings => {
-              let newMeetings = [...prevMeetings];
-              switch (action) {
-                case 'CREATE':
-                  // Add if not already present (SurrealDB might send create for initial data sometimes)
-                  if (!newMeetings.find(m => m.id === meetingData.id)) {
-                    newMeetings.push(meetingData);
-                  }
-                  break;
-                case 'UPDATE':
-                  newMeetings = newMeetings.map(m => (m.id === meetingData.id ? meetingData : m));
-                  break;
-                case 'DELETE':
-                  newMeetings = newMeetings.filter(m => m.id !== meetingData.id);
-                  break;
-                default:
-                  break;
-              }
-              // Re-sort after modification as order might change or new item added
-              return newMeetings.sort((a, b) => new Date(b.scheduled_time).getTime() - new Date(a.scheduled_time).getTime());
-            });
+        // Step 2: Set up the live query
+        const liveQueryResult = await client.query<[{ result: Uuid }]>('LIVE SELECT * FROM meeting WHERE case_id = $caseId;', { caseId });
+        if (!isMounted || !liveQueryResult || !liveQueryResult[0] || !liveQueryResult[0].result) return;
+        liveQueryId = liveQueryResult[0].result;
+        if (!isMounted) return;
+
+        // Step 3: Subscribe to live events
+        client.subscribeLive<Meeting>(liveQueryId, (action, result) => {
+          if (!isMounted || result === "killed" || result === "disconnected") return;
+
+          setMeetingsList(prevMeetings => {
+            const meetingIdStr = result.id.toString();
+            let newMeetings;
+
+            switch (action) {
+              case 'CREATE':
+                newMeetings = prevMeetings.find(m => m.id.toString() === meetingIdStr) ? prevMeetings : [...prevMeetings, result];
+                break;
+              case 'UPDATE':
+                newMeetings = prevMeetings.map(m => (m.id.toString() === meetingIdStr ? result : m));
+                break;
+              case 'DELETE':
+                newMeetings = prevMeetings.filter(m => m.id.toString() !== meetingIdStr);
+                break;
+              default:
+                newMeetings = prevMeetings;
+                break;
+            }
+            return sortMeetings(newMeetings);
           });
-        } else {
-          console.error("Failed to get live query ID for meetings. Response:", queryResponse);
-        }
-      } catch (e) {
-        console.error('Error setting up live meetings query:', e);
-        setError(e);
+        });
+      } catch (err) {
+        if (!isMounted) return;
+        console.error("Error setting up live meetings subscription:", err);
+        setError(err);
+        setMeetingsList([]);
       }
     };
 
-    setupLiveQuery();
+    setupLiveSubscription();
 
-    return () => { // Cleanup
-      if (liveQueryIdRef.current && client && client.isConnected) {
-        client.kill(liveQueryIdRef.current).then(() => {
-          liveQueryIdRef.current = null;
-        }).catch(killError => {
-          console.error(`Error killing live meetings query ${liveQueryIdRef.current} on cleanup:`, killError);
+    // Step 4: Cleanup function
+    return () => {
+      isMounted = false;
+      if (liveQueryId && client) {
+        client.kill(liveQueryId).catch(killError => {
+          console.error(`Error killing live query ${liveQueryId} on cleanup:`, killError);
         });
       }
     };
-  }, [client, isConnected, caseId, fetchMeetings]);
-  
-  if(error) {
-    // console.error("useLiveMeetings error state:", error)
+  }, [caseId, client, isConnected]);
+
+  if (error) {
+    // console.error("useLiveMeetings error state:", error);
   }
 
   return meetingsList;

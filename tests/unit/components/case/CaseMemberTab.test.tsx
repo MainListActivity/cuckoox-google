@@ -1,12 +1,12 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import '@testing-library/jest-dom';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'; // 使用vitest的测试函数
 import CaseMemberTab from '@/src/components/case/CaseMemberTab';
-import * as caseMemberService from '@/src/services/caseMemberService';
+// import * as caseMemberService from '@/src/services/caseMemberService';
 import { AuthContext, AppUser } from '@/src/contexts/AuthContext';
 import { CaseMember } from '@/src/types/caseMember';
-import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { vi } from 'vitest';
+// import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { RecordId } from 'surrealdb';
 
 // Create stable mock functions to avoid reference changes
 const mockFetchCaseMembers = vi.fn();
@@ -49,19 +49,26 @@ const initialMockMembers: CaseMember[] = [
 interface AuthContextType {
   isLoggedIn: boolean;
   user: AppUser | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   oidcUser: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setAuthState: (appUser: AppUser, oidcUserInstance?: any) => void;
   logout: () => Promise<void>;
   isLoading: boolean;
   selectedCaseId: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   userCases: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   currentUserCaseRoles: any[];
   isCaseLoading: boolean;
   selectCase: (caseId: string) => Promise<void>;
   hasRole: (roleName: string) => boolean;
   refreshUserCasesAndRoles: () => Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   navMenuItems: any[] | null;
   isMenuLoading: boolean;
+  navigateTo: string | null; // 添加缺失的属性
+  clearNavigateTo: () => void; // 添加缺失的属性
 }
 
 // Helper to provide AuthContext with stable references
@@ -82,6 +89,8 @@ const renderWithAuth = (ui: React.ReactElement, authContextValue: Partial<AuthCo
     refreshUserCasesAndRoles: vi.fn(),
     navMenuItems: [],
     isMenuLoading: false,
+    navigateTo: null,
+    clearNavigateTo: vi.fn(),
     ...authContextValue,
   };
   return render(
@@ -107,17 +116,32 @@ describe('CaseMemberTab', () => {
     mockChangeCaseOwner.mockResolvedValue(undefined);
 
     mockAuthContextValue = {
-      user: { id: 'user:nonOwner', name: 'Non Owner User', github_id: 'nonownergh' } as AppUser,
+      user: { 
+        id: new RecordId('user', 'nonOwner'), 
+        name: 'Non Owner User', 
+        github_id: 'nonownergh' 
+      } as AppUser,
     };
   });
 
-  test('renders loading state initially', () => {
+  afterEach(async () => {
+    // Clean up any open handles
+    vi.clearAllMocks();
+    
+    // Force cleanup of any pending promises
+    await new Promise(resolve => setTimeout(resolve, 0));
+    
+    // Clear any timers
+    vi.clearAllTimers();
+  });
+
+  it('renders loading state initially', () => {
     mockFetchCaseMembers.mockImplementation(() => new Promise(() => {}));
     renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
     expect(screen.getByRole('progressbar')).toBeInTheDocument();
   });
 
-  test('fetches and displays a list of members', async () => {
+  it('fetches and displays a list of members', async () => {
     renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
     await waitFor(() => expect(mockFetchCaseMembers).toHaveBeenCalledWith(mockCaseId), { timeout: 2000 });
     expect(screen.getByText('Owner User')).toBeInTheDocument();
@@ -127,17 +151,21 @@ describe('CaseMemberTab', () => {
   describe('as Owner (for remove actions)', () => {
     beforeEach(() => {
       mockAuthContextValue = {
-        user: { id: 'user:owner1', name: 'Owner User', github_id: 'ownergh' } as AppUser,
+        user: { 
+          id: new RecordId('user', 'owner1'), 
+          name: 'Owner User', 
+          github_id: 'ownergh' 
+        } as AppUser,
       };
     });
 
-    test('displays "Add Member" button', async () => {
+    it('displays "Add Member" button', async () => {
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       await waitFor(() => expect(screen.queryByText('Owner User')).toBeInTheDocument(), { timeout: 2000 });
       expect(screen.getByRole('button', { name: /Add Member/i })).toBeInTheDocument();
     });
 
-    test('opens AddCaseMemberDialog when "Add Member" is clicked', async () => {
+    it('opens AddCaseMemberDialog when "Add Member" is clicked', async () => {
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       await waitFor(() => expect(screen.getByText('Owner User')).toBeInTheDocument(), { timeout: 2000 });
       fireEvent.click(screen.getByRole('button', { name: /Add Member/i }));
@@ -146,14 +174,18 @@ describe('CaseMemberTab', () => {
   });
 
   describe('Change Case Owner functionality', () => {
-    const ownerUser = { id: 'user:owner1', name: 'Owner User', github_id: 'ownergh' } as AppUser;
+    const ownerUser = { 
+      id: new RecordId('user', 'owner1'), 
+      name: 'Owner User', 
+      github_id: 'ownergh' 
+    } as AppUser;
     const memberUser1 = initialMockMembers.find(m => m.id === 'user:member1')!;
 
     beforeEach(() => {
       mockAuthContextValue = { user: ownerUser };
     });
 
-    test('Owner sees "More" menu for other members', async () => {
+    it('Owner sees "More" menu for other members', async () => {
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       await waitFor(() => expect(screen.getByText(memberUser1.userName)).toBeInTheDocument(), { timeout: 2000 });
       
@@ -163,7 +195,7 @@ describe('CaseMemberTab', () => {
       expect(actionsButton).toBeInTheDocument();
     });
 
-    test('Owner sees "Make Case Owner" option in menu for non-owner members', async () => {
+    it('Owner sees "Make Case Owner" option in menu for non-owner members', async () => {
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       await waitFor(() => expect(screen.getByText(memberUser1.userName)).toBeInTheDocument(), { timeout: 2000 });
       
@@ -177,8 +209,14 @@ describe('CaseMemberTab', () => {
       }
     });
 
-    test('Non-owner does not see "More" menu or "Make Case Owner" option', async () => {
-      mockAuthContextValue = { user: { id: 'user:member1', name: 'Member One', github_id: 'member1gh' } as AppUser };
+    it('Non-owner does not see "More" menu or "Make Case Owner" option', async () => {
+      mockAuthContextValue = { 
+        user: { 
+          id: new RecordId('user', 'member1'), 
+          name: 'Member One', 
+          github_id: 'member1gh' 
+        } as AppUser 
+      };
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       await waitFor(() => expect(screen.getByText(memberUser1.userName)).toBeInTheDocument(), { timeout: 2000 });
       
@@ -188,7 +226,7 @@ describe('CaseMemberTab', () => {
       expect(actionsButton).not.toBeInTheDocument();
     });
 
-    test('Clicking "Make Case Owner" opens confirmation dialog', async () => {
+    it('Clicking "Make Case Owner" opens confirmation dialog', async () => {
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       await waitFor(() => expect(screen.getByText(memberUser1.userName)).toBeInTheDocument(), { timeout: 2000 });
       
@@ -206,7 +244,7 @@ describe('CaseMemberTab', () => {
       }
     });
 
-    test('Confirming ownership change calls changeCaseOwner service', async () => {
+    it('Confirming ownership change calls changeCaseOwner service', async () => {
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       await waitFor(() => expect(screen.getByText(memberUser1.userName)).toBeInTheDocument(), { timeout: 2000 });
       
@@ -234,7 +272,7 @@ describe('CaseMemberTab', () => {
   });
 
   describe('Error Handling', () => {
-    test('displays error when fetchCaseMembers fails', async () => {
+    it('displays error when fetchCaseMembers fails', async () => {
       mockFetchCaseMembers.mockRejectedValue(new Error('Failed to fetch members'));
       renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
       
@@ -243,8 +281,8 @@ describe('CaseMemberTab', () => {
       }, { timeout: 2000 });
     });
 
-    test('handles changeCaseOwner error gracefully', async () => {
-      const ownerUser = { id: 'user:owner1', name: 'Owner User', github_id: 'ownergh' } as AppUser;
+    it('handles changeCaseOwner error gracefully', async () => {
+      const ownerUser = { id: new RecordId('user','owner1'), name: 'Owner User', github_id: 'ownergh' } as AppUser;
       mockAuthContextValue = { user: ownerUser };
       mockChangeCaseOwner.mockRejectedValue(new Error('Failed to change owner'));
       

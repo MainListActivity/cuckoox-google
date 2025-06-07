@@ -1,6 +1,6 @@
 // TODO: Access Control - This page should only be accessible to users with a 'creditor' role.
 // TODO: Access Control - Verify this claimId belongs to the logged-in creditor.
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -8,55 +8,164 @@ import {
   Typography,
   Button,
   Grid,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import PageContainer from '@/src/components/PageContainer';
 import FullscreenRichTextEditor from '@/src/components/FullscreenRichTextEditor';
 import { QuillDelta } from '@/src/components/RichTextEditor';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { useAuth } from '@/src/contexts/AuthContext';
+import { useSurreal } from '@/src/contexts/SurrealProvider';
+import ClaimService, { ClaimData } from '@/src/services/claimService';
 import { Delta } from 'quill/core';
 
 const ClaimAttachmentPage: React.FC = () => {
   const navigate = useNavigate();
   const { claimId } = useParams<{ claimId: string }>();
   const { showSuccess, showError } = useSnackbar();
+  const { user, hasRole } = useAuth();
+  const { surreal } = useSurreal();
+  
   const [editorContent, setEditorContent] = useState<QuillDelta>(new Delta());
+  const [claimData, setClaimData] = useState<ClaimData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const claimService = useMemo(() => new ClaimService(surreal), [surreal]);
 
-  // Placeholder claim data - in a real app, this would come from state or API
-  const placeholderClaimData = {
-    totalAmount: '¥10,560.00', // TODO: Fetch based on claimId
-    currency: 'CNY', // TODO: Fetch based on claimId
-    nature: '普通债权', // TODO: Fetch based on claimId
-  };
+  // 加载债权数据和权限检查
+  useEffect(() => {
+    const loadClaimData = async () => {
+      // 权限检查
+      if (!hasRole('creditor_representative')) {
+        setError('您没有权限访问此页面');
+        setIsLoading(false);
+        return;
+      }
 
-  // TODO: Get actual userId and userName from auth context
-  const currentUserId = 'placeholder-user-id'; // Placeholder for userId
-  const currentUserName = 'Placeholder User'; // Placeholder for userName
+      if (!claimId || !user) {
+        setError('缺少必要参数');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null); // 清除之前的错误
+        const claim = await claimService.getClaimById(`claim:${claimId}`);
+        
+        if (!claim) {
+          setError('债权不存在');
+          return;
+        }
+
+        // 验证债权是否属于当前用户
+        if (claim.created_by !== user.id.toString()) {
+          setError('您没有权限编辑此债权');
+          return;
+        }
+
+        // 检查债权是否可编辑
+        if (!claimService.isClaimEditable(claim)) {
+          setError(`债权状态为"${claimService.getStatusText(claim.review_status)}"，无法编辑`);
+          return;
+        }
+
+        setClaimData(claim);
+        
+        // 加载已保存的附件内容
+        if (claim.asserted_claim_details.attachment_content) {
+          setEditorContent(claim.asserted_claim_details.attachment_content);
+        }
+        
+      } catch (err) {
+        console.error('加载债权数据失败:', err);
+        setError(err instanceof Error ? err.message : '加载债权数据失败');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadClaimData();
+  }, [claimId, user, surreal, hasRole, claimService]);
+
+  const currentUserId = user?.id?.toString() || 'unknown-user';
+  const currentUserName = user?.name || user?.email || 'Unknown User';
 
 
-  const handleSaveDraft = () => {
-    // Simulate API call
-    const isSuccess = Math.random() > 0.1; // 90% success rate
-    if (isSuccess) {
-      console.log(`Saving draft for claim ID: ${claimId} with content:`, JSON.stringify(editorContent.ops));
-      showSuccess('草稿已成功保存。');
-    } else {
-      console.error(`Failed to save draft for claim ID: ${claimId}.`);
-      showError('保存草稿失败，请稍后重试。');
+  const handleSaveDraft = async () => {
+    if (!claimId || !claimData) {
+      showError('缺少必要参数');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await claimService.saveAttachmentDraft(`claim:${claimId}`, editorContent);
+      showSuccess('草稿已成功保存');
+    } catch (error) {
+      console.error('保存草稿失败:', error);
+      showError(error instanceof Error ? error.message : '保存草稿失败，请稍后重试');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleSubmitClaim = () => {
-    // Simulate API call
-    const isSuccess = Math.random() > 0.1; // 90% success rate
-    if (isSuccess) {
-      console.log(`Submitting claim ID: ${claimId} with content:`, JSON.stringify(editorContent.ops));
-      showSuccess('债权申报已成功提交。');
-      navigate(`/my-claims/${claimId}/submitted`); 
-    } else {
-      console.error(`Failed to submit claim ID: ${claimId}.`);
-      showError('提交申报失败，请检查网络或稍后重试。');
+  const handleSubmitClaim = async () => {
+    if (!claimId || !claimData) {
+      showError('缺少必要参数');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await claimService.submitClaim(`claim:${claimId}`, editorContent);
+      showSuccess('债权申报已成功提交');
+      navigate(`/my-claims/${claimId}`);
+    } catch (error) {
+      console.error('提交申报失败:', error);
+      showError(error instanceof Error ? error.message : '提交申报失败，请检查网络或稍后重试');
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  // 加载状态
+  if (isLoading) {
+    return (
+      <PageContainer>
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
+          <CircularProgress />
+          <Typography sx={{ ml: 2 }}>加载债权信息中...</Typography>
+        </Box>
+      </PageContainer>
+    );
+  }
+
+  // 错误状态
+  if (error) {
+    return (
+      <PageContainer>
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {error}
+        </Alert>
+      </PageContainer>
+    );
+  }
+
+  // 数据不存在
+  if (!claimData) {
+    return (
+      <PageContainer>
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          债权数据不存在
+        </Alert>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
@@ -76,16 +185,15 @@ const ClaimAttachmentPage: React.FC = () => {
                 申报ID:
               </Typography>
               <Typography variant="body1">
-                {claimId}
+                {claimData.claim_number || claimId}
               </Typography>
             </Grid>
-            {/* TODO: Fetch and display actual basic claim info based on claimId */}
             <Grid size={{ xs: 12, sm: 4 }}>
               <Typography variant="body2" color="text.secondary">
                 债权性质:
               </Typography>
               <Typography variant="body1">
-                {placeholderClaimData.nature}
+                {claimData.asserted_claim_details.nature}
               </Typography>
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -93,7 +201,10 @@ const ClaimAttachmentPage: React.FC = () => {
                 申报金额:
               </Typography>
               <Typography variant="body1">
-                {placeholderClaimData.totalAmount} ({placeholderClaimData.currency})
+                {claimService.formatCurrency(
+                  claimData.asserted_claim_details.total_asserted_amount,
+                  claimData.asserted_claim_details.currency
+                )}
               </Typography>
             </Grid>
           </Grid>
@@ -129,12 +240,15 @@ const ClaimAttachmentPage: React.FC = () => {
                 details: [
                   {
                     label: '申报金额',
-                    value: placeholderClaimData.totalAmount,
+                    value: claimService.formatCurrency(
+                      claimData.asserted_claim_details.total_asserted_amount,
+                      claimData.asserted_claim_details.currency
+                    ),
                     icon: 'M7,15H9C9,16.08 10.37,17 12,17C13.63,17 15,16.08 15,15C15,13.9 13.96,13.5 11.76,12.97C9.64,12.44 7,11.78 7,9C7,7.21 8.47,5.69 10.5,5.18V3H13.5V5.18C15.53,5.69 17,7.21 17,9H15C15,7.92 13.63,7 12,7C10.37,7 9,7.92 9,9C9,10.1 10.04,10.5 12.24,11.03C14.36,11.56 17,12.22 17,15C17,16.79 15.53,18.31 13.5,18.82V21H10.5V18.82C8.47,18.31 7,16.79 7,15Z'
                   },
                   {
                     label: '债权性质',
-                    value: placeholderClaimData.nature,
+                    value: claimData.asserted_claim_details.nature,
                     icon: 'M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.59,8.09L18,9.5L11,16.5Z'
                   },
                   {
@@ -161,6 +275,7 @@ const ClaimAttachmentPage: React.FC = () => {
           <Button 
             variant="outlined"
             onClick={() => navigate(`/claims/submit/${claimId}`)}
+            disabled={isSubmitting || isSaving}
           >
             返回修改基本信息
           </Button>
@@ -168,15 +283,19 @@ const ClaimAttachmentPage: React.FC = () => {
             variant="contained"
             color="warning"
             onClick={handleSaveDraft}
+            disabled={isSubmitting || isSaving}
+            startIcon={isSaving ? <CircularProgress size={16} /> : undefined}
           >
-            保存草稿
+            {isSaving ? '保存中...' : '保存草稿'}
           </Button>
           <Button 
             variant="contained"
             color="success"
             onClick={handleSubmitClaim}
+            disabled={isSubmitting || isSaving}
+            startIcon={isSubmitting ? <CircularProgress size={16} /> : undefined}
           >
-            提交申报
+            {isSubmitting ? '提交中...' : '提交申报'}
           </Button>
         </Box>
         {/* TODO: Workflow - After submission, the claim should become read-only for the creditor unless explicitly rejected by an admin. */}

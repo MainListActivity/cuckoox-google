@@ -1,7 +1,6 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach, type MockedFunction } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type MockedFunction, afterEach } from 'vitest';
 import AddCaseMemberDialog from '@/src/components/case/AddCaseMemberDialog';
 import * as caseMemberService from '@/src/services/caseMemberService';
 
@@ -34,6 +33,10 @@ describe('AddCaseMemberDialog', () => {
       userEmail: 'bob@example.com',
       avatarUrl: 'avatar_bob.png',
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders correctly when open is true', () => {
@@ -81,12 +84,7 @@ describe('AddCaseMemberDialog', () => {
   });
 
   it('search input updates its value and calls searchSystemUsers', async () => {
-    mockSearchSystemUsers.mockImplementationOnce((query: string) => {
-      if (query.toLowerCase().includes('alice')) {
-        return Promise.resolve([systemUsersMock[0]]); // Return Alice
-      }
-      return Promise.resolve([]);
-    });
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[0]]);
     
     render(
       <AddCaseMemberDialog
@@ -100,22 +98,16 @@ describe('AddCaseMemberDialog', () => {
     fireEvent.change(searchInput, { target: { value: 'Alice' } });
     expect(searchInput).toHaveValue('Alice');
 
-    // Wait for debounce and API call
+    // Check if results are displayed
+    expect(await screen.findByText('Alice Admin')).toBeVisible();
+    // Ensure the mock was called
     await waitFor(() => {
       expect(mockSearchSystemUsers).toHaveBeenCalledWith('Alice');
     });
-
-    // Check if results are displayed
-    expect(await screen.findByText('Alice Admin')).toBeVisible();
   });
 
   it('displays search results correctly', async () => {
-    mockSearchSystemUsers.mockImplementationOnce((query: string) => {
-      if (query.toLowerCase().includes('user')) {
-        return Promise.resolve(systemUsersMock); // Return all users
-      }
-      return Promise.resolve([]);
-    });
+    mockSearchSystemUsers.mockResolvedValue(systemUsersMock);
     
     render(
       <AddCaseMemberDialog
@@ -126,16 +118,14 @@ describe('AddCaseMemberDialog', () => {
       />
     );
     const searchInput = screen.getByLabelText(/Search users/i);
-    fireEvent.change(searchInput, { target: { value: 'user' } }); // A query that matches both
+    fireEvent.change(searchInput, { target: { value: 'user' } }); 
 
-    await waitFor(() => {
-      expect(screen.getByText('Alice Admin')).toBeInTheDocument();
-      expect(screen.getByText('Bob Lawyer')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Alice Admin')).toBeInTheDocument();
+    expect(await screen.findByText('Bob Lawyer')).toBeInTheDocument();
   });
 
   it('shows "No users found" message if search yields no results', async () => {
-    mockSearchSystemUsers.mockResolvedValueOnce([]);
+    mockSearchSystemUsers.mockResolvedValue([]);
      render(
       <AddCaseMemberDialog
         open={true}
@@ -147,23 +137,11 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'NonExistentUser' } });
 
-    await waitFor(() => {
-      expect(screen.getByText(/No users found/i)).toBeInTheDocument();
-    });
+    expect(await screen.findByText(/No users found/i)).toBeInTheDocument();
   });
 
   it('calls addCaseMember, onMemberAdded, and onClose when a user is selected and "Add" button is clicked', async () => {
-    // Clear previous mocks and set up fresh implementation
-    vi.clearAllMocks();
-    mockSearchSystemUsers.mockImplementation(() => Promise.resolve([systemUsersMock[1]])); // Return Bob directly
-    mockAddCaseMember.mockResolvedValue({
-      id: 'user:002',
-      caseId: 'case:test123',
-      roleInCase: 'member',
-      userName: 'Bob Lawyer',
-      userEmail: 'bob@example.com',
-      avatarUrl: 'avatar_bob.png',
-    });
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[1]]);
     
     render(
       <AddCaseMemberDialog
@@ -177,11 +155,9 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'Bob' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('Bob Lawyer')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('Bob Lawyer')); // Select Bob
+    // Use findByText to wait for the user to appear
+    const userItem = await screen.findByText('Bob Lawyer');
+    fireEvent.click(userItem); // Select Bob
 
     const addButton = screen.getByRole('button', { name: /Add Selected User/i });
     expect(addButton).not.toBeDisabled();
@@ -208,41 +184,6 @@ describe('AddCaseMemberDialog', () => {
   });
 
   it('"Add" button shows error if no user is selected', async () => {
-    mockSearchSystemUsers.mockImplementationOnce((query: string) => {
-      if (query.toLowerCase().includes('alice')) {
-        return Promise.resolve([systemUsersMock[0]]); // Return Alice
-      }
-      return Promise.resolve([]);
-    });
-    
-     render(
-      <AddCaseMemberDialog
-        open={true}
-        onClose={mockOnClose}
-        caseId="case:test123"
-        onMemberAdded={mockOnMemberAdded}
-      />
-    );
-    
-    const searchInput = screen.getByLabelText(/Search users/i);
-    fireEvent.change(searchInput, { target: { value: 'Alice' } });
-
-    await waitFor(() => {
-        expect(screen.getByText('Alice Admin')).toBeInTheDocument();
-    });
-
-    const addButton = screen.getByRole('button', { name: /Add Selected User/i });
-    expect(addButton).not.toBeDisabled(); // Button is enabled but will show error
-    
-    // Click without selecting a user
-    fireEvent.click(addButton);
-    
-    await waitFor(() => {
-      expect(screen.getByText('Please select a user to add.')).toBeInTheDocument();
-    });
-  });
-
-  it('displays loading indicator during search operations', async () => {
     render(
       <AddCaseMemberDialog
         open={true}
@@ -252,29 +193,39 @@ describe('AddCaseMemberDialog', () => {
       />
     );
     
-    // Use a promise that we can control
+    const addButton = screen.getByRole('button', { name: /Add Selected User/i });
+    fireEvent.click(addButton);
+    
+    expect(await screen.findByText('Please select a user to add.')).toBeInTheDocument();
+  });
+
+  it('displays loading indicator during search operations', async () => {
     let resolveSearch: (value: caseMemberService.SystemUser[]) => void;
     const searchPromise = new Promise<caseMemberService.SystemUser[]>(resolve => {
       resolveSearch = resolve;
     });
-    mockSearchSystemUsers.mockReturnValueOnce(searchPromise);
+    mockSearchSystemUsers.mockReturnValue(searchPromise);
+
+    render(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId="case:test123"
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
 
     const searchInput = screen.getByLabelText(/Search users/i);
-
-    // Test search loading
     fireEvent.change(searchInput, { target: { value: 'user' } });
     
-    // Wait for debounce (500ms) + loading to appear
-    await waitFor(() => expect(screen.getByRole('progressbar')).toBeInTheDocument(), { timeout: 1000 });
+    expect(await screen.findByRole('progressbar')).toBeInTheDocument();
     
-    // Resolve the search
-    resolveSearch!(systemUsersMock);
+    await act(async () => {
+      resolveSearch!(systemUsersMock);
+    });
     
-    // Wait for loading to disappear
-    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument(), { timeout: 1000 });
-    
-    // Verify search results are displayed
-    expect(screen.getByText('Alice Admin')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+    expect(await screen.findByText('Alice Admin')).toBeInTheDocument();
   });
 
   it('does not search when query is less than 2 characters', async () => {
@@ -288,22 +239,16 @@ describe('AddCaseMemberDialog', () => {
     );
     const searchInput = screen.getByLabelText(/Search users/i);
     
-    // Type single character
     fireEvent.change(searchInput, { target: { value: 'A' } });
     
-    // Wait for debounce
-    await waitFor(() => {}, { timeout: 600 });
+    // Give debounce a moment, but expect no call
+    await new Promise(r => setTimeout(r, 600));
     
     expect(mockSearchSystemUsers).not.toHaveBeenCalled();
   });
 
   it('clears search results when query becomes empty', async () => {
-    mockSearchSystemUsers.mockImplementationOnce((query: string) => {
-      if (query.toLowerCase().includes('alice')) {
-        return Promise.resolve([systemUsersMock[0]]); // Return Alice
-      }
-      return Promise.resolve([]);
-    });
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[0]]);
     
     render(
       <AddCaseMemberDialog
@@ -315,13 +260,9 @@ describe('AddCaseMemberDialog', () => {
     );
     const searchInput = screen.getByLabelText(/Search users/i);
     
-    // First search with valid query
     fireEvent.change(searchInput, { target: { value: 'Alice' } });
-    await waitFor(() => {
-      expect(screen.getByText('Alice Admin')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Alice Admin')).toBeInTheDocument();
     
-    // Clear the search
     fireEvent.change(searchInput, { target: { value: '' } });
     await waitFor(() => {
       expect(screen.queryByText('Alice Admin')).not.toBeInTheDocument();
@@ -329,7 +270,7 @@ describe('AddCaseMemberDialog', () => {
   });
 
   it('displays user without email correctly', async () => {
-    mockSearchSystemUsers.mockResolvedValueOnce([systemUsersMock[4]]); // Eve Member without email
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[4]]); // Eve Member without email
     render(
       <AddCaseMemberDialog
         open={true}
@@ -341,10 +282,8 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'Eve' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('Eve Member')).toBeInTheDocument();
-      expect(screen.getByText('No email')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Eve Member')).toBeInTheDocument();
+    expect(await screen.findByText('No email')).toBeInTheDocument();
   });
 
   it('handles search error gracefully', async () => {
@@ -360,15 +299,11 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'Alice' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('Failed to search users. Please try again.')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Failed to search users. Please try again.')).toBeInTheDocument();
   });
 
   it('handles add member error gracefully', async () => {
-    // First mock successful search
-    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[0]]); // Return Alice directly
-    // Then mock failed add
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[0]]);
     mockAddCaseMember.mockRejectedValueOnce(new Error('User already exists in case'));
     
     render(
@@ -382,48 +317,20 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'Alice' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('Alice Admin')).toBeInTheDocument();
-    });
+    const userItem = await screen.findByText('Alice Admin');
+    fireEvent.click(userItem);
 
-    fireEvent.click(screen.getByText('Alice Admin'));
     const addButton = screen.getByRole('button', { name: /Add Selected User/i });
     fireEvent.click(addButton);
 
-    await waitFor(() => {
-      expect(screen.getByText('User already exists in case')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('User already exists in case')).toBeInTheDocument();
     
-    // Dialog should not close on error
     expect(mockOnClose).not.toHaveBeenCalled();
     expect(mockOnMemberAdded).not.toHaveBeenCalled();
   });
 
-  it('shows error when trying to add without selecting a user', async () => {
-    render(
-      <AddCaseMemberDialog
-        open={true}
-        onClose={mockOnClose}
-        caseId="case:test123"
-        onMemberAdded={mockOnMemberAdded}
-      />
-    );
-    
-    const addButton = screen.getByRole('button', { name: /Add Selected User/i });
-    fireEvent.click(addButton);
-
-    await waitFor(() => {
-      expect(screen.getByText('Please select a user to add.')).toBeInTheDocument();
-    });
-  });
-
   it('resets state when dialog is closed and reopened', async () => {
-    mockSearchSystemUsers.mockImplementationOnce((query: string) => {
-      if (query.toLowerCase().includes('alice')) {
-        return Promise.resolve([systemUsersMock[0]]); // Return Alice
-      }
-      return Promise.resolve([]);
-    });
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[0]]);
     
     const { rerender } = render(
       <AddCaseMemberDialog
@@ -437,13 +344,10 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'Alice' } });
     
-    await waitFor(() => {
-      expect(screen.getByText('Alice Admin')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Alice Admin')).toBeInTheDocument();
     
     fireEvent.click(screen.getByText('Alice Admin'));
     
-    // Close dialog
     rerender(
       <AddCaseMemberDialog
         open={false}
@@ -453,7 +357,6 @@ describe('AddCaseMemberDialog', () => {
       />
     );
     
-    // Reopen dialog
     rerender(
       <AddCaseMemberDialog
         open={true}
@@ -463,19 +366,13 @@ describe('AddCaseMemberDialog', () => {
       />
     );
     
-    // State should be reset
     const newSearchInput = screen.getByLabelText(/Search users/i);
     expect(newSearchInput).toHaveValue('');
     expect(screen.queryByText('Alice Admin')).not.toBeInTheDocument();
   });
 
   it('debounces search input correctly', async () => {
-    mockSearchSystemUsers.mockImplementationOnce((query: string) => {
-      if (query.toLowerCase().includes('alice')) {
-        return Promise.resolve([systemUsersMock[0]]); // Return Alice
-      }
-      return Promise.resolve([]);
-    });
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[0]]);
     
     render(
       <AddCaseMemberDialog
@@ -488,14 +385,12 @@ describe('AddCaseMemberDialog', () => {
     
     const searchInput = screen.getByLabelText(/Search users/i);
     
-    // Type multiple characters quickly
     fireEvent.change(searchInput, { target: { value: 'A' } });
     fireEvent.change(searchInput, { target: { value: 'Al' } });
     fireEvent.change(searchInput, { target: { value: 'Ali' } });
     fireEvent.change(searchInput, { target: { value: 'Alic' } });
     fireEvent.change(searchInput, { target: { value: 'Alice' } });
     
-    // Should only call search once after debounce
     await waitFor(() => {
       expect(mockSearchSystemUsers).toHaveBeenCalledTimes(1);
       expect(mockSearchSystemUsers).toHaveBeenCalledWith('Alice');
@@ -521,23 +416,18 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'user' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('Alice Admin')).toBeInTheDocument();
-      expect(screen.getByText('Frank User')).toBeInTheDocument();
-    });
+    expect(await screen.findByText('Alice Admin')).toBeInTheDocument();
+    expect(await screen.findByText('Frank User')).toBeInTheDocument();
     
-    // Check avatars are rendered
-    // Alice has avatarUrl so shows img tag
     const aliceImg = screen.getByRole('img');
     expect(aliceImg).toHaveAttribute('src', 'avatar_alice.png');
     
-    // Frank has no avatarUrl so shows text 'F'
     const frankAvatar = screen.getByText('F');
     expect(frankAvatar).toBeInTheDocument();
   });
 
   it('calls addCaseMember with correct parameters', async () => {
-    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[1]]); // Return Bob directly
+    mockSearchSystemUsers.mockResolvedValue([systemUsersMock[1]]);
     
     render(
       <AddCaseMemberDialog
@@ -551,11 +441,9 @@ describe('AddCaseMemberDialog', () => {
     const searchInput = screen.getByLabelText(/Search users/i);
     fireEvent.change(searchInput, { target: { value: 'Bob' } });
 
-    await waitFor(() => {
-      expect(screen.getByText('Bob Lawyer')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('Bob Lawyer'));
+    const userItem = await screen.findByText('Bob Lawyer');
+    fireEvent.click(userItem);
+    
     const addButton = screen.getByRole('button', { name: /Add Selected User/i });
     fireEvent.click(addButton);
 

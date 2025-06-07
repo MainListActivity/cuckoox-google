@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth,AppUser } from '@/src/contexts/AuthContext';
 import authService from '@/src/services/authService'; // For OIDC login
@@ -6,7 +6,6 @@ import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader';
-import PageContainer from '@/src/components/PageContainer';
 import {
   Box,
   Typography,
@@ -48,10 +47,10 @@ const LoginPage: React.FC = () => {
   const unsplashImageUrl = `https://images.unsplash.com/photo-1557804506-669a67965ba0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2074&q=80`;
 
   // Helper to check if current logged-in user is the special admin
-  const userIsAdmin = () => {
+  const userIsAdmin = useCallback(() => {
     // Use the 'user' destructured from useAuth() context directly
     return user?.github_id === '--admin--';
-  };
+  }, [user]);
 
   useEffect(() => {
     if (!isAdminLoginAttempt && isLoggedIn && !isAuthContextLoading) {
@@ -88,9 +87,10 @@ const LoginPage: React.FC = () => {
       setAuthState(adminAppUser, null);
       navigate('/admin', { replace: true });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Admin form login failed:", error);
-      setAdminLoginError(t('error_admin_login_failed', { message: error.message || t('error_invalid_credentials_or_server') }));
+      const errorMessage = error instanceof Error ? error.message : t('error_invalid_credentials_or_server');
+      setAdminLoginError(t('error_admin_login_failed', { message: errorMessage }));
     } finally {
       setIsProcessingAdminLogin(false);
     }
