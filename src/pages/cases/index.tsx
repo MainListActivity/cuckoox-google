@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
@@ -30,13 +30,9 @@ import {
   Menu,
   MenuItem,
   Divider,
-  Badge,
   Avatar,
   CircularProgress,
   Alert,
-  TablePagination,
-  useMediaQuery,
-  Skeleton,
 } from '@mui/material';
 import {
   mdiPlusCircleOutline,
@@ -123,7 +119,7 @@ const CaseListPage: React.FC = () => {
   const [currentMeetingTitle, setCurrentMeetingTitle] = useState<string>('');
   const [searchValue, setSearchValue] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedCaseForMenu, setSelectedCaseForMenu] = useState<CaseItem | null>(null);
+  const [_selectedCaseForMenu, setSelectedCaseForMenu] = useState<CaseItem | null>(null);
 
   // Fetch cases from database
   useEffect(() => {

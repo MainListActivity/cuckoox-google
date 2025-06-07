@@ -316,13 +316,25 @@
 
 ### 新增组件
 
-#### 1. DocumentCenterLayout
+#### 1. RichTextEditor (文档中心模式)
 ```typescript
-interface DocumentCenterLayoutProps {
-  children: React.ReactNode;
-  caseInfo?: CaseInfo;
-  comments?: Comment[];
-  onMenuToggle?: (isOpen: boolean) => void;
+interface RichTextEditorProps {
+  // 基础编辑器属性
+  defaultValue?: QuillDelta | string;
+  onTextChange?: (currentContentsDelta: QuillDelta, changeDelta: QuillDelta, source: string) => void;
+  readOnly?: boolean;
+  
+  // 文档中心模式属性
+  viewMode?: 'standard' | 'document';
+  contextInfo?: ContextInfo;
+  breadcrumbs?: React.ReactNode;
+  actions?: React.ReactNode;
+  
+  // 扩展区域属性
+  extensionAreaTabs?: ExtensionAreaTab[];
+  extensionAreaContent?: ExtensionAreaContent;
+  onExtensionAreaTabChange?: (tabId: string) => void;
+  showExtensionArea?: boolean;
 }
 ```
 

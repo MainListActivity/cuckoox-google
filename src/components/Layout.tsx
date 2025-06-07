@@ -255,7 +255,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         )}
       </Toolbar>
       <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.12)' }} />
-      <List sx={{ flex: 1, px: 1, overflowY: 'auto' }}>
+      <List sx={{ flex: 1, px: 1, overflowY: 'auto',overflowX: 'hidden' }}>
         {isMenuLoading ? (
           <ListItemButton sx={{ justifyContent: 'center', px: 2.5 }}>
             <ListItemIcon sx={{ minWidth: 0, mr: drawerOpen || isMobile ? 3 : 'auto', justifyContent: 'center', color: 'white' }}>

@@ -131,7 +131,7 @@ const initialMockClaims: Claim[] = [
 const ClaimListPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { showSnackbar } = useSnackbar();
+  const { showSuccess, showWarning } = useSnackbar();
 
   const [claimsData, setClaimsData] = useState<Claim[]>(initialMockClaims);
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -202,12 +202,12 @@ const ClaimListPage: React.FC = () => {
 
   const handleOpenRejectModal = () => {
     if (selected.length === 0) {
-      showSnackbar('没有选中任何债权。', 'warning');
+      showWarning('没有选中任何债权。');
       return;
     }
     const nonRejectableClaim = filteredClaims.find(claim => selected.includes(claim.id) && claim.audit_status === '已驳回');
     if (nonRejectableClaim) {
-      showSnackbar(`债权 ${nonRejectableClaim.claim_number} 已是“已驳回”状态，无需再次驳回。`, 'warning');
+      showWarning(`债权 ${nonRejectableClaim.claim_number} 已是"已驳回"状态，无需再次驳回。`);
     }
     setRejectionReason('');
     setRejectReasonError('');
@@ -235,7 +235,7 @@ const ClaimListPage: React.FC = () => {
         )
     );
 
-    showSnackbar(`${selected.length} 个债权已批量驳回。`, 'success');
+    showSuccess(`${selected.length} 个债权已批量驳回。`);
     handleCloseRejectModal();
     setSelected([]);
   };
@@ -255,7 +255,7 @@ const ClaimListPage: React.FC = () => {
     // For now, we just navigate.
 
     setAdminCreateClaimDialogOpen(false);
-    showSnackbar(t('admin_claim_basic_info_saved_success', '基本信息已保存，请继续添加附件材料。'), 'success');
+    showSuccess(t('admin_claim_basic_info_saved_success', '基本信息已保存，请继续添加附件材料。'));
     navigate(`/admin/create-claim/${tempClaimId}/attachments`);
   };
 
@@ -376,7 +376,10 @@ const ClaimListPage: React.FC = () => {
                         <Checkbox
                             color="primary"
                             checked={isItemSelected}
-                            onChange={(event) => handleClick(event, claim.id)}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              handleClick(event as unknown as React.MouseEvent<unknown>, claim.id);
+                            }}
                             inputProps={{ 'aria-labelledby': `claim-checkbox-${claim.id}` }}
                         />
                       </TableCell>

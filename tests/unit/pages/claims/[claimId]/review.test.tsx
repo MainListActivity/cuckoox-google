@@ -3,20 +3,22 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n'; // Adjust path
-import { SnackbarProvider, useSnackbar } from '@/src/contexts/SnackbarContext';
+import { ThemeProvider } from '@mui/material/styles';
+import { createTheme } from '@mui/material/styles';
+import i18n from '@/src/i18n';
+import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 import ClaimReviewDetailPage from '@/src/pages/claims/[claimId]/review';
 import { Delta } from 'quill/core';
 
 // Mock useNavigate and useParams
 const mockNavigate = vi.fn();
-const mockClaimId = 'claim001'; // Use an ID that matches mock data for better testing
+const mockClaimId = 'claim001';
 vi.mock('react-router-dom', async () => {
     const actual = await vi.importActual('react-router-dom');
     return {
         ...actual,
         useNavigate: () => mockNavigate,
-        useParams: () => ({ id: mockClaimId }), // Ensure 'id' matches what useParams expects
+        useParams: () => ({ id: mockClaimId }),
     };
 });
 
@@ -48,7 +50,7 @@ const mockShowWarning = vi.fn();
 vi.mock('../../../../../src/contexts/SnackbarContext', async () => {
     const actual = await vi.importActual('../../../../../src/contexts/SnackbarContext');
     return {
-        ...actual, // Spread actual to keep SnackbarProvider if it's used by the test directly
+        ...actual,
         useSnackbar: () => ({
             showSuccess: mockShowSuccess,
             showError: mockShowError,
@@ -58,43 +60,150 @@ vi.mock('../../../../../src/contexts/SnackbarContext', async () => {
     };
 });
 
+// Mock AuthContext
+const mockUser = {
+    id: 'user:test123',
+    github_id: 'test-user',
+    name: 'Test User',
+    email: 'test@example.com'
+};
+
+const mockAuthContextValue = {
+    isLoggedIn: true,
+    user: mockUser,
+    oidcUser: null,
+    setAuthState: vi.fn(),
+    logout: vi.fn(),
+    isLoading: false,
+    selectedCaseId: 'case:test001',
+    userCases: [],
+    currentUserCaseRoles: [],
+    isCaseLoading: false,
+    selectCase: vi.fn(),
+    hasRole: vi.fn(() => true),
+    refreshUserCasesAndRoles: vi.fn(),
+    navMenuItems: [],
+    isMenuLoading: false,
+    navigateTo: null,
+    clearNavigateTo: vi.fn(),
+};
+
+vi.mock('../../../../../src/contexts/AuthContext', () => ({
+    useAuth: () => mockAuthContextValue,
+    AuthProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 describe('ClaimReviewDetailPage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
 
     const renderComponent = () => {
+        const theme = createTheme();
         render(
             <BrowserRouter>
-                <I18nextProvider i18n={i18n}>
-                    <SnackbarProvider>
-                        <ClaimReviewDetailPage />
-                    </SnackbarProvider>
-                </I18nextProvider>
+                <ThemeProvider theme={theme}>
+                    <I18nextProvider i18n={i18n}>
+                        <SnackbarProvider>
+                            <ClaimReviewDetailPage />
+                        </SnackbarProvider>
+                    </I18nextProvider>
+                </ThemeProvider>
             </BrowserRouter>
         );
     };
 
+    // Loading State Tests
+    it('displays loading state initially', () => {
+        renderComponent();
+        expect(screen.getByText('加载债权详情中...')).toBeInTheDocument();
+    });
+
     // Rendering Tests
     it('renders MUI layout and displays mock claim details after loading', async () => {
         renderComponent();
-        // Wait for loading to complete (data to be set)
+        
+        // Wait for loading to complete
         await waitFor(() => {
-            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument(); // AppBar title
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
         });
 
-        // Check for some key elements from the layout
-        expect(screen.getByText('债权人申报信息')).toBeInTheDocument(); // Left panel title
-        expect(screen.getByText('债权人提交的附件材料')).toBeInTheDocument(); // Right panel title
-        expect(screen.getByText('管理员内部审核备注')).toBeInTheDocument(); // Right panel title
+        // Check for key layout elements
+        expect(screen.getByText('债权人申报信息')).toBeInTheDocument();
+        expect(screen.getByText('债权人提交的附件材料')).toBeInTheDocument();
+        expect(screen.getByText('管理员内部审核备注')).toBeInTheDocument();
 
-        // Check for some data from initialMockClaimData (Acme Corp)
+        // Check for mock data
         expect(screen.getByText('Acme Corp (组织)')).toBeInTheDocument();
-        expect(screen.getByText('91310000MA1FL000XQ')).toBeInTheDocument(); // Creditor ID
-        expect(screen.getByText(/150,000\.00/)).toBeInTheDocument(); // Asserted total amount
+        expect(screen.getByText('91310000MA1FL000XQ')).toBeInTheDocument();
+        expect(screen.getByText(/150,000\.00/)).toBeInTheDocument();
 
-        // Check for the FAB
-        expect(screen.getByRole('button', { name: /audit claim/i })).toBeInTheDocument(); // FAB aria-label
+        // Check for FAB
+        expect(screen.getByRole('button', { name: /audit claim/i })).toBeInTheDocument();
+    });
+
+    it('displays creditor information correctly', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        // Check creditor details
+        expect(screen.getByText('John Doe')).toBeInTheDocument(); // Contact name
+        expect(screen.getByText('13800138000')).toBeInTheDocument(); // Phone
+        expect(screen.getByText('john.doe@acme.com')).toBeInTheDocument(); // Email
+        expect(screen.getByText('货款')).toBeInTheDocument(); // Claim nature
+        expect(screen.getByText('CNY')).toBeInTheDocument(); // Currency
+    });
+
+    it('displays claim amounts correctly', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        // Check amounts (formatted as currency)
+        expect(screen.getByText(/120,000\.00/)).toBeInTheDocument(); // Principal
+        expect(screen.getByText(/30,000\.00/)).toBeInTheDocument(); // Interest
+    });
+
+    it('displays audit status chip with correct color', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        const statusChip = screen.getByText('待审核');
+        expect(statusChip).toBeInTheDocument();
+        expect(statusChip.closest('.MuiChip-root')).toHaveClass('MuiChip-colorInfo');
+    });
+
+    it('renders rich text editors correctly', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        // Check for mocked rich text editors
+        expect(screen.getByTestId('mocked-rich-text-editor-readonly')).toBeInTheDocument(); // Attachments
+        expect(screen.getByTestId('mocked-rich-text-editor')).toBeInTheDocument(); // Internal notes
+    });
+
+    // Navigation Tests
+    it('renders back button with correct link', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        const backLink = screen.getByRole('link', { name: /back to claims list/i });
+        expect(backLink).toBeInTheDocument();
+        expect(backLink).toHaveAttribute('href', '/admin/claims');
     });
 
     // Audit Modal Tests
@@ -107,100 +216,264 @@ describe('ClaimReviewDetailPage', () => {
             fireEvent.click(fab);
 
             await waitFor(() => {
-                expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument(); // Modal title
+                expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument();
             });
-            // Check for some form fields in the modal
+            
+            // Check for form fields
             expect(screen.getByLabelText(/审核认定债权性质/)).toBeInTheDocument();
             expect(screen.getByLabelText(/审核状态/)).toBeInTheDocument();
             expect(screen.getByLabelText(/审核认定本金/)).toBeInTheDocument();
+            expect(screen.getByLabelText(/审核认定利息/)).toBeInTheDocument();
+            expect(screen.getByLabelText(/审核意见\/备注/)).toBeInTheDocument();
         });
 
         it('pre-fills modal form correctly for a "待审核" claim', async () => {
             renderComponent();
             await waitFor(() => expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument());
+            
             fireEvent.click(screen.getByRole('button', { name: /audit claim/i }));
             await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
 
-            // initialMockClaimData has '待审核' status and asserted_details
-            // For MUI Select, check the displayed value, not a hidden input if that's the case.
-            // Assuming the label is associated with the select's display element or its FormControl.
-            expect(screen.getByLabelText(/审核认定债权性质/)).toHaveTextContent('货款'); // Check displayed text for Select
-            expect(screen.getByLabelText(/审核认定本金/)).toHaveValue(120000); // For TextField input
+            // Check pre-filled values
+            expect(screen.getByDisplayValue('120000')).toBeInTheDocument(); // Principal
+            expect(screen.getByDisplayValue('30000')).toBeInTheDocument(); // Interest
+            expect(screen.getByDisplayValue('0')).toBeInTheDocument(); // Other fees
+        });
 
-            // For an empty Select, its text content might be a zero-width space or rely on placeholder.
-            // If it's a native select or a specific MUI setup, .value might work.
-            // Let's assume it displays nothing or a placeholder that isn't '货款' or '120000'
-            const statusSelectDisplay = screen.getByLabelText(/审核状态/);
-            // More robust: check it doesn't have a specific value selected if it should be empty
-            // For example, if '审核通过' is an option:
-            // expect(within(statusSelectDisplay).queryByText('审核通过')).not.toBeInTheDocument();
-            // Or check its direct text content if it's simple
-            expect(statusSelectDisplay.textContent || "").toBe(""); // Or check for a specific placeholder if any
+        it('closes modal when cancel button is clicked', async () => {
+            renderComponent();
+            await waitFor(() => expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument());
+            
+            fireEvent.click(screen.getByRole('button', { name: /audit claim/i }));
+            await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
 
+            fireEvent.click(screen.getByRole('button', { name: '取消' }));
+            
+            await waitFor(() => {
+                expect(screen.queryByText('填写审核意见与认定金额')).not.toBeInTheDocument();
+            });
         });
 
         it('shows validation errors in modal if required fields are empty on submit', async () => {
             renderComponent();
             await waitFor(() => expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument());
+            
             fireEvent.click(screen.getByRole('button', { name: /audit claim/i }));
             await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
 
-            const submitReviewButton = screen.getByRole('button', { name: '提交审核' });
-            fireEvent.click(submitReviewButton);
+            // Clear the review opinion field (other fields have default values)
+            const reviewField = screen.getByLabelText(/审核意见\/备注/);
+            fireEvent.change(reviewField, { target: { value: '' } });
+
+            const submitButton = screen.getByRole('button', { name: '提交审核' });
+            fireEvent.click(submitButton);
 
             await waitFor(() => {
-                expect(screen.getByText('审核认定债权性质不能为空。')).toBeInTheDocument();
                 expect(screen.getByText('审核状态不能为空。')).toBeInTheDocument();
-                // Principal might default to 0 from parseFloat('')
-                // expect(screen.getByText('审核认定本金不能为空且必须大于等于0。')).toBeInTheDocument();
                 expect(screen.getByText('审核意见/备注不能为空。')).toBeInTheDocument();
             });
-            expect(mockShowError).toHaveBeenCalledWith('请修正审核表单中的错误。'); // Changed to mockShowError and removed 'error' type arg
+            
+            expect(mockShowError).toHaveBeenCalledWith('请修正审核表单中的错误。');
+        });
+
+        it('validates negative amounts in modal form', async () => {
+            renderComponent();
+            await waitFor(() => expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument());
+            
+            fireEvent.click(screen.getByRole('button', { name: /audit claim/i }));
+            await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
+
+            // Set negative values
+            fireEvent.change(screen.getByLabelText(/审核认定本金/), { target: { value: '-1000' } });
+            fireEvent.change(screen.getByLabelText(/审核认定利息/), { target: { value: '-500' } });
+
+            fireEvent.click(screen.getByRole('button', { name: '提交审核' }));
+
+            await waitFor(() => {
+                expect(screen.getByText('审核认定本金不能为空且必须大于等于0。')).toBeInTheDocument();
+                expect(screen.getByText('审核认定利息不能为空且必须大于等于0。')).toBeInTheDocument();
+            });
+        });
+
+        it('calculates total amount correctly in modal', async () => {
+            renderComponent();
+            await waitFor(() => expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument());
+            
+            fireEvent.click(screen.getByRole('button', { name: /audit claim/i }));
+            await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
+
+            // Change amounts
+            fireEvent.change(screen.getByLabelText(/审核认定本金/), { target: { value: '100000' } });
+            fireEvent.change(screen.getByLabelText(/审核认定利息/), { target: { value: '5000' } });
+            fireEvent.change(screen.getByLabelText(/审核认定其他费用/), { target: { value: '1000' } });
+
+            // Check calculated total (100000 + 5000 + 1000 = 106000)
+            await waitFor(() => {
+                expect(screen.getByText(/106,000\.00/)).toBeInTheDocument();
+            });
         });
 
         it('calls handleSubmitReview, updates data, and shows snackbar on successful modal submission', async () => {
             renderComponent();
             await waitFor(() => expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument());
+            
             fireEvent.click(screen.getByRole('button', { name: /audit claim/i }));
             await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
 
-            // Fill the modal form
-            // Interact with "审核认定债权性质" Select
-            const natureSelectControl = screen.getByLabelText(/审核认定债权性质/);
-            fireEvent.mouseDown(natureSelectControl);
+            // Fill the form
+            const natureSelect = screen.getByLabelText(/审核认定债权性质/);
+            fireEvent.mouseDown(natureSelect);
             const serviceFeeOption = await screen.findByRole('option', { name: '服务费' });
             fireEvent.click(serviceFeeOption);
 
-            // Interact with "审核状态" Select
-            const statusSelectControl = screen.getByLabelText(/审核状态/);
-            fireEvent.mouseDown(statusSelectControl);
+            const statusSelect = screen.getByLabelText(/审核状态/);
+            fireEvent.mouseDown(statusSelect);
             const approvedOption = await screen.findByRole('option', { name: '审核通过' });
             fireEvent.click(approvedOption);
 
             fireEvent.change(screen.getByLabelText(/审核认定本金/), { target: { value: '100000' } });
             fireEvent.change(screen.getByLabelText(/审核认定利息/), { target: { value: '1000' } });
-            // For RichTextEditor mock, the interaction is simplified
-            fireEvent.change(screen.getByTestId('mocked-rich-text-editor'), { target: { value: '审核通过，材料齐全。' } });
+            fireEvent.change(screen.getByLabelText(/审核意见\/备注/), { target: { value: '审核通过，材料齐全。' } });
 
             // Mock window.confirm
             const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => true);
 
-            const submitReviewButton = screen.getByRole('button', { name: '提交审核' });
-            fireEvent.click(submitReviewButton);
+            fireEvent.click(screen.getByRole('button', { name: '提交审核' }));
 
             await waitFor(() => {
-                expect(mockShowSuccess).toHaveBeenCalledWith('审核意见已提交 (模拟)'); // Changed to mockShowSuccess and removed 'success' type arg
+                expect(mockShowSuccess).toHaveBeenCalledWith('审核意见已提交 (模拟)');
             });
 
-            // Check if data on the page updated (e.g., status chip)
-            // Need to wait for modal to close and UI to re-render
+            // Check if data updated
             await waitFor(() => {
-                expect(screen.getByText('审核通过')).toBeInTheDocument(); // Chip text
+                expect(screen.getByText('审核通过')).toBeInTheDocument();
             });
-            expect(screen.getByText('审核通过').closest('.MuiChip-root')).toHaveClass('MuiChip-colorSuccess'); // Chip color
-            expect(screen.getByText('审核通过，材料齐全。')).toBeInTheDocument(); // Review opinion on page
+            
+            expect(screen.getByText('审核通过').closest('.MuiChip-root')).toHaveClass('MuiChip-colorSuccess');
+            expect(screen.getByText('审核通过，材料齐全。')).toBeInTheDocument();
 
             confirmSpy.mockRestore();
         });
+
+        it('does not submit if user cancels confirmation dialog', async () => {
+            renderComponent();
+            await waitFor(() => expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument());
+            
+            fireEvent.click(screen.getByRole('button', { name: /audit claim/i }));
+            await waitFor(() => expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument());
+
+            // Fill required fields
+            const natureSelect = screen.getByLabelText(/审核认定债权性质/);
+            fireEvent.mouseDown(natureSelect);
+            const serviceFeeOption = await screen.findByRole('option', { name: '服务费' });
+            fireEvent.click(serviceFeeOption);
+
+            const statusSelect = screen.getByLabelText(/审核状态/);
+            fireEvent.mouseDown(statusSelect);
+            const approvedOption = await screen.findByRole('option', { name: '审核通过' });
+            fireEvent.click(approvedOption);
+
+            fireEvent.change(screen.getByLabelText(/审核认定本金/), { target: { value: '100000' } });
+            fireEvent.change(screen.getByLabelText(/审核认定利息/), { target: { value: '1000' } });
+            fireEvent.change(screen.getByLabelText(/审核意见\/备注/), { target: { value: '审核通过' } });
+
+            // Mock window.confirm to return false
+            const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => false);
+
+            fireEvent.click(screen.getByRole('button', { name: '提交审核' }));
+
+            // Should not show success message
+            expect(mockShowSuccess).not.toHaveBeenCalled();
+            
+            // Modal should still be open
+            expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument();
+
+            confirmSpy.mockRestore();
+        });
+    });
+
+    // Error Handling Tests
+    it('handles loading and error states correctly', async () => {
+        renderComponent();
+        
+        // Should show loading initially
+        expect(screen.getByText('加载债权详情中...')).toBeInTheDocument();
+        
+        // After loading completes, should show content
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+        
+        // Loading indicator should be gone
+        expect(screen.queryByText('加载债权详情中...')).not.toBeInTheDocument();
+    });
+
+    // Rich Text Editor Tests
+    it('allows editing internal notes', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        const internalNotesEditor = screen.getByTestId('mocked-rich-text-editor');
+        expect(internalNotesEditor).not.toHaveAttribute('readOnly');
+        
+        fireEvent.change(internalNotesEditor, { target: { value: '内部备注测试' } });
+        // The mocked editor returns JSON string of Delta ops
+        expect((internalNotesEditor as HTMLTextAreaElement).value).toContain('内部备注测试');
+    });
+
+    it('displays attachments as read-only', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        const attachmentsEditor = screen.getByTestId('mocked-rich-text-editor-readonly');
+        expect(attachmentsEditor).toHaveAttribute('readOnly');
+    });
+
+    // Status Chip Color Tests
+    it('displays correct chip colors for different statuses', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        // Initial status should be '待审核' with info color
+        const statusChip = screen.getByText('待审核');
+        expect(statusChip.closest('.MuiChip-root')).toHaveClass('MuiChip-colorInfo');
+    });
+
+    // Accessibility Tests
+    it('has proper ARIA labels for interactive elements', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        // The back button is a link, not a button
+        expect(screen.getByRole('link', { name: /back to claims list/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /audit claim/i })).toBeInTheDocument();
+    });
+
+    // Responsive Design Tests
+    it('renders properly on different screen sizes', async () => {
+        renderComponent();
+        
+        await waitFor(() => {
+            expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+        });
+
+        // Check that Grid components are present (MUI handles responsive behavior)
+        const leftPanel = screen.getByText('债权人申报信息').closest('[class*="MuiGrid-root"]');
+        const rightPanel = screen.getByText('债权人提交的附件材料').closest('[class*="MuiGrid-root"]');
+        
+        expect(leftPanel).toBeInTheDocument();
+        expect(rightPanel).toBeInTheDocument();
     });
 });

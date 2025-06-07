@@ -8,6 +8,7 @@ import {
   TextField,
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
   ListItemAvatar,
   Avatar,
@@ -149,16 +150,16 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         {!isLoadingSearch && searchResults.length > 0 && (
           <List>
             {searchResults.map((user) => (
-              <ListItem
-                key={user.id}
-                button
-                onClick={() => handleUserSelect(user)}
-                selected={selectedUser?.id === user.id}
-              >
-                <ListItemAvatar>
-                  <Avatar src={user.avatarUrl}>{user.name.charAt(0)}</Avatar>
-                </ListItemAvatar>
-                <ListItemText primary={user.name} secondary={user.email || 'No email'} />
+              <ListItem key={user.id} disablePadding>
+                <ListItemButton
+                  onClick={() => handleUserSelect(user)}
+                  selected={selectedUser?.id === user.id}
+                >
+                  <ListItemAvatar>
+                    <Avatar src={user.avatarUrl}>{user.name.charAt(0)}</Avatar>
+                  </ListItemAvatar>
+                  <ListItemText primary={user.name} secondary={user.email || 'No email'} />
+                </ListItemButton>
               </ListItem>
             ))}
           </List>
@@ -169,7 +170,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         <Button
           onClick={handleAddMember}
           variant="contained"
-          disabled={!selectedUser || isAddingMember}
+          disabled={isAddingMember}
         >
           {isAddingMember ? <CircularProgress size={24} /> : 'Add Selected User'}
         </Button>

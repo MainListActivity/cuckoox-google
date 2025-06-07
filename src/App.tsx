@@ -17,6 +17,7 @@ import GlobalError from '@/src/components/GlobalError'; // ADDED
 
 // Lazy load pages for better performance
 const HomePage = React.lazy(() => import('@/src/pages/index'));
+const DocumentCenterDemo = React.lazy(() => import('@/src/pages/documents/demo'));
 const LoginPage = React.lazy(() => import('@/src/pages/login'));
 const DashboardPage = React.lazy(() => import('@/src/pages/dashboard/index'));
 const CaseListPage = React.lazy(() => import('@/src/pages/cases/index'));
@@ -156,6 +157,7 @@ function App() {
                             <Routes>
                                 <Route path="/select-case" element={<ProtectedRoute><CaseSelectionPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/documents/demo" element={<ProtectedRoute><DocumentCenterDemo /></ProtectedRoute> as ReactNode} />
                                 <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
