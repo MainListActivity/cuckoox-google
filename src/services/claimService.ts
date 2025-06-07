@@ -32,6 +32,12 @@ export interface ClaimData {
   created_by?: string;
 }
 
+export interface CaseData {
+    id: string;
+    name: string;
+    case_number: string;
+}
+
 export interface ClaimAttachmentData {
   claim_id: string;
   content: QuillDelta;
@@ -82,6 +88,24 @@ class ClaimService {
     } catch (error) {
       console.error('获取债权列表失败:', error);
       throw new Error('获取债权列表失败');
+    }
+  }
+
+  /**
+   * 获取债权人可以申报的案件列表
+   */
+  async getCreditorCases(creditorId: string): Promise<CaseData[]> {
+    try {
+      // This query assumes that a creditor is a "member" of a case they can submit claims to.
+      // The specific relationship might need to be adjusted based on the actual schema.
+      const [result] = await this.db.query(
+        'SELECT id, name, case_number FROM case WHERE id IN (SELECT out FROM case_member WHERE in = $creditorId)',
+        { creditorId }
+      );
+      return Array.isArray(result) ? result : [];
+    } catch (error) {
+      console.error('获取案件列表失败:', error);
+      throw new Error('获取案件列表失败');
     }
   }
 

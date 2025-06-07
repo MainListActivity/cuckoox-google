@@ -21,11 +21,26 @@ export default defineConfig(({ mode }) => {
           '@': fileURLToPath(new URL('.', import.meta.url)),
         }
       },
+      optimizeDeps: {
+        include: ['@mui/material', '@mui/icons-material'],
+        exclude: ['@mui/icons-material/esm']
+      },
+      server: {
+        fs: {
+          strict: false
+        }
+      },
       test: { // Vitest configuration
         globals: true,
         environment: 'jsdom', // Common for React component testing
         include: ['tests/unit/**/*.test.{ts,tsx}'],
         setupFiles: './tests/setup.ts', // Setup file for test environment
+        pool: 'forks', // Use forks pool to avoid file handle issues
+        poolOptions: {
+          forks: {
+            singleFork: true // Use single fork to reduce resource usage
+          }
+        },
         exclude: [ // Default Vitest excludes + e2e
           '**/node_modules/**',
           '**/dist/**',

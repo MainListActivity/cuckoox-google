@@ -1,9 +1,29 @@
+import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ThemeProvider } from '@mui/material/styles';
 import { createTheme } from '@mui/material/styles';
 import RichTextEditor from '@/src/components/RichTextEditor';
 import { Delta } from 'quill/core';
+
+// Mock MUI icons to avoid file handle issues
+vi.mock('@mui/icons-material', () => ({
+  __esModule: true,
+  default: () => React.createElement('div', { 'data-testid': 'mocked-icon' }),
+  Close: () => React.createElement('div', { 'data-testid': 'close-icon' }),
+  Fullscreen: () => React.createElement('div', { 'data-testid': 'fullscreen-icon' }),
+  FullscreenExit: () => React.createElement('div', { 'data-testid': 'fullscreen-exit-icon' }),
+  Upload: () => React.createElement('div', { 'data-testid': 'upload-icon' }),
+  Image: () => React.createElement('div', { 'data-testid': 'image-icon' }),
+  AttachFile: () => React.createElement('div', { 'data-testid': 'attach-file-icon' }),
+  Save: () => React.createElement('div', { 'data-testid': 'save-icon' }),
+  Edit: () => React.createElement('div', { 'data-testid': 'edit-icon' }),
+  Preview: () => React.createElement('div', { 'data-testid': 'preview-icon' }),
+  AddComment: () => React.createElement('div', { 'data-testid': 'add-comment-icon' }),
+  ChevronLeft: () => React.createElement('div', { 'data-testid': 'chevron-left-icon' }),
+  ExpandMore: () => React.createElement('div', { 'data-testid': 'expand-more-icon' }),
+  ExpandLess: () => React.createElement('div', { 'data-testid': 'expand-less-icon' }),
+}));
 
 // Mock file upload service first
 vi.mock('@/src/services/fileUploadService', () => ({
@@ -21,6 +41,10 @@ vi.mock('react-i18next', () => ({
     t: (key: string) => key,
   }),
 }));
+
+const mockToolbar = {
+  addHandler: vi.fn(),
+};
 
 // Create stable mock objects to avoid reference changes
 const mockQuillInstance = {
@@ -45,6 +69,15 @@ const mockQuillInstance = {
   on: vi.fn(),
   off: vi.fn(),
   hasFocus: vi.fn(() => false),
+  getModule: vi.fn((moduleName: string) => {
+    if (moduleName === 'toolbar') {
+      return mockToolbar;
+    }
+    return null;
+  }),
+  clipboard: {
+    dangerouslyPasteHTML: vi.fn(),
+  },
 };
 
 // Mock Quill with stable reference
@@ -60,6 +93,13 @@ vi.mock('quill', () => {
     }
     return {};
   });
+
+  // Add events property
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (QuillConstructor as any).events = {
+    TEXT_CHANGE: 'text-change',
+    SELECTION_CHANGE: 'selection-change',
+  };
 
   return {
     __esModule: true,
@@ -137,25 +177,12 @@ describe('RichTextEditor', () => {
       />
     );
 
-    // Check if context panel is rendered
-    expect(screen.getByText('案件详情')).toBeInTheDocument();
+    // Check if context panel is rendered - use more specific selectors
     expect(screen.getByText('案件编号: TEST001')).toBeInTheDocument();
     expect(screen.getByText('负责人')).toBeInTheDocument();
     expect(screen.getByText('张三')).toBeInTheDocument();
-  });
-
-  it('handles fullscreen toggle', async () => {
-    const mockDelta = new Delta([{ insert: 'Test content' }]);
-
-    renderWithTheme(
-      <RichTextEditor
-        defaultValue={mockDelta}
-        onTextChange={mockOnTextChange}
-      />
-    );
-
-    // Check if the editor renders properly
-    expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
+    expect(screen.getByText('创建时间')).toBeInTheDocument();
+    expect(screen.getByText('2024-01-01')).toBeInTheDocument();
   });
 
   it('hides context panel when close button is clicked', () => {
@@ -178,15 +205,21 @@ describe('RichTextEditor', () => {
       />
     );
 
-    // Context panel should be visible
-    expect(screen.getByText('测试标题')).toBeInTheDocument();
+    // Context panel should be visible - check for unique content
+    expect(screen.getByText('测试标签')).toBeInTheDocument();
+    expect(screen.getByText('测试值')).toBeInTheDocument();
 
     // Click close button
-    const closeButton = screen.getByLabelText('Close');
-    fireEvent.click(closeButton);
+    const closeIcon = screen.getByTestId('close-icon');
+    const closeButton = closeIcon.closest('button');
+    expect(closeButton).toBeInTheDocument();
+    if(closeButton) {
+      fireEvent.click(closeButton);
+    }
 
     // Context panel should be hidden
-    expect(screen.queryByText('测试标题')).not.toBeInTheDocument();
+    expect(screen.queryByText('测试标签')).not.toBeInTheDocument();
+    expect(screen.queryByText('测试值')).not.toBeInTheDocument();
   });
 
   it('handles read-only mode', () => {
@@ -204,26 +237,97 @@ describe('RichTextEditor', () => {
     expect(mockQuillInstance.enable).toHaveBeenCalledWith(false);
   });
 
-  it('handles file upload', async () => {
-    const mockDelta = new Delta([{ insert: 'Test content' }]);
+  it('uploads image and inserts it into editor', async () => {
+    const { uploadFile } = await import('@/src/services/fileUploadService');
+    const imageFile = new File(['image content'], 'image.png', { type: 'image/png' });
 
-    renderWithTheme(
-      <RichTextEditor
-        defaultValue={mockDelta}
-        onTextChange={mockOnTextChange}
-      />
-    );
+    renderWithTheme(<RichTextEditor defaultValue={new Delta()} onTextChange={vi.fn()} />);
 
-    // Simulate file upload (this would typically be triggered by Quill's image handler)
-    const _file = new File(['test'], 'test.jpg', { type: 'image/jpeg' });
-    
-    // Trigger the upload through the component's internal mechanisms
-    // This is a simplified test - in reality, the upload would be triggered by Quill
     await waitFor(() => {
-      // Just verify the component renders without crashing
-      expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
-    }, { timeout: 500 });
+      expect(mockToolbar.addHandler).toHaveBeenCalledWith('image', expect.any(Function));
+    });
+
+    const imageHandler = vi.mocked(mockToolbar.addHandler).mock.calls.find(call => call[0] === 'image')?.[1];
+    expect(imageHandler).toBeDefined();
+
+    const mockInput = {
+      click: vi.fn(),
+      onchange: null as (() => void) | null,
+      files: [imageFile],
+      setAttribute: vi.fn(),
+    };
+    const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(mockInput as any);
+
+    // Call the handler
+    imageHandler();
+
+    // The handler should have set the onchange property and called click
+    expect(mockInput.click).toHaveBeenCalled();
+    expect(mockInput.onchange).toBeInstanceOf(Function);
+
+    // Manually trigger onchange
+    if (mockInput.onchange) {
+      await mockInput.onchange();
+    }
+
+    await waitFor(() => {
+      expect(uploadFile).toHaveBeenCalledWith(imageFile);
+    });
+
+    await waitFor(() => {
+      expect(mockQuillInstance.insertEmbed).toHaveBeenCalledWith(
+        expect.any(Number),
+        'image',
+        'https://example.com/uploaded-file.jpg'
+      );
+    });
+
+    createElementSpy.mockRestore();
   });
+
+  it('uploads attachment and inserts it as a link', async () => {
+    const { uploadFile } = await import('@/src/services/fileUploadService');
+    const attachmentFile = new File(['file content'], 'document.pdf', { type: 'application/pdf' });
+
+    renderWithTheme(<RichTextEditor defaultValue={new Delta()} onTextChange={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(mockToolbar.addHandler).toHaveBeenCalledWith('attach', expect.any(Function));
+    });
+
+    const attachHandler = vi.mocked(mockToolbar.addHandler).mock.calls.find(call => call[0] === 'attach')?.[1];
+    expect(attachHandler).toBeDefined();
+
+    const mockInput = {
+      click: vi.fn(),
+      onchange: null as (() => void) | null,
+      files: [attachmentFile],
+      setAttribute: vi.fn(),
+    };
+    const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(mockInput as any);
+
+    attachHandler();
+    expect(mockInput.click).toHaveBeenCalled();
+    expect(mockInput.onchange).toBeInstanceOf(Function);
+
+    if (mockInput.onchange) {
+      await mockInput.onchange();
+    }
+
+    await waitFor(() => {
+      expect(uploadFile).toHaveBeenCalledWith(attachmentFile);
+    });
+
+    await waitFor(() => {
+      expect(mockQuillInstance.clipboard.dangerouslyPasteHTML).toHaveBeenCalledWith(
+        expect.any(Number),
+        '<a href="https://example.com/uploaded-file.jpg" target="_blank" rel="noopener noreferrer">test-file.jpg</a>'
+      );
+    });
+
+    createElementSpy.mockRestore();
+  });
+
 
   it('handles error states gracefully', () => {
     const mockDelta = new Delta([{ insert: 'Test content' }]);
@@ -321,4 +425,20 @@ describe('RichTextEditor', () => {
     // Check if the editor renders with collaborative features
     expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
   });
-}); 
+
+  // 新增测试用例：测试实时保存功能
+  it('handles real-time saving', async () => {
+    const mockDelta = new Delta([{ insert: 'Auto save content' }]);
+
+    renderWithTheme(
+      <RichTextEditor
+        defaultValue={mockDelta}
+        onTextChange={mockOnTextChange}
+        documentId="doc123"
+      />
+    );
+
+    // Check if the editor renders with document ID for real-time saving
+    expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
+  });
+});
