@@ -100,7 +100,7 @@ DEFINE FIELD contact_address ON creditor TYPE option<string>;
 DEFINE FIELD case_id ON creditor TYPE record<case>;
 DEFINE FIELD OVERWRITE created_at ON creditor TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD OVERWRITE updated_at ON creditor TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
-DEFINE FIELD created_by ON creditor TYPE record<user> DEFAULT $auth.id;
+DEFINE FIELD OVERWRITE created_by ON creditor TYPE record<user>  VALUE $auth.id;
 DEFINE INDEX creditor_case_legal_id_idx ON creditor COLUMNS case_id, legal_id UNIQUE;
 
 -- Define Claim Review Status Definition Table
@@ -152,7 +152,7 @@ DEFINE FIELD review_time ON claim TYPE option<datetime>;
 DEFINE FIELD submission_time ON claim TYPE datetime VALUE $before OR time::now();
 DEFINE FIELD OVERWRITE created_at ON claim TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD OVERWRITE updated_at ON claim TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
-DEFINE FIELD created_by ON claim TYPE record<user> DEFAULT $auth.id;
+DEFINE FIELD OVERWRITE created_by ON claim TYPE record<user>  VALUE $auth.id;
 DEFINE FIELD comments_doc_id ON claim TYPE option<record<document>>; -- For general review discussion
 DEFINE FIELD review_comments ON claim TYPE option<string>; -- ADDED for review notes
 DEFINE FIELD status ON claim TYPE string DEFAULT '草稿'; -- ADDED: 草稿, 待审核, etc.
@@ -180,7 +180,7 @@ DEFINE FIELD file_size ON document TYPE option<int>;           -- File size in b
 DEFINE FIELD mime_type ON document TYPE option<string>;        -- MIME type of the file
 DEFINE FIELD OVERWRITE created_at ON document TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD OVERWRITE updated_at ON document TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
-DEFINE FIELD created_by ON document TYPE record<user> DEFAULT $auth.id;
+DEFINE FIELD OVERWRITE created_by ON document TYPE record<user>  VALUE $auth.id;
 DEFINE FIELD last_edited_by ON document TYPE option<record<user>>;
 DEFINE FIELD version ON document TYPE int DEFAULT 1;
 DEFINE FIELD locked_by ON document TYPE option<record<user>>;
@@ -221,7 +221,7 @@ DEFINE FIELD meeting_record_doc_id ON meeting TYPE option<record<document>>; -- 
 DEFINE FIELD participants ON meeting TYPE option<array<record<user>>>; -- ADDED
 DEFINE FIELD OVERWRITE created_at ON meeting TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE;
 DEFINE FIELD OVERWRITE updated_at ON meeting TYPE datetime VALUE time::now() READONLY ASSERT $value != NONE;
-DEFINE FIELD created_by ON meeting TYPE record<user> DEFAULT $auth.id;
+DEFINE FIELD OVERWRITE created_by ON meeting TYPE record<user>  VALUE $auth.id;
 DEFINE INDEX meeting_case_idx ON meeting COLUMNS case_id;
 
 -- Define Message Table (For IM and system reminders)

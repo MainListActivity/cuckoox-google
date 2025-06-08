@@ -115,7 +115,7 @@ const TestConsumerComponent = () => {
       <div data-testid="isLoggedIn">{auth.isLoggedIn.toString()}</div>
       <div data-testid="userId">{auth.user?.id?.toString()}</div>
       <div data-testid="githubId">{auth.user?.github_id}</div>
-      <div data-testid="selectedCaseId">{auth.selectedCaseId}</div>
+      <div data-testid="selectedCaseId">{auth.selectedCaseId?.toString()}</div>
       <div data-testid="userCasesCount">{auth.userCases.length}</div>
       <div data-testid="currentRolesCount">{auth.currentUserCaseRoles.length}</div>
       <div data-testid="navMenuItemsCount">{auth.navMenuItems?.length || 0}</div>
@@ -390,8 +390,11 @@ describe('AuthContext', () => {
       });
       
       await waitFor(() => {
-        expect(capturedAuthContext.selectedCaseId).toBe('case:123');
-        expect(localStorageMock.getItem('cuckoox-selectedCaseId')).toBe('case:123');
+        expect(capturedAuthContext.selectedCaseId?.toString()).toBe('case:⟨123⟩');
+        // localStorage 现在存储序列化的 RecordId，所以检查是否包含正确的值
+        const storedCaseId = localStorageMock.getItem('cuckoox-selectedCaseId');
+        expect(storedCaseId).toBeTruthy();
+        expect(JSON.parse(storedCaseId || '{}')).toBe('case:⟨123⟩');
       });
     });
 
@@ -401,7 +404,7 @@ describe('AuthContext', () => {
        });
        
        expect(mockSurrealClient.merge).toHaveBeenCalledWith(
-         expect.any(String), // User ID as string
+         expect.any(Object), // User ID as RecordId object
          expect.objectContaining({
            last_login_case_id: expect.any(Object) // RecordId object
          })
@@ -559,7 +562,7 @@ describe('AuthContext', () => {
        
        act(() => {
          capturedAuthContext.__TEST_setCurrentUserCaseRoles?.([mockCaseManagerRole]);
-         capturedAuthContext.__TEST_setSelectedCaseId?.('case:123');
+         capturedAuthContext.__TEST_setSelectedCaseId?.(new RecordId('case', '123'));
        });
        
        await waitFor(() => {
@@ -591,12 +594,12 @@ describe('AuthContext', () => {
          // 先设置userCases，这样自动导航逻辑才能找到案件
          capturedAuthContext.__TEST_setUserCases?.([caseWithStatus]);
          capturedAuthContext.__TEST_setCurrentUserCaseRoles?.([mockCaseManagerRole]);
-         capturedAuthContext.__TEST_setSelectedCaseId?.(caseIdString);
+         capturedAuthContext.__TEST_setSelectedCaseId?.(caseWithStatus.id);
        });
        
        // 等待状态更新
        await waitFor(() => {
-         expect(capturedAuthContext.selectedCaseId).toBe(caseIdString);
+         expect(capturedAuthContext.selectedCaseId?.toString()).toBe(caseIdString);
          expect(capturedAuthContext.userCases.length).toBe(1);
          expect(capturedAuthContext.currentUserCaseRoles.length).toBe(1);
          expect(capturedAuthContext.navMenuItems?.length).toBeGreaterThan(0);
@@ -614,7 +617,7 @@ describe('AuthContext', () => {
        expect(userCase.id.toString()).toBe(caseIdString); // RecordId格式
        expect(userCase.status).toBe('立案');
        
-       const selectedCase = capturedAuthContext.userCases.find((c: Case) => c.id.toString() === capturedAuthContext.selectedCaseId);
+       const selectedCase = capturedAuthContext.userCases.find((c: Case) => c.id.toString() === capturedAuthContext.selectedCaseId?.toString());
        expect(selectedCase).toBeDefined();
        expect(selectedCase?.status).toBe('立案');
        
@@ -726,10 +729,10 @@ describe('AuthContext', () => {
          await capturedAuthContext.selectCase('case:123');
        });
        
-       expect(consoleErrorSpy).toHaveBeenCalledWith(
-         'Error selecting case case:123:',
-         expect.any(Error)
-       );
+               expect(consoleErrorSpy).toHaveBeenCalledWith(
+          'Error selecting case case:⟨123⟩:',
+          expect.any(Error)
+        );
      });
    });
 });

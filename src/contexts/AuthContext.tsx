@@ -3,10 +3,10 @@ import authService from '@/src/services/authService';
 // import { db } from '@/src/lib/surreal'; // REMOVED
 import {useSurreal} from '@/src/contexts/SurrealProvider'; // ADDED
 import { User as OidcUser } from 'oidc-client-ts';
-import { RecordId } from 'surrealdb'; // Import for typing record IDs
+import { jsonify, RecordId } from 'surrealdb'; // Import for typing record IDs
 
 // Matches AppUser in authService and user table in SurrealDB
- export interface AppUser {
+export interface AppUser {
   id: RecordId; // SurrealDB record ID, e.g., user:xxxx
   github_id: string;
   name: string;
@@ -61,11 +61,11 @@ export interface AuthContextType {
   isLoading: boolean; // For main auth state
 
   // Case and Role specific state and functions
-  selectedCaseId: string | null; // Store as string (e.g. "case:xxxx")
+  selectedCaseId: RecordId | null; // Store as string (e.g. "case:xxxx")
   userCases: Case[];
   currentUserCaseRoles: Role[];
   isCaseLoading: boolean; // For loading cases and case-specific roles
-  selectCase: (caseId: string) => Promise<void>;
+  selectCase: (caseId: RecordId | string) => Promise<void>;
   hasRole: (roleName: string) => boolean;
   refreshUserCasesAndRoles: () => Promise<void>; // Exposed function to manually refresh
 
@@ -79,12 +79,47 @@ export interface AuthContextType {
 
   // Test-only methods (only available in test environment)
   __TEST_setCurrentUserCaseRoles?: (roles: Role[]) => void;
-  __TEST_setSelectedCaseId?: (caseId: string | null) => void;
+  __TEST_setSelectedCaseId?: (caseId: RecordId | null) => void;
   __TEST_setUserCases?: (cases: Case[]) => void;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const CREDITOR_MANAGEMENT_PATH = '/creditors'; // Define target path
+
+// 序列化函数：将包含RecordId的对象转换为可存储的JSON字符串
+const serializeAppUser = (user: AppUser): string => {
+  return JSON.stringify(jsonify(user));
+};
+
+// 反序列化函数：将JSON字符串转换回包含RecordId的对象
+const deserializeAppUser = (userJson: string): AppUser => {
+  const parsed = JSON.parse(userJson);
+  return {
+    ...parsed,
+    id: typeof parsed.id === 'string' ? new RecordId(parsed.id.split(':')[0], parsed.id.split(':')[1]) : parsed.id,
+    last_login_case_id: parsed.last_login_case_id 
+      ? (typeof parsed.last_login_case_id === 'string' 
+          ? new RecordId(parsed.last_login_case_id.split(':')[0], parsed.last_login_case_id.split(':')[1])
+          : parsed.last_login_case_id)
+      : null
+  };
+};
+
+// 序列化RecordId为localStorage
+const serializeRecordId = (recordId: RecordId | null): string => {
+  return JSON.stringify(recordId ? jsonify(recordId) : null);
+};
+
+// 反序列化RecordId从localStorage
+const deserializeRecordId = (recordIdJson: string): RecordId | null => {
+  const parsed = JSON.parse(recordIdJson);
+  if (!parsed) return null;
+  if (typeof parsed === 'string') {
+    const parts = parsed.split(':');
+    return new RecordId(parts[0], parts[1]);
+  }
+  return parsed;
+};
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const {surreal:client,signout} = useSurreal(); // ADDED
@@ -93,7 +128,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(localStorage.getItem('cuckoox-selectedCaseId'));
+  const [selectedCaseId, setSelectedCaseId] = useState<RecordId | null>(deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null'));
   const [userCases, setUserCases] = useState<Case[]>([]);
   const [currentUserCaseRoles, setCurrentUserCaseRoles] = useState<Role[]>([]);
   const [isCaseLoading, setIsCaseLoading] = useState<boolean>(false);
@@ -113,7 +148,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         if (storedUser && storedIsLoggedIn === 'true') {
           // 如果有本地存储的用户信息，先使用它来初始化会话
-          const appUser = JSON.parse(storedUser) as AppUser;
+          const appUser = deserializeAppUser(storedUser);
           
           // 对于管理员用户，不需要检查 OIDC
           if (appUser.github_id === '--admin--') {
@@ -140,7 +175,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   if (result && result.length > 0) {
                     const appUserFromDb = result[0] as unknown as AppUser;
                     setUser(appUserFromDb);
-                    localStorage.setItem('cuckoox-user', JSON.stringify(appUserFromDb));
+                    localStorage.setItem('cuckoox-user', serializeAppUser(appUserFromDb));
                   }
                 } catch (error) {
                   console.error("Error syncing user data from DB:", error);
@@ -207,7 +242,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setOidcUser(oidcUserInstance || null); // MODIFIED to handle undefined
     setIsLoggedIn(true);
     localStorage.setItem('cuckoox-isLoggedIn', 'true');
-    localStorage.setItem('cuckoox-user', JSON.stringify(appUser));
+    localStorage.setItem('cuckoox-user', serializeAppUser(appUser));
     await loadUserCasesAndRoles(appUser);
   };
   
@@ -238,14 +273,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       `;
       const results: UserCaseRoleDetails[][] = await client.query(query, { userId: currentAppUser.id }); // MODIFIED db.query to client.query
       
-      const casesMap = new Map<string, Case>();
+      const casesMap = new Map<RecordId, Case>();
       let actualResults: UserCaseRoleDetails[] = [];
 
       if (results && results.length > 0 && Array.isArray(results[0])) {
          actualResults = results[0]; // Assuming the first element of the outer array is the array of records
          actualResults.forEach(ucr => {
             if (ucr.case_details && ucr.case_details.id) {
-                 casesMap.set(ucr.case_details.id.toString(), ucr.case_details);
+                 casesMap.set(ucr.case_details.id, ucr.case_details);
             }
          });
       }
@@ -254,16 +289,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUserCases(fetchedCases);
 
       const lastCaseId = currentAppUser.last_login_case_id;
-      const previouslySelectedCaseId = localStorage.getItem('cuckoox-selectedCaseId');
+      const previouslySelectedCaseId = deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null');
       
-      let caseToSelect: string | null = null;
+      let caseToSelect: RecordId | null = null;
 
       if (previouslySelectedCaseId && casesMap.has(previouslySelectedCaseId)) {
         caseToSelect = previouslySelectedCaseId;
-      } else if (lastCaseId && casesMap.has(lastCaseId.toString())) {
-        caseToSelect = lastCaseId.toString();
+      } else if (lastCaseId && casesMap.has(lastCaseId)) {
+        caseToSelect = lastCaseId;
       } else if (fetchedCases.length === 1 && fetchedCases[0].id) {
-        caseToSelect = fetchedCases[0].id.toString();
+        caseToSelect = fetchedCases[0].id;
       }
 
       if (caseToSelect) {
@@ -406,7 +441,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
   
   // Helper function to update last selected case in DB
-  const updateLastSelectedCaseInDB = async (userId: string, caseId: string) => {
+  const updateLastSelectedCaseInDB = async (userId: RecordId, caseId: RecordId) => {
     if (!client || !userId || !caseId) {
       console.warn('updateLastSelectedCaseInDB: Surreal client not available or missing userId/caseId.');
       return;
@@ -423,14 +458,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Internal helper to set roles based on a selected case ID and pre-fetched UserCaseRoleDetails
-  const selectCaseInternal = (caseIdToSelect: string, allUserCaseRolesDetails: UserCaseRoleDetails[]) => {
+  const selectCaseInternal = (caseIdToSelect: RecordId, allUserCaseRolesDetails: UserCaseRoleDetails[]) => {
     setSelectedCaseId(caseIdToSelect);
-    localStorage.setItem('cuckoox-selectedCaseId', caseIdToSelect);
+    localStorage.setItem('cuckoox-selectedCaseId', serializeRecordId(caseIdToSelect));
 
     const rolesForSelectedCase: Role[] = [];
     if (allUserCaseRolesDetails && Array.isArray(allUserCaseRolesDetails)) {
         allUserCaseRolesDetails.forEach(ucr => {
-            if (ucr.case_details && ucr.case_details.id.toString() === caseIdToSelect && ucr.role_details) {
+            if (ucr.case_details && ucr.case_details.id === caseIdToSelect && ucr.role_details) {
                 rolesForSelectedCase.push(ucr.role_details);
             }
         });
@@ -439,12 +474,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     fetchAndUpdateMenuPermissions(rolesForSelectedCase); // Call menu update
   };
 
-  const selectCase = async (caseIdToSelect: string) => {
+  const selectCase = async (caseIdToSelect: RecordId | string) => {
     if (!user || !user.id) {
       console.error("User not available for selecting case.");
       setIsCaseLoading(false); // Ensure loading state is reset
       return;
     }
+    
+    // 将字符串转换为RecordId对象
+    let recordId: RecordId;
+    if (typeof caseIdToSelect === 'string') {
+      if (caseIdToSelect.includes(':')) {
+        const parts = caseIdToSelect.split(':');
+        recordId = new RecordId(parts[0], parts[1]);
+      } else {
+        recordId = new RecordId('case', caseIdToSelect);
+      }
+    } else {
+      recordId = caseIdToSelect;
+    }
+    
     setIsCaseLoading(true);
     try {
       // Fetch all user_case_role entries for the user to correctly populate roles for the selected case
@@ -459,8 +508,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       
       // Check if the caseIdToSelect is one of the user's cases
-      const caseExistsForUser = userCases.some(c => c.id.toString() === caseIdToSelect);
-      if (!caseExistsForUser && userCaseRolesDetails.some(ucrd => ucrd.case_details.id.toString() === caseIdToSelect)) {
+      const caseExistsForUser = userCases.some(c => c.id.toString() === recordId.toString());
+      if (!caseExistsForUser && userCaseRolesDetails.some(ucrd => ucrd.case_details.id.toString() === recordId.toString())) {
           // This implies userCases might be stale if selectCase is called with a new valid case not yet in userCases
           // This could happen if roles/cases are modified externally and refreshUserCasesAndRoles wasn't called yet
           // For simplicity, we'll rely on userCases being up-to-date from loadUserCasesAndRoles or refreshUserCasesAndRoles
@@ -469,27 +518,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
 
-      selectCaseInternal(caseIdToSelect, userCaseRolesDetails);
+      selectCaseInternal(recordId, userCaseRolesDetails);
 
       // Convert string caseIdToSelect to RecordId for storage
-      const caseRecordId = new RecordId('case', caseIdToSelect.replace('case:', ''));
-      await client.merge(user.id, { last_login_case_id: caseRecordId }); // MODIFIED db.merge to client.merge
+      await client.merge(user.id, { last_login_case_id: recordId }); // MODIFIED db.merge to client.merge
       
       // Update user object in context with the new last_login_case_id
-      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: caseRecordId } : null);
+      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
       // Also update localStorage for the user object
       if (user) {
-          const updatedUser = { ...user, last_login_case_id: caseRecordId };
-          localStorage.setItem('cuckoox-user', JSON.stringify(updatedUser));
+          const updatedUser = { ...user, last_login_case_id: recordId };
+          localStorage.setItem('cuckoox-user', serializeAppUser(updatedUser));
       }
 
       // Update last selected case in DB
       if (user?.id) {
-        await updateLastSelectedCaseInDB(user.id.toString(), caseIdToSelect);
+        await updateLastSelectedCaseInDB(user.id, recordId);
       }
 
     } catch (error) {
-      console.error(`Error selecting case ${caseIdToSelect}:`, error);
+      console.error(`Error selecting case ${recordId}:`, error);
     } finally {
       setIsCaseLoading(false);
     }
@@ -549,7 +597,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Effect for automatic navigation to creditor management
   useEffect(() => {
     if (isLoggedIn && selectedCaseId && userCases.length > 0 && navMenuItems && !isCaseLoading && !isMenuLoading) {
-      const selectedCase = userCases.find(c => c.id.toString() === selectedCaseId);
+      const selectedCase = userCases.find(c => c.id === selectedCaseId);
       if (selectedCase && selectedCase.status === '立案') {
         const canNavigateToCreditors = navMenuItems.some(item => item.path === CREDITOR_MANAGEMENT_PATH);
         if (canNavigateToCreditors) {

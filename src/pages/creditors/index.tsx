@@ -63,7 +63,7 @@ const CreditorListPage: React.FC = () => {
   const [creditors, setCreditors] = useState<Creditor[]>([]); // Initialize with empty array
   const [isLoading, setIsLoading] = useState<boolean>(true); // Added
   const [error, setError] = useState<string | null>(null); // Added
-  const [selectedCreditorIds, setSelectedCreditorIds] = useState<string[]>([]);
+  const [selectedCreditorIds, setSelectedCreditorIds] = useState<RecordId[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const debouncedSearchTerm = useDebounce(searchTerm, 500); // ADDED
 
@@ -104,14 +104,14 @@ const CreditorListPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      let dataQuery = 'SELECT id, type, name, identifier, contact_person_name, contact_person_phone, address, created_at, case_id FROM creditor WHERE case_id = $caseId';
+      let dataQuery = 'SELECT id, type, name, legal_id, contact_person_name, contact_phone, contact_address, created_at, case_id FROM creditor WHERE case_id = $caseId';
       let countQuery = 'SELECT count() AS total FROM creditor WHERE case_id = $caseId';
       const queryParams: Record<string, unknown> = {
         caseId: selectedCaseId,
       };
 
       if (currentSearchTerm && currentSearchTerm.trim() !== '') {
-        const searchCondition = `AND (name CONTAINS $searchTerm OR identifier CONTAINS $searchTerm OR contact_person_name CONTAINS $searchTerm OR contact_person_phone CONTAINS $searchTerm OR address CONTAINS $searchTerm)`;
+        const searchCondition = `AND (name CONTAINS $searchTerm OR legal_id CONTAINS $searchTerm OR contact_person_name CONTAINS $searchTerm OR contact_phone CONTAINS $searchTerm OR contact_address CONTAINS $searchTerm)`;
         dataQuery += ` ${searchCondition}`;
         countQuery += ` ${searchCondition}`;
         queryParams.searchTerm = currentSearchTerm;
@@ -126,11 +126,17 @@ const CreditorListPage: React.FC = () => {
       // Fetch paginated data
       const dataResult: unknown = await client.query(dataQuery, queryParams);
       const fetchedData = Array.isArray(dataResult) && dataResult.length > 0 && Array.isArray(dataResult[0])
-                          ? dataResult[0] as Creditor[]
+                          ? dataResult[0] as any[]
                           : [];
       const formattedCreditors: Creditor[] = fetchedData.map((cred: any) => ({
         ...cred,
         id: typeof cred.id === 'string' ? cred.id : (cred.id as RecordId).toString(),
+        // Map database fields to frontend interface
+        identifier: cred.legal_id,
+        contact_person_phone: cred.contact_phone,
+        address: cred.contact_address,
+        // Map database type values to frontend values
+        type: cred.type === 'organization' ? '组织' : '个人',
       }));
       setCreditors(formattedCreditors);
 
@@ -188,9 +194,9 @@ const CreditorListPage: React.FC = () => {
     setSelectedCreditorIds([]);
   };
 
-  const handleClick = (event: React.MouseEvent<unknown>, id: string) => {
+  const handleClick = (event: React.MouseEvent<unknown>, id: RecordId) => {
     const selectedIndex = selectedCreditorIds.indexOf(id);
-    let newSelected: string[] = [];
+    let newSelected: RecordId[] = [];
 
     if (selectedIndex === -1) {
       newSelected = newSelected.concat(selectedCreditorIds, id);
@@ -207,7 +213,7 @@ const CreditorListPage: React.FC = () => {
     setSelectedCreditorIds(newSelected);
   };
 
-  const isSelected = (id: string) => selectedCreditorIds.indexOf(id) !== -1;
+  const isSelected = (id: RecordId) => selectedCreditorIds.indexOf(id) !== -1;
 
   // filteredCreditors is removed, use 'creditors' directly from state which is now backend-filtered
 
@@ -243,13 +249,12 @@ const CreditorListPage: React.FC = () => {
       }
       try {
         const dataForUpdate = {
-          type: dataToSave.category as '组织' | '个人',
+          type: dataToSave.category === '组织' ? 'organization' : 'individual',
           name: dataToSave.name,
-          identifier: dataToSave.identifier,
+          legal_id: dataToSave.identifier,
           contact_person_name: dataToSave.contactPersonName,
-          contact_person_phone: dataToSave.contactInfo,
-          address: dataToSave.address,
-          updated_at: new Date().toISOString(),
+          contact_phone: dataToSave.contactInfo,
+          contact_address: dataToSave.address,
         };
 
         // dataToSave.id is the full record ID string like 'creditor:uuid'
@@ -279,14 +284,13 @@ const CreditorListPage: React.FC = () => {
 
       const newCreditorData = {
         case_id: selectedCaseId, // Ensure this is the full RecordId string, e.g., "case:xxxx"
-        type: dataToSave.category as '组织' | '个人',
+        type: dataToSave.category === '组织' ? 'organization' : 'individual',
         name: dataToSave.name,
-        identifier: dataToSave.identifier,
+        legal_id: dataToSave.identifier,
         contact_person_name: dataToSave.contactPersonName,
-        contact_person_phone: dataToSave.contactInfo,
-        address: dataToSave.address,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        contact_phone: dataToSave.contactInfo,
+        contact_address: dataToSave.address,
+        created_by: user?.id, 
       };
 
       try {
@@ -353,14 +357,13 @@ const CreditorListPage: React.FC = () => {
 
           const creditorDataToCreate = {
             case_id: selectedCaseId,
-            type: typeValue as '组织' | '个人',
+            type: typeValue === '组织' ? 'organization' : 'individual',
             name: row[expectedHeaders.name],
-            identifier: row[expectedHeaders.identifier],
+            legal_id: row[expectedHeaders.identifier],
             contact_person_name: row[expectedHeaders.contact_person_name] || '',
-            contact_person_phone: row[expectedHeaders.contact_person_phone] || '',
-            address: row[expectedHeaders.address] || '',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            contact_phone: row[expectedHeaders.contact_person_phone] || '',
+            contact_address: row[expectedHeaders.address] || '',
+            created_by: user?.id, // Explicitly set created_by to current user's ID
           };
 
           try {
@@ -541,7 +544,7 @@ const CreditorListPage: React.FC = () => {
                     role="checkbox"
                     aria-checked={isItemSelected}
                     tabIndex={-1}
-                    key={creditor.id}
+                    key={creditor.id.toString()}
                     selected={isItemSelected}
                     sx={{ cursor: 'pointer' }}
                   >

@@ -39,6 +39,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useMemo, useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
 import { useTranslation } from 'react-i18next'; // For i18n
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // For notifications
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 
 interface CaseMemberTabProps {
   caseId: string;
@@ -68,6 +69,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
   const { t } = useTranslation(); // For i18n
   const { showSuccess, showError } = useSnackbar(); // For notifications
 
+  const client = useSurrealClient();
 
   const isOwner = useMemo(() => {
     // Admin users have owner privileges
@@ -83,7 +85,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const fetchedMembers = await fetchCaseMembers(caseId);
+      const fetchedMembers = await fetchCaseMembers(client,caseId);
       setMembers(fetchedMembers);
     } catch (err) {
       console.error('Failed to fetch case members:', err);
@@ -123,7 +125,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsRemovingMember(true);
     setError(null);
     try {
-      await removeCaseMember(caseId, memberToRemove.id);
+      await removeCaseMember(client, caseId, memberToRemove.id);
       loadMembers();
       showSuccess(t('case_members_success_removed', `${memberToRemove.userName} has been removed.`));
     } catch (err) {
@@ -165,7 +167,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
       const currentOwner = members.find(m => m.roleInCase === 'owner');
       const currentOwnerUserId = currentOwner?.id || currentUserId;
       
-      await changeCaseOwner(caseId, selectedMemberForMenu.id, currentOwnerUserId);
+      await changeCaseOwner(client, caseId, selectedMemberForMenu.id, currentOwnerUserId);
       loadMembers();
       showSuccess(t('case_members_success_owner_changed', `Ownership transferred to ${selectedMemberForMenu.userName}.`));
     } catch (err) {

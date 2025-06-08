@@ -4,6 +4,12 @@ globs:
 alwaysApply: true
 ---
 
+# 数据关联
+
+*任何* 数据库实体之间的关联，都需要用RecordId对象进行存储和查询。
+
+
+
 # `.live()` {#live}
 
 Initiates a live query. 
@@ -36,7 +42,7 @@ db.live<T>(table: string, callback: (action: string, result: T) => void, diff?: 
                <Label label="optional" />
             </td>
             <td colspan="2" scope="row" data-label="Description">
-                A callback function that processes live notifications. Consult the [Live Actions](#live-actions) for a list of all possible values being returned.
+                A callback function that processes live notifications. Consult the [Live Actions](mdc:#live-actions) for a list of all possible values being returned.
             </td>
         </tr>
         <tr>
@@ -70,7 +76,7 @@ const queryUuid = await db.live(
 
 ## Live Actions
 
-For `CREATE`, `UPDATE` and `DELETE`, the type `Result` is the generic argument passed to [`.live()`](#live) or [`.subscribeLive()`](#subscribeLive). <br />
+For `CREATE`, `UPDATE` and `DELETE`, the type `Result` is the generic argument passed to [`.live()`](mdc:#live) or [`.subscribeLive()`](mdc:#subscribeLive). <br />
 It extends either `Record<string, unknown>` or `Patch`.
 
 It's generally recommended to handle the `CLOSE` action first, as that clears out the type for the result parameter.
@@ -155,7 +161,7 @@ db.select<T>(thing)
                 <Label label="required" />
             </td>
             <td colspan="2" scope="row" data-label="Description">
-                The table name or a [`RecordId`](/docs/sdk/javascript/data-types#recordid) to select.
+                The table name or a [`RecordId`](mdc:docs/sdk/javascript/data-types#recordid) to select.
             </td>
         </tr>
     </tbody>

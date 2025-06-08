@@ -25,7 +25,7 @@ interface RawConversationData {
   updated_at?: string; // For sorting conversations by recent activity
 }
 
-export function useConversationsList(userId: string | null): { 
+export function useConversationsList(userId: RecordId | null): { 
   conversations: ConversationSummary[]; 
   isLoading: boolean; 
   error: unknown; 
@@ -37,7 +37,7 @@ export function useConversationsList(userId: string | null): {
   const [error, setError] = useState<unknown>(null);
   const liveQueryIdRef = useRef<Uuid | null>(null);
 
-  const fetchConversations = useCallback(async (currentUserId: string) => {
+  const fetchConversations = useCallback(async (currentUserId: RecordId) => {
     if (!client || !isConnected) return;
     setIsLoading(true);
     setError(null);
@@ -156,7 +156,7 @@ export function useConversationsList(userId: string | null): {
 
 
 // --- useSystemNotifications Hook ---
-export function useSystemNotifications(userId: string | null, caseId?: string | null): { 
+export function useSystemNotifications(userId: RecordId | null, caseId?: RecordId | null): { 
   notifications: (CaseRobotReminderMessage | BusinessNotificationMessage)[]; 
   isLoading: boolean; 
   error: unknown; 
@@ -168,7 +168,7 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
   const [error, setError] = useState<unknown>(null);
   const liveQueryIdRef = useRef<Uuid | null>(null);
 
-  const fetchNotifications = useCallback(async (currentUserId: string, currentCaseId?: string | null) => {
+  const fetchNotifications = useCallback(async (currentUserId: RecordId, currentCaseId?: RecordId | null) => {
     if (!client || !isConnected) return;
     setIsLoading(true);
     setError(null);
@@ -195,7 +195,7 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
       // `;
       // For simplicity, using the version that assumes $caseId can be null in DB query.
 
-      const params: { userId: string; caseId?: string | null } = { userId: currentUserId };
+      const params: { userId: RecordId; caseId?: RecordId | null } = { userId: currentUserId };
       if (caseId !== undefined) { // Pass caseId only if it's explicitly provided (even if null)
         params.caseId = currentCaseId;
       }
@@ -233,7 +233,7 @@ export function useSystemNotifications(userId: string | null, caseId?: string | 
       const setupLiveQuery = async () => {
         try {
           if (liveQueryIdRef.current) await client.kill(liveQueryIdRef.current);
-          const params: { userId: string; caseId?: string | null } = { userId: userId };
+          const params: { userId: RecordId; caseId?: RecordId | null } = { userId: userId };
           if (caseId !== undefined) params.caseId = caseId;
 
           const { result: qid } = (await client.query<[{result: Uuid}]>(liveQuery, params))[0];

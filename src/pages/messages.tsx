@@ -51,24 +51,23 @@ import {
   Warning,
   Info,
   CheckCircle,
-  Error,
 } from '@mui/icons-material';
 import MessageListItem from '@/src/components/messages/MessageListItem';
 import ChatBubble, { ChatBubbleProps } from '@/src/components/messages/ChatBubble';
 import ChatInput from '@/src/components/messages/ChatInput';
 import NotificationCard from '@/src/components/messages/NotificationCard';
-import { 
-  Message as MessageType, 
-  IMMessage, 
-  CaseRobotReminderMessage, 
+import {
+  Message as MessageType,
+  IMMessage,
+  CaseRobotReminderMessage,
   BusinessNotificationMessage,
   ConversationSummary
-} from '@/src/types/message'; 
-import { 
-  useConversationsList, 
-  useSystemNotifications 
-} from '@/src/hooks/useMessageCenterData'; 
-import { useAuth } from '@/src/contexts/AuthContext'; 
+} from '@/src/types/message';
+import {
+  useConversationsList,
+  useSystemNotifications
+} from '@/src/hooks/useMessageCenterData';
+import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 
@@ -84,7 +83,7 @@ const messageTypes = {
 type DisplayListItem = (ConversationSummary & { itemType: 'conversation' }) | (MessageType & { itemType: 'notification' });
 
 interface ChatMessageDisplay extends ChatBubbleProps {
-  id: string; 
+  id: string;
   senderName?: string;
 }
 
@@ -93,19 +92,19 @@ const MessageCenterPage: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user, selectedCaseId } = useAuth(); // Get current user and selected case
   const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
-  const { client } = useSurrealClient();
+  const client = useSurrealClient();
 
   // Fetch data using hooks
-  const { 
-    conversations, 
-    isLoading: isLoadingConversations, 
+  const {
+    conversations,
+    isLoading: isLoadingConversations,
     error: conversationsError,
     setConversations, // Destructure setter for optimistic updates
   } = useConversationsList(user?.id || null);
-  
-  const { 
-    notifications, 
-    isLoading: isLoadingNotifications, 
+
+  const {
+    notifications,
+    isLoading: isLoadingNotifications,
     error: notificationsError,
     setNotifications, // Destructure setter for optimistic updates
   } = useSystemNotifications(user?.id || null, selectedCaseId);
@@ -119,7 +118,7 @@ const MessageCenterPage: React.FC = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
-  
+
   const chatHistoryEndRef = useRef<HTMLDivElement>(null);
 
   // Handle errors from hooks
@@ -140,40 +139,40 @@ const MessageCenterPage: React.FC = () => {
   }, [notifications, conversations]);
 
   // 系统消息和聊天消息分类
-  const systemMessages = useMemo(() => 
+  const systemMessages = useMemo(() =>
     notifications.filter((n: any) => n.type === 'SYSTEM_NOTIFICATION' || n.type === 'CASE_ROBOT_REMINDER'),
     [notifications]
   );
-  
-  const chatMessages = useMemo(() => 
+
+  const chatMessages = useMemo(() =>
     conversations.filter((c: any) => c.type === 'IM'),
     [conversations]
   );
 
   // Combine conversations and notifications into a single list for display, sorted by timestamp
   const combinedList = useMemo((): DisplayListItem[] => {
-    const convItems: DisplayListItem[] = conversations.map((c: any) => ({ 
-      ...c, 
-      itemType: 'conversation' as const, 
-      created_at: c.last_message_timestamp, 
-      updated_at: c.last_message_timestamp, 
-      is_read: c.unread_count === 0 
+    const convItems: DisplayListItem[] = conversations.map((c: any) => ({
+      ...c,
+      itemType: 'conversation' as const,
+      created_at: c.last_message_timestamp,
+      updated_at: c.last_message_timestamp,
+      is_read: c.unread_count === 0
     }));
-    
-    const notifItems: DisplayListItem[] = notifications.map((n: any) => ({ 
-      ...n, 
-      itemType: 'notification' as const 
+
+    const notifItems: DisplayListItem[] = notifications.map((n: any) => ({
+      ...n,
+      itemType: 'notification' as const
     }));
-    
+
     const allItems = [...convItems, ...notifItems];
-    
+
     // Sort by updated_at or created_at (last_message_timestamp for conversations)
     allItems.sort((a, b) => {
       const dateA = new Date((a as any).updated_at || (a as any).created_at || (a as any).last_message_timestamp).getTime();
       const dateB = new Date((b as any).updated_at || (b as any).created_at || (b as any).last_message_timestamp).getTime();
       return dateB - dateA; // Descending order
     });
-    
+
     return allItems;
   }, [conversations, notifications]);
 
@@ -191,7 +190,7 @@ const MessageCenterPage: React.FC = () => {
       ];
       setCurrentConversation(simulatedConvo);
     } else {
-      setCurrentConversation([]); 
+      setCurrentConversation([]);
     }
   }, [selectedItem, user?.id]);
 
@@ -212,16 +211,16 @@ const MessageCenterPage: React.FC = () => {
 
   const handleSelectItem = useCallback(async (item: DisplayListItem) => {
     setSelectedItem(item);
-    
+
     if (item.itemType === 'notification' && !item.is_read && client) {
       try {
         // Optimistic UI update
         setNotifications((prev: any) => // Use the destructured setter
           prev.map((n: any) => n.id === item.id ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n)
         );
-        await client.merge(String(item.id), { 
-          is_read: true, 
-          updated_at: new Date().toISOString() 
+        await client.merge(String(item.id), {
+          is_read: true,
+          updated_at: new Date().toISOString()
         });
         showSuccess('通知已标记为已读');
       } catch (error) {
@@ -237,24 +236,24 @@ const MessageCenterPage: React.FC = () => {
 
   const handleMarkAsRead = useCallback(async () => {
     if (!selectedMessageId || !client) return;
-    
+
     try {
       // Find the item in our lists
       const item = [...notifications, ...conversations].find((item: any) => item.id === selectedMessageId);
       if (!item) return;
-      
+
       // Optimistic UI update
       if ('is_read' in item) {
-        setNotifications((prev: any) => 
+        setNotifications((prev: any) =>
           prev.map((n: any) => n.id === selectedMessageId ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n)
         );
       }
-      
-      await client.merge(String(selectedMessageId), { 
-        is_read: true, 
-        updated_at: new Date().toISOString() 
+
+      await client.merge(String(selectedMessageId), {
+        is_read: true,
+        updated_at: new Date().toISOString()
       });
-      
+
       showSuccess('消息已标记为已读');
       handleMenuClose();
     } catch (error) {
@@ -265,24 +264,24 @@ const MessageCenterPage: React.FC = () => {
 
   const handleMarkAsUnread = useCallback(async () => {
     if (!selectedMessageId || !client) return;
-    
+
     try {
       // Find the item in our lists
       const item = [...notifications, ...conversations].find((item: any) => item.id === selectedMessageId);
       if (!item) return;
-      
+
       // Optimistic UI update
       if ('is_read' in item) {
-        setNotifications((prev: any) => 
+        setNotifications((prev: any) =>
           prev.map((n: any) => n.id === selectedMessageId ? { ...n, is_read: false, updated_at: new Date().toISOString() } : n)
         );
       }
-      
-      await client.merge(String(selectedMessageId), { 
-        is_read: false, 
-        updated_at: new Date().toISOString() 
+
+      await client.merge(String(selectedMessageId), {
+        is_read: false,
+        updated_at: new Date().toISOString()
       });
-      
+
       showSuccess('消息已标记为未读');
       handleMenuClose();
     } catch (error) {
@@ -293,24 +292,24 @@ const MessageCenterPage: React.FC = () => {
 
   const handleDelete = useCallback(async () => {
     if (!selectedMessageId || !client) return;
-    
+
     try {
       // Find the item in our lists
       const item = [...notifications, ...conversations].find((item: any) => item.id === selectedMessageId);
       if (!item) return;
-      
+
       // Optimistic UI update
       if ('type' in item && (item.type === 'SYSTEM_NOTIFICATION' || item.type === 'CASE_ROBOT_REMINDER')) {
         setNotifications((prev: any) => prev.filter((n: any) => n.id !== selectedMessageId));
       } else {
         setConversations((prev: any) => prev.filter((c: any) => c.id !== selectedMessageId));
       }
-      
+
       await client.delete(String(selectedMessageId));
-      
+
       showSuccess('消息已删除');
       handleMenuClose();
-      
+
       // If the deleted item was selected, clear selection
       if (selectedItem && selectedItem.id === selectedMessageId) {
         setSelectedItem(null);
@@ -323,19 +322,19 @@ const MessageCenterPage: React.FC = () => {
 
   const handleArchive = useCallback(async () => {
     if (!selectedMessageId || !client) return;
-    
+
     try {
-      await client.merge(String(selectedMessageId), { 
-        archived: true, 
-        updated_at: new Date().toISOString() 
+      await client.merge(String(selectedMessageId), {
+        archived: true,
+        updated_at: new Date().toISOString()
       });
-      
+
       // Optimistic UI update
       const updatedList = combinedList.filter((item) => item.id !== selectedMessageId);
       if (selectedItem && selectedItem.id === selectedMessageId) {
         setSelectedItem(null);
       }
-      
+
       showSuccess('消息已归档');
       handleMenuClose();
     } catch (error) {
@@ -379,18 +378,18 @@ const MessageCenterPage: React.FC = () => {
       // Send to database
       const result = await client.create('message', newMessageData);
       console.log('Message sent:', result);
-      
+
       // Update conversation list with new message info
-      setConversations(prev => 
-        prev.map(c => 
-          c.id === convSummary.id 
-            ? { 
-                ...c, 
-                last_message_snippet: chatInput,
-                last_message_timestamp: new Date().toISOString(),
-                last_message_sender_name: user.name || '我',
-                updated_at: new Date().toISOString()
-              } 
+      setConversations(prev =>
+        prev.map(c =>
+          c.id === convSummary.id
+            ? {
+              ...c,
+              last_message_snippet: chatInput,
+              last_message_timestamp: new Date().toISOString(),
+              last_message_sender_name: user.name || '我',
+              updated_at: new Date().toISOString()
+            }
             : c
         )
       );
@@ -499,7 +498,7 @@ const MessageCenterPage: React.FC = () => {
       {/* 主内容区域 */}
       <Grid container spacing={2}>
         {/* 左侧消息列表 */}
-        <Grid item xs={12} md={4}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
             {/* 搜索框和过滤器 */}
             <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -561,7 +560,7 @@ const MessageCenterPage: React.FC = () => {
         </Grid>
 
         {/* 右侧消息详情 */}
-        <Grid item xs={12} md={8}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
             {selectedItem ? (
               <>
@@ -727,27 +726,19 @@ const MessageCenterPage: React.FC = () => {
         onClose={handleMenuClose}
       >
         <MenuItem onClick={handleMarkAsRead}>
-          <ListItemIcon>
-            <MarkEmailRead fontSize="small" />
-          </ListItemIcon>
+          <MarkEmailRead fontSize="small" />
           标记为已读
         </MenuItem>
         <MenuItem onClick={handleMarkAsUnread}>
-          <ListItemIcon>
-            <MarkEmailUnread fontSize="small" />
-          </ListItemIcon>
+          <MarkEmailUnread fontSize="small" />
           标记为未读
         </MenuItem>
         <MenuItem onClick={handleArchive}>
-          <ListItemIcon>
-            <Archive fontSize="small" />
-          </ListItemIcon>
+          <Archive fontSize="small" />
           归档
         </MenuItem>
         <MenuItem onClick={handleDelete}>
-          <ListItemIcon>
-            <Delete fontSize="small" />
-          </ListItemIcon>
+          <Delete fontSize="small" />
           删除
         </MenuItem>
       </Menu>

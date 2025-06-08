@@ -119,7 +119,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
       <DialogContent dividers>
         {formError && <Alert severity="error" sx={{ mb: 2 }}>{formError}</Alert>}
         <Grid container spacing={2} sx={{pt:1}}> {/* Added padding top for better spacing with error alert */}
-          <Grid item xs={12} sm={6}>
+          <Grid size={{xs:12, sm:6}}>
             <FormControl fullWidth variant="outlined" required error={formError && !creditorData.category ? true : undefined}>
               <InputLabel id="category-select-label">{t('creditor_form_category_label', '类别')}</InputLabel>
               <Select
@@ -136,7 +136,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               </Select>
             </FormControl>
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{xs:12, sm:6}}>  
             <TextField
               required
               id="name"
@@ -148,7 +148,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{xs:12}}>
             <TextField
               required
               id="identifier"
@@ -160,7 +160,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{xs:12, sm:6}}>
             <TextField
               id="contactPersonName"
               name="contactPersonName"
@@ -171,7 +171,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid item xs={12} sm={6}>
+          <Grid size={{xs:12, sm:6}}>
             <TextField
               id="contactInfo"
               name="contactInfo"
@@ -182,7 +182,7 @@ const AddCreditorDialog: React.FC<AddCreditorDialogProps> = ({
               onChange={handleChange}
             />
           </Grid>
-          <Grid item xs={12}>
+          <Grid size={{xs:12}}>
             <TextField
               id="address"
               name="address"

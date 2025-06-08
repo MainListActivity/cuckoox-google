@@ -29,7 +29,7 @@ import { mdiEmailOpenOutline } from '@mdi/js'; // Icon for Mark as Unread
 export interface MessageListItemProps {
   itemData: DisplayListItem; 
   onSelectItem: (item: DisplayListItem) => void; 
-  onDeleteItem: (itemId: string | import('surrealdb.js').RecordId) => void; 
+  onDeleteItem: (itemId: string | import('surrealdb').RecordId) => void; 
   onMarkAsUnread: (item: DisplayListItem) => void; // New prop
   selected: boolean;
 }

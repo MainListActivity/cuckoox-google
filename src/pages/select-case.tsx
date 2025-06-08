@@ -135,7 +135,7 @@ const CaseSelectionPage: React.FC = () => {
     if (!caseToSelect || !caseToSelect.id) return;
     
     try {
-      await selectCase(caseToSelect.id.toString());
+      await selectCase(caseToSelect.id);
       // The line below was removed as per instruction to fix redirect issue
       // await refreshUserCasesAndRoles();
       
@@ -271,7 +271,7 @@ const CaseSelectionPage: React.FC = () => {
               <Stack spacing={2}>
                 {cases.map((caseItem) => {
                   const statusStyle = getStatusColor(caseItem.procedure_phase);
-                  const isSelected = selectedCaseId === caseItem.id.toString();
+                  const isSelected = selectedCaseId === caseItem.id;
                   
                   return (
                     <Card

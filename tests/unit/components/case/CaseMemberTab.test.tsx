@@ -113,7 +113,7 @@ const renderWithAuth = (ui: React.ReactElement, authContextValue: Partial<AuthCo
     currentUserCaseRoles: [],
     isCaseLoading: false,
     selectCase: vi.fn(),
-    hasRole: (roleName: string) => authContextValue.user?.github_id === 'ownergh' && roleName === 'case_manager',
+    hasRole: () => false,
     refreshUserCasesAndRoles: vi.fn(),
     navMenuItems: [],
     isMenuLoading: false,
@@ -139,10 +139,13 @@ describe('CaseMemberTab', () => {
     
     const caseMemberService = await import('@/src/services/caseMemberService');
     
-    // 使用简单直接的 mock 实现
     vi.mocked(caseMemberService.fetchCaseMembers).mockResolvedValue(currentMockMembers);
     vi.mocked(caseMemberService.removeCaseMember).mockResolvedValue(undefined);
     vi.mocked(caseMemberService.changeCaseOwner).mockResolvedValue(undefined);
+    vi.mocked(caseMemberService.changeMemberRole).mockResolvedValue({
+      ...currentMockMembers[1],
+      roleInCase: 'owner'
+    });
 
     mockAuthContextValue = {
       user: { 
@@ -187,5 +190,155 @@ describe('CaseMemberTab', () => {
     expect(caseMemberService.fetchCaseMembers).toHaveBeenCalledWith(mockCaseId);
     expect(caseMemberService.removeCaseMember).not.toHaveBeenCalled();
     expect(caseMemberService.changeCaseOwner).not.toHaveBeenCalled();
+  });
+
+  // 测试成员列表渲染
+  it('renders member list correctly', async () => {
+    renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
+    
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+
+    // 验证成员列表项
+    const listItems = screen.getAllByRole('listitem');
+    expect(listItems).toHaveLength(initialMockMembers.length);
+
+    // 验证第一个成员信息
+    const firstMember = within(listItems[0]);
+    expect(firstMember.getByText('Owner User')).toBeInTheDocument();
+    expect(firstMember.getByText('owner@example.com')).toBeInTheDocument();
+    // 修复：查找 'Owner' 而不是 'owner'
+    expect(firstMember.getByText('Owner')).toBeInTheDocument();
+  });
+
+  // 测试管理员权限
+  it('shows admin controls for admin users', async () => {
+    mockAuthContextValue = {
+      user: { 
+        id: new RecordId('user', 'admin'), 
+        name: 'Admin User', 
+        github_id: '--admin--',
+        roles: ['admin']
+      } as AppUser,
+      hasRole: () => true
+    };
+
+    renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+
+    // 验证添加成员按钮存在（管理员应该有权限）
+    expect(screen.getByRole('button', { name: /add member/i })).toBeInTheDocument();
+  });
+
+  // 测试案件所有者权限
+  it('shows owner controls for case owners', async () => {
+    mockAuthContextValue = {
+      user: { 
+        id: new RecordId('user', 'owner1'), // 使用owner1的ID
+        name: 'Owner User', 
+        github_id: 'ownergh',
+        roles: ['case_manager']
+      } as AppUser,
+      hasRole: (role) => role === 'case_manager'
+    };
+
+    renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+
+    // 验证添加成员按钮存在（案件所有者应该有权限）
+    expect(screen.getByRole('button', { name: /add member/i })).toBeInTheDocument();
+  });
+
+  // 测试普通成员权限限制
+  it('restricts regular members from performing management operations', async () => {
+    mockAuthContextValue = {
+      user: { 
+        id: new RecordId('user', 'member'), 
+        name: 'Regular Member', 
+        github_id: 'membergh',
+        roles: ['member']
+      } as AppUser,
+      hasRole: () => false
+    };
+
+    renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+
+    // 验证添加成员按钮不存在
+    expect(screen.queryByRole('button', { name: /add member/i })).not.toBeInTheDocument();
+    
+    // 验证成员列表中没有操作按钮
+    expect(screen.queryByTestId('more-vert-icon')).not.toBeInTheDocument();
+  });
+
+  // 测试添加成员功能
+  it('can add new member when user is owner', async () => {
+    mockAuthContextValue = {
+      user: { 
+        id: new RecordId('user', 'owner1'), // 使用owner1的ID
+        name: 'Owner User', 
+        github_id: 'ownergh' 
+      } as AppUser,
+    };
+
+    renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+
+    // 点击添加成员按钮
+    const addButton = screen.getByRole('button', { name: /add member/i });
+    fireEvent.click(addButton);
+
+    // 验证对话框打开
+    expect(screen.getByTestId('add-case-member-dialog')).toBeInTheDocument();
+  });
+
+  // 测试错误处理
+  it('handles errors gracefully', async () => {
+    const caseMemberService = await import('@/src/services/caseMemberService');
+    vi.mocked(caseMemberService.fetchCaseMembers).mockRejectedValue(new Error('Failed to load members'));
+    
+    renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
+
+    await waitFor(() => {
+      expect(screen.getByText(/failed to load members/i)).toBeInTheDocument();
+    });
+  });
+
+  // 测试加载状态的完整生命周期
+  it('shows and hides loading state correctly', async () => {
+    const caseMemberService = await import('@/src/services/caseMemberService');
+    let resolvePromise: (value: CaseMember[]) => void;
+    const loadingPromise = new Promise<CaseMember[]>((resolve) => {
+      resolvePromise = resolve;
+    });
+    
+    vi.mocked(caseMemberService.fetchCaseMembers).mockReturnValue(loadingPromise);
+    
+    renderWithAuth(<CaseMemberTab caseId={mockCaseId} />, mockAuthContextValue);
+
+    // 验证显示加载状态
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+
+    // 解决 Promise
+    resolvePromise!(initialMockMembers);
+
+    // 验证加载状态消失，内容显示
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('listitem')).toHaveLength(initialMockMembers.length);
+    });
   });
 });
