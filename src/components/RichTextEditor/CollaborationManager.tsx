@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CollaborationManagerProps, RemoteCursor } from './types';
 
 // Helper function to convert hex to rgba
@@ -28,19 +28,64 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
 }) => {
   const { documentId, userId, userName, surreal } = config;
 
+  // 使用 useRef 存储回调函数的最新引用
+  const onTextChangeRef = useRef(onTextChange);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+
+
+  // 更新回调函数引用
+  useEffect(() => {
+    onTextChangeRef.current = onTextChange;
+    onSelectionChangeRef.current = onSelectionChange;
+  });
+
+
+  // 调试日志：跟踪组件生命周期
+  useEffect(() => {
+    console.log('[CollaborationManager] 组件挂载，配置:', {
+      hasDocumentId: !!documentId,
+      hasUserId: !!userId,
+      hasUserName: !!userName,
+      hasSurreal: !!surreal,
+      surrealStatus: surreal?.status
+    });
+
+    return () => {
+      console.log('[CollaborationManager] 组件卸载');
+    };
+  }, []);
+
   // 处理文本变化事件
   useEffect(() => {
+    // 等待 surreal 连接稳定后再初始化
+    if (!surreal || surreal.status !== 'connected') {
+      console.log('[CollaborationManager] 等待 SurrealDB 连接...', surreal?.status);
+      return;
+    }
+
     const quill = quillRef.current?.getQuill();
-    if (!quill) return;
+    if (!quill || !documentId || !userId) {
+      console.log('[CollaborationManager] 等待必要参数...', {
+        hasQuill: !!quill,
+        hasDocumentId: !!documentId,
+        hasUserId: !!userId
+      });
+      return;
+    }
+
+    console.log('[CollaborationManager] 初始化事件监听器');
     
+    // 使用稳定的事件处理器，避免频繁重新绑定
     const textChangeHandler = (delta: any, oldDelta: any, source: string) => {
+      
       const currentQuill = quillRef.current?.getQuill();
       if (!currentQuill) return;
       
       const currentContents = currentQuill.getContents();
       
-      if (onTextChange) {
-        onTextChange(currentContents, delta, source);
+      // 调用回调函数（如果存在）
+      if (onTextChangeRef.current) {
+        onTextChangeRef.current(currentContents, delta, source);
       }
 
       // 发送delta到SurrealDB
@@ -60,18 +105,26 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
       }
     };
 
+    // 添加事件监听器
     quill.on('text-change', textChangeHandler);
     quill.on('selection-change', selectionChangeHandler);
 
     return () => {
-      quill.off('text-change', textChangeHandler);
-      quill.off('selection-change', selectionChangeHandler);
+      console.log('[CollaborationManager] 清理事件监听器');
+      // 清理事件监听器
+      if (quill) {
+        quill.off('text-change', textChangeHandler);
+        quill.off('selection-change', selectionChangeHandler);
+      }
     };
-  }, [quillRef, onTextChange, onSelectionChange, surreal, documentId, userId]);
+  }, [quillRef, surreal?.status, documentId, userId]); // 添加 surreal.status 依赖
 
   // 订阅SurrealDB变化
   useEffect(() => {
-    if (!quillRef || !surreal || !documentId || !userId) return;
+    if (!quillRef || !surreal || surreal.status !== 'connected' || !documentId || !userId) {
+      console.log('[CollaborationManager] 跳过订阅设置，条件不满足');
+      return;
+    }
 
     const handleLiveChange = (data: any) => {
       if (data && data.result && typeof data.result.docId === 'string' && data.result.docId === documentId) {
@@ -85,7 +138,7 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
       }
     };
 
-    const liveQuery = `LIVE SELECT * FROM delta WHERE docId = '${documentId}' ORDER BY ts ASC`;
+    const liveQuery = `LIVE SELECT * FROM delta WHERE docId = '${documentId}'`;
     let liveQueryId: string | null = null;
 
     const setupLiveQuery = async () => {
@@ -152,12 +205,15 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
         (surreal as any).kill(liveQueryId);
       }
     };
-  }, [surreal, documentId, userId, quillRef]);
+  }, [surreal?.status, documentId, userId, quillRef]);
 
   // 处理光标更新
   useEffect(() => {
     const quill = quillRef.current?.getQuill();
-    if (!quill || !surreal || !documentId || !userId) return;
+    if (!quill || !surreal || surreal.status !== 'connected' || !documentId || !userId) {
+      console.log('[CollaborationManager] 跳过光标更新设置，条件不满足');
+      return;
+    }
 
     const selectionChangeHandler = async (range: any, oldRange: any, source: string) => {
       if (source === 'user' && range && surreal) {
@@ -192,16 +248,22 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
     window.addEventListener('beforeunload', cleanupCursor);
 
     return () => {
-      quill.off('selection-change', selectionChangeHandler);
-      cleanupCursor();
+      console.log('[CollaborationManager] 清理光标更新');
+      if (quill) {
+        quill.off('selection-change', selectionChangeHandler);
+        cleanupCursor();
+      }
       window.removeEventListener('beforeunload', cleanupCursor);
     };
-  }, [surreal, documentId, userId, userName, quillRef]);
+  }, [surreal?.status, documentId, userId, userName, quillRef]);
 
   // 处理远程光标
   useEffect(() => {
     const quill = quillRef.current?.getQuill();
-    if (!quill || !surreal || !documentId || !userId) return;
+    if (!quill || !surreal || surreal.status !== 'connected' || !documentId || !userId) {
+      console.log('[CollaborationManager] 跳过远程光标设置，条件不满足');
+      return;
+    }
 
     let remoteCursors: Record<string, RemoteCursor> = {};
 
@@ -320,7 +382,7 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
       document.querySelectorAll('.remote-cursor').forEach(el => el.remove());
       document.querySelectorAll('.remote-selection').forEach(el => el.remove());
     };
-  }, [surreal, documentId, userId, quillRef, onRemoteCursorsChange]);
+  }, [surreal?.status, documentId, userId, quillRef, onRemoteCursorsChange]);
 
   return null; // This component doesn't render anything
 };

@@ -8,9 +8,11 @@ import {
   IconButton,
   Avatar,
   Tooltip,
+  Button,
+  CircularProgress,
   useTheme,
 } from '@mui/material';
-import { AddComment } from '@mui/icons-material';
+import { AddComment, Save } from '@mui/icons-material';
 import SvgIcon from '@mui/material/SvgIcon';
 import { mdiFileDocumentOutline, mdiInformation } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
@@ -24,9 +26,19 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onToggleContextPanel,
   onAddComment,
   remoteCursors,
+  onSave,
+  isSaving = false,
+  showSaveButton = true,
+  saveButtonText,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+
+  const handleSave = () => {
+    if (onSave && !isSaving) {
+      onSave();
+    }
+  };
 
   return (
     <AppBar
@@ -120,6 +132,25 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
           {/* Right side actions and indicators */}
           <Stack direction="row" spacing={1} alignItems="center">
+            {/* 内置保存按钮 */}
+            {showSaveButton && onSave && (
+              <Button
+                startIcon={isSaving ? <CircularProgress size={16} /> : <Save />}
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={handleSave}
+                disabled={isSaving}
+                sx={{ minWidth: 100 }}
+              >
+                {isSaving 
+                  ? t('saving', '保存中...') 
+                  : (saveButtonText || t('save', '保存'))
+                }
+              </Button>
+            )}
+
+            {/* 外部传入的其他actions */}
             {actions}
             
             {/* Collaboration indicators */}

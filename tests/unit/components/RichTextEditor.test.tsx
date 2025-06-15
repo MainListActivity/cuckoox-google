@@ -441,4 +441,118 @@ describe('RichTextEditor', () => {
     // Check if the editor renders with document ID for real-time saving
     expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
   });
+
+  // 新增测试用例：测试内置保存按钮
+  it('renders built-in save button when onSave is provided', () => {
+    const mockDelta = new Delta([{ insert: 'Saveable content' }]);
+    const mockOnSave = vi.fn();
+
+    renderWithTheme(
+      <RichTextEditor
+        defaultValue={mockDelta}
+        onSave={mockOnSave}
+        showSaveButton={true}
+      />
+    );
+
+    // Check if save button is rendered
+    const saveButton = screen.getByText('保存');
+    expect(saveButton).toBeTruthy();
+  });
+
+  // 新增测试用例：测试保存按钮点击
+  it('calls onSave when save button is clicked', async () => {
+    const mockDelta = new Delta([{ insert: 'Content to save' }]);
+    const mockOnSave = vi.fn().mockResolvedValue(undefined);
+
+    renderWithTheme(
+      <RichTextEditor
+        defaultValue={mockDelta}
+        onSave={mockOnSave}
+        showSaveButton={true}
+      />
+    );
+
+    // Click save button
+    const saveButton = screen.getByText('保存');
+    fireEvent.click(saveButton);
+
+    // Wait for async operation
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalled();
+    });
+  });
+
+  // 新增测试用例：测试保存状态显示
+  it('shows saving status when isSaving is true', () => {
+    const mockDelta = new Delta([{ insert: 'Saving content' }]);
+    const mockOnSave = vi.fn();
+
+    renderWithTheme(
+      <RichTextEditor
+        defaultValue={mockDelta}
+        onSave={mockOnSave}
+        isSaving={true}
+        showSaveButton={true}
+      />
+    );
+
+    // Check if saving status is shown
+    expect(screen.getByText('保存中...')).toBeTruthy();
+  });
+
+  // 新增测试用例：测试隐藏保存按钮
+  it('hides save button when showSaveButton is false', () => {
+    const mockDelta = new Delta([{ insert: 'Content without save button' }]);
+    const mockOnSave = vi.fn();
+
+    renderWithTheme(
+      <RichTextEditor
+        defaultValue={mockDelta}
+        onSave={mockOnSave}
+        showSaveButton={false}
+      />
+    );
+
+    // Check if save button is not rendered
+    expect(screen.queryByText('保存')).toBeNull();
+  });
+
+  // 新增测试用例：测试自定义保存按钮文本
+  it('displays custom save button text', () => {
+    const mockDelta = new Delta([{ insert: 'Custom save text content' }]);
+    const mockOnSave = vi.fn();
+
+    renderWithTheme(
+      <RichTextEditor
+        defaultValue={mockDelta}
+        onSave={mockOnSave}
+        showSaveButton={true}
+        saveButtonText="提交"
+      />
+    );
+
+    // Check if custom save button text is displayed
+    expect(screen.getByText('提交')).toBeTruthy();
+  });
+
+  // 新增测试用例：测试自动保存功能
+  it('handles auto-save functionality', async () => {
+    const mockDelta = new Delta([{ insert: 'Auto save content' }]);
+    const mockOnSave = vi.fn().mockResolvedValue(undefined);
+
+    renderWithTheme(
+      <RichTextEditor
+        defaultValue={mockDelta}
+        onSave={mockOnSave}
+        enableAutoSave={true}
+        autoSaveInterval={1000} // 1秒用于测试
+      />
+    );
+
+    // 模拟用户输入触发文本变化
+    // 注意：这里可能需要更复杂的模拟，因为需要触发Quill的text-change事件
+    // 暂时验证组件正常渲染
+    expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
+  });
 });

@@ -28,6 +28,12 @@ const resources = {
 
       // LoginPage
       "login_page_title": "CuckooX", // Title on login page
+      "login_page_subtitle": "破产案件管理平台", // Subtitle on login page
+      "login_page_subtitle_admin": "管理员登录", // Subtitle on login page
+      "login_page_subtitle_user": "用户登录", // Subtitle on login page
+      "login_subtitle": "欢迎登陆", // Subtitle on login page
+      "or": "或", // Subtitle on login page
+      "admin_login_link": "使用 admin 登录",
       "login_github_prompt": "请使用您的 GitHub 帐号登录以继续。",
       "login_github_button": "使用 GitHub 登录",
       "login_github_redirect_info": "您将被重定向到 GitHub进行身份验证。",
@@ -115,7 +121,15 @@ const resources = {
       "create_case_error_generic": "创建案件失败。",
       "create_case_editor_loading_new_doc": "正在准备编辑器...",
       "saving_document": "正在保存文档...",
-      "saving_case_button_saving": "正在保存案件..."
+      "saving_case_button_saving": "正在保存案件...",
+
+      // RichTextEditor保存相关
+      "save": "保存",
+      "saving": "保存中...",
+      "document_saved": "文档已保存",
+      "document_save_failed": "文档保存失败",
+      "auto_save_enabled": "已启用自动保存",
+      "unsaved_changes": "有未保存的更改"
     }
   }
 };

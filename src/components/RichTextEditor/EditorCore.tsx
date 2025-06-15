@@ -65,11 +65,10 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
 
   // 初始化QuillJS编辑器
   useEffect(() => {
-    if (containerRef.current && !containerRef.current.dataset.quillInitialized) {
-      containerRef.current.dataset.quillInitialized = 'true';
+    if (containerRef.current) {
 
       const container = containerRef.current;
-      const editorContainer = container.appendChild(
+      const editorContainer = container.children[0] as HTMLElement || container.appendChild(
         container.ownerDocument.createElement('div'),
       );
 
@@ -114,12 +113,11 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
       }
 
       return () => {
-        quillRef.current = null;
         const currentContainer = containerRef.current;
         if (currentContainer) {
-          delete currentContainer.dataset.quillInitialized;
           currentContainer.innerHTML = '';
         }
+        quillRef.current = null;
       };
     }
   }, [

@@ -23,6 +23,7 @@ import {
   InputAdornment,
 } from '@mui/material';
 import { mdiGithub, mdiEye, mdiEyeOff } from '@mdi/js';
+import Logo from '../components/Logo';
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
@@ -205,17 +206,7 @@ const LoginPage: React.FC = () => {
           <Box sx={{ px: { xs: 2, sm: 4, md: 6 }, py: 4 }}>
             {/* Logo and Title */}
             <Box sx={{ mb: 4, textAlign: 'center' }}>
-              <Typography 
-                variant="h3" 
-                component="h1" 
-                sx={{ 
-                  fontWeight: 700,
-                  color: theme.palette.primary.main,
-                  mb: 1,
-                }}
-              >
-                CuckooX
-              </Typography>
+              <Logo size="large" variant="full" color="primary" />
               <Typography variant="body1" color="text.secondary">
                 {isAdminLoginAttempt 
                   ? t('admin_login_subtitle', 'Administrator Access')

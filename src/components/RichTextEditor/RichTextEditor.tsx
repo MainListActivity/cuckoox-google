@@ -27,7 +27,9 @@ import type {
   RichTextEditorProps,
   OutlineItem,
   RemoteCursor,
+  QuillDelta,
 } from './types';
+import { StringRecordId } from 'surrealdb';
 
 const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
   (
@@ -42,15 +44,22 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       userId,
       userName,
       contextInfo,
-      viewMode = 'standard',
+      viewMode: _viewMode = 'standard',
       initialContentForDocumentView,
-      comments = [],
+      comments: _comments = [],
       extensionAreaTabs = [],
       extensionAreaContent,
       onExtensionAreaTabChange,
       showExtensionArea = false,
       breadcrumbs,
       actions,
+      // 保存相关props
+      onSave,
+      isSaving: externalIsSaving = false,
+      enableAutoSave = false,
+      autoSaveInterval = 30000, // 30秒
+      showSaveButton = true,
+      saveButtonText,
     },
     ref
   ) => {
@@ -62,6 +71,8 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
     // Refs
     const containerRef = useRef<HTMLDivElement | null>(null);
     const editorCoreRef = useRef<EditorCoreRef>(null);
+    const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const lastSavedContentRef = useRef<QuillDelta | null>(null);
     
     // UI状态
     const [showContextPanel, setShowContextPanel] = useState(true);
@@ -76,6 +87,101 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       extensionAreaTabs.length > 0 ? extensionAreaTabs[0].id : null
     );
 
+    // 保存状态
+    const [isSaving, setIsSaving] = useState(false);
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+    // 手动保存功能
+    const handleSave = useCallback(async () => {
+      if (isSaving) return;
+
+      const quill = editorCoreRef.current?.getQuill();
+      if (!quill) return;
+
+      const currentContent = quill.getContents();
+
+      // 如果父组件提供了 onSave，则优先使用父组件的保存逻辑
+      const saveExecutor = onSave
+        ? () => onSave(currentContent)
+        : async () => {
+            // 默认保存逻辑：写入 SurrealDB
+            if (!surreal || surreal.status !== 'connected' || !documentId) {
+              console.warn('[RichTextEditor] 未提供 onSave，且 SurrealDB 未连接或缺少 documentId，跳过保存');
+              return;
+            }
+
+            try {
+              // 如果文档不存在则先创建
+              const existing = await surreal.select(new StringRecordId(documentId));
+              if (!existing) {
+                await surreal.create(new StringRecordId(documentId), { content: currentContent });
+              } else {
+                existing.content = currentContent;
+                await surreal.update(new StringRecordId(documentId), existing);
+              }
+            } catch (e) {
+              console.error('[RichTextEditor] 默认保存到 SurrealDB 失败:', e);
+              throw e;
+            }
+          };
+
+      try {
+        setIsSaving(true);
+        await saveExecutor();
+
+        lastSavedContentRef.current = currentContent;
+        setHasUnsavedChanges(false);
+        console.log('[RichTextEditor] 文档保存成功');
+      } catch (error) {
+        console.error('[RichTextEditor] 保存失败:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }, [onSave, surreal, documentId, isSaving]);
+
+    // 自动保存功能
+    const scheduleAutoSave = useCallback(() => {
+      if (!enableAutoSave) return;
+
+      // 如果没有外部 onSave，则需要确保内部默认保存可用
+      if (!onSave && (!surreal || surreal.status !== 'connected' || !documentId)) {
+        return; // 无法自动保存
+      }
+
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+
+      autoSaveTimerRef.current = setTimeout(() => {
+        if (hasUnsavedChanges && !isSaving) {
+          console.log('[RichTextEditor] 执行自动保存');
+          handleSave();
+        }
+      }, autoSaveInterval);
+    }, [enableAutoSave, onSave, hasUnsavedChanges, isSaving, autoSaveInterval, handleSave, surreal, documentId]);
+
+    // 内容变化处理器
+    const handleTextChange = useCallback((currentContentsDelta: QuillDelta, changeDelta: QuillDelta, source: string) => {
+      // 调用外部回调
+      if (onTextChange) {
+        onTextChange(currentContentsDelta, changeDelta, source);
+      }
+
+      // 检查是否有未保存的变化
+      if (source === 'user') {
+        const lastSavedContent = lastSavedContentRef.current;
+        const hasChanges = !lastSavedContent || 
+          JSON.stringify(currentContentsDelta.ops) !== JSON.stringify(lastSavedContent.ops);
+        
+        setHasUnsavedChanges(hasChanges);
+
+        // 如果启用自动保存，安排自动保存
+        if (hasChanges && enableAutoSave) {
+          scheduleAutoSave();
+        }
+      }
+    }, [onTextChange, enableAutoSave, scheduleAutoSave]);
+
     // 更新大纲数据的函数
     const updateOutline = useCallback(() => {
       const quill = editorCoreRef.current?.getQuill();
@@ -84,7 +190,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         const outlineItems: OutlineItem[] = [];
 
         if (delta && delta.ops) {
-          delta.ops.forEach((op: any) => {
+          delta.ops.forEach((op: { attributes?: { header?: number }; insert?: unknown }) => {
             if (op.attributes && op.attributes.header && typeof op.insert === 'string') {
               outlineItems.push({
                 level: op.attributes.header,
@@ -244,6 +350,10 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         ref.current = quill;
       }
 
+      // 保存初始内容作为最后保存的内容
+      const initialContent = quill.getContents();
+      lastSavedContentRef.current = initialContent;
+
       // 初始更新大纲
       updateOutline();
 
@@ -262,6 +372,18 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         setCurrentExtensionTab(extensionAreaTabs[0].id);
       }
     }, [extensionAreaTabs, currentExtensionTab]);
+
+    // 组件卸载时清理定时器
+    useEffect(() => {
+      return () => {
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+        }
+      };
+    }, []);
+
+    // 使用外部传入的保存状态或内部保存状态
+    const effectiveIsSaving = externalIsSaving || isSaving;
 
     return (
       <Box
@@ -283,6 +405,10 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           onToggleContextPanel={() => setShowContextPanel(!showContextPanel)}
           onAddComment={addCommentHandler}
           remoteCursors={remoteCursors}
+          onSave={handleSave}
+          isSaving={effectiveIsSaving}
+          showSaveButton={showSaveButton}
+          saveButtonText={saveButtonText}
         />
 
         {/* 主内容区域 */}
@@ -423,18 +549,21 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         />
 
         {/* 协作管理器 */}
-        <CollaborationManager
-          quillRef={editorCoreRef}
-          config={{
-            documentId,
-            userId,
-            userName,
-            surreal,
-          }}
-          onTextChange={onTextChange}
-          onSelectionChange={onSelectionChange}
-          onRemoteCursorsChange={setRemoteCursors}
-        />
+        {documentId && userId && surreal && (
+          <CollaborationManager
+            key={`collaboration-${documentId}-${userId}`}
+            quillRef={editorCoreRef}
+            config={{
+              documentId,
+              userId,
+              userName,
+              surreal,
+            }}
+            onTextChange={handleTextChange}
+            onSelectionChange={onSelectionChange}
+            onRemoteCursorsChange={setRemoteCursors}
+          />
+        )}
       </Box>
     );
   }

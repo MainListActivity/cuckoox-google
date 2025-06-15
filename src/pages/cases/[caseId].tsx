@@ -20,11 +20,11 @@ import {
   ListItemButton,
   ListItemText,
 } from '@mui/material';
-import { 
-  mdiArrowLeft, 
-  mdiBookOpenOutline, 
-  mdiSync, 
-  mdiGavel, 
+import {
+  mdiArrowLeft,
+  mdiBookOpenOutline,
+  mdiSync,
+  mdiGavel,
   mdiFileDocumentOutline,
   mdiInformation,
   mdiAccount,
@@ -68,6 +68,7 @@ interface Case {
 }
 
 interface Document {
+  [x: string]: unknown;
   id: RecordId;
   content: string;
   original_file_name?: string;
@@ -84,7 +85,7 @@ interface ExtensionAreaContent {
 }
 
 const CaseDetailPage: React.FC = () => {
-  const { t } = useTranslation(); 
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const { surreal: client, isSuccess: isConnected } = useSurreal();
   const { user, hasRole } = useAuth();
@@ -143,13 +144,13 @@ const CaseDetailPage: React.FC = () => {
       setMeetingMinutesOpen(true);
     }
   };
-  
+
   const handleSaveMeetingMinutes = (minutesDelta: QuillDelta, meetingTitle: string) => {
     console.log('Saving Meeting Minutes:');
     console.log('  caseId:', caseDetail?.id.toString());
     console.log('  meetingTitle:', meetingTitle);
     console.log('  minutesContent:', JSON.stringify(minutesDelta.ops));
-    
+
     // TODO: Implement actual API call to save meeting minutes
     showSuccess(t('meeting_minutes_save_success_mock', '会议纪要已（模拟）保存成功！'));
     setMeetingMinutesOpen(false);
@@ -158,7 +159,7 @@ const CaseDetailPage: React.FC = () => {
   // 创建时间线数据
   const createTimelineData = useCallback(() => {
     if (!caseDetail) return [];
-    
+
     const events = [
       {
         date: caseDetail.acceptance_date ? new Date(caseDetail.acceptance_date).toISOString().split('T')[0] : '',
@@ -235,43 +236,43 @@ const CaseDetailPage: React.FC = () => {
   // 处理扩展区域标签页切换
   const handleExtensionTabChange = useCallback((tabId: string) => {
     setCurrentExtensionTab(tabId);
-    
+
     if (!caseDetail) return;
 
     // 根据所选标签页更新内容
     switch (tabId) {
       case 'case':
-        setExtensionAreaContent({ 
-          type: 'case', 
+        setExtensionAreaContent({
+          type: 'case',
           data: {
             caseNumber: caseDetail.case_number,
             caseName: caseDetail.name,
             stage: caseDetail.procedure_phase,
             court: '广州市中级人民法院', // TODO: 从数据库获取
             administrator: caseLeadName,
-            acceptanceDate: caseDetail.acceptance_date ? 
-              (typeof caseDetail.acceptance_date === 'string' ? 
-                caseDetail.acceptance_date : 
-                new Date(caseDetail.acceptance_date).toISOString().split('T')[0]) : 
+            acceptanceDate: caseDetail.acceptance_date ?
+              (typeof caseDetail.acceptance_date === 'string' ?
+                caseDetail.acceptance_date :
+                new Date(caseDetail.acceptance_date).toISOString().split('T')[0]) :
               '暂无数据',
           }
         });
         break;
-             case 'timeline':
-         setExtensionAreaContent({ 
-           type: 'claim', 
-           data: createTimelineData()
-         });
-         break;
-       case 'members':
-         setExtensionAreaContent({ 
-           type: 'law', 
-           data: { caseId: id }
-         });
-         break;
+      case 'timeline':
+        setExtensionAreaContent({
+          type: 'claim',
+          data: createTimelineData()
+        });
+        break;
+      case 'members':
+        setExtensionAreaContent({
+          type: 'law',
+          data: { caseId: id }
+        });
+        break;
       case 'related_docs':
-        setExtensionAreaContent({ 
-          type: 'related_docs', 
+        setExtensionAreaContent({
+          type: 'related_docs',
           data: createRelatedDocsData()
         });
         break;
@@ -346,9 +347,9 @@ const CaseDetailPage: React.FC = () => {
             <Paper key={index} variant="outlined" sx={{ p: 2, mb: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                 <Typography variant="subtitle2" gutterBottom>{event.title}</Typography>
-                <Chip 
-                  label={event.status} 
-                  size="small" 
+                <Chip
+                  label={event.status}
+                  size="small"
                   color={event.status === '已完成' ? 'success' : 'primary'}
                   sx={{ fontSize: '0.75rem' }}
                 />
@@ -391,11 +392,11 @@ const CaseDetailPage: React.FC = () => {
                   secondary={`${doc.type} • ${doc.createTime}`}
                   primaryTypographyProps={{ fontWeight: 500 }}
                 />
-                                 <IconButton size="small" color="primary">
-                   <SvgIcon fontSize="small">
-                     <path d={mdiPrinter} />
-                   </SvgIcon>
-                 </IconButton>
+                <IconButton size="small" color="primary">
+                  <SvgIcon fontSize="small">
+                    <path d={mdiPrinter} />
+                  </SvgIcon>
+                </IconButton>
               </ListItemButton>
             ))}
           </List>
@@ -438,7 +439,7 @@ const CaseDetailPage: React.FC = () => {
       setError(null);
       try {
         const caseRecordId = id.startsWith('case:') ? id : `case:${id}`;
-        
+
         // Query case with related user information
         const query = `
           SELECT 
@@ -446,29 +447,28 @@ const CaseDetailPage: React.FC = () => {
             case_lead_user_id.name as case_lead_name
           FROM ${caseRecordId}
         `;
-        
+
         const result = await client.query<[Case & { case_lead_name?: string }][]>(query);
-        
+
         if (!result || result.length === 0 || !result[0] || (result[0] as any[]).length === 0) {
           setError(t('case_detail_error_not_found'));
           setCaseDetail(null);
           setIsLoading(false);
           return;
         }
-        
+
         const fetchedCase = result[0][0] as Case & { case_lead_name?: string };
         setCaseDetail(fetchedCase);
         setCaseLeadName(fetchedCase.case_lead_name || fetchedCase.case_manager_name || t('case_detail_to_be_assigned'));
 
         // Fetch filing material document if exists
         if (fetchedCase.filing_material_doc_id) {
-          const docId = fetchedCase.filing_material_doc_id.toString();
+          const docId = fetchedCase.filing_material_doc_id;
           try {
-            const docQuery = `SELECT * FROM ${docId}`;
-            const docResult = await client.query<[Document[]]>(docQuery);
-            
-            if (docResult && docResult[0] && docResult[0].length > 0) {
-              const doc = docResult[0][0];
+            const docResult = await client.select<Document>(docId);
+
+            if (docResult) {
+              const doc = docResult;
               try {
                 // Try to parse as JSON (QuillDelta)
                 const parsedContent = JSON.parse(doc.content || '{"ops":[]}');
@@ -477,16 +477,16 @@ const CaseDetailPage: React.FC = () => {
                 // If not JSON, treat as plain text
                 setFilingMaterialContent(doc.content || '');
               }
-                          } else {
-                console.warn(`Filing material document not found for ID: ${docId}`);
-                setFilingMaterialContent('');
-              }
-            } catch (docErr) {
-              console.warn(`Error fetching filing material document: ${docErr}`);
+            } else {
+              console.warn(`Filing material document not found for ID: ${docId}`);
               setFilingMaterialContent('');
             }
-          } else {
+          } catch (docErr) {
+            console.warn(`Error fetching filing material document: ${docErr}`);
             setFilingMaterialContent('');
+          }
+        } else {
+          setFilingMaterialContent('');
         }
       } catch (err) {
         console.error("Error fetching case details:", err);
@@ -542,7 +542,7 @@ const CaseDetailPage: React.FC = () => {
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-      <RichTextEditor 
+      <RichTextEditor
         defaultValue={filingMaterialContent}
         onTextChange={handleFilingMaterialChange}
         readOnly={isReadOnly}
@@ -564,32 +564,22 @@ const CaseDetailPage: React.FC = () => {
             color: '#26A69A' // Teal 300
           }
         }}
-                 breadcrumbs={
-           <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
-             <Typography color="inherit" sx={{ cursor: 'pointer' }} onClick={() => window.location.href = '/cases'}>案件管理</Typography>
-             <Typography color="text.secondary">{displayCase.case_number}</Typography>
-             <Typography color="text.primary">立案材料</Typography>
-           </Breadcrumbs>
-         }
+        breadcrumbs={
+          <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+            <Typography color="inherit" sx={{ cursor: 'pointer' }} onClick={() => window.location.href = '/cases'}>案件管理</Typography>
+            <Typography color="text.secondary">{displayCase.case_number}</Typography>
+            <Typography color="text.primary">立案材料</Typography>
+          </Breadcrumbs>
+        }
+        enableAutoSave={true}
+        autoSaveInterval={10000} // 10秒自动保存
+        showSaveButton={true}
+        saveButtonText="保存文档"
         actions={
           <>
-            {!isReadOnly && (
-              <Button 
-                startIcon={<Save />} 
-                variant="contained" 
-                color="primary" 
-                size="small"
-                onClick={() => {
-                  // TODO: Implement save functionality
-                  showSuccess('文档已保存');
-                }}
-              >
-                保存
-              </Button>
-            )}
             <Button startIcon={<Share />} variant="outlined" size="small">分享</Button>
-            <IconButton 
-              size="small" 
+            <IconButton
+              size="small"
               onClick={() => setShowExtensionArea(!showExtensionArea)}
             >
               <Print />
@@ -634,8 +624,8 @@ const CaseDetailPage: React.FC = () => {
         <ModifyCaseStatusDialog
           open={modifyStatusOpen}
           onClose={() => setModifyStatusOpen(false)}
-          currentCase={{ 
-            id: caseDetail.id.toString(), 
+          currentCase={{
+            id: caseDetail.id.toString(),
             current_status: displayCase.current_stage as CaseStatus,
           }}
         />
@@ -645,8 +635,8 @@ const CaseDetailPage: React.FC = () => {
         <MeetingMinutesDialog
           open={meetingMinutesOpen}
           onClose={() => setMeetingMinutesOpen(false)}
-          caseInfo={{ 
-            caseId: caseDetail.id.toString(), 
+          caseInfo={{
+            caseId: caseDetail.id.toString(),
             caseName: displayCase.name,
           }}
           meetingTitle={currentMeetingTitle}

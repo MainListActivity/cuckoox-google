@@ -316,16 +316,23 @@ export default function DocumentCenterDemo() {
               <Typography color="text.primary">立案材料</Typography>
             </Breadcrumbs>
           }
+          // 使用内置保存功能，移除原来的保存按钮
+          onSave={async (content) => {
+            console.log('保存文档内容:', content);
+            // 模拟保存到服务器
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                console.log('文档保存完成');
+                resolve();
+              }, 1000);
+            });
+          }}
+          enableAutoSave={true}
+          autoSaveInterval={10000} // 10秒自动保存
+          showSaveButton={true}
+          saveButtonText="保存文档"
           actions={
             <>
-              <Button 
-                startIcon={<Save />} 
-                variant="contained" 
-                color="primary" 
-                size="small"
-              >
-                保存
-              </Button>
               <Button startIcon={<Share />} variant="outlined" size="small">分享</Button>
               <IconButton 
                 size="small" 

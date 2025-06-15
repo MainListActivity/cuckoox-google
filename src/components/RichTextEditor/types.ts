@@ -90,6 +90,14 @@ export interface RichTextEditorProps {
   breadcrumbs?: React.ReactNode;
   actions?: React.ReactNode;
 
+  // 保存相关功能
+  onSave?: (content: QuillDelta) => Promise<void>;
+  isSaving?: boolean;
+  enableAutoSave?: boolean;
+  autoSaveInterval?: number; // 毫秒
+  showSaveButton?: boolean;
+  saveButtonText?: string;
+
   // 文档视图模式
   viewMode?: 'standard' | 'document';
   initialContentForDocumentView?: any[];
@@ -112,6 +120,12 @@ export interface EditorToolbarProps {
   onToggleContextPanel: () => void;
   onAddComment: () => void;
   remoteCursors: Record<string, RemoteCursor>;
+  
+  // 保存相关props
+  onSave?: () => void;
+  isSaving?: boolean;
+  showSaveButton?: boolean;
+  saveButtonText?: string;
 }
 
 // 大纲面板Props
