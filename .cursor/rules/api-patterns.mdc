@@ -99,7 +99,7 @@ export interface CaseData {
   acceptance_date: string;
   process_stage: string;
   creator: string;
-  filing_materials: string; // QuillJS content
+  filing_materials: string; // document content
 }
 
 export const createCase = async (caseData: CaseData): Promise<CaseData> => {
@@ -157,7 +157,7 @@ export interface ClaimData {
   total_amount: number;
   currency: string;
   description?: string;
-  attachments: string; // QuillJS content
+  attachments: string; // document content
   status: 'draft' | 'submitted' | 'approved' | 'rejected';
   audit_result?: AuditResult;
 }
@@ -184,7 +184,7 @@ export interface AuditResult {
   audit_total: number;
   audit_status: string;
   audit_opinion: string;
-  additional_materials?: string; // QuillJS content
+  additional_materials?: string; // document content
   audit_time: string;
 }
 

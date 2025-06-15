@@ -49,6 +49,8 @@ import {
   mdiChevronLeft,
   mdiAccount,
 } from '@mdi/js';
+import Logo from './Logo';
+import { RecordId } from 'surrealdb';
 
 // Icon map for dynamic menu items
 const iconMap: { [key: string]: string } = {
@@ -159,7 +161,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setProfileAnchorEl(null);
   };
 
-  const handleCaseSelect = async (caseId: string) => {
+  const handleCaseSelect = async (caseId: RecordId) => {
     if (caseId !== selectedCaseId) {
       await selectCase(caseId);
     }
@@ -237,10 +239,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <Toolbar sx={{ 
         minHeight: { xs: 56, sm: 64 },
         px: 2,
-        justifyContent: 'space-between',
+        justifyContent: 'start',
       }}>
-        <Typography variant="h6" noWrap sx={{ color: 'white' }}>
-          破产管理系统
+        <Logo 
+          size="small" 
+          variant="icon" 
+          color="white"
+        />
+        <Typography variant="h6" noWrap sx={{ color: 'white', ml: 1 }}>
+          CuckooX
         </Typography>
         {isMobile && (
           <IconButton
@@ -398,7 +405,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 startIcon={<SvgIcon><path d={mdiBriefcaseSearchOutline} /></SvgIcon>}
               >
                 <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                  {selectedCaseId ? userCases.find(c => c.id.toString() === selectedCaseId)?.name : t('select_case_button', 'Select Case')}
+                  {selectedCaseId ? userCases.find(c => c.id === selectedCaseId)?.name : t('select_case_button', 'Select Case')}
                 </Box>
               </Button>
               <Menu
@@ -411,8 +418,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 {userCases.map((caseItem) => (
                   <MenuItem
                     key={caseItem.id.toString()}
-                    selected={caseItem.id.toString() === selectedCaseId}
-                    onClick={() => handleCaseSelect(caseItem.id.toString())}
+                    selected={caseItem.id === selectedCaseId}
+                    onClick={() => handleCaseSelect(caseItem.id)}
                   >
                     {caseItem.name || caseItem.case_number || caseItem.id.toString()}
                   </MenuItem>

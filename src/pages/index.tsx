@@ -39,6 +39,7 @@ import {
   mdiLogin,
   mdiViewDashboard,
 } from '@mdi/js';
+import Logo from '../components/Logo';
 
 const HomePage: React.FC = () => {
   const { isLoggedIn, user } = useAuth();
@@ -151,9 +152,13 @@ const HomePage: React.FC = () => {
         }}
       >
         <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 700 }}>
-            CuckooX
-          </Typography>
+          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+            <Logo 
+              size="large" 
+              variant="full" 
+              onClick={() => navigate('/')}
+            />
+          </Box>
           {isLoggedIn ? (
             <Stack direction="row" spacing={2}>
               <Button 

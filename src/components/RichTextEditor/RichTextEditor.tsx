@@ -1,0 +1,445 @@
+import React, {
+  forwardRef,
+  useCallback,
+  useRef,
+  useState,
+  useEffect,
+} from 'react';
+import Quill from 'quill';
+import {
+  Box,
+  Paper,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
+import { useSurrealClient as useSurreal } from '@/src/contexts/SurrealProvider';
+import { useTranslation } from 'react-i18next';
+import { uploadFile } from '@/src/services/fileUploadService';
+
+import EditorToolbar from './EditorToolbar';
+import OutlinePanel from './OutlinePanel';
+import ContextPanel from './ContextPanel';
+import ExtensionArea from './ExtensionArea';
+import EditorCore, { EditorCoreRef } from './EditorCore';
+import CollaborationManager from './CollaborationManager';
+
+import type {
+  RichTextEditorProps,
+  OutlineItem,
+  RemoteCursor,
+} from './types';
+
+const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
+  (
+    {
+      defaultValue,
+      onTextChange,
+      onSelectionChange,
+      placeholder,
+      readOnly = false,
+      className,
+      documentId,
+      userId,
+      userName,
+      contextInfo,
+      viewMode = 'standard',
+      initialContentForDocumentView,
+      comments = [],
+      extensionAreaTabs = [],
+      extensionAreaContent,
+      onExtensionAreaTabChange,
+      showExtensionArea = false,
+      breadcrumbs,
+      actions,
+    },
+    ref
+  ) => {
+    const { t } = useTranslation();
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const surreal = useSurreal();
+    
+    // Refs
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const editorCoreRef = useRef<EditorCoreRef>(null);
+    
+    // UI状态
+    const [showContextPanel, setShowContextPanel] = useState(true);
+    const [isOutlineOpen, setIsOutlineOpen] = useState(true);
+    const [outline, setOutline] = useState<OutlineItem[]>([]);
+    const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
+    
+    // 扩展区域状态
+    const [isExtensionAreaOpen, setIsExtensionAreaOpen] = useState(showExtensionArea);
+    const [extensionAreaHeight, setExtensionAreaHeight] = useState(400);
+    const [currentExtensionTab, setCurrentExtensionTab] = useState<string | null>(
+      extensionAreaTabs.length > 0 ? extensionAreaTabs[0].id : null
+    );
+
+    // 更新大纲数据的函数
+    const updateOutline = useCallback(() => {
+      const quill = editorCoreRef.current?.getQuill();
+      if (quill) {
+        const delta = quill.getContents();
+        const outlineItems: OutlineItem[] = [];
+
+        if (delta && delta.ops) {
+          delta.ops.forEach((op: any) => {
+            if (op.attributes && op.attributes.header && typeof op.insert === 'string') {
+              outlineItems.push({
+                level: op.attributes.header,
+                text: op.insert.trim()
+              });
+            }
+          });
+        }
+
+        setOutline(outlineItems);
+      }
+    }, []);
+
+    // 图片上传处理器
+    const imageHandler = useCallback(() => {
+      const quill = editorCoreRef.current?.getQuill();
+      if (!quill) return;
+
+      const range = quill.getSelection(true);
+      if (!range) return;
+
+      const input = document.createElement('input');
+      input.setAttribute('type', 'file');
+      input.setAttribute('accept', 'image/*');
+
+      input.onchange = async () => {
+        if (input.files && input.files.length > 0) {
+          const file = input.files[0];
+          const placeholderText = `\n[Uploading ${file.name}...]\n`;
+
+          quill.insertText(range.index, placeholderText, 'user');
+          quill.setSelection(range.index + placeholderText.length, 0);
+
+          try {
+            const uploadedFile = await uploadFile(file);
+            quill.deleteText(range.index, placeholderText.length);
+            quill.insertEmbed(range.index, 'image', uploadedFile.url);
+            quill.setSelection(range.index + 1, 0);
+          } catch (error) {
+            console.error('Image upload failed:', error);
+            const currentTextAroundOriginalRange = quill.getText(range.index, placeholderText.length);
+            if (currentTextAroundOriginalRange === placeholderText) {
+              quill.deleteText(range.index, placeholderText.length);
+            }
+            alert(t('image_upload_failed_message', 'Image upload failed. Please try again.'));
+          }
+        }
+      };
+      input.click();
+    }, [t]);
+
+    // 附件上传处理器
+    const attachmentHandler = useCallback(() => {
+      const quill = editorCoreRef.current?.getQuill();
+      if (!quill) return;
+
+      const range = quill.getSelection(true);
+      if (!range) return;
+
+      const input = document.createElement('input');
+      input.setAttribute('type', 'file');
+      input.setAttribute('accept', '*/*');
+
+      input.onchange = async () => {
+        if (input.files && input.files.length > 0) {
+          const file = input.files[0];
+          const placeholderText = `\n[Uploading file ${file.name}...]\n`;
+
+          quill.insertText(range.index, placeholderText, 'user');
+          quill.setSelection(range.index + placeholderText.length, 0);
+
+          try {
+            const uploadedFile = await uploadFile(file);
+            quill.deleteText(range.index, placeholderText.length);
+
+            quill.insertText(range.index, uploadedFile.name, {
+              'link': uploadedFile.url
+            });
+            quill.insertText(range.index + uploadedFile.name.length, ' ', 'user');
+            quill.setSelection(range.index + uploadedFile.name.length + 1, 0);
+          } catch (error) {
+            console.error('File attachment upload failed:', error);
+            const currentTextAroundOriginalRange = quill.getText(range.index, placeholderText.length);
+            if (currentTextAroundOriginalRange === placeholderText) {
+              quill.deleteText(range.index, placeholderText.length);
+            }
+            alert(t('file_upload_failed_message', 'File upload failed. Please try again.'));
+          }
+        }
+      };
+      input.click();
+    }, [t]);
+
+    // 添加批注处理器
+    const addCommentHandler = useCallback(() => {
+      const quill = editorCoreRef.current?.getQuill();
+      if (!quill) return;
+
+      const range = quill.getSelection(true);
+      if (!range || range.length === 0) {
+        alert(t('select_text_for_comment', '请先选择要添加批注的文本'));
+        return;
+      }
+
+      quill.formatText(range.index, range.length, {
+        'background': '#FFF9C4'
+      });
+
+      console.log('添加批注:', quill.getText(range.index, range.length));
+    }, [t]);
+
+    // 滚动到标题位置
+    const scrollToHeader = useCallback((headerText: string, level: number) => {
+      const quill = editorCoreRef.current?.getQuill();
+      if (!quill) return;
+
+      const text = quill.getText();
+      const textLength = text.length;
+
+      for (let i = 0; i < textLength; i++) {
+        const pos = text.indexOf(headerText, i);
+        if (pos === -1) break;
+
+        const formats = quill.getFormat(pos, headerText.length);
+
+        if (formats.header === level) {
+          quill.setSelection(pos, 0);
+
+          const editorElem = quill.root.parentElement;
+          if (editorElem) {
+            const bounds = quill.getBounds(pos);
+            if (bounds) {
+              editorElem.scrollTop = bounds.top;
+            }
+          }
+          break;
+        }
+
+        i = pos + 1;
+      }
+    }, []);
+
+    // 扩展区域Tab变更处理
+    const handleExtensionTabChange = useCallback((tabId: string) => {
+      setCurrentExtensionTab(tabId);
+      if (onExtensionAreaTabChange) {
+        onExtensionAreaTabChange(tabId);
+      }
+    }, [onExtensionAreaTabChange]);
+
+    // 编辑器准备完成回调
+    const handleEditorReady = useCallback((quill: Quill) => {
+      // 设置ref引用
+      if (typeof ref === 'function') {
+        ref(quill);
+      } else if (ref) {
+        ref.current = quill;
+      }
+
+      // 初始更新大纲
+      updateOutline();
+
+      // 监听文本变化以更新大纲
+      quill.on('text-change', updateOutline);
+    }, [ref, updateOutline]);
+
+    // 处理扩展区域显示状态
+    useEffect(() => {
+      setIsExtensionAreaOpen(showExtensionArea);
+    }, [showExtensionArea]);
+
+    // 更新当前扩展区域Tab
+    useEffect(() => {
+      if (extensionAreaTabs.length > 0 && !currentExtensionTab) {
+        setCurrentExtensionTab(extensionAreaTabs[0].id);
+      }
+    }, [extensionAreaTabs, currentExtensionTab]);
+
+    return (
+      <Box
+        className={className}
+        sx={{
+          position: 'relative',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: theme.palette.background.default,
+        }}
+      >
+        {/* 工具栏 */}
+        <EditorToolbar
+          breadcrumbs={breadcrumbs}
+          actions={actions}
+          contextInfo={contextInfo}
+          showContextPanel={showContextPanel}
+          onToggleContextPanel={() => setShowContextPanel(!showContextPanel)}
+          onAddComment={addCommentHandler}
+          remoteCursors={remoteCursors}
+        />
+
+        {/* 主内容区域 */}
+        <Box
+          sx={{
+            flex: 1,
+            position: 'relative',
+            overflow: 'hidden',
+            display: 'flex',
+          }}
+        >
+          {/* 左侧大纲面板 */}
+          {isOutlineOpen && (
+            <Box
+              sx={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 280,
+                zIndex: 100,
+                backgroundColor: theme.palette.background.paper,
+                boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
+              }}
+            >
+              <OutlinePanel
+                isOpen={isOutlineOpen}
+                outline={outline}
+                onClose={() => setIsOutlineOpen(false)}
+                onScrollToHeader={scrollToHeader}
+              />
+            </Box>
+          )}
+
+          {/* 左侧大纲按钮 */}
+          {!isOutlineOpen && (
+            <Paper
+              elevation={4}
+              onClick={() => setIsOutlineOpen(true)}
+              sx={{
+                position: 'absolute',
+                top: '30%',
+                left: 8,
+                zIndex: 50,
+                cursor: 'pointer',
+                bgcolor: 'background.paper',
+                writingMode: 'vertical-rl',
+                textOrientation: 'mixed',
+                p: '12px 8px',
+                borderRadius: 2,
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              {t('outline', '大纲')}
+            </Paper>
+          )}
+
+          {/* 中心编辑器区域 */}
+          <Box
+            sx={{
+              position: 'absolute',
+              left: '50%',
+              top: 0,
+              bottom: 0,
+              transform: 'translateX(-50%)',
+              width: { xs: '100%', sm: '800px' },
+              maxWidth: { xs: 'calc(100% - 32px)', sm: '800px' },
+              display: 'flex',
+              flexDirection: 'column',
+              zIndex: 10,
+            }}
+          >
+            <EditorCore
+              ref={editorCoreRef}
+              containerRef={containerRef}
+              defaultValue={defaultValue}
+              initialContentForDocumentView={initialContentForDocumentView}
+              placeholder={placeholder}
+              readOnly={readOnly}
+              imageHandler={imageHandler}
+              attachmentHandler={attachmentHandler}
+              onReady={handleEditorReady}
+            />
+          </Box>
+
+          {/* 右侧上下文面板 */}
+          {contextInfo && showContextPanel && !isMobile && (
+            <Box
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 16,
+                width: 320,
+                maxHeight: 'calc(100% - 32px)',
+                zIndex: 100,
+              }}
+            >
+              <ContextPanel
+                contextInfo={contextInfo}
+                showPanel={showContextPanel}
+                onClose={() => setShowContextPanel(false)}
+              />
+            </Box>
+          )}
+
+          {/* 移动端上下文面板 */}
+          {contextInfo && showContextPanel && isMobile && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 16,
+                left: 16,
+                right: 16,
+                zIndex: 200,
+              }}
+            >
+              <ContextPanel
+                contextInfo={contextInfo}
+                showPanel={showContextPanel}
+                onClose={() => setShowContextPanel(false)}
+              />
+            </Box>
+          )}
+        </Box>
+
+        {/* 扩展区域 */}
+        <ExtensionArea
+          tabs={extensionAreaTabs}
+          content={extensionAreaContent}
+          isOpen={isExtensionAreaOpen}
+          height={extensionAreaHeight}
+          currentTabId={currentExtensionTab}
+          onTabChange={handleExtensionTabChange}
+          onToggle={() => setIsExtensionAreaOpen(!isExtensionAreaOpen)}
+          onHeightChange={setExtensionAreaHeight}
+        />
+
+        {/* 协作管理器 */}
+        <CollaborationManager
+          quillRef={editorCoreRef}
+          config={{
+            documentId,
+            userId,
+            userName,
+            surreal,
+          }}
+          onTextChange={onTextChange}
+          onSelectionChange={onSelectionChange}
+          onRemoteCursorsChange={setRemoteCursors}
+        />
+      </Box>
+    );
+  }
+);
+
+RichTextEditor.displayName = 'RichTextEditor';
+
+export default RichTextEditor; 

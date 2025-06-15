@@ -24,7 +24,7 @@ src/components/
 ### 重要的通用组件
 
 - [src/components/Layout.tsx](mdc:src/components/Layout.tsx) - 主布局组件
-- [src/components/RichTextEditor.tsx](mdc:src/components/RichTextEditor.tsx) - QuillJS富文本编辑器
+- [src/components/RichTextEditor/index.ts](mdc:src/components/RichTextEditor/index.ts) - QuillJS富文本编辑器
 - [src/components/GlobalLoader.tsx](mdc:src/components/GlobalLoader.tsx) - 全局加载状态
 - [src/components/GlobalError.tsx](mdc:src/components/GlobalError.tsx) - 全局错误处理
 
@@ -138,7 +138,7 @@ import {
 
 ### QuillJS集成
 
-- [src/components/RichTextEditor.tsx](mdc:src/components/RichTextEditor.tsx) - 统一的富文本编辑器组件
+- [src/components/RichTextEditor/index.ts](mdc:src/components/RichTextEditor/index.ts) - 统一的富文本编辑器组件
 - 支持图片上传到MinIO
 - 支持文件附件管理
 - 主题适配深色/亮色模式

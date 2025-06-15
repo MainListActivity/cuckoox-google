@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CuckooX Logo 设计预览</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #f6f6f6 0%, #e8f5e8 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #26A69A 0%, #00695C 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        
+        .content {
+            padding: 2rem;
+        }
+        
+        .section {
+            margin-bottom: 3rem;
+        }
+        
+        .section h2 {
+            color: #00695C;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #26A69A;
+            padding-bottom: 0.5rem;
+        }
+        
+        .logo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .logo-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            border: 1px solid #e9ecef;
+            transition: transform 0.2s ease;
+        }
+        
+        .logo-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .logo-item h3 {
+            color: #00695C;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+        
+        .logo-item .description {
+            color: #666;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+        
+        .background-demos {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        
+        .bg-demo {
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        
+        .bg-light { background: #ffffff; border: 1px solid #e9ecef; }
+        .bg-dark { background: #37474F; }
+        .bg-primary { background: linear-gradient(135deg, #26A69A 0%, #00695C 100%); }
+        .bg-gray { background: #f6f6f6; }
+        
+        .size-demo {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 2rem;
+            padding: 2rem;
+            background: #f8f9fa;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+        }
+        
+        .responsive-demo {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .device-mockup {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 1rem;
+            background: white;
+        }
+        
+        .device-mockup.mobile {
+            width: 320px;
+            margin: 0 auto;
+        }
+        
+        .device-mockup.tablet {
+            width: 768px;
+            margin: 0 auto;
+        }
+        
+        .device-mockup.desktop {
+            width: 100%;
+        }
+        
+        .mockup-header {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 1rem;
+        }
+        
+        .color-swatch {
+            text-align: center;
+            border-radius: 8px;
+            padding: 1rem;
+            color: white;
+            font-weight: 500;
+        }
+        
+        .color-swatch.light-text {
+            color: #333;
+        }
+        
+        @media (max-width: 768px) {
+            .logo-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .size-demo {
+                flex-direction: column;
+            }
+            
+            .device-mockup.tablet,
+            .device-mockup.desktop {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CuckooX Logo 设计预览</h1>
+            <p>破产案件全生命周期管理平台品牌标识设计</p>
+            <div style="margin-top: 1rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px;">
+                <strong>🎯 重设计特色：</strong>采用CX字母变形成更夸张的鸟形象，C形成鸟身，X形成翅膀
+            </div>
+        </div>
+        
+        <div class="content">
+            <!-- 主要Logo展示 -->
+            <div class="section">
+                <h2>主要Logo设计</h2>
+                <div class="logo-grid">
+                    <div class="logo-item">
+                        <h3>完整Logo</h3>
+                        <div style="display: flex; justify-content: center;">
+                            <img src="assets/logo/cuckoo-logo-main.svg" alt="CuckooX主要Logo" style="max-width: 100%; height: auto;">
+                        </div>
+                                                 <div class="description">
+                             <strong>CX字母变形鸟设计：</strong>C字母构成鸟身和头部，X字母形成夸张的四个翅膀，融合时钟元素体现时效管理
+                         </div>
+                    </div>
+                    
+                    <div class="logo-item">
+                        <h3>图标版本</h3>
+                        <div style="display: flex; justify-content: center; align-items: center; height: 100px;">
+                            <img src="assets/logo/cuckoo-icon.svg" alt="CuckooX图标" style="width: 64px; height: 64px;">
+                        </div>
+                                                 <div class="description">
+                             <strong>简化CX变形鸟：</strong>保持字母变形的核心设计理念，适用于应用图标、小尺寸展示和移动端
+                         </div>
+                    </div>
+                    
+                    <div class="logo-item">
+                        <h3>Favicon</h3>
+                        <div style="display: flex; justify-content: center; align-items: center; height: 100px;">
+                            <img src="assets/logo/favicon.svg" alt="CuckooX Favicon" style="width: 32px; height: 32px;">
+                        </div>
+                                                 <div class="description">
+                             <strong>极简CX鸟图标：</strong>保留C和X的核心字母特征，专为浏览器标签页设计，确保在最小尺寸下仍能识别鸟形
+                         </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 不同背景效果 -->
+            <div class="section">
+                <h2>不同背景展示效果</h2>
+                <div class="background-demos">
+                    <div class="bg-demo bg-light">
+                        <img src="assets/logo/cuckoo-logo-main.svg" alt="白色背景Logo" style="max-width: 200px; height: auto;">
+                        <p style="color: #666; margin-top: 1rem;">浅色背景</p>
+                    </div>
+                    
+                    <div class="bg-demo bg-dark">
+                        <img src="assets/logo/cuckoo-logo-main.svg" alt="深色背景Logo" style="max-width: 200px; height: auto;">
+                        <p style="color: white; margin-top: 1rem;">深色背景</p>
+                    </div>
+                    
+                    <div class="bg-demo bg-primary">
+                        <img src="assets/logo/cuckoo-icon.svg" alt="主题色背景Logo" style="width: 48px; height: 48px;">
+                        <p style="color: white; margin-top: 1rem;">主题色背景</p>
+                    </div>
+                    
+                    <div class="bg-demo bg-gray">
+                        <img src="assets/logo/cuckoo-logo-main.svg" alt="灰色背景Logo" style="max-width: 200px; height: auto;">
+                        <p style="color: #333; margin-top: 1rem;">灰色背景</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 响应式设计 -->
+            <div class="section">
+                <h2>响应式设计展示</h2>
+                <div class="responsive-demo">
+                    <div class="device-mockup desktop">
+                        <div class="mockup-header">
+                            <img src="assets/logo/favicon.svg" style="width: 16px; height: 16px; margin-right: 8px;">
+                            <span style="font-size: 14px; color: #666;">Desktop - 1200px+</span>
+                        </div>
+                        <div style="text-align: center; padding: 2rem;">
+                            <img src="assets/logo/cuckoo-logo-main.svg" alt="桌面版Logo" style="max-width: 300px; height: auto;">
+                        </div>
+                    </div>
+                    
+                    <div class="device-mockup tablet">
+                        <div class="mockup-header">
+                            <img src="assets/logo/favicon.svg" style="width: 16px; height: 16px; margin-right: 8px;">
+                            <span style="font-size: 14px; color: #666;">Tablet - 768px - 1199px</span>
+                        </div>
+                        <div style="text-align: center; padding: 1.5rem;">
+                            <img src="assets/logo/cuckoo-icon.svg" alt="平板版Logo" style="width: 48px; height: 48px; margin-right: 12px;">
+                            <span style="font-size: 20px; color: #00695C; font-weight: 500;">CuckooX</span>
+                        </div>
+                    </div>
+                    
+                    <div class="device-mockup mobile">
+                        <div class="mockup-header">
+                            <img src="assets/logo/favicon.svg" style="width: 16px; height: 16px; margin-right: 8px;">
+                            <span style="font-size: 14px; color: #666;">Mobile - 320px - 767px</span>
+                        </div>
+                        <div style="text-align: center; padding: 1rem;">
+                            <img src="assets/logo/cuckoo-icon.svg" alt="移动版Logo" style="width: 32px; height: 32px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 尺寸对比 -->
+            <div class="section">
+                <h2>尺寸对比展示</h2>
+                <div class="size-demo">
+                    <div style="text-align: center;">
+                        <img src="assets/logo/favicon.svg" style="width: 16px; height: 16px;">
+                        <p style="margin-top: 0.5rem; font-size: 12px; color: #666;">16px</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <img src="assets/logo/favicon.svg" style="width: 24px; height: 24px;">
+                        <p style="margin-top: 0.5rem; font-size: 12px; color: #666;">24px</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <img src="assets/logo/favicon.svg" style="width: 32px; height: 32px;">
+                        <p style="margin-top: 0.5rem; font-size: 12px; color: #666;">32px</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <img src="assets/logo/cuckoo-icon.svg" style="width: 48px; height: 48px;">
+                        <p style="margin-top: 0.5rem; font-size: 12px; color: #666;">48px</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <img src="assets/logo/cuckoo-icon.svg" style="width: 64px; height: 64px;">
+                        <p style="margin-top: 0.5rem; font-size: 12px; color: #666;">64px</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <img src="assets/logo/cuckoo-logo-main.svg" style="width: 120px; height: auto;">
+                        <p style="margin-top: 0.5rem; font-size: 12px; color: #666;">120px</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 色彩系统 -->
+            <div class="section">
+                <h2>色彩系统</h2>
+                <div class="color-palette">
+                    <div class="color-swatch" style="background: #26A69A;">
+                        <div>Teal 400</div>
+                        <div style="font-size: 12px; opacity: 0.8;">#26A69A</div>
+                    </div>
+                    <div class="color-swatch" style="background: #009688;">
+                        <div>Teal 500</div>
+                        <div style="font-size: 12px; opacity: 0.8;">#009688</div>
+                    </div>
+                    <div class="color-swatch" style="background: #00695C;">
+                        <div>Teal 700</div>
+                        <div style="font-size: 12px; opacity: 0.8;">#00695C</div>
+                    </div>
+                    <div class="color-swatch" style="background: #4DB6AC;">
+                        <div>Teal 300</div>
+                        <div style="font-size: 12px; opacity: 0.8;">#4DB6AC</div>
+                    </div>
+                    <div class="color-swatch light-text" style="background: #FFFFFF; border: 1px solid #e9ecef;">
+                        <div>White</div>
+                        <div style="font-size: 12px; opacity: 0.6;">#FFFFFF</div>
+                    </div>
+                    <div class="color-swatch" style="background: #37474F;">
+                        <div>Gray 800</div>
+                        <div style="font-size: 12px; opacity: 0.8;">#37474F</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 
