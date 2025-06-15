@@ -573,9 +573,6 @@ const CaseDetailPage: React.FC = () => {
          }
         actions={
           <>
-            <Button component={Link} to="/cases" startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>} size="small">
-              {t('case_detail_back_to_list_link')}
-            </Button>
             {!isReadOnly && (
               <Button 
                 startIcon={<Save />} 

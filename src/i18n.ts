@@ -70,15 +70,15 @@ const resources = {
       "case_detail_current_stage_label": "当前阶段",
       "case_detail_status_label": "案件状态", // ADDED
       "case_detail_details_label": "案件详情", // ADDED
-      "case_detail_timeline_title": "时间轴 (占位)", // Keep placeholder or translate
+      "case_detail_timeline_title": "时间轴", // Keep placeholder or translate
       "case_detail_timeline_event1": "立案: 2023-01-10", // ADDED (example, can be made dynamic)
       "case_detail_timeline_event2": "公告: 2023-01-15", // ADDED
       "case_detail_timeline_event3": "债权申报开始: 2023-02-15", // ADDED
-      "case_detail_filing_material_title": "立案材料 (只读预览)",
+      "case_detail_filing_material_title": "立案材料",
       "case_detail_filing_material_empty": "（当前无立案材料内容）",
-      "case_detail_actions_meeting_minutes_button": "填写会议纪要 (条件性显示)",
-      "case_detail_actions_change_status_button": "修改状态 (条件性显示)",
-      "case_detail_footer_info_1": "此页面将展示案件的详细信息，包括左侧固定的基本信息和时间轴，主区域展示立案材料（使用QuillJS渲染，只读）。",
+      "case_detail_actions_meeting_minutes_button": "填写会议纪要",
+      "case_detail_actions_change_status_button": "修改状态",
+      "case_detail_footer_info_1": "此页面将展示案件的详细信息，包括左侧固定的基本信息和时间轴，主区域展示立案材料。",
       "case_detail_footer_info_2": "操作（如修改状态、填写会议纪要）将根据案件阶段和用户权限显示。",
       "case_detail_error_not_found": "案件未找到。",
       "case_detail_error_fetch_failed": "获取案件详情失败。请稍后重试。",
@@ -104,7 +104,7 @@ const resources = {
       "create_case_filing_material_title": "立案材料",
       "create_case_filing_material_editor_placeholder": "（此处将集成可编辑的 RichTextEditor 用于撰写立案材料）",
       "create_case_filing_material_editor_area_placeholder": "[富文本编辑器区域]",
-      "create_case_save_button": "保存案件 (功能待实现)",
+      "create_case_save_button": "保存案件",
       
       // RichTextEditor (placeholder for editor itself)
       "richtexteditor_placeholder": "撰写内容...",
