@@ -106,7 +106,7 @@ const CaseDetailPage: React.FC = () => {
     type: 'case',
     data: {}
   });
-  const [showExtensionArea, setShowExtensionArea] = useState(true);
+  const [showExtensionArea, setShowExtensionArea] = useState(false);
 
   // Check if user is admin or has edit permissions
   const isAdmin = user?.github_id === '--admin--';

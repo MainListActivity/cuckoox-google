@@ -22,13 +22,13 @@ alwaysApply: true
 
 ```bash
 # 运行所有单元测试
-npm run test:run
+bun run test:run
 
 # 运行特定测试用例
-npx vitest --run --testNamePattern="CaseListPage renders search field and filter button" tests/unit/pages/cases/index.test.tsx
+bunx vitest --run --testNamePattern="CaseListPage renders search field and filter button" tests/unit/pages/cases/index.test.tsx
 
 # 运行测试UI界面
-npm run test:ui
+bun run test:ui
 
 ```
 
@@ -36,10 +36,10 @@ npm run test:ui
 
 ```bash
 # 1. 运行ESLint检查
-npx eslint src/**/*.tsx
+bunx eslint src/**/*.tsx
 
 # 2. 运行所有单元测试
-npm run test:run
+bun run test:run
 
 # 3. 确保所有测试通过后再提交代码
 ```
@@ -320,7 +320,7 @@ export const handlers = [
 
 ```bash
 # 生成覆盖率报告
-npm run test:run -- --coverage
+bun run test:run -- --coverage
 
 # 查看详细覆盖率报告
 open coverage/index.html
@@ -345,16 +345,16 @@ jobs:
           node-version: '18'
       
       - name: Install dependencies
-        run: npm ci
+        run: bun ci
       
       - name: Run ESLint
-        run: npm run lint
+        run: bun run lint
       
       - name: Run unit tests
-        run: npm run test:run
+        run: bun run test:run
       
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: bun run test:e2e
 ```
 
 ## 重要配置文件

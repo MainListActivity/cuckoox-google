@@ -27,7 +27,6 @@ import {
   alpha,
   Tooltip,
   AppBar,
-  Dialog,
   useMediaQuery,
   Button,
   List,
@@ -125,7 +124,7 @@ interface RichTextEditorProps {
   // New props for Document View mode
   viewMode?: 'standard' | 'document';
   initialContentForDocumentView?: any[];
-  comments?: Comment[];
+  _comments?: Comment[];
   caseInfoForDocumentView?: CaseInfoForDocView;
 
   // 新增的Props
@@ -168,7 +167,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       contextInfo,
       viewMode = 'standard',
       initialContentForDocumentView,
-      comments = [],
+      _comments = [],
       extensionAreaTabs = [],
       extensionAreaContent,
       onExtensionAreaTabChange,
@@ -199,7 +198,6 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
 
     // States for Document View
     const [isOutlineOpen, setIsOutlineOpen] = useState(true);
-    const [isCommentsPanelOpen, setIsCommentsPanelOpen] = useState(false);
     const [outline, setOutline] = useState<OutlineItem[]>([]);
 
     // 新增状态
@@ -963,7 +961,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       });
 
       // 显示评论面板
-      setIsCommentsPanelOpen(true);
+      // setIsCommentsPanelOpen(true);
 
       // 这里可以调用函数来添加一个新的评论
       // 实际项目中会将此评论保存到数据库
@@ -971,7 +969,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
     }, []);
 
     // 文档评论组件
-    const CommentsPanel = ({ comments }: { comments: Comment[] }) => {
+    const _CommentsPanel = ({ comments }: { comments: Comment[] }) => {
       if (!comments || comments.length === 0) {
         return (
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
@@ -1126,13 +1124,9 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           <Paper
             elevation={3}
             sx={{
-              position: 'absolute',
-              top: 16,
-              right: 16,
-              width: { xs: 280, sm: 320 },
-              maxHeight: 'calc(100vh - 120px)',
+              width: '100%',
+              maxHeight: '100%',
               overflow: 'auto',
-              zIndex: 1000,
               backdropFilter: 'blur(10px)',
               backgroundColor: alpha(theme.palette.background.paper, 0.95),
               border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
@@ -1211,38 +1205,14 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           backgroundColor: theme.palette.background.default,
         }}
       >
-        {/* 左侧大纲按钮 */}
-        {!isOutlineOpen && (
-          <Paper
-            elevation={4}
-            onClick={() => setIsOutlineOpen(true)}
-            sx={{
-              position: 'absolute',
-              top: '30%',
-              left: 0,
-              zIndex: 10,
-              cursor: 'pointer',
-              bgcolor: 'background.paper',
-              writingMode: 'vertical-rl',
-              textOrientation: 'mixed',
-              p: '12px 8px',
-              borderTopRightRadius: 4,
-              borderBottomRightRadius: 4,
-              fontSize: '0.875rem',
-              fontWeight: 500
-            }}
-          >
-            大纲
-          </Paper>
-        )}
-
-        {/* Custom Toolbar */}
+        {/* Custom Toolbar - 固定在顶部 */}
         <AppBar
           position="static"
           elevation={0}
           sx={{
             backgroundColor: theme.palette.background.paper,
             borderBottom: `1px solid ${theme.palette.divider}`,
+            zIndex: 1000,
             '& .MuiToolbar-root': {
               minHeight: 56,
               px: 2,
@@ -1331,7 +1301,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
                 {/* Collaboration indicators */}
                 {Object.keys(remoteCursors).length > 0 && (
                   <Stack direction="row" spacing={-1}>
-                    {Object.values(remoteCursors).slice(0, 3).map((cursor: any, index) => (
+                    {Object.values(remoteCursors).slice(0, 3).map((cursor: any) => (
                       <Tooltip key={cursor.userId} title={cursor.userName || cursor.userId}>
                         <Avatar
                           sx={{
@@ -1394,24 +1364,27 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           </Toolbar>
         </AppBar>
 
-        {/* Editor Content */}
+        {/* Main Content Area - 使用完全新的布局结构 */}
         <Box
           sx={{
             flex: 1,
-            display: 'flex',
             position: 'relative',
             overflow: 'hidden',
+            display: 'flex',
           }}
         >
-          {/* 左侧大纲面板 - 修改为固定定位而不是绝对定位 */}
+          {/* 左侧大纲面板 - 绝对定位，不影响中心编辑器 */}
           {isOutlineOpen && (
             <Box
               sx={{
+                position: 'absolute',
+                left: 0,
+                top: 0,
+                bottom: 0,
                 width: 280,
-                height: '100%',
-                flexShrink: 0,
-                position: 'relative',
-                zIndex: 20
+                zIndex: 100,
+                backgroundColor: theme.palette.background.paper,
+                boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
               }}
             >
               <OutlinePanel
@@ -1422,65 +1395,147 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
             </Box>
           )}
 
-          {/* Main Editor Area - 修改布局，当大纲打开时内容自动向右移动 */}
+          {/* 左侧大纲按钮 - 当大纲面板关闭时显示 */}
+          {!isOutlineOpen && (
+            <Paper
+              elevation={4}
+              onClick={() => setIsOutlineOpen(true)}
+              sx={{
+                position: 'absolute',
+                top: '30%',
+                left: 8,
+                zIndex: 50,
+                cursor: 'pointer',
+                bgcolor: 'background.paper',
+                writingMode: 'vertical-rl',
+                textOrientation: 'mixed',
+                p: '12px 8px',
+                borderRadius: 2,
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              }}
+            >
+              大纲
+            </Paper>
+          )}
+
+          {/* 中心编辑器区域 - 固定宽度居中，独立滚动 */}
           <Box
             sx={{
-              flex: 1,
+              position: 'absolute',
+              left: '50%',
+              top: 0,
+              bottom: 0,
+              transform: 'translateX(-50%)',
+              width: { xs: '100%', sm: '800px' },
+              maxWidth: { xs: 'calc(100% - 32px)', sm: '800px' },
               display: 'flex',
               flexDirection: 'column',
-              maxWidth: showContextPanel && contextInfo && !isMobile ? 'calc(100% - 360px)' : '100%',
-              transition: 'max-width 0.3s ease',
+              zIndex: 10,
             }}
           >
-            <Paper
-              elevation={0}
+            <Box
               sx={{
                 flex: 1,
-                m: { xs: 1, sm: 2 },
-                maxWidth: { xs: '100%', sm: 800 },
-                mx: 'auto',
-                width: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: theme.palette.mode === 'light'
-                  ? '0px 2px 8px rgba(0, 0, 0, 0.1)'
-                  : '0px 2px 8px rgba(0, 0, 0, 0.3)',
-                '& .ql-container': {
-                  flex: 1,
-                  border: 'none',
-                  borderRadius: 0,
-                  fontFamily: theme.typography.fontFamily,
-                  fontSize: '16px',
-                  lineHeight: 1.6,
+                overflow: 'auto',
+                px: { xs: 2, sm: 3 },
+                py: 2,
+                scrollBehavior: 'smooth',
+                '&::-webkit-scrollbar': {
+                  width: '8px',
                 },
-                '& .ql-editor': {
-                  margin: 0,
-                  padding: { xs: '20px 16px', sm: '32px 48px' },
-                  minHeight: isExtensionAreaOpen ? `calc(100vh - ${extensionAreaHeight + 200}px)` : 'calc(100vh - 200px)',
-                  '&.ql-blank::before': {
-                    left: { xs: 16, sm: 48 },
-                    fontStyle: 'normal',
-                    color: theme.palette.text.disabled,
+                '&::-webkit-scrollbar-track': {
+                  backgroundColor: 'transparent',
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  backgroundColor: alpha(theme.palette.text.secondary, 0.3),
+                  borderRadius: '4px',
+                  '&:hover': {
+                    backgroundColor: alpha(theme.palette.text.secondary, 0.5),
                   },
-                },
-                // 隐藏Quill自带的工具栏
-                '& .ql-toolbar.ql-snow': {
-                  display: 'none',
-                  borderBottom: 'none',
-                  boxShadow: 'none',
                 },
               }}
             >
-              <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }} />
-            </Paper>
+              <Paper
+                elevation={0}
+                sx={{
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 'calc(100vh - 300px)',
+                  boxShadow: theme.palette.mode === 'light'
+                    ? '0px 2px 12px rgba(0, 0, 0, 0.08)'
+                    : '0px 2px 12px rgba(0, 0, 0, 0.25)',
+                  '& .ql-container': {
+                    flex: 1,
+                    border: 'none',
+                    borderRadius: 0,
+                    fontFamily: theme.typography.fontFamily,
+                    fontSize: '16px',
+                    lineHeight: 1.6,
+                  },
+                  '& .ql-editor': {
+                    margin: 0,
+                    padding: { xs: '24px 20px', sm: '40px 48px' },
+                    minHeight: 'calc(100vh - 300px)',
+                    '&.ql-blank::before': {
+                      left: { xs: 20, sm: 48 },
+                      fontStyle: 'normal',
+                      color: theme.palette.text.disabled,
+                    },
+                  },
+                  // 隐藏Quill自带的工具栏
+                  '& .ql-toolbar.ql-snow': {
+                    display: 'none',
+                    borderBottom: 'none',
+                    boxShadow: 'none',
+                  },
+                }}
+              >
+                <div ref={containerRef} style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }} />
+              </Paper>
+            </Box>
           </Box>
 
-          {/* Context Panel */}
-          <ContextPanel
-            contextInfo={contextInfo}
-            showContextPanel={showContextPanel}
-            setShowContextPanel={setShowContextPanel}
-          />
+          {/* 右侧上下文面板 - 绝对定位，不影响中心编辑器 */}
+          {contextInfo && showContextPanel && !isMobile && (
+            <Box
+              sx={{
+                position: 'absolute',
+                right: 8,
+                top: 16,
+                width: 320,
+                maxHeight: 'calc(100% - 32px)',
+                zIndex: 100,
+              }}
+            >
+              <ContextPanel
+                contextInfo={contextInfo}
+                showContextPanel={showContextPanel}
+                setShowContextPanel={setShowContextPanel}
+              />
+            </Box>
+          )}
+
+          {/* 移动端上下文面板 - 浮动显示 */}
+          {contextInfo && showContextPanel && isMobile && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 16,
+                left: 16,
+                right: 16,
+                zIndex: 200,
+              }}
+            >
+              <ContextPanel
+                contextInfo={contextInfo}
+                showContextPanel={showContextPanel}
+                setShowContextPanel={setShowContextPanel}
+              />
+            </Box>
+          )}
         </Box>
 
         {/* Document Extension Area - 修复扩展区域收起后无法再次展开的问题 */}

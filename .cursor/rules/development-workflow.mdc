@@ -10,7 +10,7 @@ alwaysApply: false
 ### 环境准备
 
 1. **Node.js**: 确保安装 Node.js 18+
-2. **包管理器**: 使用 npm
+2. **包管理器**: 使用 bun
 3. **编辑器**: 推荐使用支持TypeScript的编辑器
 4. **Git配置**: 
    ```bash
@@ -22,16 +22,16 @@ alwaysApply: false
 
 ```bash
 # 安装依赖
-npm install
+bun install
 
 # 启动开发服务器
-npm run dev
+bun run dev
 
 # 运行测试
-npm run test:run
+bun run test:run
 
 # 代码检查
-npm run lint
+bun run lint
 ```
 
 ## 代码提交流程
@@ -40,12 +40,12 @@ npm run lint
 
 1. ✅ **ESLint检查通过**
    ```bash
-   npx eslint src/**/*.tsx
+   bunx eslint src/**/*.tsx
    ```
 
 2. ✅ **所有单元测试通过**
    ```bash
-   npm run test:run
+   bun run test:run
    ```
 
 3. ✅ **页面功能正常**

@@ -8,13 +8,13 @@ alwaysApply: true
 ## 基本开发流程
 
 1. **提交代码前必须执行单元测试**
-   - 运行命令: `npm run test:run`
-   - 确保ESLint检查通过: `npx eslint xxx.tsx`
+   - 运行命令: `bun run test:run`
+   - 确保ESLint检查通过: `bunx eslint xxx.tsx`
    - 所有测试必须通过才能提交代码
 
 2. **单元测试执行**
-   - 运行所有测试: `npm run test:run`
-   - 运行特定测试: `npx vitest --run --testNamePattern="测试用例名称" tests/unit/path/to/test.tsx`
+   - 运行所有测试: `bun run test:run`
+   - 运行特定测试: `bunx vitest --run --testNamePattern="测试用例名称" tests/unit/path/to/test.tsx`
 
 ## UI设计规范
 

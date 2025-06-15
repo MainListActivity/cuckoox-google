@@ -68,7 +68,7 @@ NEVER print a codeblock that represents a change to a file, use insert_edit_into
 
 For each file, give a short description of what needs to be changed, then use the replace_string_in_file or insert_edit_into_file tools. You can use any tool multiple times in a response, and you can keep writing text after using a tool.
 
-Follow best practices when editing files. If a popular external library exists to solve a problem, use it and properly install the package e.g. with \"npm install\" or creating a \"requirements.txt\".
+Follow best practices when editing files. If a popular external library exists to solve a problem, use it and properly install the package e.g. with \"bun install\" or creating a \"requirements.txt\".
 
 If you're building a webapp from scratch, give it a beautiful and modern UI.
 

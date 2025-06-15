@@ -14,6 +14,7 @@ import Layout from '@/src/components/Layout';
 import ProtectedRoute from '@/src/components/ProtectedRoute';
 import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
 import GlobalError from '@/src/components/GlobalError'; // ADDED
+import { RecordId } from 'surrealdb';
 
 // Lazy load pages for better performance
 const HomePage = React.lazy(() => import('@/src/pages/index'));
@@ -60,7 +61,7 @@ function App() {
                 const caseIdFromUrl = searchParams.get('case');
 
                 if (caseIdFromUrl) {
-                    if (auth.selectedCaseId !== caseIdFromUrl) {
+                    if (auth.selectedCaseId !== new RecordId('case', caseIdFromUrl)) {
                         console.log(`Attempting to select case from URL parameter: ${caseIdFromUrl}`);
                         // Ensure the caseIdFromUrl is valid for the user before attempting to select
                         // This check is technically redundant if auth.selectCase itself validates against userCases,

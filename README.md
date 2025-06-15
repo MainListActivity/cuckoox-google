@@ -14,10 +14,10 @@ git config --global core.sshCommand "ssh -i ~/.ssh/cuckoox"
 
 
 1. Install dependencies:
-   `npm install`
+   `bun install`
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.dev) to your Gemini API key
 3. Run the app:
-   `npm run dev`
+   `bun run dev`
 
 git config --global http.proxy socks5://127.0.0.1:7891
 
@@ -32,18 +32,18 @@ This project uses [Playwright](https://playwright.dev/) for End-to-End (E2E) tes
 If you haven't already, or if you're setting up the project on a new machine, you may need to install the browser binaries required by Playwright:
 
 ```bash
-npx playwright install --with-deps
+bunx playwright install --with-deps
 ```
 This command downloads the necessary browser executables (Chromium, Firefox, WebKit) and installs any required system dependencies.
 
 ### Running E2E Tests
 
-To run the E2E tests, use the following npm script:
+To run the E2E tests, use the following bun script:
 
 ```bash
-npm run test:e2e
+bun run test:e2e
 ```
-(If using pnpm, use `pnpm test:e2e`)
+(If using pbun, use `pbun test:e2e`)
 
 This command will execute all test files located in the `e2e/` directory using the Playwright test runner.
 
@@ -52,7 +52,7 @@ This command will execute all test files located in the `e2e/` directory using t
 After the tests complete, an HTML report will be generated in the `playwright-report` directory. You can open the `index.html` file in this directory to view a detailed report of the test execution:
 
 ```bash
-npx playwright show-report
+bunx playwright show-report
 ```
 Alternatively, you can directly open `playwright-report/index.html` in your browser.
 
