@@ -4,6 +4,11 @@
 
 基于对现有代码的深度分析，以及对development_design_editor.md方案的技术风险评估，我们采用渐进式改进策略，而非危险的全盘替换。
 
+**🔗 相关文档**:
+- [架构审查报告](editor_architecture_review.md) - 详细的代码审查结果和问题分析
+- [开发规范](../规范.md) - 项目整体开发规范
+- [测试指南](../规范.md#测试指南) - 单元测试规范和要求
+
 ## 📊 现状分析
 
 ### ✅ 现有优势
@@ -195,10 +200,13 @@ interface StandardEditorProps {
 - 用户满意度 > 4.5/5
 
 ### 技术指标
-- 代码覆盖率 > 85%
+- ESLint通过率 100% (当前32个问题需修复)
+- 代码覆盖率 > 85% (当前需要统计基准)
+- TypeScript类型安全 100% (当前24处any类型需替换)
 - 性能测试通过率 100%
 - 内存使用优化 30%
 - 协作同步延迟 < 500ms
+- React Hooks依赖检查通过率 100% (当前7处需修复)
 
 ## 🚀 为什么这个方案更好
 
@@ -247,18 +255,52 @@ interface StandardEditorProps {
 ### 🏗️ 准备阶段 (1周)
 
 #### 代码清理和环境准备
-- [ ] **P0** 修复现有ESLint错误 (0.5天)
+- [ ] **P0** 修复现有ESLint错误 (2天) 
   - [x] 修复 RichTextEditor.tsx 中的 `_viewMode` 和 `_comments` 属性错误
-  - [ ] 运行完整的ESLint检查，修复所有警告
-  - [ ] 更新TypeScript类型定义，确保类型安全
+  - [ ] 修复CollaborationManager.tsx中18处any类型使用 (1天)
+    - [ ] L79: 替换data: any, action: any为具体类型
+    - [ ] L98: 替换payload: any为DeltaPayload类型
+    - [ ] L102: 替换live回调参数any类型
+    - [ ] L129-155: 替换光标处理中的any类型
+    - [ ] L181-222: 替换查询结果any类型
+    - [ ] L340-380: 替换事件处理any类型
+  - [ ] 修复EditorCore.tsx中5处any类型使用 (0.5天)
+    - [ ] L12: 替换initialContentForDocumentView: any[]
+    - [ ] L22: 替换modules配置any类型
+    - [ ] L54: 替换Quill构造函数any类型
+    - [ ] L104: 替换事件处理器any类型
+  - [ ] 修复ExtensionArea.tsx中1处any类型使用 (0.1天)
+  - [ ] 修复React Hooks依赖缺失问题 (0.5天)
+    - [ ] CollaborationManager L56: 添加缺失的依赖项
+    - [ ] CollaborationManager L120: 添加onSelectionChange, surreal
+    - [ ] CollaborationManager L208: 添加surreal依赖
+    - [ ] CollaborationManager L258: 添加surreal依赖  
+    - [ ] CollaborationManager L385: 添加surreal依赖
+  - [ ] 修复引用管理问题 (0.1天)
+    - [ ] EditorCore L116: 修复containerRef清理逻辑
+  - [ ] 移除未使用的导入 (0.1天)
+    - [ ] CollaborationManager L1: 移除未使用的useState导入
 - [ ] **P0** 建立测试基准 (1天)
   - [ ] 运行现有测试套件，确保全部通过
   - [ ] 记录当前性能基准数据
   - [ ] 建立性能监控指标
-- [ ] **P1** 代码审查和文档整理 (2天)
-  - [ ] 审查现有组件架构，确认重构点
-  - [ ] 更新组件文档和API文档
-  - [ ] 创建改进前的功能清单
+  - [ ] 清理冗余测试文件
+    - [ ] 删除 src/components/RichTextEditor.test.tsx (旧版本)
+    - [ ] 保留 tests/unit/components/RichTextEditor.test.tsx (新版本)
+- [ ] **P0** 修复架构设计问题 (0.5天)
+  - [ ] 统一类型定义 (0.3天)
+    - [ ] 修复FullscreenRichTextEditor.tsx中重复的RichTextEditorProps定义
+    - [ ] 从types.ts导入统一的类型定义
+    - [ ] 确保所有组件使用一致的接口约定
+  - [ ] 完善TODO项实现计划 (0.2天)
+    - [ ] 制定MinIO图片上传配置实现计划 (attachment.tsx:224-225)
+    - [ ] 制定文件附件支持实现计划 (attachment.tsx:225)
+    - [ ] 制定管理员页面图片上传实现计划 (create-claim-attachments.tsx:85-86)
+- [x] **P1** 代码审查和文档整理 (2天) ✅
+  - [x] 审查现有组件架构，确认重构点
+  - [x] 更新组件文档和API文档  
+  - [x] 创建改进前的功能清单
+  - [x] 完成架构审查报告 (doc/document/editor_architecture_review.md)
 - [ ] **P1** 开发环境优化 (1天)
   - [ ] 设置开发环境的热重载优化
   - [ ] 配置组件开发的Storybook环境
@@ -442,11 +484,14 @@ interface StandardEditorProps {
 ### 📊 验收标准
 
 #### 技术指标
+- [ ] ESLint通过率 100% (修复32个问题)
+- [ ] TypeScript类型安全 100% (替换24处any类型)
+- [ ] React Hooks依赖检查通过率 100% (修复7处问题)
 - [ ] 代码覆盖率 ≥ 85%
-- [ ] ESLint通过率 100%
 - [ ] 编辑延迟 < 50ms
 - [ ] 页面加载时间 < 2s
 - [ ] 内存使用优化 ≥ 30%
+- [ ] 测试文件结构规范化 (移除冗余文件)
 
 #### 功能指标
 - [ ] 所有现有功能正常工作

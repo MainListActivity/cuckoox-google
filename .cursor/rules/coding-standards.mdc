@@ -7,14 +7,12 @@ alwaysApply: true
 
 ## 基本开发流程
 
-1. **提交代码前必须执行单元测试**
-   - 运行命令: `bun run test:run`
-   - 确保ESLint检查通过: `bunx eslint xxx.tsx`
+1. **提交代码前必须执行单元测试**，单元测试范围遵循最小原则
+   - 运行当前提交影响文件的单元测试: `bunx vitest --run --testNamePattern="测试用例名称" tests/unit/path/to/test.tsx`
+   - 不允许运行命令: `bun run test:run`
+   - 确保当前提交的文件ESLint检查通过: `bunx eslint xxx.tsx`
    - 所有测试必须通过才能提交代码
 
-2. **单元测试执行**
-   - 运行所有测试: `bun run test:run`
-   - 运行特定测试: `bunx vitest --run --testNamePattern="测试用例名称" tests/unit/path/to/test.tsx`
 
 ## UI设计规范
 
