@@ -115,7 +115,7 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
     console.log('[CollaborationManager] 初始化事件监听器');
 
     // 使用稳定的事件处理器，避免频繁重新绑定
-    const textChangeHandler = (delta: QuillDelta, oldDelta: QuillDelta, source: string) => {
+    const textChangeHandler = (delta: QuillDelta, _: QuillDelta, source: string) => {
 
       const currentQuill = quillRef.current?.getQuill();
       if (!currentQuill) return;
@@ -260,7 +260,7 @@ const CollaborationManager: React.FC<CollaborationManagerProps> = ({
       return;
     }
 
-    const selectionChangeHandler = async (range: QuillRange | null, oldRange: QuillRange | null, source: string) => {
+    const selectionChangeHandler = async (range: QuillRange | null, _: QuillRange | null, source: string) => {
       if (source === 'user' && range && surreal) {
         try {
           const cursorId = `cursor:${documentId}:${userId}`;
