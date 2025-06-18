@@ -255,38 +255,45 @@ interface StandardEditorProps {
 ### 🏗️ 准备阶段 (1周)
 
 #### 代码清理和环境准备
-- [ ] **P0** 修复现有ESLint错误 (2天) 
+优先修复error级别的错误，特别需要注意的是，如果涉及到surrealdb的，一定要按照项目中文档的正确用法来使用，不允许mock，不允许使用as 语法
+- [x] **P0** 修复现有ESLint错误 (2天) ✅
   - [x] 修复 RichTextEditor.tsx 中的 `_viewMode` 和 `_comments` 属性错误
-  - [ ] 修复CollaborationManager.tsx中18处any类型使用 (1天)
-    - [ ] L79: 替换data: any, action: any为具体类型
-    - [ ] L98: 替换payload: any为DeltaPayload类型
-    - [ ] L102: 替换live回调参数any类型
-    - [ ] L129-155: 替换光标处理中的any类型
-    - [ ] L181-222: 替换查询结果any类型
-    - [ ] L340-380: 替换事件处理any类型
-  - [ ] 修复EditorCore.tsx中5处any类型使用 (0.5天)
-    - [ ] L12: 替换initialContentForDocumentView: any[]
-    - [ ] L22: 替换modules配置any类型
-    - [ ] L54: 替换Quill构造函数any类型
-    - [ ] L104: 替换事件处理器any类型
-  - [ ] 修复ExtensionArea.tsx中1处any类型使用 (0.1天)
-  - [ ] 修复React Hooks依赖缺失问题 (0.5天)
-    - [ ] CollaborationManager L56: 添加缺失的依赖项
-    - [ ] CollaborationManager L120: 添加onSelectionChange, surreal
-    - [ ] CollaborationManager L208: 添加surreal依赖
-    - [ ] CollaborationManager L258: 添加surreal依赖  
-    - [ ] CollaborationManager L385: 添加surreal依赖
-  - [ ] 修复引用管理问题 (0.1天)
-    - [ ] EditorCore L116: 修复containerRef清理逻辑
-  - [ ] 移除未使用的导入 (0.1天)
-    - [ ] CollaborationManager L1: 移除未使用的useState导入
+  - [x] 修复CollaborationManager.tsx中18处any类型使用 (1天)
+    - [x] L1: 移除未使用的useState导入
+    - [x] L79: 替换data: any, action: any为具体类型
+    - [x] L98: 替换payload: any为DeltaPayload类型
+    - [x] L102: 替换live回调参数any类型 (使用正确的回调函数签名)
+    - [x] L129-155: 替换光标处理中的any类型
+    - [x] L181-222: 替换查询结果any类型 (使用DocumentRecord类型)
+    - [x] L340-380: 替换事件处理any类型
+  - [x] 修复EditorCore.tsx中5处any类型使用 (0.5天)
+    - [x] L12: 替换initialContentForDocumentView: any[]
+    - [x] L22: 替换modules配置any类型
+    - [x] L54: 替换Quill构造函数any类型
+    - [x] L104: 替换事件处理器any类型
+  - [x] 修复ExtensionArea.tsx中1处any类型使用 (0.1天)
+  - [x] 修复React Hooks依赖缺失问题 (0.5天)
+    - [x] CollaborationManager L56: 添加缺失的依赖项
+    - [x] CollaborationManager L120: 添加onSelectionChange, surreal
+    - [x] CollaborationManager L208: 添加surreal依赖
+    - [x] CollaborationManager L258: 添加surreal依赖  
+    - [x] CollaborationManager L385: 添加surreal依赖
+  - [x] 修复引用管理问题 (0.1天)
+    - [x] EditorCore L116: 修复containerRef清理逻辑
+  - [x] 移除未使用的导入 (0.1天)
+    - [x] CollaborationManager L1: 移除未使用的useState导入
+  - [x] 修复types.ts中的any类型使用
+    - [x] L52: 替换data: any为Record<string, unknown>
+    - [x] L70: 替换surreal?: any为surreal?: Surreal
+    - [x] L103: 替换initialContentForDocumentView?: any[]
+    - [x] L162: 替换initialContentForDocumentView?: any[]
 - [ ] **P0** 建立测试基准 (1天)
   - [ ] 运行现有测试套件，确保全部通过
   - [ ] 记录当前性能基准数据
   - [ ] 建立性能监控指标
   - [ ] 清理冗余测试文件
-    - [ ] 删除 src/components/RichTextEditor.test.tsx (旧版本)
-    - [ ] 保留 tests/unit/components/RichTextEditor.test.tsx (新版本)
+    - [x] 删除 src/components/RichTextEditor.test.tsx (旧版本)
+    - [x] 保留 tests/unit/components/RichTextEditor.test.tsx (新版本)
 - [ ] **P0** 修复架构设计问题 (0.5天)
   - [ ] 统一类型定义 (0.3天)
     - [ ] 修复FullscreenRichTextEditor.tsx中重复的RichTextEditorProps定义

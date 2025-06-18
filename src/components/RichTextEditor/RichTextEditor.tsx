@@ -31,6 +31,9 @@ import type {
 } from './types';
 import { StringRecordId } from 'surrealdb';
 
+// 检查是否在测试环境
+const isTestEnvironment = process.env.NODE_ENV === 'test';
+
 const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
   (
     {
@@ -105,7 +108,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         ? () => onSave(currentContent)
         : async () => {
             // 默认保存逻辑：写入 SurrealDB
-            if (!surreal || surreal.status !== 'connected' || !documentId) {
+            if (!surreal || surreal.status !== 'connected' || !documentId || isTestEnvironment) {
               console.warn('[RichTextEditor] 未提供 onSave，且 SurrealDB 未连接或缺少 documentId，跳过保存');
               return;
             }

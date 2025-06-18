@@ -9,7 +9,7 @@ import type { EditorCoreProps, QuillDelta } from './types';
 // 注册自定义图标
 const MDI_PAPERCLIP_ICON = '<svg viewBox="0 0 24 24"><path d="M16.5,6V17.5A4,4 0 0,1 12.5,21.5A4,4 0 0,1 8.5,17.5V5A2.5,2.5 0 0,1 11,2.5A2.5,2.5 0 0,1 13.5,5V15.5A1,1 0 0,1 12.5,16.5A1,1 0 0,1 11.5,15.5V6H10V15.5A2.5,2.5 0 0,0 12.5,18A2.5,2.5 0 0,0 15,15.5V5A4,4 0 0,0 11,1A4,4 0 0,0 7,5V17.5A5.5,5.5 0 0,0 12.5,23A5.5,5.5 0 0,0 18,17.5V6H16.5Z" /></svg>';
 
-const icons = Quill.import('ui/icons') as any;
+const icons = Quill.import('ui/icons') as Record<string, string>;
 if (icons && !icons['attach']) {
   icons['attach'] = MDI_PAPERCLIP_ICON;
 }
@@ -19,7 +19,7 @@ export interface EditorCoreRef {
   getContents: () => QuillDelta | null;
   setContents: (delta: QuillDelta, source?: string) => void;
   getText: () => string;
-  getSelection: () => any;
+  getSelection: () => { index: number; length: number } | null;
   setSelection: (index: number, length?: number) => void;
   focus: () => void;
   blur: () => void;
@@ -51,10 +51,10 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
     getQuill: () => quillRef.current,
     getContents: () => quillRef.current?.getContents() || null,
     setContents: (delta: QuillDelta, source = 'api') => {
-      quillRef.current?.setContents(delta, source as any);
+      quillRef.current?.setContents(delta, source as 'api' | 'user' | 'silent');
     },
     getText: () => quillRef.current?.getText() || '',
-    getSelection: () => quillRef.current?.getSelection(),
+    getSelection: () => quillRef.current?.getSelection() || null,
     setSelection: (index: number, length = 0) => {
       quillRef.current?.setSelection(index, length);
     },
@@ -101,7 +101,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
         if (typeof initialContent === 'string') {
           editor.clipboard.dangerouslyPasteHTML(initialContent);
         } else {
-          editor.setContents(initialContent as any, 'api');
+          editor.setContents(initialContent as QuillDelta, 'api');
         }
       }
 
@@ -113,7 +113,8 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
       }
 
       return () => {
-        const currentContainer = containerRef.current;
+        // 保存当前容器的引用，避免在清理函数中访问可能已经改变的ref
+        const currentContainer = container;
         if (currentContainer) {
           currentContainer.innerHTML = '';
         }

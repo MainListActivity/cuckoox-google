@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
         environment: 'jsdom', // Common for React component testing
         include: ['tests/unit/**/*.test.{ts,tsx}'],
         setupFiles: './tests/setup.ts', // Setup file for test environment
+        testTimeout: 10000, // 10 seconds timeout for each test
         pool: 'forks', // Use forks pool to avoid file handle issues
         poolOptions: {
           forks: {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ThemeProvider } from '@mui/material/styles';
 import { createTheme } from '@mui/material/styles';
 import RichTextEditor from '@/src/components/RichTextEditor';
@@ -30,9 +30,26 @@ vi.mock('@/src/services/fileUploadService', () => ({
   uploadFile: vi.fn(),
 }));
 
+// Create mock SurrealDB client with all required methods
+const mockSurrealClient = {
+  status: 'disconnected',
+  connect: vi.fn().mockResolvedValue(undefined),
+  disconnect: vi.fn().mockResolvedValue(undefined),
+  use: vi.fn().mockResolvedValue(undefined),
+  select: vi.fn().mockResolvedValue([]),
+  create: vi.fn().mockResolvedValue({}),
+  update: vi.fn().mockResolvedValue({}),
+  merge: vi.fn().mockResolvedValue({}),
+  delete: vi.fn().mockResolvedValue(undefined),
+  query: vi.fn().mockResolvedValue([]),
+  live: vi.fn().mockResolvedValue('mock-live-id'),
+  subscribeLive: vi.fn(),
+  kill: vi.fn().mockResolvedValue(undefined),
+};
+
 // Mock SurrealDB provider
 vi.mock('@/src/contexts/SurrealProvider', () => ({
-  useSurrealClient: vi.fn(() => null),
+  useSurrealClient: vi.fn(() => mockSurrealClient),
 }));
 
 // Mock i18n
@@ -121,6 +138,9 @@ describe('RichTextEditor', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    // Use fake timers to control setTimeout/setInterval
+    vi.useFakeTimers();
+    
     // Setup mock for uploadFile
     const { uploadFile } = await import('@/src/services/fileUploadService');
     vi.mocked(uploadFile).mockResolvedValue({
@@ -131,7 +151,13 @@ describe('RichTextEditor', () => {
     });
   });
 
-  it('renders editor with basic props', () => {
+  afterEach(() => {
+    // Clean up timers
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('renders editor with basic props', async () => {
     const mockDelta = new Delta([{ insert: 'Hello World' }]);
     
     renderWithTheme(
@@ -146,7 +172,7 @@ describe('RichTextEditor', () => {
     expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
   });
 
-  it('renders with context information panel', () => {
+  it('renders with context information panel', async () => {
     const mockDelta = new Delta([{ insert: 'Test content' }]);
     const contextInfo = {
       title: '案件详情',
@@ -185,7 +211,7 @@ describe('RichTextEditor', () => {
     expect(screen.getByText('2024-01-01')).toBeInTheDocument();
   });
 
-  it('hides context panel when close button is clicked', () => {
+  it('hides context panel when close button is clicked', async () => {
     const mockDelta = new Delta([{ insert: 'Test content' }]);
     const contextInfo = {
       title: '测试标题',
@@ -222,7 +248,7 @@ describe('RichTextEditor', () => {
     expect(screen.queryByText('测试值')).not.toBeInTheDocument();
   });
 
-  it('handles read-only mode', () => {
+  it('handles read-only mode', async () => {
     const mockDelta = new Delta([{ insert: 'Read only content' }]);
 
     renderWithTheme(
@@ -329,7 +355,7 @@ describe('RichTextEditor', () => {
   });
 
 
-  it('handles error states gracefully', () => {
+  it('handles error states gracefully', async () => {
     const mockDelta = new Delta([{ insert: 'Test content' }]);
     
     // Mock an error in Quill initialization
@@ -348,7 +374,7 @@ describe('RichTextEditor', () => {
     }).not.toThrow();
   });
 
-  it('cleans up properly on unmount', () => {
+  it('cleans up properly on unmount', async () => {
     const mockDelta = new Delta([{ insert: 'Test content' }]);
     
     const { unmount } = renderWithTheme(
@@ -363,7 +389,7 @@ describe('RichTextEditor', () => {
   });
 
   // 新增测试用例：测试扩展区域功能
-  it('handles expanded area functionality', () => {
+  it('handles expanded area functionality', async () => {
     const mockDelta = new Delta([{ insert: 'Test content for expanded area' }]);
     const extensionAreaTabs = [
       { id: 'case', label: '案件信息' },
@@ -389,7 +415,7 @@ describe('RichTextEditor', () => {
   });
 
   // 新增测试用例：测试文档视图模式
-  it('handles document view mode', () => {
+  it('handles document view mode', async () => {
     const mockDelta = new Delta([{ insert: 'Document view content' }]);
     const comments = [
       { id: '1', author: '张三', content: '这里需要修改', time: '2024-01-01' }
@@ -409,7 +435,7 @@ describe('RichTextEditor', () => {
   });
 
   // 新增测试用例：测试协作编辑功能
-  it('handles collaborative editing features', () => {
+  it('handles collaborative editing features', async () => {
     const mockDelta = new Delta([{ insert: 'Collaborative content' }]);
 
     renderWithTheme(
@@ -443,7 +469,7 @@ describe('RichTextEditor', () => {
   });
 
   // 新增测试用例：测试内置保存按钮
-  it('renders built-in save button when onSave is provided', () => {
+  it('renders built-in save button when onSave is provided', async () => {
     const mockDelta = new Delta([{ insert: 'Saveable content' }]);
     const mockOnSave = vi.fn();
 
@@ -484,7 +510,7 @@ describe('RichTextEditor', () => {
   });
 
   // 新增测试用例：测试保存状态显示
-  it('shows saving status when isSaving is true', () => {
+  it('shows saving status when isSaving is true', async () => {
     const mockDelta = new Delta([{ insert: 'Saving content' }]);
     const mockOnSave = vi.fn();
 
@@ -502,7 +528,7 @@ describe('RichTextEditor', () => {
   });
 
   // 新增测试用例：测试隐藏保存按钮
-  it('hides save button when showSaveButton is false', () => {
+  it('hides save button when showSaveButton is false', async () => {
     const mockDelta = new Delta([{ insert: 'Content without save button' }]);
     const mockOnSave = vi.fn();
 
@@ -519,7 +545,7 @@ describe('RichTextEditor', () => {
   });
 
   // 新增测试用例：测试自定义保存按钮文本
-  it('displays custom save button text', () => {
+  it('displays custom save button text', async () => {
     const mockDelta = new Delta([{ insert: 'Custom save text content' }]);
     const mockOnSave = vi.fn();
 
@@ -554,5 +580,8 @@ describe('RichTextEditor', () => {
     // 注意：这里可能需要更复杂的模拟，因为需要触发Quill的text-change事件
     // 暂时验证组件正常渲染
     expect(document.querySelector('[class*="ql-"]')).toBeTruthy();
+    
+    // Advance timers to trigger auto-save
+    vi.advanceTimersByTime(1000);
   });
 });

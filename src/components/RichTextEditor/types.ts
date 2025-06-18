@@ -1,5 +1,6 @@
 import type { Delta as QuillDeltaType, Range as QuillRange } from 'quill/core';
 import Quill from 'quill';
+import type Surreal from 'surrealdb';
 
 // 导出Delta类型
 export type QuillDelta = QuillDeltaType;
@@ -49,7 +50,7 @@ export interface ExtensionAreaTab {
 // 扩展区域内容接口
 export interface ExtensionAreaContent {
   type: 'case' | 'claim' | 'law' | 'related_docs';
-  data: any;
+  data: Record<string, unknown>;
   renderContent?: () => React.ReactNode;
 }
 
@@ -67,7 +68,7 @@ export interface CollaborationConfig {
   documentId?: string;
   userId?: string;
   userName?: string;
-  surreal?: any;
+  surreal?: Surreal;
 }
 
 // 文件上传接口
@@ -100,7 +101,7 @@ export interface RichTextEditorProps {
 
   // 文档视图模式
   viewMode?: 'standard' | 'document';
-  initialContentForDocumentView?: any[];
+  initialContentForDocumentView?: QuillDelta;
   comments?: Comment[];
   caseInfoForDocumentView?: CaseInfoForDocView;
 
@@ -159,7 +160,7 @@ export interface ExtensionAreaProps {
 export interface EditorCoreProps {
   containerRef: React.RefObject<HTMLDivElement | null>;
   defaultValue?: QuillDelta | string;
-  initialContentForDocumentView?: any[];
+  initialContentForDocumentView?: QuillDelta;
   placeholder?: string;
   readOnly?: boolean;
   imageHandler: () => void;

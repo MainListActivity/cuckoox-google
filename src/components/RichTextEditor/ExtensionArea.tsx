@@ -178,7 +178,7 @@ const ExtensionArea: React.FC<ExtensionAreaProps> = ({
 };
 
 // 默认内容渲染器组件
-const DefaultContentRenderer: React.FC<{ content: any }> = ({ content }) => {
+const DefaultContentRenderer: React.FC<{ content: ExtensionAreaProps['content'] }> = ({ content }) => {
   const { t } = useTranslation();
 
   if (!content) return null;
