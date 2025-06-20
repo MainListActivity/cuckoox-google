@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import Quill from 'quill';
 import { Paper, Box, useTheme, alpha } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -40,6 +40,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
   const theme = useTheme();
   const quillRef = useRef<Quill | null>(null);
   const defaultValueRef = useRef(defaultValue);
+  const isInitializingRef = useRef(false);
 
   // 更新默认值引用
   useLayoutEffect(() => {
@@ -65,7 +66,13 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
 
   // 初始化QuillJS编辑器
   useEffect(() => {
+    // 防护：如果已经在初始化中或已经有实例，则跳过
+    if (isInitializingRef.current || quillRef.current) {
+      return;
+    }
+
     if (containerRef.current) {
+      isInitializingRef.current = true;
 
       const container = containerRef.current;
       const editorContainer = container.children[0] as HTMLElement || container.appendChild(
@@ -106,6 +113,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
       }
 
       quillRef.current = editor;
+      isInitializingRef.current = false;
 
       // 通知父组件编辑器已准备好
       if (onReady) {
@@ -119,6 +127,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
           currentContainer.innerHTML = '';
         }
         quillRef.current = null;
+        isInitializingRef.current = false;
       };
     }
   }, [
