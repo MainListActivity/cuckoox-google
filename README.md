@@ -6,12 +6,34 @@ This contains everything you need to run your app locally.
 
 **Prerequisites:**  Node.js
 
+```shell
 ssh-keygen -t rsa -b 2048 -C "1025988443@qq.com" -f ~/.ssh/cuckoox
 
 git config --global user.email "1025988443@qq.com"
 git config --global user.name "MainActivity"
 git config --global core.sshCommand "ssh -i ~/.ssh/cuckoox"
+```
 
+```json
+{
+    "server": "xxxxx",
+    "server_port": 6001,
+    "password": "xxxx",
+    "local_port": 1080,
+    "local_address": "192.168.1.116",
+    "method": "aes-256-gcm",
+    "timeout": 120,
+    "mode": "tcp_and_udp",
+    "fast_open": false,
+    "locals": [
+        {
+            "protocol": "http",
+            "local_address": "192.168.1.116",
+            "local_port": 3128
+        }
+    ]
+}
+```
 
 1. Install dependencies:
    `bun install`
