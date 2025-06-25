@@ -1,6 +1,8 @@
 # AGENTS.md
 
-This file provides guidance to Jules Code (Jules) when working with code in this repository. Always use Chinese output.
+This file provides guidance to Jules Code (Jules) when working with code in this repository. 
+
+Always utilize Chinese for outputs and code comments.
 
 ## Development Commands
 
