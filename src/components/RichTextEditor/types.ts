@@ -9,6 +9,7 @@ export type QuillDelta = QuillDeltaType;
 export interface OutlineItem {
   level: number;
   text: string;
+  index?: number; // 在文档中的位置索引
 }
 
 // 评论接口
@@ -135,6 +136,7 @@ export interface OutlinePanelProps {
   outline: OutlineItem[];
   onClose: () => void;
   onScrollToHeader: (headerText: string, level: number) => void;
+  activeHeaderIndex?: number;
 }
 
 // 上下文面板Props

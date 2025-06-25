@@ -17,6 +17,7 @@ const OutlinePanel: React.FC<OutlinePanelProps> = ({
   outline,
   onClose,
   onScrollToHeader,
+  activeHeaderIndex = -1,
 }) => {
   const { t } = useTranslation();
 
@@ -62,10 +63,18 @@ const OutlinePanel: React.FC<OutlinePanelProps> = ({
             outline.map((item, index) => (
               <ListItemButton
                 key={index}
-                sx={{ 
+                selected={index === activeHeaderIndex}
+                sx={{
                   pl: item.level * 2, 
                   borderRadius: 1,
                   py: 0.5,
+                  '&.Mui-selected': {
+                    backgroundColor: 'primary.main',
+                    color: 'primary.contrastText',
+                    '&:hover': {
+                      backgroundColor: 'primary.dark',
+                    },
+                  },
                 }}
                 onClick={() => onScrollToHeader(item.text, item.level)}
               >

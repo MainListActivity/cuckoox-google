@@ -81,6 +81,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
     const [showContextPanel, setShowContextPanel] = useState(true);
     const [isOutlineOpen, setIsOutlineOpen] = useState(true);
     const [outline, setOutline] = useState<OutlineItem[]>([]);
+    const [activeHeaderIndex, setActiveHeaderIndex] = useState<number>(-1);
     const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
     
     // 扩展区域状态
@@ -185,6 +186,40 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       }
     }, [onTextChange, enableAutoSave, scheduleAutoSave]);
 
+    // 检测当前活动标题的函数
+    const detectActiveHeader = useCallback((currentOutline: OutlineItem[]) => {
+      const quill = editorCoreRef.current?.getQuill();
+      const mainContentArea = document.querySelector('[data-main-content-area="true"]');
+      
+      if (!quill || !mainContentArea || currentOutline.length === 0) {
+        setActiveHeaderIndex(-1);
+        return;
+      }
+
+      const scrollTop = mainContentArea.scrollTop;
+      let activeIndex = -1;
+
+      // 遍历所有标题，找到最接近当前滚动位置的标题
+      for (let i = 0; i < currentOutline.length; i++) {
+        const item = currentOutline[i];
+        if (item.index !== undefined) {
+          const bounds = quill.getBounds(item.index);
+          if (bounds) {
+            const headerTop = bounds.top;
+            
+            // 如果标题在当前视口上方或刚好可见，则认为是活动状态
+            if (headerTop <= scrollTop + 100) {
+              activeIndex = i;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+
+      setActiveHeaderIndex(activeIndex);
+    }, []);
+
     // 更新大纲数据的函数
     const updateOutline = useCallback(() => {
       const quill = editorCoreRef.current?.getQuill();
@@ -193,19 +228,69 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         const outlineItems: OutlineItem[] = [];
 
         if (delta && delta.ops) {
-          delta.ops.forEach((op: { attributes?: { header?: number }; insert?: unknown }) => {
-            if (op.attributes && op.attributes.header && typeof op.insert === 'string') {
+          let currentText = '';
+          let currentIndex = 0;
+          
+          for (let i = 0; i < delta.ops.length; i++) {
+            const op = delta.ops[i];
+            
+            if (typeof op.insert === 'string') {
+              if (op.insert === '\n') {
+                // 遇到换行符，检查是否有header属性
+                if (op.attributes && op.attributes.header && currentText.trim()) {
+                  outlineItems.push({
+                    level: Number(op.attributes.header),
+                    text: currentText.trim(),
+                    index: currentIndex - currentText.length
+                  });
+                }
+                // 重置当前文本
+                currentText = '';
+                currentIndex += 1;
+              } else {
+                // 累积文本内容
+                currentText += op.insert;
+                currentIndex += op.insert.length;
+              }
+            } else {
+              // 非文本内容（如图片、嵌入等）
+              currentIndex += 1;
+            }
+          }
+          
+          // 处理最后一行没有换行符的情况
+          if (currentText.trim()) {
+            // 检查最后一个操作是否有header属性
+            const lastOp = delta.ops[delta.ops.length - 1];
+            if (lastOp && lastOp.attributes && lastOp.attributes.header) {
               outlineItems.push({
-                level: op.attributes.header,
-                text: op.insert.trim()
+                level: Number(lastOp.attributes.header),
+                text: currentText.trim(),
+                index: currentIndex - currentText.length
               });
             }
-          });
+          }
         }
 
         setOutline(outlineItems);
       }
-    }, []);
+    }, []); // 移除 detectActiveHeader 依赖，避免循环依赖
+
+    // 滚动事件监听器
+    const handleScroll = useCallback(() => {
+      detectActiveHeader(outline);
+    }, [detectActiveHeader, outline]);
+
+    // 添加滚动监听器
+    useEffect(() => {
+      const mainContentArea = document.querySelector('[data-main-content-area="true"]');
+      if (mainContentArea) {
+        mainContentArea.addEventListener('scroll', handleScroll);
+        return () => {
+          mainContentArea.removeEventListener('scroll', handleScroll);
+        };
+      }
+    }, [handleScroll]);
 
     // 图片上传处理器
     const imageHandler = useCallback(() => {
@@ -322,11 +407,24 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         if (formats.header === level) {
           quill.setSelection(pos, 0);
 
-          const editorElem = quill.root.parentElement;
-          if (editorElem) {
+          // 寻找主内容区域的滚动容器
+          const mainContentArea = containerRef.current?.closest('[data-main-content-area]') ||
+                                  document.querySelector('[data-main-content-area]') ||
+                                  containerRef.current?.parentElement?.parentElement?.parentElement;
+          
+          if (mainContentArea) {
             const bounds = quill.getBounds(pos);
             if (bounds) {
-              editorElem.scrollTop = bounds.top;
+              // 计算相对于主内容区域的偏移
+              const quillContainer = quill.root.getBoundingClientRect();
+              const mainContentRect = mainContentArea.getBoundingClientRect();
+              const offsetTop = quillContainer.top - mainContentRect.top + bounds.top;
+              
+              // 平滑滚动到目标位置
+              mainContentArea.scrollTo({
+                top: Math.max(0, offsetTop - 100), // 留出100px的缓冲空间
+                behavior: 'smooth'
+              });
             }
           }
           break;
@@ -416,11 +514,31 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
 
         {/* 主内容区域 */}
         <Box
+          data-main-content-area="true"
           sx={{
             flex: 1,
             position: 'relative',
-            overflow: 'hidden',
+            overflow: 'auto', // 改为 auto，让主内容区域可以滚动
             display: 'flex',
+            scrollBehavior: 'smooth',
+            // 自定义滚动条样式
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              backgroundColor: 'transparent',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: theme.palette.mode === 'light' 
+                ? 'rgba(0, 0, 0, 0.2)' 
+                : 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '4px',
+              '&:hover': {
+                backgroundColor: theme.palette.mode === 'light' 
+                  ? 'rgba(0, 0, 0, 0.4)' 
+                  : 'rgba(255, 255, 255, 0.4)',
+              },
+            },
           }}
         >
           {/* 左侧大纲面板 */}
@@ -432,9 +550,10 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
                 top: 0,
                 bottom: 0,
                 width: 280,
-                zIndex: 100,
+                zIndex: 10,
                 backgroundColor: theme.palette.background.paper,
                 boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
+                display: { xs: 'none', md: 'block' }, // 在小屏幕上隐藏，避免覆盖编辑器
               }}
             >
               <OutlinePanel
@@ -442,6 +561,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
                 outline={outline}
                 onClose={() => setIsOutlineOpen(false)}
                 onScrollToHeader={scrollToHeader}
+                activeHeaderIndex={activeHeaderIndex}
               />
             </Box>
           )}
@@ -483,7 +603,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
               maxWidth: { xs: 'calc(100% - 32px)', sm: '800px' },
               display: 'flex',
               flexDirection: 'column',
-              zIndex: 10,
+              zIndex: 1, // 降低 z-index，避免覆盖问题
             }}
           >
             <EditorCore

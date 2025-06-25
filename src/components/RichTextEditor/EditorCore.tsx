@@ -290,7 +290,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
     <Box
       sx={{
         flex: 1,
-        overflow: 'auto',
+        overflow: 'visible', // 移除内部滚动，让父容器处理滚动
         px: { xs: 2, sm: 3 },
         py: 2,
         scrollBehavior: 'smooth',
@@ -315,7 +315,8 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
           width: '100%',
           display: 'flex',
           flexDirection: 'column',
-          minHeight: 'calc(100vh - 300px)',
+          // 移除固定高度，让内容自然增长
+          minHeight: '100vh',
           boxShadow: theme.palette.mode === 'light'
             ? '0px 2px 12px rgba(0, 0, 0, 0.08)'
             : '0px 2px 12px rgba(0, 0, 0, 0.25)',
@@ -329,8 +330,9 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
           },
           '& .ql-editor': {
             margin: 0,
-            padding: { xs: '24px 20px', sm: '40px 48px' },
-            minHeight: 'calc(100vh - 300px)',
+            padding: { xs: '24px 20px 200px 20px', sm: '40px 48px 200px 48px' },
+            minHeight: '100vh', // 确保编辑器至少占满整个视口高度
+            cursor: 'text', // 确保鼠标悬停时显示文本光标
             '&.ql-blank::before': {
               left: { xs: 20, sm: 48 },
               fontStyle: 'normal',
@@ -394,7 +396,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
             display: 'flex', 
             flexDirection: 'column', 
             height: '100%', 
-            width: '100%' 
+            width: '100%'
           }} 
         />
       </Paper>
