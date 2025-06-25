@@ -79,9 +79,28 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
         container.ownerDocument.createElement('div'),
       );
 
+      // Quill推荐的toolbar配置方式
+      const toolbarOptions = [
+        [{ 'header': [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline'],
+        [{ 'color': [] }, { 'background': [] }],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        [{ 'indent': '-1'}, { 'indent': '+1' }],
+        ['link', 'image', 'attach'],
+        ['clean']
+      ];
+
+      // 配置header选项的国际化文本
+      const headerOptions: Record<string | number, string> = {
+        1: t('heading_1', '标题 1'),
+        2: t('heading_2', '标题 2'), 
+        3: t('heading_3', '标题 3'),
+        'false': t('normal_text', '正文')
+      };
+
       const modules = {
         toolbar: {
-          container: '#quill-toolbar',
+          container: toolbarOptions,
           handlers: {
             image: imageHandler,
             attach: attachmentHandler,
@@ -111,6 +130,32 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
           editor.setContents(initialContent as QuillDelta, 'api');
         }
       }
+
+      // 设置header选项的国际化文本
+      const setupHeaderInternationalization = () => {
+        const headerSelect = document.querySelector('.ql-header .ql-picker-options');
+        if (headerSelect) {
+          const options = headerSelect.querySelectorAll('.ql-picker-item');
+          options.forEach((option) => {
+            const dataValue = option.getAttribute('data-value');
+            if (dataValue === '1') {
+              option.textContent = headerOptions[1];
+            } else if (dataValue === '2') {
+              option.textContent = headerOptions[2];
+            } else if (dataValue === '3') {
+              option.textContent = headerOptions[3];
+            } else if (dataValue === '' || dataValue === null) {
+              option.textContent = headerOptions['false'];
+            }
+          });
+          
+          // 设置header选择器的默认显示文本
+          const headerLabel = document.querySelector('.ql-header .ql-picker-label');
+          if (headerLabel) {
+            headerLabel.textContent = headerOptions['false'];
+          }
+        }
+      };
 
       // 修复工具栏失焦问题的完整解决方案
       const setupToolbarFocusManagement = () => {
@@ -183,6 +228,11 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
       if (toolbarCleanup) {
         (editor as Quill & { __toolbarCleanup?: () => void }).__toolbarCleanup = toolbarCleanup;
       }
+
+      // 设置国际化文本
+      setTimeout(() => {
+        setupHeaderInternationalization();
+      }, 100);
 
       quillRef.current = editor;
       isInitializingRef.current = false;
@@ -287,11 +337,53 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
               color: theme.palette.text.disabled,
             },
           },
-          // 隐藏Quill自带的工具栏
+          // Quill自带的工具栏样式定制（将通过JS移动到我们的容器中）
           '& .ql-toolbar.ql-snow': {
-            display: 'none',
-            borderBottom: 'none',
-            boxShadow: 'none',
+            border: 'none !important',
+            borderTop: 'none !important',
+            borderBottom: 'none !important',
+            borderLeft: 'none !important',
+            borderRight: 'none !important',
+            boxShadow: 'none !important',
+            WebkitBoxShadow: 'none !important',
+            MozBoxShadow: 'none !important',
+            padding: 0,
+            margin: 0,
+            backgroundColor: 'transparent',
+            display: 'none', // 初始隐藏，直到移动到正确位置
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: 42,
+            '&::before, &::after': {
+              display: 'none !important',
+            },
+            '& .ql-formats': {
+              display: 'flex',
+              alignItems: 'center',
+              marginRight: theme.spacing(1),
+              border: 'none !important',
+              boxShadow: 'none !important',
+            },
+            '& .ql-picker': {
+              height: 24,
+            },
+            '& button': {
+              width: 28,
+              height: 28,
+              padding: 0,
+              margin: 0,
+              border: 'none !important',
+              boxShadow: 'none !important',
+            },
+            '& .ql-picker-options': {
+              '& *': {
+                outline: 'none !important',
+                userSelect: 'none',
+              }
+            },
+            '& .ql-picker, & .ql-picker-label, & .ql-picker-item': {
+              outline: 'none !important',
+            }
           },
         }}
       >

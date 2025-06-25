@@ -17,6 +17,7 @@ import SvgIcon from '@mui/material/SvgIcon';
 import { mdiFileDocumentOutline, mdiInformation } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import type { EditorToolbarProps } from './types';
+import { useEffect, useRef } from 'react';
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
   breadcrumbs,
@@ -33,12 +34,56 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const toolbarContainerRef = useRef<HTMLDivElement>(null);
 
   const handleSave = () => {
     if (onSave && !isSaving) {
       onSave();
     }
   };
+
+  // 将Quill生成的toolbar移动到我们的容器中
+  useEffect(() => {
+    const moveToolbarToContainer = () => {
+      const quillToolbar = document.querySelector('.ql-toolbar.ql-snow');
+      const container = toolbarContainerRef.current;
+      
+      if (quillToolbar && container && !container.contains(quillToolbar)) {
+        // 移动toolbar到我们的容器中
+        container.appendChild(quillToolbar);
+        
+        // 应用自定义样式，确保没有border和shadow
+        const toolbarElement = quillToolbar as HTMLElement;
+        toolbarElement.style.position = 'static';
+        toolbarElement.style.display = 'flex';
+        toolbarElement.style.alignItems = 'center';
+        toolbarElement.style.justifyContent = 'center';
+        toolbarElement.style.border = 'none';
+        toolbarElement.style.borderTop = 'none';
+        toolbarElement.style.borderBottom = 'none';
+        toolbarElement.style.borderLeft = 'none';
+        toolbarElement.style.borderRight = 'none';
+        toolbarElement.style.boxShadow = 'none';
+        toolbarElement.style.setProperty('-webkit-box-shadow', 'none');
+        toolbarElement.style.setProperty('-moz-box-shadow', 'none');
+        toolbarElement.style.padding = '0';
+        toolbarElement.style.margin = '0';
+        toolbarElement.style.backgroundColor = 'transparent';
+      }
+    };
+
+    // 延迟执行，确保Quill已经创建了toolbar
+    const timer = setTimeout(moveToolbarToContainer, 100);
+    
+    // 也监听DOM变化
+    const observer = new MutationObserver(moveToolbarToContainer);
+    observer.observe(document.body, { childList: true, subtree: true });
+    
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, []);
 
   return (
     <AppBar
@@ -69,78 +114,19 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             </Stack>
           </Stack>
 
-          {/* QuillJS Toolbar Container */}
+          {/* Quill自动生成的Toolbar容器 */}
           <Box
-            id="quill-toolbar"
-            style={{
-              borderBottom: 'none',
-              boxShadow: 'none',
-            }}
+            ref={toolbarContainerRef}
+            id="quill-toolbar-container"
             sx={{
               display: 'flex',
               alignItems: 'center',
               flex: 2,
               justifyContent: 'center',
               minHeight: 42,
-              '& .ql-formats': {
-                display: 'flex',
-                alignItems: 'center',
-                mr: 1
-              },
-              '& .ql-picker': {
-                height: 24,
-              },
-              '& button': {
-                width: 28,
-                height: 28,
-                padding: 0
-              },
-              // 防止工具栏下拉菜单导致编辑器失焦
-              '& .ql-picker-options': {
-                // 防止下拉菜单获取焦点
-                '& *': {
-                  outline: 'none !important',
-                  userSelect: 'none',
-                }
-              },
-              // 阻止工具栏元素的鼠标事件冒泡导致失焦
-              '& .ql-picker, & .ql-picker-label, & .ql-picker-item': {
-                outline: 'none !important',
-              }
+              position: 'relative',
             }}
-          >
-            <span className="ql-formats">
-              <select className="ql-header" defaultValue="">
-                <option value="1">{t('heading_1', '标题 1')}</option>
-                <option value="2">{t('heading_2', '标题 2')}</option>
-                <option value="3">{t('heading_3', '标题 3')}</option>
-                <option value="">{t('normal_text', '正文')}</option>
-              </select>
-            </span>
-            <span className="ql-formats">
-              <button className="ql-bold"></button>
-              <button className="ql-italic"></button>
-              <button className="ql-underline"></button>
-            </span>
-            <span className="ql-formats">
-              <select className="ql-color"></select>
-              <select className="ql-background"></select>
-            </span>
-            <span className="ql-formats">
-              <button className="ql-list" value="ordered"></button>
-              <button className="ql-list" value="bullet"></button>
-              <button className="ql-indent" value="-1"></button>
-              <button className="ql-indent" value="+1"></button>
-            </span>
-            <span className="ql-formats">
-              <button className="ql-link"></button>
-              <button className="ql-image"></button>
-              <button className="ql-attach"></button>
-            </span>
-            <span className="ql-formats">
-              <button className="ql-clean"></button>
-            </span>
-          </Box>
+          />
 
           {/* Right side actions and indicators */}
           <Stack direction="row" spacing={1} alignItems="center">
