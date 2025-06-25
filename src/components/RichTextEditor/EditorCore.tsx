@@ -112,6 +112,78 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
         }
       }
 
+      // 修复工具栏失焦问题的完整解决方案
+      const setupToolbarFocusManagement = () => {
+        const toolbar = document.getElementById('quill-toolbar');
+        if (!toolbar) return null;
+
+        let savedSelection: { index: number; length: number } | null = null;
+        let isQuillInteraction = false;
+
+        // 检查是否是Quill相关的元素
+        const isQuillElement = (element: HTMLElement): boolean => {
+          // 检查工具栏内的元素
+          if (element.closest('#quill-toolbar')) {
+            return !!(element.closest('.ql-bold, .ql-italic, .ql-underline, .ql-list, .ql-indent, .ql-link, .ql-image, .ql-clean, .ql-header, .ql-color, .ql-background, .ql-picker'));
+          }
+          
+          // 检查下拉菜单选项（可能在工具栏外部渲染）
+          return !!(element.closest('.ql-picker-options') || element.closest('.ql-picker-item'));
+        };
+
+        // 处理文档级别的点击事件
+        const handleDocumentClick = (event: MouseEvent) => {
+          const target = event.target as HTMLElement;
+          
+          if (isQuillElement(target)) {
+            // 保存当前选择状态
+            savedSelection = editor.getSelection();
+            isQuillInteraction = true;
+            
+            // 短暂延迟后恢复焦点和选择
+            setTimeout(() => {
+              if (isQuillInteraction && savedSelection) {
+                editor.setSelection(savedSelection.index, savedSelection.length);
+                editor.focus();
+                isQuillInteraction = false;
+              }
+            }, 15); // 稍微增加延迟确保Quill操作完成
+          } else {
+            // 点击了非Quill元素，重置状态
+            isQuillInteraction = false;
+          }
+        };
+
+        // 处理编辑器失焦事件
+        const handleEditorBlur = () => {
+          if (isQuillInteraction) {
+            // 如果是Quill交互导致的失焦，短暂延迟后检查并恢复
+            setTimeout(() => {
+              if (isQuillInteraction && savedSelection) {
+                editor.setSelection(savedSelection.index, savedSelection.length);
+                editor.focus();
+              }
+            }, 20);
+          }
+        };
+
+        // 监听文档级别的点击事件（捕获阶段）
+        document.addEventListener('click', handleDocumentClick, true);
+        
+        // 监听编辑器失焦事件
+        editor.root.addEventListener('blur', handleEditorBlur);
+        
+        return () => {
+          document.removeEventListener('click', handleDocumentClick, true);
+          editor.root.removeEventListener('blur', handleEditorBlur);
+        };
+      };
+
+      const toolbarCleanup = setupToolbarFocusManagement();
+      if (toolbarCleanup) {
+        (editor as Quill & { __toolbarCleanup?: () => void }).__toolbarCleanup = toolbarCleanup;
+      }
+
       quillRef.current = editor;
       isInitializingRef.current = false;
 
@@ -121,6 +193,12 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
       }
 
       return () => {
+        // 清理工具栏事件监听器
+        const editorWithCleanup = quillRef.current as Quill & { __toolbarCleanup?: () => void };
+        if (quillRef.current && editorWithCleanup.__toolbarCleanup) {
+          editorWithCleanup.__toolbarCleanup();
+        }
+        
         // 保存当前容器的引用，避免在清理函数中访问可能已经改变的ref
         const currentContainer = container;
         if (currentContainer) {

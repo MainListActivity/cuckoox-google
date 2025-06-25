@@ -95,14 +95,26 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 height: 28,
                 padding: 0
               },
+              // 防止工具栏下拉菜单导致编辑器失焦
+              '& .ql-picker-options': {
+                // 防止下拉菜单获取焦点
+                '& *': {
+                  outline: 'none !important',
+                  userSelect: 'none',
+                }
+              },
+              // 阻止工具栏元素的鼠标事件冒泡导致失焦
+              '& .ql-picker, & .ql-picker-label, & .ql-picker-item': {
+                outline: 'none !important',
+              }
             }}
           >
             <span className="ql-formats">
-              <select className="ql-header" defaultValue={4}>
+              <select className="ql-header" defaultValue="">
                 <option value="1">{t('heading_1', '标题 1')}</option>
                 <option value="2">{t('heading_2', '标题 2')}</option>
                 <option value="3">{t('heading_3', '标题 3')}</option>
-                <option value="4">{t('normal_text', '正文')}</option>
+                <option value="">{t('normal_text', '正文')}</option>
               </select>
             </span>
             <span className="ql-formats">

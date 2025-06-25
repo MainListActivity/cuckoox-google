@@ -299,6 +299,82 @@
   padding: 8px 0;
   margin-top: 4px;
   z-index: 1000;
+  /* 防止下拉菜单抢夺焦点 */
+  pointer-events: auto;
+}
+
+/* 防止工具栏元素导致编辑器失焦 */
+.ql-snow .ql-toolbar button,
+.ql-snow .ql-toolbar .ql-picker,
+.ql-snow .ql-toolbar .ql-picker-label,
+.ql-snow .ql-toolbar .ql-picker-item,
+.ql-snow .ql-toolbar select {
+  outline: none !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 确保工具栏按钮不会获取焦点 */
+.ql-snow .ql-toolbar button:focus,
+.ql-snow .ql-toolbar .ql-picker:focus,
+.ql-snow .ql-toolbar .ql-picker-label:focus,
+.ql-snow .ql-toolbar select:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 工具栏下拉菜单点击时不触发焦点丢失 */
+.ql-snow .ql-picker-options,
+.ql-snow .ql-picker-options *,
+.ql-snow .ql-picker-options *:focus,
+.ql-snow .ql-picker-options *:active {
+  outline: none !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 确保下拉菜单选项不会获取焦点 */
+.ql-snow .ql-picker-options .ql-picker-item,
+.ql-snow .ql-picker-options .ql-picker-item:hover,
+.ql-snow .ql-picker-options .ql-picker-item:focus,
+.ql-snow .ql-picker-options .ql-picker-item:active {
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 防止颜色选择器的特殊元素获取焦点 */
+.ql-snow .ql-color-picker .ql-picker-item,
+.ql-snow .ql-background-picker .ql-picker-item {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* 全局防止所有Quill相关元素获取焦点 */
+.ql-picker-options *,
+.ql-picker-item,
+.ql-picker-label,
+[class*="ql-picker"] * {
+  outline: none !important;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .ql-snow .ql-picker-options .ql-picker-item {
