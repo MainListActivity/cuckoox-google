@@ -518,7 +518,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           sx={{
             flex: 1,
             position: 'relative',
-            pt: '120px', // 为固定工具栏留出空间
+            pt: '10px', // 为固定工具栏留出空间
             pb: isExtensionAreaOpen ? `${extensionAreaHeight + 20}px` : '20px', // 为扩展区域留出空间
             display: 'flex',
             justifyContent: 'center',
@@ -536,7 +536,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
                 width: 280,
                 zIndex: 1000,
                 backgroundColor: theme.palette.background.paper,
-                boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
+                boxShadow: '0',
                 display: { xs: 'none', md: 'block' },
                 overflowY: 'auto',
                 overflowX: 'hidden',

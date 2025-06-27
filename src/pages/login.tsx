@@ -166,7 +166,7 @@ const LoginPage: React.FC = () => {
             alt="Login background"
             sx={{
               width: '100%',
-              height: '100%',
+              height: '100vh',
               objectFit: 'cover',
               display: 'block',
             }}

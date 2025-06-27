@@ -317,9 +317,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
           flexDirection: 'column',
           // 移除固定高度，让内容自然增长
           minHeight: '100vh',
-          boxShadow: theme.palette.mode === 'light'
-            ? '0px 2px 12px rgba(0, 0, 0, 0.08)'
-            : '0px 2px 12px rgba(0, 0, 0, 0.25)',
+          boxShadow: 'none !important',
           '& .ql-container': {
             flex: 1,
             border: 'none',
