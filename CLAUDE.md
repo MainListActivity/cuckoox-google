@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. Always use Chinese output.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. 
+
+Always use Chinese output.
 
 ## Development Commands
 

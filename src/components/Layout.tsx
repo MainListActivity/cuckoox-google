@@ -536,7 +536,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         sx={{ 
           flexGrow: 1, 
           backgroundColor: currentTheme.palette.background.default,
-          minHeight: '100vh',
           p: isDocumentCenterMode ? 0 : { xs: 2, sm: 3 },
           width: isDocumentCenterMode ? '100vw' : {
             xs: '100%',

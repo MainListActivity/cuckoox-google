@@ -189,14 +189,13 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
     // 检测当前活动标题的函数
     const detectActiveHeader = useCallback((currentOutline: OutlineItem[]) => {
       const quill = editorCoreRef.current?.getQuill();
-      const mainContentArea = document.querySelector('[data-main-content-area="true"]');
       
-      if (!quill || !mainContentArea || currentOutline.length === 0) {
+      if (!quill || currentOutline.length === 0) {
         setActiveHeaderIndex(-1);
         return;
       }
 
-      const scrollTop = mainContentArea.scrollTop;
+      const scrollTop = window.scrollY;
       let activeIndex = -1;
 
       // 遍历所有标题，找到最接近当前滚动位置的标题
@@ -205,10 +204,11 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         if (item.index !== undefined) {
           const bounds = quill.getBounds(item.index);
           if (bounds) {
-            const headerTop = bounds.top;
+            const quillContainer = quill.root.getBoundingClientRect();
+            const headerTop = quillContainer.top + bounds.top;
             
             // 如果标题在当前视口上方或刚好可见，则认为是活动状态
-            if (headerTop <= scrollTop + 100) {
+            if (headerTop <= 200) { // 考虑固定工具栏的高度
               activeIndex = i;
             } else {
               break;
@@ -283,13 +283,10 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
 
     // 添加滚动监听器
     useEffect(() => {
-      const mainContentArea = document.querySelector('[data-main-content-area="true"]');
-      if (mainContentArea) {
-        mainContentArea.addEventListener('scroll', handleScroll);
-        return () => {
-          mainContentArea.removeEventListener('scroll', handleScroll);
-        };
-      }
+      window.addEventListener('scroll', handleScroll);
+      return () => {
+        window.removeEventListener('scroll', handleScroll);
+      };
     }, [handleScroll]);
 
     // 图片上传处理器
@@ -407,25 +404,18 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         if (formats.header === level) {
           quill.setSelection(pos, 0);
 
-          // 寻找主内容区域的滚动容器
-          const mainContentArea = containerRef.current?.closest('[data-main-content-area]') ||
-                                  document.querySelector('[data-main-content-area]') ||
-                                  containerRef.current?.parentElement?.parentElement?.parentElement;
-          
-          if (mainContentArea) {
-            const bounds = quill.getBounds(pos);
-            if (bounds) {
-              // 计算相对于主内容区域的偏移
-              const quillContainer = quill.root.getBoundingClientRect();
-              const mainContentRect = mainContentArea.getBoundingClientRect();
-              const offsetTop = quillContainer.top - mainContentRect.top + bounds.top;
-              
-              // 平滑滚动到目标位置
-              mainContentArea.scrollTo({
-                top: Math.max(0, offsetTop - 100), // 留出100px的缓冲空间
-                behavior: 'smooth'
-              });
-            }
+          // 使用页面级别的滚动
+          const bounds = quill.getBounds(pos);
+          if (bounds) {
+            // 计算相对于页面顶部的偏移
+            const quillContainer = quill.root.getBoundingClientRect();
+            const offsetTop = quillContainer.top + bounds.top + window.scrollY;
+            
+            // 平滑滚动到目标位置，考虑固定工具栏的高度
+            window.scrollTo({
+              top: Math.max(0, offsetTop - 180), // 留出180px的缓冲空间（工具栏高度+额外空间）
+              behavior: 'smooth'
+            });
           }
           break;
         }
@@ -491,69 +481,69 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         className={className}
         sx={{
           position: 'relative',
-          height: '100%',
+          minHeight: '100vh', // 改为minHeight，让内容决定高度
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: theme.palette.background.default,
         }}
       >
-        {/* 工具栏 */}
-        <EditorToolbar
-          breadcrumbs={breadcrumbs}
-          actions={actions}
-          contextInfo={contextInfo}
-          showContextPanel={showContextPanel}
-          onToggleContextPanel={() => setShowContextPanel(!showContextPanel)}
-          onAddComment={addCommentHandler}
-          remoteCursors={remoteCursors}
-          onSave={handleSave}
-          isSaving={effectiveIsSaving}
-          showSaveButton={showSaveButton}
-          saveButtonText={saveButtonText}
-        />
+        {/* 工具栏 - 使用fixed定位悬浮在顶部 */}
+        <Box sx={{ 
+          position: 'fixed',
+          top: 64, // 在AppBar下方
+          left: 0,
+          right: 0,
+          zIndex: 1100,
+          backgroundColor: theme.palette.background.default,
+          borderBottom: `1px solid ${theme.palette.divider}`,
+        }}>
+          <EditorToolbar
+            breadcrumbs={breadcrumbs}
+            actions={actions}
+            contextInfo={contextInfo}
+            showContextPanel={showContextPanel}
+            onToggleContextPanel={() => setShowContextPanel(!showContextPanel)}
+            onAddComment={addCommentHandler}
+            remoteCursors={remoteCursors}
+            onSave={handleSave}
+            isSaving={effectiveIsSaving}
+            showSaveButton={showSaveButton}
+            saveButtonText={saveButtonText}
+          />
+        </Box>
 
-        {/* 主内容区域 */}
+        {/* 主内容区域 - 使用正常文档流，添加顶部和底部padding */}
         <Box
           data-main-content-area="true"
           sx={{
             flex: 1,
             position: 'relative',
-            overflow: 'auto', // 改为 auto，让主内容区域可以滚动
+            pt: '120px', // 为固定工具栏留出空间
+            pb: isExtensionAreaOpen ? `${extensionAreaHeight + 20}px` : '20px', // 为扩展区域留出空间
             display: 'flex',
-            scrollBehavior: 'smooth',
-            // 自定义滚动条样式
-            '&::-webkit-scrollbar': {
-              width: '8px',
-            },
-            '&::-webkit-scrollbar-track': {
-              backgroundColor: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              backgroundColor: theme.palette.mode === 'light' 
-                ? 'rgba(0, 0, 0, 0.2)' 
-                : 'rgba(255, 255, 255, 0.2)',
-              borderRadius: '4px',
-              '&:hover': {
-                backgroundColor: theme.palette.mode === 'light' 
-                  ? 'rgba(0, 0, 0, 0.4)' 
-                  : 'rgba(255, 255, 255, 0.4)',
-              },
-            },
+            justifyContent: 'center',
+            minHeight: 'calc(100vh - 120px)', // 确保最小高度
           }}
         >
-          {/* 左侧大纲面板 */}
+          {/* 左侧大纲面板 - 使用fixed定位悬浮 */}
           {isOutlineOpen && (
             <Box
               sx={{
-                position: 'absolute',
+                position: 'fixed',
                 left: 0,
-                top: 0,
-                bottom: 0,
+                top: 120, // 在工具栏下方
+                bottom: isExtensionAreaOpen ? `${extensionAreaHeight}px` : 0,
                 width: 280,
-                zIndex: 10,
+                zIndex: 1000,
                 backgroundColor: theme.palette.background.paper,
                 boxShadow: '2px 0 8px rgba(0,0,0,0.1)',
-                display: { xs: 'none', md: 'block' }, // 在小屏幕上隐藏，避免覆盖编辑器
+                display: { xs: 'none', md: 'block' },
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                '& > *': {
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                },
               }}
             >
               <OutlinePanel
@@ -572,9 +562,10 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
               elevation={4}
               onClick={() => setIsOutlineOpen(true)}
               sx={{
-                position: 'absolute',
-                top: '30%',
+                position: 'fixed',
+                top: '50%',
                 left: 8,
+                transform: 'translateY(-50%)',
                 zIndex: 50,
                 cursor: 'pointer',
                 bgcolor: 'background.paper',
@@ -594,16 +585,12 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           {/* 中心编辑器区域 */}
           <Box
             sx={{
-              position: 'absolute',
-              left: '50%',
-              top: 0,
-              bottom: 0,
-              transform: 'translateX(-50%)',
               width: { xs: '100%', sm: '800px' },
               maxWidth: { xs: 'calc(100% - 32px)', sm: '800px' },
               display: 'flex',
               flexDirection: 'column',
-              zIndex: 1, // 降低 z-index，避免覆盖问题
+              px: 2,
+              py: 3,
             }}
           >
             <EditorCore
@@ -619,16 +606,22 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
             />
           </Box>
 
-          {/* 右侧上下文面板 */}
+          {/* 右侧上下文面板 - 使用fixed定位悬浮 */}
           {contextInfo && showContextPanel && !isMobile && (
             <Box
               sx={{
-                position: 'absolute',
-                right: 8,
-                top: 16,
+                position: 'fixed',
+                right: 16,
+                top: 120,
                 width: 320,
-                maxHeight: 'calc(100% - 32px)',
-                zIndex: 100,
+                maxHeight: 'calc(100vh - 140px)',
+                zIndex: 1000,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                '& > *': {
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                },
               }}
             >
               <ContextPanel
@@ -643,11 +636,14 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           {contextInfo && showContextPanel && isMobile && (
             <Box
               sx={{
-                position: 'absolute',
-                top: 16,
+                position: 'fixed',
+                top: 120,
                 left: 16,
                 right: 16,
-                zIndex: 200,
+                zIndex: 1200,
+                maxHeight: 'calc(100vh - 140px)',
+                overflowY: 'auto',
+                overflowX: 'hidden',
               }}
             >
               <ContextPanel
@@ -659,17 +655,25 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           )}
         </Box>
 
-        {/* 扩展区域 */}
-        <ExtensionArea
-          tabs={extensionAreaTabs}
-          content={extensionAreaContent}
-          isOpen={isExtensionAreaOpen}
-          height={extensionAreaHeight}
-          currentTabId={currentExtensionTab}
-          onTabChange={handleExtensionTabChange}
-          onToggle={() => setIsExtensionAreaOpen(!isExtensionAreaOpen)}
-          onHeightChange={setExtensionAreaHeight}
-        />
+        {/* 扩展区域 - 使用fixed定位悬浮在底部 */}
+        <Box sx={{ 
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1050,
+        }}>
+          <ExtensionArea
+            tabs={extensionAreaTabs}
+            content={extensionAreaContent}
+            isOpen={isExtensionAreaOpen}
+            height={extensionAreaHeight}
+            currentTabId={currentExtensionTab}
+            onTabChange={handleExtensionTabChange}
+            onToggle={() => setIsExtensionAreaOpen(!isExtensionAreaOpen)}
+            onHeightChange={setExtensionAreaHeight}
+          />
+        </Box>
 
         {/* 协作管理器 */}
         {documentId && userId && surreal && (
