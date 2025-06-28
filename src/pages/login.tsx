@@ -43,6 +43,7 @@ const LoginPage: React.FC = () => {
 
   const searchParams = new URLSearchParams(location.search);
   const isAdminLoginAttempt = searchParams.get('admin') === 'true';
+  const justRegistered = searchParams.get('registered') === 'true';
 
   // Unsplash image URL with random parameter for variety
   const unsplashImageUrl = `https://images.unsplash.com/photo-1557804506-669a67965ba0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2074&q=80`;
@@ -72,21 +73,55 @@ const LoginPage: React.FC = () => {
       if (!adminUsername || !adminPassword) {
         throw new Error(t('error_admin_credentials_required', 'Username and password are required.'));
       }
-      await client.signin({
-        username: adminUsername,
-        password: adminPassword,
+
+      // 调用后端密码登录API
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: adminUsername,
+          password: adminPassword,
+        }),
       });
 
-      console.log('Admin successfully signed into SurrealDB via form.');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || t('error_invalid_credentials_or_server'));
+      }
 
+      const data = await response.json();
+      
+      // 存储令牌
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('token_type', data.token_type);
+      localStorage.setItem('token_expires_at', String(Date.now() + data.expires_in * 1000));
+      if (data.refresh_token) {
+        localStorage.setItem('refresh_token', data.refresh_token);
+      }
+
+      // 使用SurrealDB认证（使用JWT令牌）
+      await client.authenticate(data.access_token);
+
+      console.log('Admin successfully logged in with password.');
+
+      // 创建用户对象
       const adminAppUser: AppUser = {
-        id: new RecordId('user', `admin_${adminUsername}`), // Keep RecordId
-        github_id: '--admin--',
-        name: t('administrator_name_generic', {username: adminUsername})
+        id: new RecordId('user', data.user.id.split(':')[1]), // 从 "user:xxx" 格式提取ID
+        github_id: `local_${data.user.username}`,
+        name: data.user.name,
+        email: data.user.email,
       };
 
       setAuthState(adminAppUser, null);
-      navigate('/admin', { replace: true });
+      
+      // 根据用户角色决定跳转页面
+      if (data.user.roles.includes('admin')) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
 
     } catch (error: unknown) {
       console.error("Admin form login failed:", error);
@@ -209,13 +244,18 @@ const LoginPage: React.FC = () => {
               <Logo size="large" variant="full" color="primary" />
               <Typography variant="body1" color="text.secondary">
                 {isAdminLoginAttempt 
-                  ? t('admin_login_subtitle', 'Administrator Access')
+                  ? t('password_login_subtitle', 'Sign in with Username and Password')
                   : t('login_subtitle', 'Sign in to your account')
                 }
               </Typography>
             </Box>
 
-            {/* Error Alerts */}
+            {/* Success/Error Alerts */}
+            {justRegistered && (
+              <Alert severity="success" sx={{ mb: 3 }}>
+                {t('registration_success', 'Registration successful! Please login with your credentials.')}
+              </Alert>
+            )}
             {isAdminLoginAttempt && adminLoginError && (
               <Alert severity="error" sx={{ mb: 3 }}>{adminLoginError}</Alert>
             )}
@@ -301,7 +341,7 @@ const LoginPage: React.FC = () => {
                   }}
                   startIcon={isProcessingAdminLogin ? <CircularProgress size={20} color="inherit" /> : null}
                 >
-                  {isProcessingAdminLogin ? t('admin_logging_in_button', 'Logging in...') : t('admin_login_button', 'Admin Login')}
+                  {isProcessingAdminLogin ? t('logging_in_button', 'Logging in...') : t('login_button', 'Login')}
                 </Button>
 
                 <Divider sx={{ my: 3 }}>
@@ -322,8 +362,30 @@ const LoginPage: React.FC = () => {
                     py: 1,
                   }}
                 >
-                  {t('back_to_oidc_login_link', 'Back to regular login')}
+                  {t('back_to_github_login_link', 'Back to GitHub login')}
                 </Button>
+
+                <Box sx={{ textAlign: 'center', mt: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('no_account_yet', "Don't have an account?")}{' '}
+                    <Link
+                      component="button"
+                      type="button"
+                      onClick={() => navigate('/register')}
+                      variant="body2"
+                      sx={{
+                        color: theme.palette.primary.main,
+                        fontWeight: 500,
+                        textDecoration: 'none',
+                        '&:hover': {
+                          textDecoration: 'underline',
+                        },
+                      }}
+                    >
+                      {t('register_link', 'Register')}
+                    </Link>
+                  </Typography>
+                </Box>
               </form>
             ) : (
               /* GitHub Login */
@@ -386,7 +448,7 @@ const LoginPage: React.FC = () => {
                       },
                     }}
                   >
-                    {t('admin_login_link', 'Switch to Admin Login')}
+                    {t('password_login_link', 'Login with Username/Password')}
                   </Link>
                 </Box>
               </>

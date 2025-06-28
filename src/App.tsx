@@ -42,6 +42,7 @@ const NotFoundPage = React.lazy(() => import('@/src/pages/404'));
 const CaseSelectionPage = React.lazy(() => import('@/src/pages/select-case'));
 const OidcCallbackPage = React.lazy(() => import('@/src/pages/oidc-callback'));
 const CreateCasePage = React.lazy(() => import('@/src/pages/cases/create'));
+const RegisterPage = React.lazy(() => import('@/src/pages/register'));
 const AdminCreateClaimAttachmentsPage = React.lazy(() => import('@/src/pages/admin/create-claim-attachments'));
 const NotificationRuleManagementPage = React.lazy(() => import('@/src/pages/admin/manage/notification-rules'));
 // Note: ReviewStatusManagementPage and RoleManagementPage were not previously imported in App.tsx, so no path update needed here for them.
@@ -113,8 +114,8 @@ function App() {
 
     // If connected, proceed with the rest of the application logic
 
-    // Define routes that don't need the main layout (e.g., Login, OidcCallback)
-    if (location.pathname === '/login' || location.pathname === '/oidc-callback') {
+    // Define routes that don't need the main layout (e.g., Login, OidcCallback, Register)
+    if (location.pathname === '/login' || location.pathname === '/oidc-callback' || location.pathname === '/register') {
         return (
             <CustomThemeProvider>
                 <SnackbarProvider>
@@ -123,6 +124,7 @@ function App() {
                             <Routes>
                                 <Route path="/login" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
                                 <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
+                                <Route path="/register" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <RegisterPage/>}/>
                             </Routes>
                         </Suspense>
                     </CaseStatusProvider>

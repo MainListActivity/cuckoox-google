@@ -24,3 +24,17 @@ package-lock.json
 *.njsproj
 *.sln
 *.sw?
+
+# Environment variables
+.env.local
+
+# Testing
+coverage
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Vitest
+coverage/
