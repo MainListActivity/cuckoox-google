@@ -15,6 +15,21 @@ vi.mock('react-router-dom', () => ({
   useLocation: () => mockUseLocation(),
 }));
 
+// Mock fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Mock Turnstile component
+vi.mock('../../../src/components/Turnstile', () => ({
+  default: ({ onSuccess }: { onSuccess: (token: string) => void }) => {
+    // Simulate successful verification immediately
+    React.useEffect(() => {
+      onSuccess('mock-turnstile-token');
+    }, [onSuccess]);
+    return null; // Don't render anything in tests
+  }
+}));
+
 const mockSetAuthState = vi.fn();
 const mockUseAuthFn = vi.fn();
 vi.mock('../../../src/contexts/AuthContext', () => ({
@@ -31,10 +46,16 @@ vi.mock('../../../src/services/authService', () => ({
 const mockDbSignin = vi.fn();
 const mockSurrealClient = {
   signin: mockDbSignin,
+  authenticate: vi.fn(),
 };
+
+const mockSetTokens = vi.fn();
 
 vi.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => mockSurrealClient,
+  useSurreal: () => ({
+    setTokens: mockSetTokens,
+  }),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -96,11 +117,11 @@ describe('LoginPage', () => {
     });
 
     it('should display admin login link', () => {
-      expect(screen.getByText('admin_login_link')).toBeInTheDocument();
+      expect(screen.getByText('password_login_link')).toBeInTheDocument();
     });
 
     it('should navigate to admin login when admin link is clicked', () => {
-      fireEvent.click(screen.getByText('admin_login_link'));
+      fireEvent.click(screen.getByText('password_login_link'));
       expect(mockNavigate).toHaveBeenCalledWith('/login?admin=true');
     });
 
@@ -122,17 +143,17 @@ describe('LoginPage', () => {
     it('should display the admin login form and not the GitHub button as primary', () => {
       expect(screen.getByRole('textbox', { name: /admin_username_label/i })).toBeInTheDocument();
       expect(screen.getByLabelText(/admin_password_label/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /admin_login_button/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /login_button/i })).toBeInTheDocument();
       expect(screen.queryByText('login_github_button')).not.toBeInTheDocument();
-      expect(screen.getByText('back_to_oidc_login_link')).toBeInTheDocument();
+      expect(screen.getByText('back_to_github_login_link')).toBeInTheDocument();
     });
 
     it('should display admin login subtitle', () => {
-      expect(screen.getByText('admin_login_subtitle')).toBeInTheDocument();
+      expect(screen.getByText('password_login_subtitle')).toBeInTheDocument();
     });
 
     it('should navigate back to regular login when back link is clicked', () => {
-      fireEvent.click(screen.getByText('back_to_oidc_login_link'));
+      fireEvent.click(screen.getByText('back_to_github_login_link'));
       expect(mockNavigate).toHaveBeenCalledWith('/login');
     });
   });
@@ -261,7 +282,22 @@ describe('LoginPage', () => {
   describe('Admin Login Form - Successful Submission', () => {
     beforeEach(async () => {
       setupMockLocation(true);
-      mockDbSignin.mockResolvedValue(undefined);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          access_token: 'test-token',
+          refresh_token: 'test-refresh-token',
+          expires_in: 3600,
+          user: {
+            id: 'user:testadmin',
+            username: 'testadmin',
+            name: 'Test Admin',
+            email: 'test@example.com',
+            roles: ['admin']
+          }
+        })
+      });
+      
       render(<LoginPage />);
 
       await act(async () => {
@@ -271,16 +307,33 @@ describe('LoginPage', () => {
         fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
           target: { value: 'password123' } 
         });
-        fireEvent.click(screen.getByRole('button', { name: /admin_login_button/i }));
+        
+        // Wait for Turnstile to be "verified" (mocked)
+        await waitFor(() => {
+          const submitButton = screen.getByRole('button', { name: /login_button/i });
+          expect(submitButton).not.toBeDisabled();
+        });
+        
+        fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
       });
     });
 
-    it('should call db.signin with correct credentials and params', async () => {
+    it('should call fetch with correct credentials', async () => {
       await waitFor(() => {
-        expect(mockDbSignin).toHaveBeenCalledWith({
-          username: 'testadmin',
-          password: 'password123',
-        });
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/auth/login'),
+          expect.objectContaining({
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: 'testadmin',
+              password: 'password123',
+              turnstile_token: 'mock-turnstile-token',
+            }),
+          })
+        );
       });
     });
     
@@ -288,12 +341,13 @@ describe('LoginPage', () => {
       await waitFor(() => {
         const [[actualCall]] = mockSetAuthState.mock.calls;
         expect(actualCall).toEqual(expect.objectContaining({
-          github_id: '--admin--',
-          name: 'administrator_name_generic testadmin',
+          github_id: 'local_testadmin',
+          name: 'Test Admin',
+          email: 'test@example.com',
         }));
         expect(actualCall.id).toBeInstanceOf(RecordId);
         expect(actualCall.id.tb).toBe('user');
-        expect(actualCall.id.id).toBe('admin_testadmin');
+        expect(actualCall.id.id).toBe('testadmin');
       });
     });
 
@@ -308,7 +362,12 @@ describe('LoginPage', () => {
     const errorMessage = 'Invalid credentials';
     beforeEach(async () => {
       setupMockLocation(true);
-      mockDbSignin.mockRejectedValue(new Error(errorMessage));
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({
+          message: errorMessage
+        })
+      });
       render(<LoginPage />);
 
       await act(async () => {
@@ -318,7 +377,14 @@ describe('LoginPage', () => {
         fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
           target: { value: 'wrongpass' } 
         });
-        fireEvent.click(screen.getByRole('button', { name: /admin_login_button/i }));
+        
+        // Mock Turnstile verification
+        await waitFor(() => {
+          const submitButton = screen.getByRole('button', { name: /login_button/i });
+          expect(submitButton).not.toBeDisabled();
+        });
+        
+        fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
       });
       
       await screen.findByText(`error_admin_login_failed ${errorMessage}`);
@@ -340,8 +406,8 @@ describe('LoginPage', () => {
   describe('Loading State - Admin Login Processing', () => {
     it('should show loading message during admin login attempt', async () => {
       setupMockLocation(true);
-      let resolveSignin:any;
-      mockDbSignin.mockImplementation(() => new Promise(resolve => { resolveSignin = resolve; }));
+      let resolveFetch:any;
+      mockFetch.mockImplementation(() => new Promise(resolve => { resolveFetch = resolve; }));
       
       render(<LoginPage />);
 
@@ -351,14 +417,37 @@ describe('LoginPage', () => {
       fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
         target: { value: 'password123' } 
       });
-      fireEvent.click(screen.getByRole('button', { name: /admin_login_button/i }));
+      
+      // Mock Turnstile verification
+      await act(async () => {
+        await waitFor(() => {
+          const submitButton = screen.getByRole('button', { name: /login_button/i });
+          expect(submitButton).not.toBeDisabled();
+        });
+        
+        fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
+      });
 
       expect(screen.getByText('admin_login_attempt_loading')).toBeInTheDocument();
       // During loading state, the button might be hidden or removed
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
 
       await act(async () => {
-        resolveSignin(undefined);
+        resolveFetch({
+          ok: true,
+          json: async () => ({
+            access_token: 'test-token',
+            refresh_token: 'test-refresh-token',
+            expires_in: 3600,
+            user: {
+              id: 'user:testadmin',
+              username: 'testadmin',
+              name: 'Test Admin',
+              email: 'test@example.com',
+              roles: ['admin']
+            }
+          })
+        });
       });
       
       await waitFor(() => {
@@ -441,7 +530,11 @@ describe('LoginPage', () => {
       setupMockLocation(false);
       render(<LoginPage />);
       
-      expect(screen.getByText('CuckooX')).toBeInTheDocument();
+      // Logo is rendered as SVG, check for the SVG element
+      const logo = document.querySelector('svg');
+      expect(logo).toBeInTheDocument();
+      // Check for the welcome text instead
+      expect(screen.getByText('welcome_to_cuckoox')).toBeInTheDocument();
     });
 
     it('should display footer text', () => {
@@ -488,7 +581,10 @@ describe('LoginPage', () => {
 
     it('should clear error when starting new admin login attempt', async () => {
       // First, create an error
-      mockDbSignin.mockRejectedValue(new Error('Test error'));
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ message: 'Test error' })
+      });
       
       await act(async () => {
         fireEvent.change(screen.getByRole('textbox', { name: /admin_username_label/i }), { 
@@ -497,7 +593,14 @@ describe('LoginPage', () => {
         fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
           target: { value: 'test' } 
         });
-        fireEvent.click(screen.getByRole('button', { name: /admin_login_button/i }));
+        
+        // Mock Turnstile verification
+        await waitFor(() => {
+          const submitButton = screen.getByRole('button', { name: /login_button/i });
+          expect(submitButton).not.toBeDisabled();
+        });
+        
+        fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
       });
 
       await waitFor(() => {
@@ -514,7 +617,7 @@ describe('LoginPage', () => {
         fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
           target: { value: 'newtest' } 
         });
-        fireEvent.click(screen.getByRole('button', { name: /admin_login_button/i }));
+        fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
       });
 
       // Error should be cleared during new attempt

@@ -1,9 +1,20 @@
-// Fix: The reference below is standard for Vite projects.
 /// <reference types="vite/client" />
-// The error "Cannot find type definition file for 'vite/client'" on the line above
-// usually indicates that Vite is not correctly installed or TypeScript's typeRoots
-// are misconfigured in tsconfig.json. This line is presumed to be correct and necessary
-// for Vite-specific features like `import.meta.env`.
+
+interface ImportMetaEnv {
+  readonly VITE_API_URL: string;
+  readonly VITE_SURREALDB_URL: string;
+  readonly VITE_SURREALDB_NAMESPACE: string;
+  readonly VITE_SURREALDB_DATABASE: string;
+  readonly VITE_OIDC_AUTHORITY: string;
+  readonly VITE_OIDC_CLIENT_ID: string;
+  readonly VITE_OIDC_REDIRECT_URI: string;
+  readonly VITE_OIDC_POST_LOGOUT_REDIRECT_URI: string;
+  readonly VITE_TURNSTILE_SITE_KEY: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
 
 // If you use CSS Modules:
 // declare module '*.module.css' {

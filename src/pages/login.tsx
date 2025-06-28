@@ -6,6 +6,7 @@ import { useSurrealClient, useSurreal } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader';
+import Turnstile from '@/src/components/Turnstile';
 import {
   Box,
   Typography,
@@ -41,6 +42,8 @@ const LoginPage: React.FC = () => {
   const [isProcessingAdminLogin, setIsProcessingAdminLogin] = useState<boolean>(false);
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
 
   const searchParams = new URLSearchParams(location.search);
   const isAdminLoginAttempt = searchParams.get('admin') === 'true';
@@ -65,6 +68,24 @@ const LoginPage: React.FC = () => {
     }
   }, [isLoggedIn, isAuthContextLoading, navigate, location.state, isAdminLoginAttempt, userIsAdmin]); // Added userIsAdmin to dependencies
 
+  const handleTurnstileSuccess = (token: string) => {
+    console.log('Turnstile验证成功');
+    setTurnstileToken(token);
+    setTurnstileError(null);
+  };
+
+  const handleTurnstileError = (error: string) => {
+    console.error('Turnstile验证失败:', error);
+    setTurnstileError(t('error_turnstile_failed', '人机验证失败，请重试'));
+    setTurnstileToken(null);
+  };
+
+  const handleTurnstileExpire = () => {
+    console.log('Turnstile token已过期');
+    setTurnstileToken(null);
+    setTurnstileError(t('error_turnstile_expired', '验证已过期，请重新验证'));
+  };
+
   const handleAdminFormLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsProcessingAdminLogin(true);
@@ -75,7 +96,11 @@ const LoginPage: React.FC = () => {
         throw new Error(t('error_admin_credentials_required', 'Username and password are required.'));
       }
 
-      // 调用后端密码登录API
+      if (!turnstileToken) {
+        throw new Error(t('error_turnstile_required', '请完成人机验证'));
+      }
+
+      // 调用后端密码登录API，包含 Turnstile token
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/login`, {
         method: 'POST',
         headers: {
@@ -84,6 +109,7 @@ const LoginPage: React.FC = () => {
         body: JSON.stringify({
           username: adminUsername,
           password: adminPassword,
+          turnstile_token: turnstileToken,
         }),
       });
 
@@ -123,6 +149,8 @@ const LoginPage: React.FC = () => {
       console.error("Admin form login failed:", error);
       const errorMessage = error instanceof Error ? error.message : t('error_invalid_credentials_or_server');
       setAdminLoginError(t('error_admin_login_failed', { message: errorMessage }));
+      // 重置 Turnstile
+      setTurnstileToken(null);
     } finally {
       setIsProcessingAdminLogin(false);
     }
@@ -132,6 +160,7 @@ const LoginPage: React.FC = () => {
     setAdminLoginError(null);
     if (isProcessingAdminLogin) return;
 
+    // GitHub 登录暂时不需要 Turnstile 验证
     try {
       await authService.loginRedirect();
     } catch (error) {
@@ -255,6 +284,9 @@ const LoginPage: React.FC = () => {
             {isAdminLoginAttempt && adminLoginError && (
               <Alert severity="error" sx={{ mb: 3 }}>{adminLoginError}</Alert>
             )}
+            {turnstileError && (
+              <Alert severity="error" sx={{ mb: 3 }}>{turnstileError}</Alert>
+            )}
             {!isAdminLoginAttempt && location.state?.error && (
               <Alert severity="error" sx={{ mb: 3 }}>{t(location.state.error as string, "An OIDC error occurred.")}</Alert>
             )}
@@ -315,9 +347,23 @@ const LoginPage: React.FC = () => {
                   }}
                 />
                 
+                {/* Turnstile 组件 */}
+                <Box sx={{ mt: 2, mb: 2 }}>
+                  <Turnstile
+                    siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'} // 测试用的 site key
+                    onSuccess={handleTurnstileSuccess}
+                    onError={handleTurnstileError}
+                    onExpire={handleTurnstileExpire}
+                    theme={theme.palette.mode}
+                    size="normal"
+                    action="login"
+                    language="zh-CN"
+                  />
+                </Box>
+                
                 <Button
                   type="submit"
-                  disabled={isProcessingAdminLogin}
+                  disabled={isProcessingAdminLogin || !turnstileToken}
                   fullWidth
                   variant="contained"
                   color="primary"
