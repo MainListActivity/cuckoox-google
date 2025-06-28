@@ -2,6 +2,96 @@ import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSetting
 // import { db } from '../lib/surreal'; // REMOVED
 import Surreal, { RecordId } from 'surrealdb'; // IMPORT Surreal class for type from the library
 
+// --- JWT Token Management ---
+interface JwtLoginRequest {
+  username: string;
+  password: string;
+}
+
+interface JwtLoginResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
+  user: {
+    id: string;
+    username: string;
+    name: string;
+    email?: string;
+    roles: string[];
+  };
+}
+
+interface JwtRefreshRequest {
+  refresh_token: string;
+}
+
+interface JwtRefreshResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
+}
+
+// --- JWT Authentication Functions ---
+const jwtAuth = {
+  login: async (credentials: JwtLoginRequest): Promise<JwtLoginResponse> => {
+    const response = await fetch('/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Login failed');
+    }
+
+    return response.json();
+  },
+
+  refresh: async (request: JwtRefreshRequest): Promise<JwtRefreshResponse> => {
+    const response = await fetch('/auth/refresh', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Token refresh failed');
+    }
+
+    return response.json();
+  },
+
+  register: async (userData: {
+    username: string;
+    password: string;
+    name: string;
+    email?: string;
+  }): Promise<any> => {
+    const response = await fetch('/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(userData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Registration failed');
+    }
+
+    return response.json();
+  },
+};
+
 // --- OIDC Configuration ---
 // These settings need to be configured based on your Quarkus OIDC provider.
 // Use Vite environment variables (import.meta.env.VITE_...)
@@ -34,6 +124,10 @@ interface AppUser extends Record<string, any> {
 
 // --- Authentication Service Logic ---
 const authService = {
+  // JWT Authentication methods
+  jwt: jwtAuth,
+
+  // OIDC Authentication methods
   getUser: async (): Promise<OidcUser | null> => {
     return userManager.getUser();
   },

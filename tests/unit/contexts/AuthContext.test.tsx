@@ -50,6 +50,9 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
     dbInfo: null,
     connect: vi.fn(),
     signout: mockSurrealClient.signout,
+    setTokens: vi.fn(),
+    clearTokens: vi.fn(),
+    getStoredAccessToken: vi.fn(),
   }),
 }));
 

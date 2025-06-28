@@ -3,6 +3,7 @@ import {Routes, Route, Navigate, useLocation, useNavigate} from 'react-router-do
 import {useAuth} from '@/src/contexts/AuthContext';
 import {useSurreal} from '@/src/contexts/SurrealProvider';
 import {useTranslation} from 'react-i18next';
+import DebugPanel from '@/src/components/DebugPanel';
 // Remove MUI ThemeProvider, use our own from ThemeContext
 // import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'; 
 // import theme from './theme'; // This is likely MUI theme, not our custom one
@@ -44,7 +45,7 @@ const OidcCallbackPage = React.lazy(() => import('@/src/pages/oidc-callback'));
 const CreateCasePage = React.lazy(() => import('@/src/pages/cases/create'));
 const RegisterPage = React.lazy(() => import('@/src/pages/register'));
 const AdminCreateClaimAttachmentsPage = React.lazy(() => import('@/src/pages/admin/create-claim-attachments'));
-const NotificationRuleManagementPage = React.lazy(() => import('@/src/pages/admin/manage/notification-rules'));
+// const NotificationRuleManagementPage = React.lazy(() => import('@/src/pages/admin/manage/notification-rules'));
 // Note: ReviewStatusManagementPage and RoleManagementPage were not previously imported in App.tsx, so no path update needed here for them.
 
 
@@ -82,7 +83,8 @@ function App() {
         };
 
         processUrlCaseSelection();
-    }, [auth.isLoggedIn, auth.userCases, auth.selectCase, auth.selectedCaseId, location.search, location.pathname, navigate]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [auth.isLoggedIn, auth.userCases, auth.selectCase, auth.selectedCaseId, location.search, location.pathname, navigate]); // Explicitly excluding 'auth' and 'location.state' to prevent unnecessary re-renders
 
     // Handle SurrealDB connection status
     if (isConnecting) {
@@ -127,6 +129,7 @@ function App() {
                                 <Route path="/register" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <RegisterPage/>}/>
                             </Routes>
                         </Suspense>
+                        {import.meta.env.DEV && <DebugPanel />}
                     </CaseStatusProvider>
                 </SnackbarProvider>
             </CustomThemeProvider>
@@ -144,6 +147,7 @@ function App() {
                                 <Route path="/" element={<HomePage />} />
                             </Routes>
                         </Suspense>
+                        {import.meta.env.DEV && <DebugPanel />}
                     </CaseStatusProvider>
                 </SnackbarProvider>
             </CustomThemeProvider>
@@ -189,6 +193,7 @@ function App() {
                             </Routes>
                         </Suspense>
                     </Layout>
+                    {import.meta.env.DEV && <DebugPanel />}
                 </LayoutProvider> {/* <-- ADDED LAYOUT PROVIDER */}
                 </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
             </SnackbarProvider>

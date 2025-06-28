@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth,AppUser } from '@/src/contexts/AuthContext';
 import authService from '@/src/services/authService'; // For OIDC login
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient, useSurreal } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader';
@@ -28,6 +28,7 @@ import Logo from '../components/Logo';
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
   const client = useSurrealClient();
+  const { setTokens } = useSurreal();
   const auth = useAuth(); // Store the full context
   const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState, user } = auth; // Destructure user here
   const navigate = useNavigate();
@@ -93,13 +94,8 @@ const LoginPage: React.FC = () => {
 
       const data = await response.json();
       
-      // 存储令牌
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('token_type', data.token_type);
-      localStorage.setItem('token_expires_at', String(Date.now() + data.expires_in * 1000));
-      if (data.refresh_token) {
-        localStorage.setItem('refresh_token', data.refresh_token);
-      }
+      // 使用SurrealProvider存储令牌
+      setTokens(data.access_token, data.refresh_token, data.expires_in);
 
       // 使用SurrealDB认证（使用JWT令牌）
       await client.authenticate(data.access_token);

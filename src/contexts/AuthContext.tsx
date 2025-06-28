@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import authService from '@/src/services/authService';
 // import { db } from '@/src/lib/surreal'; // REMOVED
 import {useSurreal} from '@/src/contexts/SurrealProvider'; // ADDED
@@ -122,7 +122,7 @@ const deserializeRecordId = (recordIdJson: string): RecordId | null => {
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const {surreal:client,signout} = useSurreal(); // ADDED
+  const {surreal:client,signout,setTokens,clearTokens} = useSurreal(); // ADDED
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
@@ -135,12 +135,115 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [navMenuItems, setNavMenuItems] = useState<NavItemType[] | null>(null);
   const [isMenuLoading, setIsMenuLoading] = useState<boolean>(false);
   const [navigateTo, setNavigateTo] = useState<string | null>(null); // Navigation state
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const clearNavigateTo = () => setNavigateTo(null);
 
+  // Token refresh functionality
+  const refreshAccessToken = async (): Promise<boolean> => {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token'); // Updated key name
+      if (!refreshToken) {
+        console.error('No refresh token available');
+        return false;
+      }
+
+      const response = await fetch('/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      const data = await response.json();
+
+      // Handle the current backend response which returns 501 Not Implemented
+      if (response.status === 501) {
+        console.warn('Token refresh not yet implemented on backend:', data.message);
+        // For now, we'll extend the current token expiry by 1 hour as a fallback
+        const currentExpiresAt = localStorage.getItem('token_expires_at'); // Updated key name
+        if (currentExpiresAt) {
+          const newExpiryTime = parseInt(currentExpiresAt, 10) + (60 * 60 * 1000); // Add 1 hour
+          localStorage.setItem('token_expires_at', newExpiryTime.toString()); // Updated key name
+          console.log('Token expiry extended by 1 hour as fallback');
+          return true;
+        }
+        return false;
+      }
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
+      }
+      
+      if (data.access_token) {
+        // Store the new tokens
+        setTokens(data.access_token, data.refresh_token, data.expires_in);
+        
+        // Re-authenticate with SurrealDB using the new token
+        await client.authenticate(data.access_token);
+        
+        console.log('Access token refreshed successfully');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error refreshing access token:', error);
+      return false;
+    }
+  };
+
+  // Set up automatic token refresh
+  const setupTokenRefresh = () => {
+    // Clear existing timer
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+
+    const checkAndRefreshToken = async () => {
+      const expiresAtStr = localStorage.getItem('token_expires_at'); // Updated key name
+      if (!expiresAtStr) return;
+      
+      const expiresAt = parseInt(expiresAtStr, 10);
+      const now = Date.now();
+      const timeUntilExpiry = expiresAt - now;
+      
+      // Refresh token if it expires within 10 minutes (600000 ms)
+      if (timeUntilExpiry <= 600000 && timeUntilExpiry > 0) {
+        console.log('Token expiring soon, attempting refresh...');
+        const success = await refreshAccessToken();
+        if (!success) {
+          console.error('Failed to refresh token, logging out user');
+          // Don't call logout here to avoid potential infinite loops
+          clearAuthState();
+        }
+      }
+    };
+
+    // Check every 5 minutes instead of every minute to reduce frequency
+    refreshTimerRef.current = setInterval(checkAndRefreshToken, 300000);
+    
+    // Also check immediately, but with a delay to avoid blocking
+    setTimeout(checkAndRefreshToken, 1000);
+  };
+
+  // Clear token refresh timer
+  const clearTokenRefresh = () => {
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
+    let isMounted = true; // Flag to prevent state updates after unmount
+    
     const checkCurrentUser = async () => {
+      if (!isMounted) return;
       setIsLoading(true);
+      
       try {
         // 首先检查本地存储的用户信息
         const storedUser = localStorage.getItem('cuckoox-user');
@@ -152,16 +255,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           // 对于管理员用户，不需要检查 OIDC
           if (appUser.github_id === '--admin--') {
-            await initializeUserSession(appUser, null);
-            setIsLoading(false);
+            if (isMounted) {
+              await initializeUserSession(appUser, null);
+            }
             return;
           }
           
           // 对于普通用户，先恢复会话，然后异步检查 OIDC 状态
-          await initializeUserSession(appUser, null);
+          if (isMounted) {
+            await initializeUserSession(appUser, null);
+          }
           
           // 异步检查 OIDC 状态（不阻塞用户使用）
           authService.getUser().then(async (currentOidcUser) => {
+            if (!isMounted) return;
+            
             if (currentOidcUser && !currentOidcUser.expired) {
               // OIDC 会话有效，更新 oidcUser
               setOidcUser(currentOidcUser);
@@ -172,7 +280,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 const userRecordId = `user:${githubId}`;
                 try {
                   const result = await client.select(userRecordId);
-                  if (result && result.length > 0) {
+                  if (result && result.length > 0 && isMounted) {
                     const appUserFromDb = result[0] as unknown as AppUser;
                     setUser(appUserFromDb);
                     localStorage.setItem('cuckoox-user', serializeAppUser(appUserFromDb));
@@ -184,12 +292,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             } else {
               // OIDC 会话已过期，但保持用户登录状态
               console.log("OIDC session expired, but keeping user logged in with stored credentials");
-              setOidcUser(null);
+              if (isMounted) setOidcUser(null);
             }
           }).catch((error) => {
             console.error("Error checking OIDC session:", error);
             // 即使 OIDC 检查失败，也保持用户登录状态
-            setOidcUser(null);
+            if (isMounted) setOidcUser(null);
           });
         } else {
           // 没有本地存储的用户信息，检查 OIDC
@@ -204,25 +312,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             if (result && result.length > 0) {
               const appUserFromDb = result[0] as unknown as AppUser;
-              await initializeUserSession(appUserFromDb, currentOidcUser);
+              if (isMounted) {
+                await initializeUserSession(appUserFromDb, currentOidcUser);
+              }
             } else {
               console.warn(`User ${githubId} found in OIDC but not in DB. Logging out.`);
-              clearAuthState();
+              if (isMounted) clearAuthState();
             }
           } else {
             // 没有有效的会话
-            clearAuthState();
+            if (isMounted) clearAuthState();
           }
         }
       } catch (error) {
         console.error("Error checking current user session:", error);
-        clearAuthState();
+        if (isMounted) clearAuthState();
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
+    
     checkCurrentUser();
-  }, []);
+    
+    return () => {
+      isMounted = false; // Cleanup flag
+    };
+  }, []); // Empty dependency array is correct here
 
   const clearAuthState = () => {
     setUser(null);
@@ -232,6 +347,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserCases([]);
     setCurrentUserCaseRoles([]);
     setNavMenuItems([]);
+    clearTokenRefresh(); // Clear token refresh timer
+    clearTokens(); // Clear tokens from localStorage
     localStorage.removeItem('cuckoox-isLoggedIn');
     localStorage.removeItem('cuckoox-user');
     localStorage.removeItem('cuckoox-selectedCaseId');
@@ -243,6 +360,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoggedIn(true);
     localStorage.setItem('cuckoox-isLoggedIn', 'true');
     localStorage.setItem('cuckoox-user', serializeAppUser(appUser));
+    
+    // Set up automatic token refresh for authenticated users
+    setupTokenRefresh();
+    
     await loadUserCasesAndRoles(appUser);
   };
   
@@ -636,6 +757,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 检查用户在当前案件中是否拥有指定角色
     return currentUserCaseRoles.some(role => role.name === roleName);
   };
+
+  // Cleanup effect for token refresh timer
+  useEffect(() => {
+    return () => {
+      clearTokenRefresh();
+    };
+  }, []);
 
   // Test-only methods
   const __TEST_setCurrentUserCaseRoles = process.env.NODE_ENV === 'test' ? setCurrentUserCaseRoles : undefined;

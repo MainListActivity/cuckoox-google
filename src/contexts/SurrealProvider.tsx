@@ -13,6 +13,10 @@ import {
     useQueryClient,
 } from '@tanstack/react-query';
 
+// Token storage keys
+const ACCESS_TOKEN_KEY = 'access_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
+const TOKEN_EXPIRES_AT_KEY = 'token_expires_at';
 
 // Define the props for the SurrealProvider component
 interface SurrealProviderProps {
@@ -46,9 +50,29 @@ export interface SurrealContextValue {
     // Re-add signin and signout to the context value if needed for direct use
     signin: (auth: AnyAuth) => Promise<any>;
     signout: () => Promise<void>;
+    // Token management methods
+    setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => void;
+    clearTokens: () => void;
+    getStoredAccessToken: () => string | null;
 }
 
 const SurrealContext = createContext<SurrealContextValue | undefined>(undefined);
+
+// Helper functions for token management
+const getStoredTokens = () => {
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    const expiresAtStr = localStorage.getItem(TOKEN_EXPIRES_AT_KEY);
+    const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
+    
+    return { accessToken, refreshToken, expiresAt };
+};
+
+const isTokenExpired = (expiresAt: number | null): boolean => {
+    if (!expiresAt) return true;
+    // Consider token expired if it expires within the next minute
+    return Date.now() >= (expiresAt - 60000);
+};
 
 // Create the SurrealProvider component
 export function SurrealProvider({
@@ -78,13 +102,24 @@ export function SurrealProvider({
                 if (surrealInstance.status === 'connected') {
                     return true;
                 }
+                
                 const conn = await surrealInstance.connect(endpoint, params);
                 const useRlt = await surrealInstance.use({namespace: namespace, database: database});
-                if (auth) { // Apply auth if provided during initial connect
+                
+                // 尝试从localStorage恢复token认证
+                const { accessToken, expiresAt } = getStoredTokens();
+                
+                if (accessToken && !isTokenExpired(expiresAt)) {
+                    console.log('Restoring authentication from stored access token');
+                    await surrealInstance.authenticate(accessToken);
+                } else if (auth) { 
+                    // Apply auth if provided during initial connect
                     await surrealInstance.signin(auth);
-                } else if (token) { // Or authenticate with token
+                } else if (token) { 
+                    // Or authenticate with token
                     await surrealInstance.authenticate(token);
                 }
+                
                 return conn && useRlt;
             } catch (e: any) {
                 setError(e);
@@ -94,16 +129,42 @@ export function SurrealProvider({
         },
     });
 
-
     const connect = useCallback(async () => {
         if (isSuccess) {
             return true;
         }
         return connectMutation();
-    }, [connectMutation]);
+    }, [connectMutation, isSuccess]);
 
     const disconnect = useCallback(async () => {
         await surrealInstance.close();
+    }, [surrealInstance]);
+
+    // Token management functions
+    const setTokens = useCallback((accessToken: string, refreshToken?: string, expiresIn?: number) => {
+        localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+        
+        if (refreshToken) {
+            localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+        }
+        
+        if (expiresIn) {
+            const expiresAt = Date.now() + (expiresIn * 1000);
+            localStorage.setItem(TOKEN_EXPIRES_AT_KEY, expiresAt.toString());
+        }
+        
+        console.log('Tokens stored in localStorage');
+    }, []);
+
+    const clearTokens = useCallback(() => {
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
+        console.log('Tokens cleared from localStorage');
+    }, []);
+
+    const getStoredAccessToken = useCallback(() => {
+        return localStorage.getItem(ACCESS_TOKEN_KEY);
     }, []);
 
     // Signin function
@@ -127,6 +188,7 @@ export function SurrealProvider({
     const {mutateAsync: signoutMutation} = useMutation<void, Error, void>({
         mutationFn: async () => {
             await surrealInstance.invalidate(); // Invalidate session on signout
+            clearTokens(); // Clear stored tokens
             // Or use surrealInstance.signout() if it's a specific scope signout and you want to keep connection
         },
         onSuccess: () => {
@@ -139,15 +201,46 @@ export function SurrealProvider({
 
     // Auto-connect on mount (if enabled) and cleanup on unmount
     useEffect(() => {
-        if (autoConnect) {
-            connect();
-        }
+        let mounted = true;
+        
+        const tryConnect = async () => {
+            if (mounted && autoConnect && !isSuccess && !isPending && !isError) {
+                try {
+                    await connectMutation();
+                } catch (error) {
+                    console.error('Initial connection failed:', error);
+                }
+            }
+        };
+        
+        tryConnect();
 
         return () => {
-            reset();
+            mounted = false;
+            // Don't call reset() here as it might cause issues
             surrealInstance.close();
         };
-    }, [autoConnect, connect, reset, surrealInstance]);
+    }, []); // Empty dependency array - only run once on mount
+
+    // Handle reconnection when connection is lost
+    useEffect(() => {
+        if (!autoConnect || !isSuccess) {
+            return; // Don't set up reconnection if not connected yet
+        }
+        
+        const connectionCheckInterval = setInterval(() => {
+            if (surrealInstance.status !== 'connected') {
+                console.warn('SurrealDB connection lost, attempting to reconnect...');
+                connectMutation().catch(error => {
+                    console.error('Reconnection failed:', error);
+                });
+            }
+        }, 10000); // Check every 10 seconds
+
+        return () => {
+            clearInterval(connectionCheckInterval);
+        };
+    }, [isSuccess]); // Only depend on isSuccess to set up monitoring after successful connection
 
     const value: SurrealContextValue = useMemo(
         () => ({
@@ -163,8 +256,11 @@ export function SurrealProvider({
             disconnect,
             signin: signinMutation,
             signout: signoutMutation,
+            setTokens,
+            clearTokens,
+            getStoredAccessToken,
         }),
-        [error, connect, disconnect, signinMutation, signoutMutation, isPending, isSuccess, isError]
+        [surrealInstance, isPending, isSuccess, isError, error, connect, disconnect, signinMutation, signoutMutation, setTokens, clearTokens, getStoredAccessToken]
     );
 
     return (
