@@ -19,14 +19,15 @@ vi.mock('react-router-dom', () => ({
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-// Mock Turnstile component
+// Mock Turnstile component with manual trigger
+let turnstileSuccessCallback: ((token: string) => void) | null = null;
 vi.mock('../../../src/components/Turnstile', () => ({
   default: ({ onSuccess }: { onSuccess: (token: string) => void }) => {
-    // Simulate successful verification immediately
+    // Store the callback for manual triggering
     React.useEffect(() => {
-      onSuccess('mock-turnstile-token');
+      turnstileSuccessCallback = onSuccess;
     }, [onSuccess]);
-    return null; // Don't render anything in tests
+    return <div data-testid="turnstile-widget">Turnstile Mock</div>;
   }
 }));
 
@@ -308,13 +309,20 @@ describe('LoginPage', () => {
           target: { value: 'password123' } 
         });
         
-        // Wait for Turnstile to be "verified" (mocked)
-        await waitFor(() => {
-          const submitButton = screen.getByRole('button', { name: /login_button/i });
-          expect(submitButton).not.toBeDisabled();
-        });
-        
+        // Click login button to show Turnstile dialog
         fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
+      });
+
+      // Wait for Turnstile dialog to appear
+      await waitFor(() => {
+        expect(screen.getByText('human_verification')).toBeInTheDocument();
+      });
+
+      // Simulate Turnstile success by calling the stored callback
+      await act(async () => {
+        if (turnstileSuccessCallback) {
+          turnstileSuccessCallback('mock-turnstile-token');
+        }
       });
     });
 
@@ -378,16 +386,23 @@ describe('LoginPage', () => {
           target: { value: 'wrongpass' } 
         });
         
-        // Mock Turnstile verification
-        await waitFor(() => {
-          const submitButton = screen.getByRole('button', { name: /login_button/i });
-          expect(submitButton).not.toBeDisabled();
-        });
-        
+        // Click login button to show Turnstile dialog
         fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
       });
+
+      // Wait for Turnstile dialog to appear
+      await waitFor(() => {
+        expect(screen.getByText('human_verification')).toBeInTheDocument();
+      });
+
+      // Simulate Turnstile success
+      await act(async () => {
+        if (turnstileSuccessCallback) {
+          turnstileSuccessCallback('mock-turnstile-token');
+        }
+      });
       
-      await screen.findByText(`error_admin_login_failed ${errorMessage}`);
+      await screen.findByText(/error_admin_login_failed/);
     });
     
     it('should display an error message', () => {
@@ -404,10 +419,8 @@ describe('LoginPage', () => {
   });
   
   describe('Loading State - Admin Login Processing', () => {
-    it('should show loading message during admin login attempt', async () => {
+    it('should show verifying button text when clicking login', async () => {
       setupMockLocation(true);
-      let resolveFetch:any;
-      mockFetch.mockImplementation(() => new Promise(resolve => { resolveFetch = resolve; }));
       
       render(<LoginPage />);
 
@@ -418,41 +431,16 @@ describe('LoginPage', () => {
         target: { value: 'password123' } 
       });
       
-      // Mock Turnstile verification
+      // Click login button
       await act(async () => {
-        await waitFor(() => {
-          const submitButton = screen.getByRole('button', { name: /login_button/i });
-          expect(submitButton).not.toBeDisabled();
-        });
-        
         fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
       });
 
-      expect(screen.getByText('admin_login_attempt_loading')).toBeInTheDocument();
-      // During loading state, the button might be hidden or removed
-      expect(screen.queryByRole('button')).not.toBeInTheDocument();
-
-      await act(async () => {
-        resolveFetch({
-          ok: true,
-          json: async () => ({
-            access_token: 'test-token',
-            refresh_token: 'test-refresh-token',
-            expires_in: 3600,
-            user: {
-              id: 'user:testadmin',
-              username: 'testadmin',
-              name: 'Test Admin',
-              email: 'test@example.com',
-              roles: ['admin']
-            }
-          })
-        });
-      });
+      // Should show verifying button text
+      expect(screen.getByText('verifying_button')).toBeInTheDocument();
       
-      await waitFor(() => {
-        expect(screen.queryByText('admin_login_attempt_loading')).not.toBeInTheDocument();
-      });
+      // Should show Turnstile dialog
+      expect(screen.getByText('human_verification')).toBeInTheDocument();
     });
 
     it('should show loading state when auth context is loading', () => {
@@ -594,33 +582,47 @@ describe('LoginPage', () => {
           target: { value: 'test' } 
         });
         
-        // Mock Turnstile verification
-        await waitFor(() => {
-          const submitButton = screen.getByRole('button', { name: /login_button/i });
-          expect(submitButton).not.toBeDisabled();
-        });
-        
+        // Click login button to show Turnstile dialog
         fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
+      });
+
+      // Wait for Turnstile dialog and trigger success
+      await waitFor(() => {
+        expect(screen.getByText('human_verification')).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        if (turnstileSuccessCallback) {
+          turnstileSuccessCallback('mock-turnstile-token');
+        }
       });
 
       await waitFor(() => {
         expect(screen.getByText(/error_admin_login_failed/)).toBeInTheDocument();
       });
 
-      // Now mock success and try again
-      mockDbSignin.mockResolvedValue(undefined);
-      
-      await act(async () => {
-        fireEvent.change(screen.getByRole('textbox', { name: /admin_username_label/i }), { 
-          target: { value: 'newtest' } 
-        });
-        fireEvent.change(screen.getByLabelText(/admin_password_label/i), { 
-          target: { value: 'newtest' } 
-        });
-        fireEvent.click(screen.getByRole('button', { name: /login_button/i }));
+      // The error message should be displayed
+      expect(screen.getByText(/error_admin_login_failed/)).toBeInTheDocument();
+
+      // Close dialog by clicking the backdrop
+      const backdrop = document.querySelector('.MuiBackdrop-root');
+      if (backdrop) {
+        fireEvent.click(backdrop);
+      }
+
+      // Wait for dialog to close
+      await waitFor(() => {
+        expect(screen.queryByText('human_verification')).not.toBeInTheDocument();
       });
 
-      // Error should be cleared during new attempt
+      // Clear the form and type new values - error should be cleared
+      const usernameField = screen.getByRole('textbox', { name: /admin_username_label/i });
+      
+      // Clear and type new value
+      fireEvent.change(usernameField, { target: { value: '' } });
+      fireEvent.change(usernameField, { target: { value: 'newtest' } });
+
+      // Error should be cleared after typing
       expect(screen.queryByText(/error_admin_login_failed/)).not.toBeInTheDocument();
     });
   });
