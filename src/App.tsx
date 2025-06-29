@@ -47,6 +47,7 @@ const RegisterPage = React.lazy(() => import('@/src/pages/register'));
 const AdminCreateClaimAttachmentsPage = React.lazy(() => import('@/src/pages/admin/create-claim-attachments'));
 // const NotificationRuleManagementPage = React.lazy(() => import('@/src/pages/admin/manage/notification-rules'));
 // Note: ReviewStatusManagementPage and RoleManagementPage were not previously imported in App.tsx, so no path update needed here for them.
+const PermissionManagementPage = React.lazy(() => import('@/src/pages/admin/manage/permissions'));
 
 
 function App() {
@@ -186,6 +187,7 @@ function App() {
                                 <Route path="/admin/create-claim/:tempClaimId/attachments" element={<ProtectedRoute requiredRole="admin"><AdminCreateClaimAttachmentsPage /></ProtectedRoute>} />
                                 {/* End Admin specific claim creation routes */}
                                 <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/admin/manage/permissions" element={<ProtectedRoute requiredRole="admin"><PermissionManagementPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/admin/case-status-toggler" element={<ProtectedRoute requiredRole="admin"><CaseStatusToggler /></ProtectedRoute> as ReactNode} /> {/* <-- ADDED */}
                                 <Route path="/access-denied-status" element={<AccessDeniedPage />} /> {/* <-- ADDED */}
                                 <Route path="/access-denied-role" element={<AccessDeniedRolePage />} /> {/* <-- ADDED */}

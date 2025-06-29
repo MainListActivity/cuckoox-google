@@ -18,6 +18,9 @@ interface SurrealContextType {
   disconnect: () => Promise<void>;
   signin: (auth: unknown) => Promise<unknown>;
   signout: () => Promise<void>;
+  setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => void;
+  clearTokens: () => void;
+  getStoredAccessToken: () => string | null;
 }
 
 // Define simplified prop types for mocked dialogs
@@ -78,6 +81,21 @@ vi.mock('../../../../src/contexts/SnackbarContext', async () => {
     }),
   };
 });
+
+// Mock useOperationPermissions hook
+vi.mock('../../../../src/hooks/useOperationPermission', () => ({
+  useOperationPermissions: () => ({
+    permissions: {
+      'case_list_view': true,
+      'case_create': true,
+      'case_view_detail': true,
+      'case_edit': true,
+      'case_modify_status': true,
+      'case_manage_members': true
+    },
+    isLoading: false
+  })
+}));
 
 // Mock useTranslation
 vi.mock('react-i18next', async () => {
@@ -250,6 +268,9 @@ describe('CaseListPage', () => {
       disconnect: vi.fn().mockResolvedValue(undefined),
       signin: vi.fn().mockResolvedValue({}),
       signout: vi.fn().mockResolvedValue(undefined),
+      setTokens: vi.fn(),
+      clearTokens: vi.fn(),
+      getStoredAccessToken: vi.fn().mockReturnValue(null),
     };
   });
 

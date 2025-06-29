@@ -1,6 +1,7 @@
 // TODO: Automatic Navigation - Logic for navigating to this page when case status is '立案' should be handled in higher-level routing (e.g., App.tsx or ProtectedRoute.tsx).
 // TODO: Access Control - Page access to Creditor Management itself should be controlled via routing based on user permissions (e.g., has 'view_creditors' or a general case access permission).
-import React, { useState, useEffect } from 'react'; // Changed to useState
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Papa from 'papaparse'; // Added for CSV parsing
 import {
   Box,
@@ -44,6 +45,7 @@ import { useAuth } from '@/src/contexts/AuthContext'; // Added
 import { useSurreal } from '@/src/contexts/SurrealProvider'; // Added
 import { RecordId } from 'surrealdb'; // Added
 import { useDebounce } from '@/src/hooks/useDebounce'; // ADDED
+import { useOperationPermission } from '@/src/hooks/usePermission';
 
 // Creditor interface moved to ./types.ts
 
@@ -54,11 +56,19 @@ const CreditorListPage: React.FC = () => {
   const { showSuccess, showError, showInfo } = useSnackbar(); // Added showError and showInfo
   const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
   const { surreal: client, isSuccess: isDbConnected } = useSurreal(); // Added
+  const navigate = useNavigate();
 
   // Determine if the user has management permissions
   // For now, system admin (user?.github_id === '--admin--') or users with 'case_manager' role for the selected case.
   // Assuming hasRole('admin') covers the system admin case.
   const canManageCreditors = hasRole('admin') || hasRole('case_manager');
+
+  // 权限检查
+  const { hasPermission: canCreate } = useOperationPermission('creditor_create');
+  const { hasPermission: canEdit } = useOperationPermission('creditor_edit');
+  const { hasPermission: canDelete } = useOperationPermission('creditor_delete');
+  const { hasPermission: canBatchImport } = useOperationPermission('creditor_batch_import');
+  const { hasPermission: canPrintWaybill } = useOperationPermission('creditor_print_waybill');
 
   const [creditors, setCreditors] = useState<Creditor[]>([]); // Initialize with empty array
   const [isLoading, setIsLoading] = useState<boolean>(true); // Added
@@ -471,25 +481,27 @@ const CreditorListPage: React.FC = () => {
           sx={{ minWidth: '300px', flexGrow: { xs:1, sm: 0.5, md:0.3 } }} // Responsive grow
         />
         <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', gap:1}}> {/* Allow buttons to wrap and add gap */}
-          {canManageCreditors && (
+          {canCreate && (
             <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiAccountPlusOutline} /></SvgIcon>} onClick={handleOpenAddCreditorDialog}>
               {t('add_single_creditor_button', '添加单个债权人')}
             </Button>
           )}
-          {canManageCreditors && (
+          {canBatchImport && (
             <Button variant="outlined" color="secondary" startIcon={<SvgIcon><path d={mdiFileImportOutline} /></SvgIcon>} onClick={handleOpenBatchImportDialog}>
               {t('batch_import_creditors_button', '批量导入债权人')}
             </Button>
           )}
-          <Button
-            variant="contained" 
-            color="secondary" 
-            startIcon={<SvgIcon><path d={mdiPrinterOutline} /></SvgIcon>}
-            onClick={handleOpenPrintWaybillsDialog}
-            disabled={!canManageCreditors || selectedCreditorIds.length === 0}
-          >
-            {t('print_waybill_button', '打印快递单号')}
-          </Button>
+          {canPrintWaybill && selectedCreditorIds.length > 0 && (
+            <Button
+              variant="contained" 
+              color="secondary" 
+              startIcon={<SvgIcon><path d={mdiPrinterOutline} /></SvgIcon>}
+              onClick={handleOpenPrintWaybillsDialog}
+              disabled={!canManageCreditors || selectedCreditorIds.length === 0}
+            >
+              {t('print_waybill_button', '打印快递单号')} ({selectedCreditorIds.length})
+            </Button>
+          )}
         </Stack>
       </Box>
       
@@ -564,7 +576,7 @@ const CreditorListPage: React.FC = () => {
                     <TableCell>{creditor.address}</TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={0} justifyContent="center">
-                        {canManageCreditors && (
+                        {canEdit && (
                           <Tooltip title={t('edit_creditor_tooltip', '编辑')}>
                             <IconButton
                               color="primary"
@@ -579,7 +591,7 @@ const CreditorListPage: React.FC = () => {
                             </IconButton>
                           </Tooltip>
                         )}
-                        {canManageCreditors && (
+                        {canDelete && (
                           <Tooltip title={t('delete_creditor_tooltip', '删除')}>
                             <IconButton
                               color="error"

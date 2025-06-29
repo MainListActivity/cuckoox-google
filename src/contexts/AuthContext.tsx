@@ -4,6 +4,7 @@ import authService from '@/src/services/authService';
 import {useSurreal} from '@/src/contexts/SurrealProvider'; // ADDED
 import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb'; // Import for typing record IDs
+import { menuService } from '@/src/services/menuService';
 
 // Matches AppUser in authService and user table in SurrealDB
 export interface AppUser {
@@ -136,6 +137,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isMenuLoading, setIsMenuLoading] = useState<boolean>(false);
   const [navigateTo, setNavigateTo] = useState<string | null>(null); // Navigation state
   const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Initialize menuService with SurrealDB client
+  useEffect(() => {
+    console.log('Setting menuService client:', client);
+    menuService.setClient(client);
+  }, [client]);
 
   const clearNavigateTo = () => setNavigateTo(null);
 
@@ -530,32 +537,60 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // 更新菜单状态
   const fetchAndUpdateMenuPermissions = async (currentRoles: Role[]) => {
+    console.log('fetchAndUpdateMenuPermissions called with roles:', currentRoles);
+    
     if (!user) {
+      console.log('No user, clearing menu items');
       setNavMenuItems([]);
       return;
     }
 
     const isAdmin = user.github_id === '--admin--';
+    console.log('User is admin:', isAdmin, 'User:', user);
     setIsMenuLoading(true);
     
     try {
-      if (!isAdmin && (!currentRoles?.length)) {
-        console.log('No roles assigned - returning empty menu');
-        setNavMenuItems([]);
-        return;
+      // 从数据库加载菜单
+      console.log('Attempting to load menus from database...');
+      const dbMenuItems = await menuService.loadUserMenus();
+      console.log('Database menu items:', dbMenuItems);
+      
+      if (dbMenuItems && dbMenuItems.length > 0) {
+        // 使用数据库中的菜单
+        setNavMenuItems(dbMenuItems);
+        console.log('Menu items loaded from database:', {
+          userRoles: isAdmin ? ['admin'] : currentRoles.map(r => r.name),
+          menuCount: dbMenuItems.length
+        });
+      } else {
+        // 如果数据库中没有菜单，回退到硬编码的菜单
+        console.log('No menus from database, falling back to hardcoded menus');
+        
+        if (!isAdmin && (!currentRoles?.length)) {
+          console.log('No roles assigned - returning empty menu');
+          setNavMenuItems([]);
+          return;
+        }
+        
+        const accessibleMenuItems = getAccessibleMenuItems(currentRoles, isAdmin);
+        
+        setNavMenuItems(accessibleMenuItems);
+        console.log('Menu items updated from hardcoded:', {
+          userRoles: isAdmin ? ['admin'] : currentRoles.map(r => r.name),
+          menuCount: accessibleMenuItems.length
+        });
       }
-      
-      const accessibleMenuItems = getAccessibleMenuItems(currentRoles, isAdmin);
-      
-      setNavMenuItems(accessibleMenuItems);
-      console.log('Menu items updated:', {
-        userRoles: isAdmin ? ['admin'] : currentRoles.map(r => r.name),
-        menuCount: accessibleMenuItems.length
-      });
 
     } catch (error) {
       console.error('Error updating menu permissions:', error);
-      setNavMenuItems([]);
+      // 出错时回退到硬编码的菜单
+      try {
+        const accessibleMenuItems = getAccessibleMenuItems(currentRoles, isAdmin);
+        setNavMenuItems(accessibleMenuItems);
+      } catch (fallbackError) {
+        console.error('Error in fallback menu logic:', fallbackError);
+        setNavMenuItems([]);
+      }
     } finally {
       setIsMenuLoading(false);
     }
@@ -705,15 +740,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Check if user is admin
     const isAdmin = user && user.github_id === '--admin--';
     
-    if (isAdmin) {
+    if (isAdmin && client) {
       // Admin users should see all menus regardless of case selection
+      // But only call after client is initialized
+      console.log('Admin user detected, loading menus...');
       fetchAndUpdateMenuPermissions([]);
     } else if (selectedCaseId && currentUserCaseRoles && currentUserCaseRoles.length > 0) {
       fetchAndUpdateMenuPermissions(currentUserCaseRoles);
-    } else if (!selectedCaseId) {
-      setNavMenuItems([]); // Clear menu if no case is selected
+    } else if (!selectedCaseId && !isAdmin) {
+      setNavMenuItems([]); // Clear menu if no case is selected (except for admin)
     }
-  }, [selectedCaseId, currentUserCaseRoles, user]); // Added user as dependency
+  }, [selectedCaseId, currentUserCaseRoles, user, client]); // Added client as dependency
 
   // Effect for automatic navigation to creditor management
   useEffect(() => {

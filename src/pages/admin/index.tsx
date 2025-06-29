@@ -7,6 +7,7 @@ import {
   CardContent,
   Button,
   SvgIcon,
+  Stack,
 } from '@mui/material';
 import {
   mdiAccountGroupOutline,
@@ -14,7 +15,11 @@ import {
   mdiPlaylistCheck,
   mdiBellRingOutline,
   mdiCogOutline,
+  mdiCog,
+  mdiAccountGroup,
 } from '@mdi/js'; // Using @mdi/js for path data
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 const adminSections = [
   { title: '用户管理', description: '管理系统用户账户、分配全局角色。', buttonText: '管理用户', icon: mdiAccountGroupOutline },
@@ -25,6 +30,9 @@ const adminSections = [
 ];
 
 const AdminPage: React.FC = () => {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
   // TODO: Implement admin functionalities:
   // - User management
   // - Role management (defining roles and their menu/action permissions)
@@ -36,6 +44,49 @@ const AdminPage: React.FC = () => {
       <Typography variant="h4" component="h1" gutterBottom>系统管理</Typography>
       
       <Grid container spacing={3}>
+        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <SvgIcon sx={{ mr: 1, color: 'primary.main' }}>
+                  <path d={mdiCog} />
+                </SvgIcon>
+                <Typography variant="h6">{t('admin.systemSettings', '系统设置')}</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                {t('admin.systemSettingsDesc', '配置系统参数、主题和其他全局设置')}
+              </Typography>
+              <Button variant="outlined" fullWidth onClick={() => navigate('/admin/theme')}>
+                {t('admin.themeSettings', '主题设置')}
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6, lg: 4 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <SvgIcon sx={{ mr: 1, color: 'primary.main' }}>
+                  <path d={mdiAccountGroup} />
+                </SvgIcon>
+                <Typography variant="h6">{t('admin.userManagement', '用户管理')}</Typography>
+              </Box>
+              <Typography variant="body2" color="text.secondary" paragraph>
+                {t('admin.userManagementDesc', '管理系统用户、角色和权限分配')}
+              </Typography>
+              <Stack spacing={1}>
+                <Button variant="outlined" fullWidth onClick={() => navigate('/admin/manage/roles')}>
+                  {t('admin.roleManagement', '角色管理')}
+                </Button>
+                <Button variant="outlined" fullWidth onClick={() => navigate('/admin/manage/permissions')}>
+                  {t('admin.permissionManagement', '权限管理')}
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {adminSections.map((section, index) => (
           <Grid size={{ xs: 12, sm: 6, md: 4 }} key={index}>
             <Card sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
