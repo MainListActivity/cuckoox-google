@@ -42,12 +42,12 @@ const AdminThemePage = React.lazy(() => import('@/src/pages/admin/theme'));
 const NotFoundPage = React.lazy(() => import('@/src/pages/404'));
 const CaseSelectionPage = React.lazy(() => import('@/src/pages/select-case'));
 const OidcCallbackPage = React.lazy(() => import('@/src/pages/oidc-callback'));
-const CreateCasePage = React.lazy(() => import('@/src/pages/cases/create'));
 const RegisterPage = React.lazy(() => import('@/src/pages/register'));
 const AdminCreateClaimAttachmentsPage = React.lazy(() => import('@/src/pages/admin/create-claim-attachments'));
 // const NotificationRuleManagementPage = React.lazy(() => import('@/src/pages/admin/manage/notification-rules'));
 // Note: ReviewStatusManagementPage and RoleManagementPage were not previously imported in App.tsx, so no path update needed here for them.
 const PermissionManagementPage = React.lazy(() => import('@/src/pages/admin/manage/permissions'));
+const CaseMemberManagementPage = React.lazy(() => import('@/src/pages/case-members/index'));
 
 
 function App() {
@@ -167,8 +167,8 @@ function App() {
                                 <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/documents/demo" element={<ProtectedRoute><DocumentCenterDemo /></ProtectedRoute> as ReactNode} />
                                 <Route path="/cases" element={<ProtectedRoute><CaseListPage /></ProtectedRoute> as ReactNode} />
-                                <Route path="/cases/create" element={<ProtectedRoute><CreateCasePage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/cases/:id" element={<ProtectedRoute><CaseDetailPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/case-members" element={<ProtectedRoute><CaseMemberManagementPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/creditors" element={<ProtectedRoute><CreditorListPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/claims" element={<ProtectedRoute><ClaimListPage /></ProtectedRoute> as ReactNode} />
                                 {/* Claim Submission Module with Case Status Guard */}

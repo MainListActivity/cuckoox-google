@@ -1,6 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import LanguageDetector from 'i18next-browser-languagedetector'; // Optional: for language detection
+// import LanguageDetector from 'i18next-browser-languagedetector'; // Optional: for language detection
 
 // For now, we will define translations directly here.
 // In a larger app, you would import them from JSON files in a `locales` directory.
@@ -58,6 +58,9 @@ const resources = {
       "nav_online_meetings": "在线会议",
       "nav_message_center": "消息中心",
       "nav_system_management": "系统管理",
+      "nav_case_member_management": "成员管理",
+      "nav_my_claims": "我的债权",
+      "nav_claim_submission": "债权申报",
 
       // ProtectedRoute (already covered by common)
 
@@ -129,7 +132,28 @@ const resources = {
       "document_saved": "文档已保存",
       "document_save_failed": "文档保存失败",
       "auto_save_enabled": "已启用自动保存",
-      "unsaved_changes": "有未保存的更改"
+      "unsaved_changes": "有未保存的更改",
+
+      // CaseMemberTab
+      "case_members_title": "成员管理",
+      "add_member_button": "添加成员",
+      "no_members_added": "暂无成员",
+      "remove_member_action": "移除成员",
+      "confirm_change_owner_title": "确认变更负责人",
+      "confirm_change_owner_text": "确认将{userName}设为新的负责人？您将成为普通成员。",
+      "confirm_change_button": "确认变更",
+      "confirm_removal_title": "确认移除",
+      "confirm_removal_text": "确认移除{userName}？",
+      "remove_button": "移除",
+      "cancel_button": "取消",
+      "add_selected_user": "添加选中用户",
+      "add_member_dialog_title": "添加新成员到案件",
+      "search_users_label": "搜索用户（按姓名或邮箱）",
+      "search_users_helper_text": "请输入至少2个字符进行搜索。",
+      "no_users_found": "未找到匹配的用户。",
+      "search_users_error": "搜索用户失败。请重试。",
+      "please_select_user": "请选择一个用户。",
+      "add_member_error": "添加成员失败。请重试。",
     }
   }
 };

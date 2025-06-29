@@ -58,6 +58,7 @@ import {
 // Import Dialogs
 import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/ModifyCaseStatusDialog';
 import MeetingMinutesDialog from '@/src/components/case/MeetingMinutesDialog';
+import CreateCaseDialog from '@/src/components/case/CreateCaseDialog';
 import { QuillDelta } from '@/src/components/RichTextEditor';
 
 // Define interfaces based on SurrealDB schema
@@ -127,6 +128,7 @@ const CaseListPage: React.FC = () => {
   // State for dialogs
   const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
   const [meetingMinutesOpen, setMeetingMinutesOpen] = useState(false);
+  const [createCaseOpen, setCreateCaseOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
   const [currentMeetingTitle, setCurrentMeetingTitle] = useState<string>('');
   const [searchValue, setSearchValue] = useState('');
@@ -311,6 +313,81 @@ const CaseListPage: React.FC = () => {
     setSelectedCaseForMenu(null);
   };
 
+  // Handle create case dialog
+  const handleOpenCreateCase = () => {
+    setCreateCaseOpen(true);
+  };
+
+  const handleCloseCreateCase = () => {
+    setCreateCaseOpen(false);
+  };
+
+  const handleCaseCreated = (caseId: string, caseName: string) => {
+    // Show success message
+    showSuccess(`案件"${caseName}"创建成功！您可以在案件详情页面编辑立案材料。`);
+    
+    // Refresh cases list to show the new case
+    const fetchCases = async () => {
+      if (!isConnected) return;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        // Query cases with related user information
+        const query = `
+          SELECT 
+            id,
+            name,
+            case_number,
+            case_manager_name,
+            case_procedure,
+            acceptance_date,
+            procedure_phase,
+            created_by_user,
+            case_lead_user_id,
+            created_at,
+            updated_at,
+            created_by_user.name as creator_name,
+            case_lead_user_id.name as case_lead_name
+          FROM case
+          ORDER BY created_at DESC
+        `;
+        
+        const result = await client.query(query);
+        
+        if (result && result[0]) {
+          const casesData = result[0] as RawCaseData[];
+          
+          // Transform the data to match our CaseItem interface
+          const transformedCases: CaseItem[] = casesData.map(caseData => ({
+            id: caseData.id.toString().replace('case:', ''),
+            case_number: caseData.case_number || `BK-${caseData.id.toString().slice(-6)}`,
+            case_lead_name: caseData.case_lead_name || caseData.case_manager_name || t('unassigned', '未分配'),
+            case_procedure: caseData.case_procedure || '破产',
+            creator_name: caseData.creator_name || t('system', '系统'),
+            current_stage: caseData.procedure_phase as CaseStatus || '立案',
+            acceptance_date: caseData.acceptance_date ? new Date(caseData.acceptance_date).toISOString().split('T')[0] : '',
+          }));
+          
+          setCases(transformedCases);
+        } else {
+          setCases([]);
+        }
+      } catch (err) {
+        console.error('Error fetching cases:', err);
+        setError(t('error_fetching_cases', '获取案件列表失败'));
+        showError(t('error_fetching_cases', '获取案件列表失败'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    setTimeout(() => {
+      fetchCases();
+    }, 500);
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
@@ -450,8 +527,7 @@ const CaseListPage: React.FC = () => {
               <Button
                 variant="contained"
                 color="primary"
-                component={Link}
-                to="/cases/create"
+                onClick={handleOpenCreateCase}
                 startIcon={<SvgIcon><path d={mdiPlusCircleOutline} /></SvgIcon>}
                 sx={{ 
                   borderRadius: 2,
@@ -717,6 +793,11 @@ const CaseListPage: React.FC = () => {
           onSave={handleSaveMeetingMinutes}
         />
       )}
+      <CreateCaseDialog
+        open={createCaseOpen}
+        onClose={handleCloseCreateCase}
+        onCaseCreated={handleCaseCreated}
+      />
     </Box>
   );
 };

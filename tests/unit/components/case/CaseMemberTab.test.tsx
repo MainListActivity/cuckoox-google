@@ -1,8 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import CaseMemberTab from '@/src/components/case/CaseMemberTab';
-import { AuthContext, AppUser } from '@/src/contexts/AuthContext';
+import { AuthContext, AppUser, AuthContextType } from '@/src/contexts/AuthContext';
 import { CaseMember } from '@/src/types/caseMember';
 import { RecordId } from 'surrealdb';
 
@@ -73,31 +73,6 @@ const initialMockMembers: CaseMember[] = [
   { id: 'user:member2', caseId: mockCaseId, roleInCase: 'member', userName: 'Member Two', userEmail: 'member2@example.com', avatarUrl: 'member2.png' },
 ];
 
-// Define a minimal AuthContextType for testing
-interface AuthContextType {
-  isLoggedIn: boolean;
-  user: AppUser | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oidcUser: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setAuthState: (appUser: AppUser, oidcUserInstance?: any) => void;
-  logout: () => Promise<void>;
-  isLoading: boolean;
-  selectedCaseId: string | null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  userCases: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  currentUserCaseRoles: any[];
-  isCaseLoading: boolean;
-  selectCase: (caseId: string) => Promise<void>;
-  hasRole: (roleName: string) => boolean;
-  refreshUserCasesAndRoles: () => Promise<void>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  navMenuItems: any[] | null;
-  isMenuLoading: boolean;
-  navigateTo: string | null;
-  clearNavigateTo: () => void;
-}
 
 // Helper to provide AuthContext with stable references
 const renderWithAuth = (ui: React.ReactElement, authContextValue: Partial<AuthContextType>) => {
@@ -108,7 +83,7 @@ const renderWithAuth = (ui: React.ReactElement, authContextValue: Partial<AuthCo
     setAuthState: vi.fn(),
     logout: vi.fn(),
     isLoading: false,
-    selectedCaseId: mockCaseId,
+    selectedCaseId: new RecordId('case', mockCaseId),
     userCases: [],
     currentUserCaseRoles: [],
     isCaseLoading: false,
@@ -123,7 +98,7 @@ const renderWithAuth = (ui: React.ReactElement, authContextValue: Partial<AuthCo
   };
   
   return render(
-    <AuthContext.Provider value={fullAuthContextValue}>
+    <AuthContext.Provider value={fullAuthContextValue}> 
       {ui}
     </AuthContext.Provider>
   );

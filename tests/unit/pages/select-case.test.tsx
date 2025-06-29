@@ -261,7 +261,7 @@ describe('CaseSelectionPage', () => {
   });
 
   it('highlights selected case with check icon', async () => {
-    mockAuthContextValue.selectedCaseId = mockCases[1].id.toString(); // Case Beta is selected
+    mockAuthContextValue.selectedCaseId = mockCases[1].id; // Case Beta is selected
     renderWithProviders(<CaseSelectionPage />);
 
     await waitFor(() => {

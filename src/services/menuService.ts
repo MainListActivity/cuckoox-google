@@ -103,7 +103,7 @@ class MenuService {
    * @param caseId 案件ID（可选）
    * @returns 用户可执行的操作列表
    */
-  async loadUserOperations(userId: string, menuId: string, caseId?: string | null): Promise<OperationMetadata[]> {
+  async loadUserOperations(menuId: string, caseId?: RecordId | null): Promise<OperationMetadata[]> {
     if (!this.client) {
       console.error('MenuService: SurrealDB client not initialized');
       return [];
@@ -111,36 +111,19 @@ class MenuService {
 
     try {
       // 使用图查询检查用户在特定菜单中可执行的操作
-      const query = `
-        LET $global_roles = (SELECT out FROM $user_id->has_role);
-        LET $case_roles = IF $case_id THEN 
-          (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-        ELSE [];
-        END;
-        LET $all_roles = array::concat($global_roles, $case_roles);
-        
-        SELECT DISTINCT out.* FROM (
-          SELECT * FROM $all_roles->can_execute_operation 
-          WHERE out.menu_id = $menu_id 
-            AND can_execute = true 
-            AND out.is_active = true
-        );
-      `;
       
-      const results = await this.client.query<OperationMetadata[][]>(query, {
-        user_id: userId,
-        menu_id: menuId,
-        case_id: caseId || null
-      });
+      const query = `select * from operation_metadata where menu_id = $menu_id`;
+      const params = caseId ? { case_id: caseId, menu_id: menuId } : { menu_id: menuId };
+      const results = await this.client.query<OperationMetadata[][]>(query, params);
       
       if (!results || results.length === 0 || !results[0]) {
-        console.log(`No operations found for user ${userId} in menu ${menuId}`);
+        console.log(`No operations found in menu ${menuId}`);
         return [];
       }
-
+      console.log('Operations from DB:', results[0]);
       return results[0];
     } catch (error) {
-      console.error(`Error loading operations for user ${userId} in menu ${menuId}:`, error);
+      console.error(`Error loading operations in menu ${menuId}:`, error);
       return [];
     }
   }
@@ -152,38 +135,21 @@ class MenuService {
    * @param caseId 案件ID（可选）
    * @returns 是否有权限
    */
-  async hasOperation(userId: string, operationId: string, caseId?: string | null): Promise<boolean> {
+  async hasOperation(operationId: string, caseId?: RecordId | null): Promise<boolean> {
     if (!this.client) {
       console.error('MenuService: SurrealDB client not initialized');
       return false;
     }
 
     try {
-      const query = `
-        LET $global_roles = (SELECT out FROM $user_id->has_role);
-        LET $case_roles = IF $case_id THEN 
-          (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-        ELSE [];
-        END;
-        LET $all_roles = array::concat($global_roles, $case_roles);
-        
-        SELECT * FROM (
-          SELECT * FROM $all_roles->can_execute_operation 
-          WHERE out.operation_id = $operation_id 
-            AND can_execute = true 
-            AND out.is_active = true
-        ) LIMIT 1;
-      `;
       
-      const results = await this.client.query<unknown[][]>(query, {
-        user_id: userId,
-        operation_id: operationId,
-        case_id: caseId || null
-      });
+      const query = `select * from operation_metadata where operation_id = $operation_id`;
+      const params = caseId ? { case_id: caseId, operation_id: operationId } : { operation_id: operationId };
+      const results = await this.client.query<OperationQueryResult[][]>(query, params);
       
       return !!(results && results[0] && results[0].length > 0);
     } catch (error) {
-      console.error(`Error checking operation ${operationId} for user ${userId}:`, error);
+      console.error(`Error checking operation ${operationId}:`, error);
       return false;
     }
   }
@@ -195,7 +161,7 @@ class MenuService {
    * @param caseId 案件ID（可选）
    * @returns 操作ID到权限的映射
    */
-  async hasOperations(userId: string, operationIds: string[], caseId?: string | null): Promise<Record<string, boolean>> {
+  async hasOperations(operationIds: string[], caseId?: RecordId | null): Promise<Record<string, boolean>> {
     if (!this.client) {
       console.error('MenuService: SurrealDB client not initialized');
       const permissions: Record<string, boolean> = {};
@@ -213,7 +179,7 @@ class MenuService {
       const availableOperations = new Set(
         results && results[0] ? results[0].map((item: OperationQueryResult) => item.operation_id) : []
       );
-      
+      console.log('Available operations:', availableOperations);
       const permissions: Record<string, boolean> = {};
       operationIds.forEach(id => {
         permissions[id] = availableOperations.has(id);

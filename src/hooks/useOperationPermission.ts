@@ -42,9 +42,8 @@ export function useOperationPermissions(operationIds: string[]) {
     setIsLoading(true);
     try {
       const result = await menuService.hasOperations(
-        user.id.toString(),
         ids,
-        selectedCaseId?.toString() || null
+        selectedCaseId
       );
       setPermissions(result);
     } catch (error) {

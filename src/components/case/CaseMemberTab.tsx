@@ -36,10 +36,11 @@ import { CaseMember } from '@/src/types/caseMember';
 import { fetchCaseMembers, removeCaseMember, changeCaseOwner } from '@/src/services/caseMemberService'; // Added changeCaseOwner
 import AddCaseMemberDialog from './AddCaseMemberDialog';
 import { useAuth } from '@/src/contexts/AuthContext';
-import { useMemo, useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
+import { useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
 import { useTranslation } from 'react-i18next'; // For i18n
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // For notifications
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
 
 interface CaseMemberTabProps {
   caseId: string;
@@ -71,14 +72,13 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
 
   const client = useSurrealClient();
 
-  const isOwner = useMemo(() => {
-    // Admin users have owner privileges
-    if (user && user.github_id === '--admin--') {
-      return true;
-    }
-    if (!currentUserId || !members || members.length === 0) return false;
-    return members.some(member => member.id === currentUserId && member.roleInCase === 'owner');
-  }, [currentUserId, members, user]);
+  // Check operation permissions
+  const { permissions, isLoading: isPermissionsLoading } = useOperationPermissions([
+    'case_member_add',
+    'case_member_remove',
+    'case_member_change_owner'
+  ]);
+
 
   const loadMembers = useCallback(async () => {
     if (!caseId) return; // Do not load if caseId is not available
@@ -181,7 +181,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isPermissionsLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
         <CircularProgress />
@@ -206,15 +206,15 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     <Paper elevation={0} sx={{ p: 2 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
         <Typography variant="h6" component="div">
-          Case Members ({members.length})
+          {t('case_members_title', 'Case Members')} ({members.length})
         </Typography>
-        {isOwner && ( // Use derived isOwner state
+        {permissions['case_member_add'] && ( // Use derived isOwner state and permission check
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleOpenAddMemberDialog}
           >
-            Add Member
+            {t('add_member_button', 'Add Member')}
           </Button>
         )}
       </Box>
@@ -222,7 +222,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
 
       {members.length === 0 ? (
         <Typography variant="body1" color="textSecondary" align="center" sx={{p: 3}}>
-          No members have been added to this case yet.
+          {t('no_members_added', 'No members have been added to this case yet.')}
         </Typography>
       ) : (
         <List>
@@ -255,7 +255,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
                   </>
                 }
               />
-              {isOwner && currentUserId && (
+              {currentUserId && (permissions['case_member_remove'] || permissions['case_member_change_owner']) && (
                 // Admin can modify anyone, regular owner can't modify themselves
                 (user?.github_id === '--admin--' || member.id !== currentUserId) && (
                   <Box>
@@ -306,7 +306,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        {selectedMemberForMenu?.roleInCase === 'member' && (
+        {selectedMemberForMenu?.roleInCase === 'member' && permissions['case_member_change_owner'] && (
            <MenuItem onClick={handleOpenChangeOwnerConfirmDialog}>
             <ListItemIcon>
               <MakeOwnerIcon fontSize="small" />
@@ -314,15 +314,17 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
             {t('make_owner_action', 'Make Case Owner')}
           </MenuItem>
         )}
-        <MenuItem onClick={() => {
-          if (selectedMemberForMenu) handleOpenRemoveConfirmDialog(selectedMemberForMenu);
-          handleMenuClose();
-        }}>
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error"/>
-          </ListItemIcon>
-          <Typography color="error">{t('remove_member_action', 'Remove Member')}</Typography>
-        </MenuItem>
+        {permissions['case_member_remove'] && (
+          <MenuItem onClick={() => {
+            if (selectedMemberForMenu) handleOpenRemoveConfirmDialog(selectedMemberForMenu);
+            handleMenuClose();
+          }}>
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" color="error"/>
+            </ListItemIcon>
+            <Typography color="error">{t('remove_member_action', 'Remove Member')}</Typography>
+          </MenuItem>
+        )}
       </Menu>
 
 

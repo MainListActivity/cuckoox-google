@@ -19,6 +19,8 @@ import {
 } from '@mui/material';
 import { CaseMember } from '@/src/types/caseMember';
 import { addCaseMember, searchSystemUsers, SystemUser } from '@/src/services/caseMemberService';
+import { useTranslation } from 'react-i18next';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 
 interface AddCaseMemberDialogProps {
   open: boolean;
@@ -38,7 +40,9 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
   const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
   const [isLoadingSearch, setIsLoadingSearch] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
+  const client = useSurrealClient();
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!open) {
@@ -69,11 +73,11 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
       setIsLoadingSearch(true);
       setError(null);
       try {
-        const users = await searchSystemUsers(searchQuery);
+        const users = await searchSystemUsers(client, searchQuery);
         setSearchResults(users);
       } catch (err) {
         console.error('Failed to search users:', err);
-        setError('Failed to search users. Please try again.');
+        setError(t('search_users_error', 'Failed to search users. Please try again.'));
         setSearchResults([]);
       } finally {
         setIsLoadingSearch(false);
@@ -96,13 +100,14 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
 
   const handleAddMember = async () => {
     if (!selectedUser) {
-      setError('Please select a user to add.');
+      setError(t('please_select_user', 'Please select a user to add.'));
       return;
     }
     setIsAddingMember(true);
     setError(null);
     try {
       const newMember = await addCaseMember(
+        client,
         caseId,
         selectedUser.id,
         selectedUser.name,
@@ -114,7 +119,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
       onClose(); // Close dialog on success
     } catch (err) {
       console.error('Failed to add member:', err);
-      setError((err as Error).message || 'Failed to add member. Please try again.');
+      setError((err as Error).message || t('add_member_error', 'Failed to add member. Please try again.'));
     } finally {
       setIsAddingMember(false);
     }
@@ -122,20 +127,20 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Add New Member to Case</DialogTitle>
+      <DialogTitle>{t('add_member_dialog_title', 'Add New Member to Case')}</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
         <TextField
           autoFocus
           margin="dense"
-          label="Search users (by name or email)"
+          label={t('search_users_label', 'Search users (by name or email)')}
           type="text"
           fullWidth
           variant="outlined"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           sx={{ mb: 2 }}
-          helperText="Enter at least 2 characters to search."
+          helperText={t('search_users_helper_text', 'Enter at least 2 characters to search.')}
         />
         {isLoadingSearch && (
           <Box display="flex" justifyContent="center" my={2}>
@@ -144,7 +149,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         )}
         {!isLoadingSearch && searchResults.length === 0 && searchQuery.trim().length >=2 && (
           <Typography variant="body2" color="textSecondary" align="center">
-            No users found matching your search.
+            {t('no_users_found', 'No users found matching your search.')}
           </Typography>
         )}
         {!isLoadingSearch && searchResults.length > 0 && (
@@ -166,13 +171,13 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={isAddingMember}>Cancel</Button>
+        <Button onClick={onClose} disabled={isAddingMember}>{t('cancel_button', 'Cancel')}</Button>
         <Button
           onClick={handleAddMember}
           variant="contained"
           disabled={isAddingMember}
         >
-          {isAddingMember ? <CircularProgress size={24} /> : 'Add Selected User'}
+          {isAddingMember ? <CircularProgress size={24} /> : t('add_selected_user', 'Add Selected User')}
         </Button>
       </DialogActions>
     </Dialog>
