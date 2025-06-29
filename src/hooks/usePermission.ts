@@ -260,7 +260,7 @@ export function useUserRoles() {
 
         // 使用定义的函数获取用户角色
         const query = `
-          RETURN fn::get_user_roles($user_id, $case_id);
+          return $user_id->(select * from has_case_role,has_role where case_id = $case_id or case_id =none)->role.name;
         `;
         
         const result = await client.query(query, {

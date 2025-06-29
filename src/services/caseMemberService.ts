@@ -164,6 +164,84 @@ export interface SystemUser {
   avatarUrl?: string;
 }
 
+// 创建用户并添加到案件的接口
+export interface CreateUserAndAddToCaseParams {
+  username: string;
+  password: string;
+  email: string;
+  name: string;
+  role: 'owner' | 'member';
+}
+
+export const createUserAndAddToCase = async (
+  client: Surreal,
+  caseId: string,
+  params: CreateUserAndAddToCaseParams
+): Promise<CaseMember> => {
+  console.log(`[SurrealDB API] Creating user ${params.username} and adding to case ${caseId} as ${params.role}`);
+  
+  try {
+    // 首先检查用户名和邮箱是否已存在
+    const existingUserQuery = `
+      SELECT id FROM user 
+      WHERE username = $username OR email = $email
+      LIMIT 1;
+    `;
+    
+    const existingResult = await client.query<[{ result: any[] }]>(existingUserQuery, {
+      username: params.username,
+      email: params.email
+    });
+    
+    if (existingResult && existingResult[0] && existingResult[0].result && existingResult[0].result.length > 0) {
+      throw new Error('用户名或邮箱已存在');
+    }
+    
+    // 创建新用户
+    const createUserQuery = `
+      CREATE user SET
+        username = $username,
+        password = crypto::bcrypt::generate($password),
+        email = $email,
+        name = $name,
+        created_at = time::now(),
+        updated_at = time::now(),
+        is_active = true;
+    `;
+    
+    const createUserResult = await client.query<[{ result: any[] }]>(createUserQuery, {
+      username: params.username,
+      password: params.password,
+      email: params.email,
+      name: params.name
+    });
+    
+    if (!createUserResult || !createUserResult[0] || !createUserResult[0].result || createUserResult[0].result.length === 0) {
+      throw new Error('Failed to create user');
+    }
+    
+    const newUser = createUserResult[0].result[0];
+    const userId = newUser.id.toString().split(':')[1]; // 提取ID部分
+    
+    // 将用户添加到案件中
+    const caseMember = await addCaseMember(
+      client,
+      caseId,
+      userId,
+      params.name,
+      params.email,
+      `https://i.pravatar.cc/150?u=${params.email}`,
+      params.role
+    );
+    
+    return caseMember;
+    
+  } catch (error) {
+    console.error('[SurrealDB API] Error creating user and adding to case:', error);
+    throw error;
+  }
+};
+
 export const searchSystemUsers = async (client: Surreal, query: string): Promise<SystemUser[]> => {
   console.log(`[SurrealDB API] Searching system users with query: ${query}`);
   
