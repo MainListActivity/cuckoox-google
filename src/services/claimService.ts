@@ -96,10 +96,9 @@ class ClaimService {
    */
   async getCreditorCases(creditorId: string): Promise<CaseData[]> {
     try {
-      // This query assumes that a creditor is a "member" of a case they can submit claims to.
-      // The specific relationship might need to be adjusted based on the actual schema.
+      // 使用图查询获取债权人所属的案件
       const [result] = await this.db.query(
-        'SELECT id, name, case_number FROM case WHERE id IN (SELECT out FROM case_member WHERE in = $creditorId)',
+        'SELECT out.* FROM $creditorId->belongs_to',
         { creditorId }
       );
       return Array.isArray(result) ? result : [];

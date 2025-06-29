@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants';
-import { RecordId } from 'surrealdb.js';
-import { vi } from 'vitest'; // Import vi
+import { RecordId } from 'surrealdb';
+import { vi, describe, beforeEach, it, expect } from 'vitest';
 
 // Mock the SurrealClient
 const mockQuery = vi.fn();
@@ -24,13 +24,23 @@ const mockSurrealDbClient = {
     return Promise.resolve({ id: 'mock-subscribe-live-ucp-' + Date.now(), close: vi.fn() });
   },
   kill: mockKill,
-  isConnected: true,
+  status: 'connected' as const,
 };
 
 vi.mock('../../../src/contexts/SurrealProvider', () => ({
-  useSurrealClient: () => ({
-    client: mockSurrealDbClient,
-    isConnected: true,
+  useSurreal: () => ({
+    surreal: mockSurrealDbClient,
+    isSuccess: true,
+    isConnecting: false,
+    isError: false,
+    error: null,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    signin: vi.fn(),
+    signout: vi.fn(),
+    setTokens: vi.fn(),
+    clearTokens: vi.fn(),
+    getStoredAccessToken: vi.fn(),
   }),
 }));
 
@@ -47,23 +57,23 @@ describe('useCaseParticipants Hook', () => {
   });
 
   it('should call client.query with correct queries and parameters', async () => {
-    // Mock empty successful responses for both queries
-    mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // For users query
-    mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // For creditors query
+    // Mock empty successful responses for both queries - 修复数据格式
+    mockQuery.mockResolvedValueOnce([[]]); // For users query - 返回空数组的数组
+    mockQuery.mockResolvedValueOnce([[]]); // For creditors query - 返回空数组的数组
 
     const caseId = 'case:test-query-check';
     const { result } = renderHook(() => useCaseParticipants(caseId));
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    // Check users query
+    // Check users query - 更新查询字符串匹配
     expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringContaining("SELECT id, name FROM user WHERE id IN (SELECT user FROM user_case_roles WHERE case = $case_id);"),
+      expect.stringContaining("FROM $case_id->has_member"),
       { case_id: caseId }
     );
     // Check creditors query
     expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringContaining("SELECT id, name FROM creditor WHERE case_id = $case_id;"),
+      expect.stringContaining("SELECT id, name FROM creditor WHERE case_id = $case_id"),
       { case_id: caseId }
     );
   });
@@ -77,8 +87,9 @@ describe('useCaseParticipants Hook', () => {
       { id: 'creditor:1', name: 'Creditor Corp' },
     ];
 
-    mockQuery.mockResolvedValueOnce([{ result: mockUserData, status: 'OK' }]); // Users
-    mockQuery.mockResolvedValueOnce([{ result: mockCreditorData, status: 'OK' }]); // Creditors
+    // 修复数据格式 - 返回数组的数组
+    mockQuery.mockResolvedValueOnce([mockUserData]); // Users
+    mockQuery.mockResolvedValueOnce([mockCreditorData]); // Creditors
 
     const { result } = renderHook(() => useCaseParticipants('case:test-data'));
 
@@ -95,8 +106,8 @@ describe('useCaseParticipants Hook', () => {
 
   it('should handle empty results from users query', async () => {
     const mockCreditorData = [{ id: 'creditor:1', name: 'Creditor Corp' }];
-    mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // Empty users
-    mockQuery.mockResolvedValueOnce([{ result: mockCreditorData, status: 'OK' }]); // Creditors
+    mockQuery.mockResolvedValueOnce([[]]); // Empty users - 修复格式
+    mockQuery.mockResolvedValueOnce([mockCreditorData]); // Creditors - 修复格式
 
     const { result } = renderHook(() => useCaseParticipants('case:test-empty-users'));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -109,8 +120,8 @@ describe('useCaseParticipants Hook', () => {
   
   it('should handle empty results from creditors query', async () => {
     const mockUserData = [{ id: 'user:1', name: 'Alice Admin' }];
-    mockQuery.mockResolvedValueOnce([{ result: mockUserData, status: 'OK' }]); // Users
-    mockQuery.mockResolvedValueOnce([{ result: [], status: 'OK' }]); // Empty creditors
+    mockQuery.mockResolvedValueOnce([mockUserData]); // Users - 修复格式
+    mockQuery.mockResolvedValueOnce([[]]); // Empty creditors - 修复格式
 
     const { result } = renderHook(() => useCaseParticipants('case:test-empty-creditors'));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -122,7 +133,7 @@ describe('useCaseParticipants Hook', () => {
   });
 
   it('should handle empty results from both queries', async () => {
-    mockQuery.mockResolvedValue([{ result: [], status: 'OK' }]); // Both users and creditors return empty
+    mockQuery.mockResolvedValue([[]]); // Both users and creditors return empty - 修复格式
     
     const { result } = renderHook(() => useCaseParticipants('case:test-empty-all'));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -132,10 +143,10 @@ describe('useCaseParticipants Hook', () => {
   it('should handle error from users query', async () => {
     const MOCK_ERROR = new Error('User query failed');
     mockQuery.mockImplementation((query: string) => {
-      if (query.includes("FROM user")) {
+      if (query.includes("has_member")) { // 更新条件匹配
         return Promise.reject(MOCK_ERROR);
       }
-      return Promise.resolve([{ result: [{ id: 'creditor:1', name: 'Creditor Corp' }], status: 'OK' }]); // Creditors succeed
+      return Promise.resolve([[{ id: 'creditor:1', name: 'Creditor Corp' }]]); // Creditors succeed - 修复格式
     });
     
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
@@ -154,7 +165,7 @@ describe('useCaseParticipants Hook', () => {
       if (query.includes("FROM creditor")) {
         return Promise.reject(MOCK_ERROR);
       }
-      return Promise.resolve([{ result: [{ id: 'user:1', name: 'Alice Admin' }], status: 'OK' }]); // Users succeed
+      return Promise.resolve([[{ id: 'user:1', name: 'Alice Admin' }]]); // Users succeed - 修复格式
     });
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {}); // Use vi.spyOn()
@@ -186,7 +197,7 @@ describe('useCaseParticipants Hook', () => {
   });
 
   it('should set isLoading to false after data fetching attempt (success)', async () => {
-    mockQuery.mockResolvedValue([{ result: [], status: 'OK' }]);
+    mockQuery.mockResolvedValue([[]]); // 修复格式
     const { result } = renderHook(() => useCaseParticipants('case:test-loading-success'));
     expect(result.current.isLoading).toBe(true); // Initial
     await waitFor(() => expect(result.current.isLoading).toBe(false));
