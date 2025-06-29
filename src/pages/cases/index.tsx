@@ -447,25 +447,25 @@ const CaseListPage: React.FC = () => {
               {isPermissionsLoading ? (
                 <Skeleton variant="rectangular" width={140} height={36} sx={{ borderRadius: 2 }} />
               ) : permissions['case_create'] ? (
-                <Button
-                  variant="contained"
-                  color="primary"
-                  component={Link}
-                  to="/cases/create"
-                  startIcon={<SvgIcon><path d={mdiPlusCircleOutline} /></SvgIcon>}
-                  sx={{ 
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    background: 'linear-gradient(135deg, #00897B 0%, #00695C 100%)',
-                    boxShadow: '0 4px 12px rgba(0,137,123,0.3)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #00695C 0%, #004D40 100%)',
-                      boxShadow: '0 6px 16px rgba(0,137,123,0.4)',
-                    },
-                  }}
-                >
-                  {t('create_new_case', '创建新案件')}
-                </Button>
+              <Button
+                variant="contained"
+                color="primary"
+                component={Link}
+                to="/cases/create"
+                startIcon={<SvgIcon><path d={mdiPlusCircleOutline} /></SvgIcon>}
+                sx={{ 
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  background: 'linear-gradient(135deg, #00897B 0%, #00695C 100%)',
+                  boxShadow: '0 4px 12px rgba(0,137,123,0.3)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #00695C 0%, #004D40 100%)',
+                    boxShadow: '0 6px 16px rgba(0,137,123,0.4)',
+                  },
+                }}
+              >
+                {t('create_new_case', '创建新案件')}
+              </Button>
               ) : null}
             </Box>
           </Box>
@@ -592,54 +592,54 @@ const CaseListPage: React.FC = () => {
                       </TableCell>
                       <TableCell align="center" sx={{whiteSpace: 'nowrap'}}>
                         {permissions['case_view_detail'] && (
-                          <Tooltip title={t('view_details', '查看详情')}>
-                            <IconButton 
-                              component={Link} 
-                              to={`/cases/${caseItem.id}`} 
-                              size="small" 
-                              sx={{ 
-                                color: '#00897B',
-                                '&:hover': {
-                                  backgroundColor: alpha('#00897B', 0.08),
-                                },
-                              }}
-                            >
-                              <SvgIcon fontSize="small"><path d={mdiEyeOutline} /></SvgIcon>
-                            </IconButton>
-                          </Tooltip>
+                        <Tooltip title={t('view_details', '查看详情')}>
+                          <IconButton 
+                            component={Link} 
+                            to={`/cases/${caseItem.id}`} 
+                            size="small" 
+                            sx={{ 
+                              color: '#00897B',
+                              '&:hover': {
+                                backgroundColor: alpha('#00897B', 0.08),
+                              },
+                            }}
+                          >
+                            <SvgIcon fontSize="small"><path d={mdiEyeOutline} /></SvgIcon>
+                          </IconButton>
+                        </Tooltip>
                         )}
                         {permissions['case_view_detail'] && (
-                          <Tooltip title={t('view_documents', '查看材料')}>
-                            <IconButton 
-                              component={Link} 
-                              to={`/cases/${caseItem.id}`} 
-                              size="small"
-                              sx={{ 
-                                color: '#00ACC1',
-                                '&:hover': {
-                                  backgroundColor: alpha('#00ACC1', 0.08),
-                                },
-                              }}
-                            >
-                              <SvgIcon fontSize="small"><path d={mdiFileDocumentOutline} /></SvgIcon>
-                            </IconButton>
-                          </Tooltip>
+                        <Tooltip title={t('view_documents', '查看材料')}>
+                          <IconButton 
+                            component={Link} 
+                            to={`/cases/${caseItem.id}`} 
+                            size="small"
+                            sx={{ 
+                              color: '#00ACC1',
+                              '&:hover': {
+                                backgroundColor: alpha('#00ACC1', 0.08),
+                              },
+                            }}
+                          >
+                            <SvgIcon fontSize="small"><path d={mdiFileDocumentOutline} /></SvgIcon>
+                          </IconButton>
+                        </Tooltip>
                         )}
                         {permissions['case_modify_status'] && (
-                          <Tooltip title={t('modify_status', '修改状态')}>
-                            <IconButton 
-                              onClick={() => handleOpenModifyStatus(caseItem)} 
-                              size="small"
-                              sx={{ 
-                                color: '#7B1FA2',
-                                '&:hover': {
-                                  backgroundColor: alpha('#7B1FA2', 0.08),
-                                },
-                              }}
-                            >
-                              <SvgIcon fontSize="small"><path d={mdiFileEditOutline} /></SvgIcon>
-                            </IconButton>
-                          </Tooltip>
+                        <Tooltip title={t('modify_status', '修改状态')}>
+                          <IconButton 
+                            onClick={() => handleOpenModifyStatus(caseItem)} 
+                            size="small"
+                            sx={{ 
+                              color: '#7B1FA2',
+                              '&:hover': {
+                                backgroundColor: alpha('#7B1FA2', 0.08),
+                              },
+                            }}
+                          >
+                            <SvgIcon fontSize="small"><path d={mdiFileEditOutline} /></SvgIcon>
+                          </IconButton>
+                        </Tooltip>
                         )}
                         {caseItem.current_stage === '债权人第一次会议' && permissions['case_edit'] && (
                           <Tooltip title={t('meeting_minutes', '会议纪要')}>

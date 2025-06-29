@@ -123,7 +123,7 @@ const deserializeRecordId = (recordIdJson: string): RecordId | null => {
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const {surreal:client,signout,setTokens,clearTokens} = useSurreal(); // ADDED
+  const {surreal:client,signout,setTokens,clearTokens,isSuccess} = useSurreal(); // ADDED
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
@@ -155,7 +155,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      const response = await fetch('/auth/refresh', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -739,8 +739,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     // Check if user is admin
     const isAdmin = user && user.github_id === '--admin--';
-    
-    if (isAdmin && client) {
+    if (isAdmin && isSuccess) {
       // Admin users should see all menus regardless of case selection
       // But only call after client is initialized
       console.log('Admin user detected, loading menus...');
@@ -750,7 +749,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } else if (!selectedCaseId && !isAdmin) {
       setNavMenuItems([]); // Clear menu if no case is selected (except for admin)
     }
-  }, [selectedCaseId, currentUserCaseRoles, user, client]); // Added client as dependency
+  }, [selectedCaseId, currentUserCaseRoles, user, isSuccess]); // Added client as dependency
 
   // Effect for automatic navigation to creditor management
   useEffect(() => {
