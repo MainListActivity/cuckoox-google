@@ -1,8 +1,8 @@
 import { CaseMember } from '@/src/types/caseMember';
-import Surreal from 'surrealdb';
+import Surreal, { RecordId } from 'surrealdb';
 
 // 基于SurrealDB的案件成员服务
-export const fetchCaseMembers = async (client: Surreal, caseId: string): Promise<CaseMember[]> => {
+export const fetchCaseMembers = async (client: Surreal, caseId: RecordId): Promise<CaseMember[]> => {
   console.log(`[SurrealDB API] Fetching members for case: ${caseId}`);
   
   try {
@@ -27,8 +27,8 @@ export const fetchCaseMembers = async (client: Surreal, caseId: string): Promise
     }
     
     const members: CaseMember[] = result[0].result.map((row: any) => ({
-      id: row.id.toString(),
-      caseId: row.caseId.toString(),
+      id: row.id,
+      caseId: row.caseId,
       roleInCase: mapRoleToMemberRole(row.roleInCase),
       userName: row.userName,
       userEmail: row.userEmail,
@@ -44,8 +44,8 @@ export const fetchCaseMembers = async (client: Surreal, caseId: string): Promise
 
 export const addCaseMember = async (
   client: Surreal, 
-  caseId: string, 
-  userId: string, 
+  caseId: RecordId, 
+  userId: RecordId, 
   userName: string, 
   userEmail: string | undefined, 
   avatarUrl: string | undefined, 
@@ -110,7 +110,7 @@ export const addCaseMember = async (
   }
 };
 
-export const removeCaseMember = async (client: Surreal, caseId: string, userId: string): Promise<void> => {
+export const removeCaseMember = async (client: Surreal, caseId: RecordId, userId: RecordId): Promise<void> => {
   console.log(`[SurrealDB API] Removing user ${userId} from case ${caseId}`);
   
   try {
@@ -167,7 +167,7 @@ export interface SystemUser {
 // 创建用户并添加到案件的接口
 export interface CreateUserAndAddToCaseParams {
   username: string;
-  password: string;
+  password_hash: string;
   email: string;
   name: string;
   role: 'owner' | 'member';
@@ -175,7 +175,7 @@ export interface CreateUserAndAddToCaseParams {
 
 export const createUserAndAddToCase = async (
   client: Surreal,
-  caseId: string,
+  caseId: RecordId,
   params: CreateUserAndAddToCaseParams
 ): Promise<CaseMember> => {
   console.log(`[SurrealDB API] Creating user ${params.username} and adding to case ${caseId} as ${params.role}`);
@@ -201,7 +201,7 @@ export const createUserAndAddToCase = async (
     const createUserQuery = `
       CREATE user SET
         username = $username,
-        password = crypto::bcrypt::generate($password),
+        password_hash = crypto::bcrypt::generate($password_hash),
         email = $email,
         name = $name,
         created_at = time::now(),
@@ -209,25 +209,24 @@ export const createUserAndAddToCase = async (
         is_active = true;
     `;
     
-    const createUserResult = await client.query<[{ result: any[] }]>(createUserQuery, {
+    const createUserResult = await client.query<[any[]]>(createUserQuery, {
       username: params.username,
-      password: params.password,
+      password_hash: params.password_hash,
       email: params.email,
       name: params.name
     });
     
-    if (!createUserResult || !createUserResult[0] || !createUserResult[0].result || createUserResult[0].result.length === 0) {
+    if (!createUserResult || !createUserResult[0] || !createUserResult[0].length) {
       throw new Error('Failed to create user');
     }
     
-    const newUser = createUserResult[0].result[0];
-    const userId = newUser.id.toString().split(':')[1]; // 提取ID部分
+    const newUser = createUserResult[0][0];
     
     // 将用户添加到案件中
     const caseMember = await addCaseMember(
       client,
       caseId,
-      userId,
+      newUser.id,
       params.name,
       params.email,
       `https://i.pravatar.cc/150?u=${params.email}`,
@@ -285,9 +284,9 @@ export const searchSystemUsers = async (client: Surreal, query: string): Promise
 
 export const changeCaseOwner = async (
   client: Surreal, 
-  caseId: string, 
-  newOwnerUserId: string, 
-  oldOwnerUserId: string
+  caseId: RecordId, 
+  newOwnerUserId: RecordId, 
+  oldOwnerUserId: RecordId
 ): Promise<void> => {
   console.log(`[SurrealDB API] Changing owner for case ${caseId}. New owner: ${newOwnerUserId}, Old owner: ${oldOwnerUserId}`);
   
@@ -339,8 +338,8 @@ export const changeCaseOwner = async (
 
 export const changeMemberRole = async (
   client: Surreal, 
-  caseId: string, 
-  userId: string, 
+  caseId: RecordId, 
+  userId: RecordId, 
   newRole: 'owner' | 'member'
 ): Promise<CaseMember> => {
   console.log(`[SurrealDB API] Changing role for user ${userId} in case ${caseId} to ${newRole}`);

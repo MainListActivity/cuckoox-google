@@ -28,6 +28,21 @@ const surrealDatabase = import.meta.env.VITE_SURREALDB_DATABASE || 'ck_go';
 
 const queryClient = new QueryClient(); // ADDED
 
+// Authentication error handler (session/token expired)
+const handleSessionExpired = () => {
+  console.warn('Authentication error (session/token expired), clearing storage and redirecting to login...');
+  // Clear all auth-related localStorage items
+  localStorage.removeItem('cuckoox-isLoggedIn');
+  localStorage.removeItem('cuckoox-user');
+  localStorage.removeItem('cuckoox-selectedCaseId');
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('token_expires_at');
+  
+  // Redirect to login page by reloading
+  window.location.href = '/login';
+};
+
 root.render(
   <React.StrictMode>
     <I18nextProvider i18n={i18n}>
@@ -36,6 +51,7 @@ root.render(
           endpoint={surrealEndpoint}
           namespace={surrealNamespace}
         database={surrealDatabase}
+        onSessionExpired={handleSessionExpired}
         // autoConnect is typically handled by the provider's useEffect internally based on props.
         // If your SurrealProvider implementation from the previous step explicitly uses an autoConnect prop,
         // you can set it here. Otherwise, it will likely attempt connection on mount.

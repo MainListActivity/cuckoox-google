@@ -364,7 +364,7 @@ const CaseMemberManagementPage: React.FC = () => {
             </Typography>
           </Box>
           <Divider />
-          <CaseMemberTab caseId={selectedCaseId.toString().replace('case:', '')} />
+          <CaseMemberTab caseId={selectedCaseId} />
         </Paper>
       </Fade>
     </Box>

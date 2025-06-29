@@ -15,7 +15,7 @@ export interface PermissionCheckResult {
  */
 export function useOperationPermission(operationId: string): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client } = useSurreal();
+  const { surreal: client, handleSessionError } = useSurreal();
   const [hasPermission, setHasPermission] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +67,13 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
         setHasPermission(hasResult);
       } catch (err) {
         console.error('Error checking operation permission:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        
+        // 检查是否为认证错误(session/token过期)并处理
+        const isSessionError = await handleSessionError(err);
+        if (!isSessionError) {
+          // 如果不是认证错误，设置一般错误状态
+          setError(err instanceof Error ? err.message : 'Unknown error');
+        }
         setHasPermission(false);
       } finally {
         setIsLoading(false);
@@ -75,7 +81,7 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
     };
 
     checkPermission();
-  }, [user, operationId, selectedCaseId, client]);
+  }, [user, operationId, selectedCaseId, client, handleSessionError]);
 
   return { hasPermission, isLoading, error };
 }
@@ -87,7 +93,7 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
  */
 export function useMenuPermission(menuId: string): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client } = useSurreal();
+  const { surreal: client, handleSessionError } = useSurreal();
   const [hasPermission, setHasPermission] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +145,13 @@ export function useMenuPermission(menuId: string): PermissionCheckResult {
         setHasPermission(hasResult);
       } catch (err) {
         console.error('Error checking menu permission:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        
+        // 检查是否为认证错误(session/token过期)并处理
+        const isSessionError = await handleSessionError(err);
+        if (!isSessionError) {
+          // 如果不是认证错误，设置一般错误状态
+          setError(err instanceof Error ? err.message : 'Unknown error');
+        }
         setHasPermission(false);
       } finally {
         setIsLoading(false);
@@ -147,7 +159,7 @@ export function useMenuPermission(menuId: string): PermissionCheckResult {
     };
 
     checkPermission();
-  }, [user, menuId, selectedCaseId, client]);
+  }, [user, menuId, selectedCaseId, client, handleSessionError]);
 
   return { hasPermission, isLoading, error };
 }
@@ -163,7 +175,7 @@ export function useDataPermission(
   crudType: 'create' | 'read' | 'update' | 'delete'
 ): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client } = useSurreal();
+  const { surreal: client, handleSessionError } = useSurreal();
   const [hasPermission, setHasPermission] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -209,12 +221,18 @@ export function useDataPermission(
         // 如果查询成功执行（没有抛出权限错误），则说明有权限
         setHasPermission(true);
       } catch (err: unknown) {
-        // 检查是否是权限错误
-        if (err instanceof Error && err.message && err.message.includes('permission')) {
-          setHasPermission(false);
+        // 首先检查是否为认证错误(session/token过期)
+        const isSessionError = await handleSessionError(err);
+        if (!isSessionError) {
+          // 检查是否是权限错误
+          if (err instanceof Error && err.message && err.message.includes('permission')) {
+            setHasPermission(false);
+          } else {
+            console.error('Error checking data permission:', err);
+            setError(err instanceof Error ? err.message : 'Unknown error');
+            setHasPermission(false);
+          }
         } else {
-          console.error('Error checking data permission:', err);
-          setError(err instanceof Error ? err.message : 'Unknown error');
           setHasPermission(false);
         }
       } finally {
@@ -223,7 +241,7 @@ export function useDataPermission(
     };
 
     checkPermission();
-  }, [user, tableName, crudType, selectedCaseId, client]);
+  }, [user, tableName, crudType, selectedCaseId, client, handleSessionError]);
 
   return { hasPermission, isLoading, error };
 }
@@ -234,7 +252,7 @@ export function useDataPermission(
  */
 export function useUserRoles() {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client } = useSurreal();
+  const { surreal: client, handleSessionError } = useSurreal();
   const [roles, setRoles] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -272,7 +290,13 @@ export function useUserRoles() {
         setRoles(roleNames);
       } catch (err) {
         console.error('Error loading user roles:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        
+        // 检查是否为认证错误(session/token过期)并处理
+        const isSessionError = await handleSessionError(err);
+        if (!isSessionError) {
+          // 如果不是认证错误，设置一般错误状态
+          setError(err instanceof Error ? err.message : 'Unknown error');
+        }
         setRoles([]);
       } finally {
         setIsLoading(false);
@@ -280,7 +304,7 @@ export function useUserRoles() {
     };
 
     loadRoles();
-  }, [user, selectedCaseId, client]);
+  }, [user, selectedCaseId, client, handleSessionError]);
 
   return { roles, isLoading, error };
 } 

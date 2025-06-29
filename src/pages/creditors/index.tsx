@@ -1,7 +1,6 @@
 // TODO: Automatic Navigation - Logic for navigating to this page when case status is '立案' should be handled in higher-level routing (e.g., App.tsx or ProtectedRoute.tsx).
 // TODO: Access Control - Page access to Creditor Management itself should be controlled via routing based on user permissions (e.g., has 'view_creditors' or a general case access permission).
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import Papa from 'papaparse'; // Added for CSV parsing
 import {
   Box,
@@ -55,8 +54,7 @@ const CreditorListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError, showInfo } = useSnackbar(); // Added showError and showInfo
   const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
-  const { surreal: client, isSuccess: isDbConnected } = useSurreal(); // Added
-  const navigate = useNavigate();
+  const { surreal: client, isSuccess: isDbConnected, handleSessionError } = useSurreal(); // Added
 
   // Determine if the user has management permissions
   // For now, system admin (user?.github_id === '--admin--') or users with 'case_manager' role for the selected case.
@@ -167,15 +165,21 @@ const CreditorListPage: React.FC = () => {
 
     } catch (err) {
       console.error("Error fetching creditors:", err);
-      const errorMessage = t('error_fetching_creditors', '获取债权人列表失败。');
-      setError(errorMessage);
-      showError(errorMessage);
+      
+      // 检查是否为认证错误(session/token过期)并处理
+      const isSessionError = await handleSessionError(err);
+      if (!isSessionError) {
+        // 如果不是认证错误，显示一般错误信息
+        const errorMessage = t('error_fetching_creditors', '获取债权人列表失败。');
+        setError(errorMessage);
+        showError(errorMessage);
+      }
       setCreditors([]); // Clear data on error
       setTotalCreditors(0); // Reset total on error
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, client, isDbConnected, t]); // Removed showError from deps to prevent infinite loops
+  }, [selectedCaseId, client, isDbConnected, t, handleSessionError]); // Removed showError from deps to prevent infinite loops
 
   useEffect(() => {
     // Reset page to 0 when debouncedSearchTerm changes
@@ -278,7 +282,12 @@ const CreditorListPage: React.FC = () => {
         handleCloseAddCreditorDialog();
       } catch (err) {
         console.error("Error updating creditor:", err);
-        showError(t('creditor_update_failed', '更新债权人失败'));
+        
+        // 检查是否为认证错误(session/token过期)并处理
+        const isSessionError = await handleSessionError(err);
+        if (!isSessionError) {
+          showError(t('creditor_update_failed', '更新债权人失败'));
+        }
       }
     } else { // Adding new creditor
       if (!selectedCaseId) {
@@ -313,7 +322,12 @@ const CreditorListPage: React.FC = () => {
         handleCloseAddCreditorDialog();
       } catch (err) { // ADDED opening brace
         console.error("Error creating creditor:", err);
-        showError(t('creditor_add_failed', '添加债权人失败'));
+        
+        // 检查是否为认证错误(session/token过期)并处理
+        const isSessionError = await handleSessionError(err);
+        if (!isSessionError) {
+          showError(t('creditor_add_failed', '添加债权人失败'));
+        }
       } // ADDED closing brace
     }
   };
@@ -380,6 +394,13 @@ const CreditorListPage: React.FC = () => {
             await client.create('creditor', creditorDataToCreate);
             successfulImports++;
           } catch (err:any) {
+            // 检查是否为认证错误(session/token过期)
+            const isSessionError = await handleSessionError(err);
+            if (isSessionError) {
+              // 认证失败时停止导入
+              break;
+            }
+            
             failedImports++;
             console.error('Failed to import creditor row:', row, err);
             errors.push(t('import_error_db_error_row', '导入失败 (数据库错误) 行: {{rowJson}} - {{errorMessage}}', { rowJson: JSON.stringify(row), errorMessage: err.message }));

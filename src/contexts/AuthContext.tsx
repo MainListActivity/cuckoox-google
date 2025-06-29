@@ -123,7 +123,7 @@ const deserializeRecordId = (recordIdJson: string): RecordId | null => {
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const {surreal:client,signout,setTokens,clearTokens,isSuccess} = useSurreal(); // ADDED
+  const {surreal:client,signout,setTokens,clearTokens,isSuccess,handleSessionError} = useSurreal(); // ADDED
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
@@ -143,6 +143,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log('Setting menuService client:', client);
     menuService.setClient(client);
   }, [client]);
+
+
 
   const clearNavigateTo = () => setNavigateTo(null);
 

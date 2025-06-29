@@ -1,8 +1,8 @@
 import { RecordId } from 'surrealdb'; // Assuming RecordId is appropriately typed elsewhere or use string
 
 export interface CaseMember {
-  id: string; // This would typically be the user's ID (e.g. "user:001")
-  caseId: string; // RecordId of the case (e.g. "case:abc")
+  id: RecordId; // This would typically be the user's ID (e.g. "user:001")
+  caseId: RecordId; // RecordId of the case (e.g. "case:abc")
   roleInCase: 'owner' | 'member';
   userName: string;
   userEmail?: string; // Optional

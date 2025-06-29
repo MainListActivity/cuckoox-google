@@ -41,15 +41,16 @@ import { useTranslation } from 'react-i18next'; // For i18n
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // For notifications
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
+import { RecordId } from 'surrealdb';
 
 interface CaseMemberTabProps {
-  caseId: string;
+  caseId: RecordId;
   // Props currentUserIsOwner and currentUserId are removed
 }
 
 const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
   const { user } = useAuth(); // Get user from AuthContext
-  const currentUserId = user?.id?.toString(); // Get current user's ID as string
+  const currentUserId = user?.id; // Get current user's ID as string
 
   const [members, setMembers] = useState<CaseMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -228,7 +229,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
         <List>
           {members.map((member) => (
             <ListItem
-              key={member.id}
+              key={member.id.toString()}
               disablePadding
               sx={{ '&:hover': { backgroundColor: 'action.hover' }, borderRadius: 1, mb: 1 }}
             >

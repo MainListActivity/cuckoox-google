@@ -32,11 +32,12 @@ import { CaseMember } from '@/src/types/caseMember';
 import { createUserAndAddToCase, CreateUserAndAddToCaseParams } from '@/src/services/caseMemberService';
 import { useTranslation } from 'react-i18next';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { RecordId } from 'surrealdb';
 
 interface AddCaseMemberDialogProps {
   open: boolean;
   onClose: () => void;
-  caseId: string;
+  caseId: RecordId;
   onMemberAdded: (newMember: CaseMember) => void;
 }
 
@@ -163,7 +164,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
     try {
       const params: CreateUserAndAddToCaseParams = {
         username: formData.username.trim(),
-        password: formData.password,
+        password_hash: formData.password,
         email: formData.email.trim().toLowerCase(),
         name: formData.name.trim(),
         role: formData.role,

@@ -33,6 +33,8 @@ interface SurrealProviderProps {
     onError?: (error: Error) => void;
     /** Auto connect on component mount, defaults to true */
     autoConnect?: boolean;
+    /** Callback when session expires */
+    onSessionExpired?: () => void;
 }
 
 // Create the SurrealContext
@@ -54,6 +56,8 @@ export interface SurrealContextValue {
     setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => void;
     clearTokens: () => void;
     getStoredAccessToken: () => string | null;
+    // Session error handling
+    handleSessionError: SessionErrorHandler;
 }
 
 const SurrealContext = createContext<SurrealContextValue | undefined>(undefined);
@@ -74,6 +78,28 @@ const isTokenExpired = (expiresAt: number | null): boolean => {
     return Date.now() >= (expiresAt - 60000);
 };
 
+// Session and token error checker
+const isSessionExpiredError = (error: any): boolean => {
+    if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        return errorMessage.includes('session has expired') || 
+               errorMessage.includes('session expired') ||
+               errorMessage.includes('the session has expired') ||
+               errorMessage.includes('token expired') ||
+               errorMessage.includes('token has expired') ||
+               errorMessage.includes('jwt expired') ||
+               errorMessage.includes('jwt has expired') ||
+               errorMessage.includes('invalid token') ||
+               errorMessage.includes('authentication failed') ||
+               errorMessage.includes('unauthorized') ||
+               errorMessage.includes('401');
+    }
+    return false;
+};
+
+// Session error handler function type
+type SessionErrorHandler = (error: any) => Promise<boolean>;
+
 // Create the SurrealProvider component
 export function SurrealProvider({
                                     children,
@@ -86,6 +112,7 @@ export function SurrealProvider({
                                     token,
                                     onError,
                                     autoConnect = true,
+                                    onSessionExpired,
                                 }: SurrealProviderProps) {
     const [error, setError] = useState<Error | null>(null);
 
@@ -95,7 +122,6 @@ export function SurrealProvider({
         mutateAsync: connectMutation, isPending,
         isSuccess,
         isError,
-        reset,
     } = useMutation<boolean, Error, void>({
         mutationFn: async () => {
             try {
@@ -122,6 +148,16 @@ export function SurrealProvider({
                 
                 return conn && useRlt;
             } catch (e: any) {
+                // 检查是否为token/session过期错误
+                if (isSessionExpiredError(e)) {
+                    console.warn('Authentication error during connection, triggering session expired handler');
+                    if (onSessionExpired) {
+                        onSessionExpired();
+                        // 不设置错误状态，直接返回false，避免显示错误页面
+                        return false;
+                    }
+                }
+                
                 setError(e);
                 if (onError) onError(e);
                 throw e; // Re-throw to be caught by useMutation's error state
@@ -166,6 +202,21 @@ export function SurrealProvider({
     const getStoredAccessToken = useCallback(() => {
         return localStorage.getItem(ACCESS_TOKEN_KEY);
     }, []);
+
+    const handleSessionError: SessionErrorHandler = useCallback(async (error: any) => {
+        if (isSessionExpiredError(error)) {
+            console.warn('Authentication error detected in SurrealProvider (session/token expired):', error.message || error);
+            if (onSessionExpired) {
+                onSessionExpired();
+                return true;
+            } else {
+                console.warn('No authentication error handler registered, clearing tokens as fallback');
+                clearTokens();
+                return true;
+            }
+        }
+        return false;
+    }, [onSessionExpired, clearTokens]);
 
     // Signin function
     const {mutateAsync: signinMutation} = useMutation<any, Error, AnyAuth>({
@@ -259,8 +310,9 @@ export function SurrealProvider({
             setTokens,
             clearTokens,
             getStoredAccessToken,
+            handleSessionError,
         }),
-        [surrealInstance, isPending, isSuccess, isError, error, connect, disconnect, signinMutation, signoutMutation, setTokens, clearTokens, getStoredAccessToken]
+        [surrealInstance, isPending, isSuccess, isError, error, connect, disconnect, signinMutation, signoutMutation, setTokens, clearTokens, getStoredAccessToken, handleSessionError]
     );
 
     return (
