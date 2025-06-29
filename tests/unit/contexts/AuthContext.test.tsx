@@ -3,6 +3,7 @@ import { render, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 import { AuthProvider, useAuth, Case, Role, AppUser } from '@/src/contexts/AuthContext';
 import authService from '@/src/services/authService';
+import { menuService } from '@/src/services/menuService';
 import { User as OidcUser } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
 
@@ -28,6 +29,24 @@ vi.mock('../../../src/services/authService', () => ({
     logoutRedirect: vi.fn(),
     handleLoginRedirect: vi.fn(),
   }
+}));
+
+// Mock menuService
+vi.mock('../../../src/services/menuService', () => ({
+  default: {
+    loadUserMenus: vi.fn(),
+    getUserMenus: vi.fn(),
+    hasOperationPermission: vi.fn(),
+    hasMenuPermission: vi.fn(),
+    setClient: vi.fn(),
+  },
+  menuService: {
+    loadUserMenus: vi.fn(),
+    getUserMenus: vi.fn(),
+    hasOperationPermission: vi.fn(),
+    hasMenuPermission: vi.fn(),
+    setClient: vi.fn(),
+  },
 }));
 
 // Mock SurrealProvider
@@ -182,6 +201,9 @@ describe('AuthContext', () => {
     (mockSurrealClient.signout as Mock).mockResolvedValue(undefined);
     (mockSurrealClient.merge as Mock).mockResolvedValue(undefined);
     (authService.logoutRedirect as Mock).mockResolvedValue(undefined);
+    
+    // Mock menuService default behavior
+    (menuService.loadUserMenus as Mock).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -536,6 +558,14 @@ describe('AuthContext', () => {
 
   describe('菜单权限管理', () => {
     it('管理员应该看到所有菜单项', async () => {
+      // 设置管理员菜单项
+      const adminMenus = [
+        { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard' },
+        { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase' },
+        { id: 'admin_home', path: '/admin', labelKey: 'nav_system_management', iconName: 'mdiCog' },
+      ];
+      (menuService.loadUserMenus as Mock).mockResolvedValue(adminMenus);
+      
       localStorageMock.setItem('cuckoox-user', JSON.stringify({
         id: 'user:admin',
         github_id: '--admin--',
@@ -552,6 +582,14 @@ describe('AuthContext', () => {
     });
 
     it('普通用户应该根据角色看到相应菜单项', async () => {
+      // 设置case_manager用户菜单项
+      const caseManagerMenus = [
+        { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard' },
+        { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase' },
+        { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountGroup' },
+      ];
+      (menuService.loadUserMenus as Mock).mockResolvedValue(caseManagerMenus);
+      
       (mockSurrealClient.query as Mock).mockResolvedValue([[{
         case_details: mockCase1,
         role_details: mockCaseManagerRole,
@@ -577,6 +615,14 @@ describe('AuthContext', () => {
   describe('自动导航功能', () => {
               it('应该在案件状态为立案时自动导航到债权人管理', async () => {
        const caseWithStatus = { ...mockCase1, status: '立案' };
+       
+       // 设置包含债权人管理菜单的菜单项
+       const menusWithCreditors = [
+         { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard' },
+         { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase' },
+         { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountGroup' },
+       ];
+       (menuService.loadUserMenus as Mock).mockResolvedValue(menusWithCreditors);
        
        (mockSurrealClient.query as Mock).mockResolvedValue([[{
          case_details: caseWithStatus,

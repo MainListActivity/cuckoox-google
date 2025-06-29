@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -27,16 +27,17 @@ import {
   FormControlLabel,
   Alert,
   CircularProgress,
-  Tooltip,
+  Checkbox,
+  FormGroup,
+  Grid,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Security as SecurityIcon,
   Menu as MenuIcon,
   TouchApp as TouchAppIcon,
-  Storage as StorageIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import { useSurreal } from '@/src/contexts/SurrealProvider';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
@@ -55,8 +56,8 @@ function TabPanel(props: TabPanelProps) {
     <div
       role="tabpanel"
       hidden={value !== index}
-      id={`permission-tabpanel-${index}`}
-      aria-labelledby={`permission-tab-${index}`}
+      id={`tabpanel-${index}`}
+      aria-labelledby={`tab-${index}`}
       {...other}
     >
       {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
@@ -66,6 +67,7 @@ function TabPanel(props: TabPanelProps) {
 
 // 定义数据类型
 interface MenuMetadata {
+  id: string;
   menu_id: string;
   path: string;
   label_key: string;
@@ -76,6 +78,7 @@ interface MenuMetadata {
 }
 
 interface OperationMetadata {
+  id: string;
   operation_id: string;
   menu_id: string;
   operation_name: string;
@@ -84,22 +87,17 @@ interface OperationMetadata {
   is_active: boolean;
 }
 
-interface DataPermissionRule {
-  id?: RecordId;
-  rule_id: string;
-  role_id: RecordId;
-  table_name: string;
-  crud_type: string;
-  rule_expression: string;
-  description?: string;
-  priority: number;
-  is_active: boolean;
-}
-
 interface Role {
   id: RecordId;
   name: string;
   description?: string;
+}
+
+interface RolePermission {
+  role_id: RecordId;
+  role_name: string;
+  menu_permissions: string[];
+  operation_permissions: string[];
 }
 
 const PermissionManagementPage: React.FC = () => {
@@ -118,29 +116,26 @@ const PermissionManagementPage: React.FC = () => {
   const [selectedOperation, setSelectedOperation] = useState<OperationMetadata | null>(null);
   const [operationDialogOpen, setOperationDialogOpen] = useState(false);
 
-  // 数据权限相关状态
-  const [dataRules, setDataRules] = useState<DataPermissionRule[]>([]);
-  const [selectedDataRule, setSelectedDataRule] = useState<DataPermissionRule | null>(null);
-  const [dataRuleDialogOpen, setDataRuleDialogOpen] = useState(false);
-
-  // 角色列表
-  const [roles, setRoles] = useState<Role[]>([]);
+  // 角色权限相关状态
+  const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
+  const [selectedRolePermission, setSelectedRolePermission] = useState<RolePermission | null>(null);
+  const [rolePermissionDialogOpen, setRolePermissionDialogOpen] = useState(false);
 
   // 加载角色列表
-  const loadRoles = async () => {
+  const loadRoles = useCallback(async () => {
     try {
       const result = await client.query<Role[][]>('SELECT * FROM role');
       if (result && result[0]) {
-        setRoles(result[0]);
+        // 角色数据现在直接用于查询，不需要存储在状态中
       }
     } catch (error) {
       console.error('Error loading roles:', error);
       showError('加载角色列表失败');
     }
-  };
+  }, [client, showError]);
 
   // 加载菜单元数据
-  const loadMenus = async () => {
+  const loadMenus = useCallback(async () => {
     setLoading(true);
     try {
       const result = await client.query<MenuMetadata[][]>('SELECT * FROM menu_metadata ORDER BY display_order');
@@ -153,10 +148,10 @@ const PermissionManagementPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [client, showError]);
 
   // 加载操作元数据
-  const loadOperations = async () => {
+  const loadOperations = useCallback(async () => {
     setLoading(true);
     try {
       const result = await client.query<OperationMetadata[][]>('SELECT * FROM operation_metadata ORDER BY menu_id, operation_id');
@@ -169,30 +164,53 @@ const PermissionManagementPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [client, showError]);
 
-  // 加载数据权限规则
-  const loadDataRules = async () => {
+  // 加载角色权限关系
+  const loadRolePermissions = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await client.query<DataPermissionRule[][]>('SELECT * FROM data_permission_rule ORDER BY role_id, table_name, crud_type');
+      // 获取所有角色及其权限关系
+      const result = await client.query<unknown[][]>(`
+        SELECT 
+          id as role_id,
+          name as role_name,
+          ->can_access_menu->out.menu_id as menu_permissions,
+          ->can_execute_operation->out.operation_id as operation_permissions
+        FROM role
+      `);
+      
       if (result && result[0]) {
-        setDataRules(result[0]);
+        const formattedRolePermissions = (result[0] as unknown[]).map((item: unknown) => {
+          const roleItem = item as {
+            role_id: RecordId;
+            role_name: string;
+            menu_permissions?: string[];
+            operation_permissions?: string[];
+          };
+          return {
+            role_id: roleItem.role_id,
+            role_name: roleItem.role_name,
+            menu_permissions: roleItem.menu_permissions || [],
+            operation_permissions: roleItem.operation_permissions || [],
+          };
+        });
+        setRolePermissions(formattedRolePermissions);
       }
     } catch (error) {
-      console.error('Error loading data rules:', error);
-      showError('加载数据权限规则失败');
+      console.error('Error loading role permissions:', error);
+      showError('加载角色权限失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, [client, showError]);
 
   useEffect(() => {
     loadRoles();
     if (tabValue === 0) loadMenus();
     else if (tabValue === 1) loadOperations();
-    else if (tabValue === 2) loadDataRules();
-  }, [tabValue]);
+    else if (tabValue === 2) loadRolePermissions();
+  }, [tabValue, loadRoles, loadMenus, loadOperations, loadRolePermissions]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -224,7 +242,14 @@ const PermissionManagementPage: React.FC = () => {
         // 创建
         await client.query(
           'INSERT INTO menu_metadata (menu_id, path, label_key, icon_name, display_order, is_active) VALUES ($menu_id, $path, $label_key, $icon_name, $display_order, $is_active)',
-          menu
+          {
+            menu_id: menu.menu_id,
+            path: menu.path,
+            label_key: menu.label_key,
+            icon_name: menu.icon_name,
+            display_order: menu.display_order,
+            is_active: menu.is_active,
+          }
         );
         showSuccess('菜单创建成功');
       }
@@ -248,14 +273,28 @@ const PermissionManagementPage: React.FC = () => {
         // 更新
         await client.query(
           'UPDATE operation_metadata SET menu_id = $menu_id, operation_name = $operation_name, operation_type = $operation_type, description = $description, is_active = $is_active WHERE operation_id = $operation_id',
-          operation
+          {
+            operation_id: operation.operation_id,
+            menu_id: operation.menu_id,
+            operation_name: operation.operation_name,
+            operation_type: operation.operation_type,
+            description: operation.description,
+            is_active: operation.is_active,
+          }
         );
         showSuccess('操作更新成功');
       } else {
         // 创建
         await client.query(
           'INSERT INTO operation_metadata (operation_id, menu_id, operation_name, operation_type, description, is_active) VALUES ($operation_id, $menu_id, $operation_name, $operation_type, $description, $is_active)',
-          operation
+          {
+            operation_id: operation.operation_id,
+            menu_id: operation.menu_id,
+            operation_name: operation.operation_name,
+            operation_type: operation.operation_type,
+            description: operation.description,
+            is_active: operation.is_active,
+          }
         );
         showSuccess('操作创建成功');
       }
@@ -267,34 +306,54 @@ const PermissionManagementPage: React.FC = () => {
     }
   };
 
-  // 数据权限管理
-  const handleDataRuleEdit = (rule: DataPermissionRule) => {
-    setSelectedDataRule(rule);
-    setDataRuleDialogOpen(true);
+  // 角色权限管理
+  const handleRolePermissionEdit = (rolePermission: RolePermission) => {
+    setSelectedRolePermission(rolePermission);
+    setRolePermissionDialogOpen(true);
   };
 
-  const handleDataRuleSave = async (rule: DataPermissionRule) => {
+  const handleRolePermissionSave = async (rolePermission: RolePermission) => {
     try {
-      if (selectedDataRule?.id) {
-        // 更新
-        await client.query(
-          'UPDATE data_permission_rule SET role_id = $role_id, table_name = $table_name, crud_type = $crud_type, rule_expression = $rule_expression, description = $description, priority = $priority, is_active = $is_active WHERE rule_id = $rule_id',
-          rule
-        );
-        showSuccess('数据权限规则更新成功');
-      } else {
-        // 创建
-        await client.query(
-          'INSERT INTO data_permission_rule (rule_id, role_id, table_name, crud_type, rule_expression, description, priority, is_active) VALUES ($rule_id, $role_id, $table_name, $crud_type, $rule_expression, $description, $priority, $is_active)',
-          rule
-        );
-        showSuccess('数据权限规则创建成功');
+      const roleId = rolePermission.role_id;
+      
+      // 删除现有的权限关系
+      await client.query(
+        'DELETE $role_id->can_access_menu',
+        { role_id: roleId }
+      );
+      await client.query(
+        'DELETE $role_id->can_execute_operation',
+        { role_id: roleId }
+      );
+
+      // 添加新的菜单权限关系
+      for (const menuId of rolePermission.menu_permissions) {
+        const menuRecord = menus.find(m => m.menu_id === menuId);
+        if (menuRecord) {
+          await client.query(
+            'RELATE $role_id->can_access_menu->$menu_record_id SET can_access = true, assigned_at = time::now()',
+            { role_id: roleId, menu_record_id: menuRecord.id }
+          );
+        }
       }
-      setDataRuleDialogOpen(false);
-      loadDataRules();
+
+      // 添加新的操作权限关系
+      for (const operationId of rolePermission.operation_permissions) {
+        const operationRecord = operations.find(o => o.operation_id === operationId);
+        if (operationRecord) {
+          await client.query(
+            'RELATE $role_id->can_execute_operation->$operation_record_id SET can_execute = true, assigned_at = time::now()',
+            { role_id: roleId, operation_record_id: operationRecord.id }
+          );
+        }
+      }
+
+      showSuccess('角色权限更新成功');
+      setRolePermissionDialogOpen(false);
+      loadRolePermissions();
     } catch (error) {
-      console.error('Error saving data rule:', error);
-      showError('保存数据权限规则失败');
+      console.error('Error saving role permission:', error);
+      showError('保存角色权限失败');
     }
   };
 
@@ -309,7 +368,7 @@ const PermissionManagementPage: React.FC = () => {
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="权限管理标签">
           <Tab icon={<MenuIcon />} label="菜单权限" />
           <Tab icon={<TouchAppIcon />} label="操作权限" />
-          <Tab icon={<StorageIcon />} label="数据权限" />
+          <Tab icon={<PeopleIcon />} label="角色权限" />
         </Tabs>
       </Paper>
 
@@ -453,24 +512,14 @@ const PermissionManagementPage: React.FC = () => {
         )}
       </TabPanel>
 
-      {/* 数据权限管理 */}
+      {/* 角色权限管理 */}
       <TabPanel value={tabValue} index={2}>
         <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h6">数据权限规则管理</Typography>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              setSelectedDataRule(null);
-              setDataRuleDialogOpen(true);
-            }}
-          >
-            添加规则
-          </Button>
+          <Typography variant="h6">角色权限管理</Typography>
         </Box>
 
         <Alert severity="info" sx={{ mb: 2 }}>
-          数据权限规则用于控制角色对特定数据表的访问权限。规则表达式使用 SurrealDB 的查询语法。
+          管理角色对菜单和操作的访问权限。这些权限通过图关系存储在数据库中。
         </Alert>
 
         {loading ? (
@@ -482,58 +531,20 @@ const PermissionManagementPage: React.FC = () => {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>规则ID</TableCell>
-                  <TableCell>角色</TableCell>
-                  <TableCell>数据表</TableCell>
-                  <TableCell>操作类型</TableCell>
-                  <TableCell>规则表达式</TableCell>
-                  <TableCell>优先级</TableCell>
-                  <TableCell>状态</TableCell>
+                  <TableCell>角色名称</TableCell>
+                  <TableCell>菜单权限数量</TableCell>
+                  <TableCell>操作权限数量</TableCell>
                   <TableCell>操作</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {dataRules.map((rule) => (
-                  <TableRow key={rule.rule_id}>
-                    <TableCell>{rule.rule_id}</TableCell>
+                {rolePermissions.map((rolePermission) => (
+                  <TableRow key={rolePermission.role_id.toString()}>
+                    <TableCell>{rolePermission.role_name}</TableCell>
+                    <TableCell>{rolePermission.menu_permissions.length}</TableCell>
+                    <TableCell>{rolePermission.operation_permissions.length}</TableCell>
                     <TableCell>
-                      {roles.find((r) => r.id.toString() === rule.role_id.toString())?.name || rule.role_id.toString()}
-                    </TableCell>
-                    <TableCell>{rule.table_name}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={rule.crud_type}
-                        color={
-                          rule.crud_type === 'create'
-                            ? 'success'
-                            : rule.crud_type === 'read'
-                            ? 'info'
-                            : rule.crud_type === 'update'
-                            ? 'warning'
-                            : rule.crud_type === 'delete'
-                            ? 'error'
-                            : 'default'
-                        }
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title={rule.rule_expression}>
-                        <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {rule.rule_expression}
-                        </Typography>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>{rule.priority}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={rule.is_active ? '启用' : '禁用'}
-                        color={rule.is_active ? 'success' : 'default'}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton size="small" onClick={() => handleDataRuleEdit(rule)}>
+                      <IconButton size="small" onClick={() => handleRolePermissionEdit(rolePermission)}>
                         <EditIcon />
                       </IconButton>
                     </TableCell>
@@ -674,95 +685,77 @@ const PermissionManagementPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* 数据权限规则编辑对话框 */}
-      <Dialog open={dataRuleDialogOpen} onClose={() => setDataRuleDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>{selectedDataRule ? '编辑数据权限规则' : '添加数据权限规则'}</DialogTitle>
+      {/* 角色权限编辑对话框 */}
+      <Dialog open={rolePermissionDialogOpen} onClose={() => setRolePermissionDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>编辑角色权限 - {selectedRolePermission?.role_name}</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField
-              label="规则ID"
-              value={selectedDataRule?.rule_id || ''}
-              disabled={!!selectedDataRule?.id}
-              onChange={(e) => setSelectedDataRule({ ...selectedDataRule!, rule_id: e.target.value })}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel>角色</InputLabel>
-              <Select
-                value={selectedDataRule?.role_id?.toString() || ''}
-                onChange={(e) => {
-                  const role = roles.find((r) => r.id.toString() === e.target.value);
-                  if (role) {
-                    setSelectedDataRule({ ...selectedDataRule!, role_id: role.id });
-                  }
-                }}
-                label="角色"
-              >
-                {roles.map((role) => (
-                  <MenuItem key={role.id.toString()} value={role.id.toString()}>
-                    {role.name} - {role.description}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="数据表名称"
-              value={selectedDataRule?.table_name || ''}
-              onChange={(e) => setSelectedDataRule({ ...selectedDataRule!, table_name: e.target.value })}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel>操作类型</InputLabel>
-              <Select
-                value={selectedDataRule?.crud_type || ''}
-                onChange={(e) => setSelectedDataRule({ ...selectedDataRule!, crud_type: e.target.value })}
-                label="操作类型"
-              >
-                <MenuItem value="create">创建</MenuItem>
-                <MenuItem value="read">读取</MenuItem>
-                <MenuItem value="update">更新</MenuItem>
-                <MenuItem value="delete">删除</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label="规则表达式"
-              value={selectedDataRule?.rule_expression || ''}
-              onChange={(e) => setSelectedDataRule({ ...selectedDataRule!, rule_expression: e.target.value })}
-              fullWidth
-              multiline
-              rows={3}
-              helperText="使用 SurrealDB 查询语法，例如: created_by = $auth.id"
-            />
-            <TextField
-              label="描述"
-              value={selectedDataRule?.description || ''}
-              onChange={(e) => setSelectedDataRule({ ...selectedDataRule!, description: e.target.value })}
-              fullWidth
-              multiline
-              rows={2}
-            />
-            <TextField
-              label="优先级"
-              type="number"
-              value={selectedDataRule?.priority || 0}
-              onChange={(e) => setSelectedDataRule({ ...selectedDataRule!, priority: parseInt(e.target.value) })}
-              fullWidth
-              helperText="数字越大优先级越高"
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={selectedDataRule?.is_active ?? true}
-                  onChange={(e) => setSelectedDataRule({ ...selectedDataRule!, is_active: e.target.checked })}
-                />
-              }
-              label="启用"
-            />
+          <Box sx={{ pt: 2 }}>
+            <Grid container spacing={3}>
+              <Grid size={6}>
+                <Typography variant="h6" gutterBottom>
+                  菜单权限
+                </Typography>
+                <FormGroup>
+                  {menus.map((menu) => (
+                    <FormControlLabel
+                      key={menu.menu_id}
+                      control={
+                        <Checkbox
+                          checked={selectedRolePermission?.menu_permissions.includes(menu.menu_id) || false}
+                          onChange={(e) => {
+                            if (!selectedRolePermission) return;
+                            const newMenuPermissions = e.target.checked
+                              ? [...selectedRolePermission.menu_permissions, menu.menu_id]
+                              : selectedRolePermission.menu_permissions.filter(id => id !== menu.menu_id);
+                            setSelectedRolePermission({
+                              ...selectedRolePermission,
+                              menu_permissions: newMenuPermissions
+                            });
+                          }}
+                        />
+                      }
+                      label={`${menu.menu_id} - ${menu.label_key}`}
+                    />
+                  ))}
+                </FormGroup>
+              </Grid>
+              <Grid size={6}>
+                <Typography variant="h6" gutterBottom>
+                  操作权限
+                </Typography>
+                <FormGroup>
+                  {operations.map((operation) => (
+                    <FormControlLabel
+                      key={operation.operation_id}
+                      control={
+                        <Checkbox
+                          checked={selectedRolePermission?.operation_permissions.includes(operation.operation_id) || false}
+                          onChange={(e) => {
+                            if (!selectedRolePermission) return;
+                            const newOperationPermissions = e.target.checked
+                              ? [...selectedRolePermission.operation_permissions, operation.operation_id]
+                              : selectedRolePermission.operation_permissions.filter(id => id !== operation.operation_id);
+                            setSelectedRolePermission({
+                              ...selectedRolePermission,
+                              operation_permissions: newOperationPermissions
+                            });
+                          }}
+                        />
+                      }
+                      label={`${operation.operation_id} - ${operation.operation_name}`}
+                    />
+                  ))}
+                </FormGroup>
+              </Grid>
+            </Grid>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDataRuleDialogOpen(false)}>取消</Button>
-          <Button onClick={() => selectedDataRule && handleDataRuleSave(selectedDataRule)} variant="contained">
+          <Button onClick={() => setRolePermissionDialogOpen(false)}>取消</Button>
+          <Button 
+            onClick={() => selectedRolePermission && handleRolePermissionSave(selectedRolePermission)} 
+            variant="contained"
+          >
             保存
           </Button>
         </DialogActions>

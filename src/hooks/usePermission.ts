@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/src/contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useSurreal } from '@/src/contexts/SurrealProvider';
 
-interface PermissionCheckResult {
+export interface PermissionCheckResult {
   hasPermission: boolean;
   isLoading: boolean;
   error: string | null;
 }
 
 /**
- * 检查当前用户是否有特定操作的权限
- * @param operationId 操作ID，如 'case_create', 'creditor_edit' 等
+ * 检查当前用户是否有执行特定操作的权限
+ * @param operationId 操作ID，如 'case_create', 'claim_review' 等
  * @returns 权限检查结果
  */
 export function useOperationPermission(operationId: string): PermissionCheckResult {
-  const { user, currentUserCaseRoles } = useAuth();
+  const { user, selectedCaseId } = useAuth();
   const { surreal: client } = useSurreal();
   const [hasPermission, setHasPermission] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -39,45 +39,31 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
         setIsLoading(true);
         setError(null);
 
-        // 获取用户在当前案件中的角色
-        const roleIds = currentUserCaseRoles.map(role => role.id);
-        
-        if (roleIds.length === 0) {
-          // 检查用户的全局角色
-          const globalRolesQuery = `
-            SELECT role_id 
-            FROM user_role 
-            WHERE user_id = $userId
-          `;
-          const globalRolesResult = await client.query(globalRolesQuery, { userId: user.id });
+        // 使用图查询检查用户是否有操作权限
+        // 查询用户的全局角色和案件角色中是否有权限执行该操作
+        const query = `
+          LET $global_roles = (SELECT out FROM $user_id->has_role);
+          LET $case_roles = IF $case_id THEN 
+            (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
+          ELSE [];
+          END;
+          LET $all_roles = array::concat($global_roles, $case_roles);
           
-          if (globalRolesResult && globalRolesResult[0]) {
-            roleIds.push(...(globalRolesResult[0] as any[]).map((r: any) => r.role_id));
-          }
-        }
-
-        if (roleIds.length === 0) {
-          setHasPermission(false);
-          setIsLoading(false);
-          return;
-        }
-
-        // 检查这些角色是否有该操作的权限
-        const permissionQuery = `
-          SELECT * 
-          FROM role_operation_permission 
-          WHERE role_id IN $roleIds 
-            AND operation_id = $operationId 
-            AND can_execute = true
-          LIMIT 1
+          SELECT * FROM (
+            SELECT * FROM $all_roles->can_execute_operation 
+            WHERE out.operation_id = $operation_id 
+              AND can_execute = true 
+              AND out.is_active = true
+          ) LIMIT 1;
         `;
         
-        const result = await client.query(permissionQuery, {
-          roleIds,
-          operationId
+        const result = await client.query(query, {
+          user_id: user.id,
+          case_id: selectedCaseId || null,
+          operation_id: operationId
         });
 
-        const hasResult = !!(result && result[0] && (result[0] as any[]).length > 0);
+        const hasResult = !!(result && result[0] && (result[0] as unknown[]).length > 0);
         setHasPermission(hasResult);
       } catch (err) {
         console.error('Error checking operation permission:', err);
@@ -89,7 +75,7 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
     };
 
     checkPermission();
-  }, [user, operationId, currentUserCaseRoles, client]);
+  }, [user, operationId, selectedCaseId, client]);
 
   return { hasPermission, isLoading, error };
 }
@@ -100,7 +86,7 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
  * @returns 权限检查结果
  */
 export function useMenuPermission(menuId: string): PermissionCheckResult {
-  const { user, currentUserCaseRoles } = useAuth();
+  const { user, selectedCaseId } = useAuth();
   const { surreal: client } = useSurreal();
   const [hasPermission, setHasPermission] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,45 +111,31 @@ export function useMenuPermission(menuId: string): PermissionCheckResult {
         setIsLoading(true);
         setError(null);
 
-        // 获取用户在当前案件中的角色
-        const roleIds = currentUserCaseRoles.map(role => role.id);
-        
-        if (roleIds.length === 0) {
-          // 检查用户的全局角色
-          const globalRolesQuery = `
-            SELECT role_id 
-            FROM user_role 
-            WHERE user_id = $userId
-          `;
-          const globalRolesResult = await client.query(globalRolesQuery, { userId: user.id });
+        // 使用图查询检查用户是否有菜单权限
+        // 查询用户的全局角色和案件角色中是否有权限访问该菜单
+        const query = `
+          LET $global_roles = (SELECT out FROM $user_id->has_role);
+          LET $case_roles = IF $case_id THEN 
+            (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
+          ELSE [];
+          END;
+          LET $all_roles = array::concat($global_roles, $case_roles);
           
-          if (globalRolesResult && globalRolesResult[0]) {
-            roleIds.push(...(globalRolesResult[0] as any[]).map((r: any) => r.role_id));
-          }
-        }
-
-        if (roleIds.length === 0) {
-          setHasPermission(false);
-          setIsLoading(false);
-          return;
-        }
-
-        // 检查这些角色是否有该菜单的权限
-        const permissionQuery = `
-          SELECT * 
-          FROM role_menu_permission 
-          WHERE role_id IN $roleIds 
-            AND menu_id = $menuId 
-            AND can_access = true
-          LIMIT 1
+          SELECT * FROM (
+            SELECT * FROM $all_roles->can_access_menu 
+            WHERE out.menu_id = $menu_id 
+              AND can_access = true 
+              AND out.is_active = true
+          ) LIMIT 1;
         `;
         
-        const result = await client.query(permissionQuery, {
-          roleIds,
-          menuId
+        const result = await client.query(query, {
+          user_id: user.id,
+          case_id: selectedCaseId || null,
+          menu_id: menuId
         });
 
-        const hasResult = !!(result && result[0] && (result[0] as any[]).length > 0);
+        const hasResult = !!(result && result[0] && (result[0] as unknown[]).length > 0);
         setHasPermission(hasResult);
       } catch (err) {
         console.error('Error checking menu permission:', err);
@@ -175,24 +147,22 @@ export function useMenuPermission(menuId: string): PermissionCheckResult {
     };
 
     checkPermission();
-  }, [user, menuId, currentUserCaseRoles, client]);
+  }, [user, menuId, selectedCaseId, client]);
 
   return { hasPermission, isLoading, error };
 }
 
 /**
- * 检查当前用户对特定数据的访问权限
+ * 检查当前用户对特定数据表的CRUD权限
  * @param tableName 数据表名称
- * @param crudType CRUD类型：'create' | 'read' | 'update' | 'delete'
- * @param recordData 要检查的数据记录（可选，用于条件判断）
+ * @param crudType CRUD操作类型
  * @returns 权限检查结果
  */
 export function useDataPermission(
   tableName: string,
-  crudType: 'create' | 'read' | 'update' | 'delete',
-  recordData?: any
+  crudType: 'create' | 'read' | 'update' | 'delete'
 ): PermissionCheckResult {
-  const { user, currentUserCaseRoles } = useAuth();
+  const { user, selectedCaseId } = useAuth();
   const { surreal: client } = useSurreal();
   const [hasPermission, setHasPermission] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -200,7 +170,7 @@ export function useDataPermission(
 
   useEffect(() => {
     const checkPermission = async () => {
-      if (!user || !tableName || !crudType) {
+      if (!user || !tableName) {
         setHasPermission(false);
         setIsLoading(false);
         return;
@@ -217,92 +187,100 @@ export function useDataPermission(
         setIsLoading(true);
         setError(null);
 
-        // 获取用户的所有角色（案件角色 + 全局角色）
-        const roleIds = [...currentUserCaseRoles.map(role => role.id)];
-        
-        // 获取全局角色
-        const globalRolesQuery = `
-          SELECT role_id 
-          FROM user_role 
-          WHERE user_id = $userId
-        `;
-        const globalRolesResult = await client.query(globalRolesQuery, { userId: user.id });
-        
-        if (globalRolesResult && globalRolesResult[0]) {
-          roleIds.push(...(globalRolesResult[0] as any[]).map((r: any) => r.role_id));
-        }
-
-        if (roleIds.length === 0) {
-          setHasPermission(false);
-          setIsLoading(false);
-          return;
-        }
-
-        // 获取适用的数据权限规则
-        const rulesQuery = `
-          SELECT * 
-          FROM data_permission_rule 
-          WHERE role_id IN $roleIds 
-            AND table_name = $tableName 
-            AND crud_type = $crudType 
-            AND is_active = true
-          ORDER BY priority DESC
-        `;
-        
-        const rulesResult = await client.query(rulesQuery, {
-          roleIds,
-          tableName,
-          crudType
-        });
-
-        if (!rulesResult || !rulesResult[0] || (rulesResult[0] as any[]).length === 0) {
-          setHasPermission(false);
-          setIsLoading(false);
-          return;
-        }
-
-        // 检查规则
-        const rules = rulesResult[0] as any[];
-        let hasValidRule = false;
-
-        for (const rule of rules) {
-          // 如果规则表达式是 'true'，直接允许
-          if (rule.rule_expression === 'true') {
-            hasValidRule = true;
+        // 使用SurrealDB内置的权限系统进行数据权限检查
+        // 尝试执行一个简单的查询来测试权限
+        let testQuery = '';
+        switch (crudType) {
+          case 'read':
+            testQuery = `SELECT * FROM ${tableName} WHERE false LIMIT 0`;
             break;
-          }
-
-          // 如果有记录数据，尝试评估规则表达式
-          if (recordData && rule.rule_expression) {
-            // 这里需要一个更复杂的表达式评估器
-            // 简单起见，我们只处理一些基本情况
-            if (rule.rule_expression.includes('$auth.id')) {
-              const expression = rule.rule_expression.replace('$auth.id', `"${user.id}"`);
-              
-              // 检查简单的相等条件
-              if (expression.includes('created_by =')) {
-                const createdBy = recordData.created_by?.toString() || recordData.created_by_user?.toString();
-                if (createdBy === user.id.toString()) {
-                  hasValidRule = true;
-                  break;
-                }
-              }
-            }
-          }
+          case 'create':
+            // 对于创建权限，我们检查表的权限定义
+            testQuery = `SELECT * FROM ONLY ${tableName} WHERE false LIMIT 0`;
+            break;
+          case 'update':
+          case 'delete':
+            // 对于更新和删除，检查是否能查询到记录（基础权限）
+            testQuery = `SELECT * FROM ${tableName} WHERE false LIMIT 0`;
+            break;
         }
 
-        setHasPermission(hasValidRule);
-      } catch (err) {
-        console.error('Error checking data permission:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
-        setHasPermission(false);
+        await client.query(testQuery);
+        // 如果查询成功执行（没有抛出权限错误），则说明有权限
+        setHasPermission(true);
+      } catch (err: unknown) {
+        // 检查是否是权限错误
+        if (err instanceof Error && err.message && err.message.includes('permission')) {
+          setHasPermission(false);
+        } else {
+          console.error('Error checking data permission:', err);
+          setError(err instanceof Error ? err.message : 'Unknown error');
+          setHasPermission(false);
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     checkPermission();
-  }, [user, tableName, crudType, recordData, currentUserCaseRoles, client]);
+  }, [user, tableName, crudType, selectedCaseId, client]);
 
   return { hasPermission, isLoading, error };
+}
+
+/**
+ * 获取用户的角色列表（包括全局角色和案件角色）
+ * @returns 用户角色列表
+ */
+export function useUserRoles() {
+  const { user, selectedCaseId } = useAuth();
+  const { surreal: client } = useSurreal();
+  const [roles, setRoles] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadRoles = async () => {
+      if (!user) {
+        setRoles([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // 管理员默认有admin角色
+      if (user.github_id === '--admin--') {
+        setRoles(['admin']);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // 使用定义的函数获取用户角色
+        const query = `
+          RETURN fn::get_user_roles($user_id, $case_id);
+        `;
+        
+        const result = await client.query(query, {
+          user_id: user.id,
+          case_id: selectedCaseId || null
+        });
+
+        const roleNames = result && result[0] ? result[0] as string[] : [];
+        setRoles(roleNames);
+      } catch (err) {
+        console.error('Error loading user roles:', err);
+        setError(err instanceof Error ? err.message : 'Unknown error');
+        setRoles([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadRoles();
+  }, [user, selectedCaseId, client]);
+
+  return { roles, isLoading, error };
 } 

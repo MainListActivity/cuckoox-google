@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
 import authService from '@/src/services/authService';
 // import { db } from '@/src/lib/surreal'; // REMOVED
 import {useSurreal} from '@/src/contexts/SurrealProvider'; // ADDED
@@ -451,150 +451,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // 菜单配置常量
-  const ALL_NAV_ITEMS = [
-    { 
-      id: 'dashboard', 
-      path: '/dashboard', 
-      labelKey: 'nav_dashboard', 
-      iconName: 'mdiViewDashboard', 
-      requiredRoles: ['case_manager', 'admin', 'creditor_representative'] 
-    },
-    { 
-      id: 'cases', 
-      path: '/cases', 
-      labelKey: 'nav_case_management', 
-      iconName: 'mdiBriefcase', 
-      requiredRoles: ['case_manager', 'admin'] 
-    },
-    { 
-      id: 'creditors', 
-      path: '/creditors', 
-      labelKey: 'nav_creditor_management', 
-      iconName: 'mdiAccountGroup', 
-      requiredRoles: ['case_manager', 'admin'] 
-    },
-    { 
-      id: 'claims_list', 
-      path: '/claims', 
-      labelKey: 'nav_claim_management', 
-      iconName: 'mdiFileDocumentOutline', 
-      requiredRoles: ['case_manager', 'admin'] 
-    },
-    { 
-      id: 'my_claims', 
-      path: '/my-claims', 
-      labelKey: 'nav_my_claims', 
-      iconName: 'mdiFileDocumentSearchOutline', 
-      requiredRoles: ['creditor_representative'] 
-    },
-    { 
-      id: 'claims_submit', 
-      path: '/claims/submit', 
-      labelKey: 'nav_claim_submission', 
-      iconName: 'mdiFileUploadOutline', 
-      requiredRoles: ['creditor_representative'] 
-    },
-    { 
-      id: 'claim_dashboard', 
-      path: '/claim-dashboard', 
-      labelKey: 'nav_claim_dashboard', 
-      iconName: 'mdiChartBar', 
-      requiredRoles: ['case_manager', 'admin'] 
-    },
-    { 
-      id: 'online_meetings', 
-      path: '/online-meetings', 
-      labelKey: 'nav_online_meetings', 
-      iconName: 'mdiVideo', 
-      requiredRoles: ['case_manager', 'admin', 'creditor_representative'] 
-    },
-    { 
-      id: 'messages', 
-      path: '/messages', 
-      labelKey: 'nav_message_center', 
-      iconName: 'mdiMessageTextOutline', 
-      requiredRoles: ['case_manager', 'admin', 'creditor_representative'] 
-    },
-    { 
-      id: 'admin_home', 
-      path: '/admin', 
-      labelKey: 'nav_system_management', 
-      iconName: 'mdiCog', 
-      requiredRoles: ['admin'] 
-    }
-  ] as const;
 
-  // 菜单权限逻辑
-  const getAccessibleMenuItems = (userRoles: readonly Role[], isAdmin: boolean): NavItemType[] => {
-    if (isAdmin) return [...ALL_NAV_ITEMS]; // 创建一个新的数组
-    const userRoleNames = userRoles.map(role => role.name);
-    return ALL_NAV_ITEMS.filter(item => {
-      if (!item.requiredRoles?.length) return true;
-      return item.requiredRoles.some(requiredRole => userRoleNames.includes(requiredRole));
-    }) as NavItemType[]; // 类型断言为非只读数组
-  };
 
   // 更新菜单状态
-  const fetchAndUpdateMenuPermissions = async (currentRoles: Role[]) => {
-    console.log('fetchAndUpdateMenuPermissions called with roles:', currentRoles);
+  const fetchAndUpdateMenuPermissions = useCallback(async () => {
+    console.log('fetchAndUpdateMenuPermissions called');
     
-    if (!user) {
-      console.log('No user, clearing menu items');
+    if (!user || !isSuccess) {
+      console.log('No user or client not ready, clearing menu items');
       setNavMenuItems([]);
       return;
     }
 
-    const isAdmin = user.github_id === '--admin--';
-    console.log('User is admin:', isAdmin, 'User:', user);
+    console.log('Loading menus for user:', user.id, 'case:', selectedCaseId);
     setIsMenuLoading(true);
     
     try {
-      // 从数据库加载菜单
-      console.log('Attempting to load menus from database...');
-      const dbMenuItems = await menuService.loadUserMenus();
+      // 直接使用图查询函数加载用户可访问的菜单
+      console.log('Loading menus using fn::get_user_menus...');
+      const dbMenuItems = await menuService.loadUserMenus(
+        selectedCaseId || null
+      );
       console.log('Database menu items:', dbMenuItems);
       
-      if (dbMenuItems && dbMenuItems.length > 0) {
-        // 使用数据库中的菜单
-        setNavMenuItems(dbMenuItems);
-        console.log('Menu items loaded from database:', {
-          userRoles: isAdmin ? ['admin'] : currentRoles.map(r => r.name),
-          menuCount: dbMenuItems.length
-        });
-      } else {
-        // 如果数据库中没有菜单，回退到硬编码的菜单
-        console.log('No menus from database, falling back to hardcoded menus');
-        
-        if (!isAdmin && (!currentRoles?.length)) {
-          console.log('No roles assigned - returning empty menu');
-          setNavMenuItems([]);
-          return;
-        }
-        
-        const accessibleMenuItems = getAccessibleMenuItems(currentRoles, isAdmin);
-        
-        setNavMenuItems(accessibleMenuItems);
-        console.log('Menu items updated from hardcoded:', {
-          userRoles: isAdmin ? ['admin'] : currentRoles.map(r => r.name),
-          menuCount: accessibleMenuItems.length
-        });
-      }
+      // 设置菜单项，如果为空则显示空菜单
+      setNavMenuItems(dbMenuItems);
+      console.log('Menu items loaded:', {
+        userId: user.id.toString(),
+        caseId: selectedCaseId?.toString() || null,
+        menuCount: dbMenuItems.length
+      });
 
     } catch (error) {
       console.error('Error updating menu permissions:', error);
-      // 出错时回退到硬编码的菜单
-      try {
-        const accessibleMenuItems = getAccessibleMenuItems(currentRoles, isAdmin);
-        setNavMenuItems(accessibleMenuItems);
-      } catch (fallbackError) {
-        console.error('Error in fallback menu logic:', fallbackError);
-        setNavMenuItems([]);
-      }
+      // 出错时设置为空菜单
+      setNavMenuItems([]);
     } finally {
       setIsMenuLoading(false);
     }
-  };
+  }, [user, isSuccess, selectedCaseId]);
   
   // Helper function to update last selected case in DB
   const updateLastSelectedCaseInDB = async (userId: RecordId, caseId: RecordId) => {
@@ -627,7 +522,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
     }
     setCurrentUserCaseRoles(rolesForSelectedCase);
-    fetchAndUpdateMenuPermissions(rolesForSelectedCase); // Call menu update
+    fetchAndUpdateMenuPermissions(); // Call menu update
   };
 
   const selectCase = async (caseIdToSelect: RecordId | string) => {
@@ -737,19 +632,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
-    // Check if user is admin
-    const isAdmin = user && user.github_id === '--admin--';
-    if (isAdmin && isSuccess) {
-      // Admin users should see all menus regardless of case selection
-      // But only call after client is initialized
-      console.log('Admin user detected, loading menus...');
-      fetchAndUpdateMenuPermissions([]);
-    } else if (selectedCaseId && currentUserCaseRoles && currentUserCaseRoles.length > 0) {
-      fetchAndUpdateMenuPermissions(currentUserCaseRoles);
-    } else if (!selectedCaseId && !isAdmin) {
-      setNavMenuItems([]); // Clear menu if no case is selected (except for admin)
+    // 只要用户存在且客户端连接成功就加载菜单
+    if (user && isSuccess) {
+      console.log('User and client ready, loading menus...');
+      fetchAndUpdateMenuPermissions();
+    } else {
+      setNavMenuItems([]); // Clear menu if no user or client not ready
     }
-  }, [selectedCaseId, currentUserCaseRoles, user, isSuccess]); // Added client as dependency
+  }, [user, isSuccess, fetchAndUpdateMenuPermissions]); // 添加 fetchAndUpdateMenuPermissions 作为依赖
 
   // Effect for automatic navigation to creditor management
   useEffect(() => {

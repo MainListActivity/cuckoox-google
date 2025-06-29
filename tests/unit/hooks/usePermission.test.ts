@@ -34,7 +34,7 @@ describe('useOperationPermission', () => {
         github_id: '--admin--',
         name: 'Admin User',
       },
-      currentUserCaseRoles: [],
+      selectedCaseId: null,
     });
 
     mockUseSurreal.mockReturnValue({
@@ -50,7 +50,7 @@ describe('useOperationPermission', () => {
     expect(result.current.hasPermission).toBe(true);
   });
 
-  it('should check permissions for regular users', async () => {
+  it('should check permissions for regular users using graph queries', async () => {
     const mockQuery = vi.fn().mockResolvedValueOnce([[{ can_execute: true }]]);
     
     mockUseAuth.mockReturnValue({
@@ -59,12 +59,7 @@ describe('useOperationPermission', () => {
         github_id: 'test-user',
         name: 'Test User',
       },
-      currentUserCaseRoles: [
-        {
-          id: new RecordId('role', 'case_manager'),
-          name: 'case_manager',
-        },
-      ],
+      selectedCaseId: new RecordId('case', 'case123'),
     });
 
     mockUseSurreal.mockReturnValue({
@@ -78,8 +73,12 @@ describe('useOperationPermission', () => {
     });
 
     expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringContaining('role_operation_permission'),
-      expect.any(Object)
+      expect.stringContaining('can_execute_operation'),
+      {
+        user_id: new RecordId('user', 'test123'),
+        case_id: new RecordId('case', 'case123'),
+        operation_id: 'case_create'
+      }
     );
     expect(result.current.hasPermission).toBe(true);
   });
@@ -93,12 +92,7 @@ describe('useOperationPermission', () => {
         github_id: 'test-user',
         name: 'Test User',
       },
-      currentUserCaseRoles: [
-        {
-          id: new RecordId('role', 'case_manager'),
-          name: 'case_manager',
-        },
-      ],
+      selectedCaseId: null,
     });
 
     mockUseSurreal.mockReturnValue({
@@ -123,7 +117,7 @@ describe('useOperationPermission', () => {
         github_id: 'test-user',
         name: 'Test User',
       },
-      currentUserCaseRoles: [],
+      selectedCaseId: null,
     });
 
     mockUseSurreal.mockReturnValue({
@@ -155,7 +149,7 @@ describe('useMenuPermission', () => {
         github_id: '--admin--',
         name: 'Admin User',
       },
-      currentUserCaseRoles: [],
+      selectedCaseId: null,
     });
 
     mockUseSurreal.mockReturnValue({
@@ -171,7 +165,7 @@ describe('useMenuPermission', () => {
     expect(result.current.hasPermission).toBe(true);
   });
 
-  it('should check menu permissions for regular users', async () => {
+  it('should check menu permissions for regular users using graph queries', async () => {
     const mockQuery = vi.fn().mockResolvedValueOnce([[{ can_access: true }]]);
     
     mockUseAuth.mockReturnValue({
@@ -180,12 +174,7 @@ describe('useMenuPermission', () => {
         github_id: 'test-user',
         name: 'Test User',
       },
-      currentUserCaseRoles: [
-        {
-          id: new RecordId('role', 'case_manager'),
-          name: 'case_manager',
-        },
-      ],
+      selectedCaseId: new RecordId('case', 'case123'),
     });
 
     mockUseSurreal.mockReturnValue({
@@ -199,8 +188,12 @@ describe('useMenuPermission', () => {
     });
 
     expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringContaining('role_menu_permission'),
-      expect.any(Object)
+      expect.stringContaining('can_access_menu'),
+      {
+        user_id: new RecordId('user', 'test123'),
+        case_id: new RecordId('case', 'case123'),
+        menu_id: 'cases'
+      }
     );
     expect(result.current.hasPermission).toBe(true);
   });
@@ -220,7 +213,7 @@ describe('useDataPermission', () => {
         github_id: '--admin--',
         name: 'Admin User',
       },
-      currentUserCaseRoles: [],
+      selectedCaseId: null,
     });
 
     mockUseSurreal.mockReturnValue({
@@ -236,12 +229,8 @@ describe('useDataPermission', () => {
     expect(result.current.hasPermission).toBe(true);
   });
 
-  it('should check data permissions with rules', async () => {
-    const mockQuery = vi.fn()
-      // First call - global roles query
-      .mockResolvedValueOnce([[]])
-      // Second call - data permission rules query
-      .mockResolvedValueOnce([[{ rule_expression: 'true' }]]);
+  it('should check data permissions using SurrealDB built-in permissions', async () => {
+    const mockQuery = vi.fn().mockResolvedValueOnce([[]]);
     
     mockUseAuth.mockReturnValue({
       user: {
@@ -249,12 +238,7 @@ describe('useDataPermission', () => {
         github_id: 'test-user',
         name: 'Test User',
       },
-      currentUserCaseRoles: [
-        {
-          id: new RecordId('role', 'case_manager'),
-          name: 'case_manager',
-        },
-      ],
+      selectedCaseId: new RecordId('case', 'case123'),
     });
 
     mockUseSurreal.mockReturnValue({
@@ -267,25 +251,12 @@ describe('useDataPermission', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringContaining('data_permission_rule'),
-      expect.any(Object)
-    );
+    expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM case WHERE false LIMIT 0');
     expect(result.current.hasPermission).toBe(true);
   });
 
-  it('should evaluate rule expressions for specific records', async () => {
-    const recordData = {
-      created_by: new RecordId('user', 'test123'),
-    };
-
-    const mockQuery = vi.fn()
-      // First call - global roles query
-      .mockResolvedValueOnce([[]])
-      // Second call - data permission rules query
-      .mockResolvedValueOnce([[{ 
-        rule_expression: 'created_by = $auth.id' 
-      }]]);
+  it('should handle permission errors correctly', async () => {
+    const mockQuery = vi.fn().mockRejectedValueOnce(new Error('permission denied'));
     
     mockUseAuth.mockReturnValue({
       user: {
@@ -293,52 +264,30 @@ describe('useDataPermission', () => {
         github_id: 'test-user',
         name: 'Test User',
       },
-      currentUserCaseRoles: [
-        {
-          id: new RecordId('role', 'case_manager'),
-          name: 'case_manager',
-        },
-      ],
+      selectedCaseId: null,
     });
 
     mockUseSurreal.mockReturnValue({
       surreal: { query: mockQuery },
     });
 
-    const { result } = renderHook(
-      () => useDataPermission('case', 'update', recordData)
-    );
+    const { result } = renderHook(() => useDataPermission('case', 'read'));
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(result.current.hasPermission).toBe(true);
+    expect(result.current.hasPermission).toBe(false);
   });
 
-  it('should return false when no matching rules', async () => {
-    const mockQuery = vi.fn()
-      // First call - global roles query
-      .mockResolvedValueOnce([[]])
-      // Second call - data permission rules query - no rules
-      .mockResolvedValueOnce([[]]);
-    
+  it('should return false when no user is provided', async () => {
     mockUseAuth.mockReturnValue({
-      user: {
-        id: new RecordId('user', 'test123'),
-        github_id: 'test-user',
-        name: 'Test User',
-      },
-      currentUserCaseRoles: [
-        {
-          id: new RecordId('role', 'case_manager'),
-          name: 'case_manager',
-        },
-      ],
+      user: null,
+      selectedCaseId: null,
     });
 
     mockUseSurreal.mockReturnValue({
-      surreal: { query: mockQuery },
+      surreal: { query: vi.fn() },
     });
 
     const { result } = renderHook(() => useDataPermission('case', 'delete'));
