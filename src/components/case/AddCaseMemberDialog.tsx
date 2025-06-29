@@ -30,6 +30,7 @@ import {
 import { SelectChangeEvent } from '@mui/material/Select';
 import { CaseMember } from '@/src/types/caseMember';
 import { createUserAndAddToCase, CreateUserAndAddToCaseParams } from '@/src/services/caseMemberService';
+import { getCaseMemberRoles, Role } from '@/src/services/roleService';
 import { useTranslation } from 'react-i18next';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
@@ -46,7 +47,7 @@ interface FormData {
   password: string;
   email: string;
   name: string;
-  role: 'owner' | 'member';
+  role: RecordId | null;
 }
 
 interface FormErrors {
@@ -67,16 +68,44 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
     password: '',
     email: '',
     name: '',
-    role: 'member',
+    role: null,
   });
   
   const [errors, setErrors] = useState<FormErrors>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   
   const client = useSurrealClient();
   const { t } = useTranslation();
+
+  // Load roles from database
+  const loadRoles = React.useCallback(async () => {
+    setIsLoadingRoles(true);
+    try {
+      const roleList = await getCaseMemberRoles(client);
+      setRoles(roleList);
+      
+      // Set default role if roles are available and no role is selected
+      if (roleList.length > 0) {
+        setFormData(prev => {
+          if (!prev.role) {
+            // Find case_manager role or use first available role
+            const defaultRole = roleList.find(role => role.name === 'case_manager') || roleList[0];
+            return { ...prev, role: defaultRole.id };
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load roles:', error);
+      setApiError('加载角色列表失败');
+    } finally {
+      setIsLoadingRoles(false);
+    }
+  }, [client]);
 
   useEffect(() => {
     if (!open) {
@@ -86,14 +115,17 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         password: '',
         email: '',
         name: '',
-        role: 'member',
+        role: null,
       });
       setErrors({});
       setApiError(null);
       setIsCreating(false);
       setShowPassword(false);
+    } else {
+      // Load roles when dialog is opened
+      loadRoles();
     }
-  }, [open]);
+  }, [open, loadRoles]);
 
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
@@ -145,8 +177,12 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
     setApiError(null);
   };
 
-  const handleRoleChange = (event: SelectChangeEvent<'owner' | 'member'>) => {
-    setFormData(prev => ({ ...prev, role: event.target.value as 'owner' | 'member' }));
+  const handleRoleChange = (event: SelectChangeEvent<string>) => {
+    const selectedRoleId = event.target.value;
+    const selectedRole = roles.find(role => role.id.toString() === selectedRoleId);
+    if (selectedRole) {
+      setFormData(prev => ({ ...prev, role: selectedRole.id }));
+    }
   };
 
   const togglePasswordVisibility = () => {
@@ -155,6 +191,11 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
 
   const handleSubmit = async () => {
     if (!validateForm()) {
+      return;
+    }
+
+    if (!formData.role) {
+      setApiError('请选择角色');
       return;
     }
 
@@ -167,7 +208,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         password_hash: formData.password,
         email: formData.email.trim().toLowerCase(),
         name: formData.name.trim(),
-        role: formData.role,
+        roleId: formData.role, // 直接使用角色RecordId
       };
 
       const newMember = await createUserAndAddToCase(client, caseId, params);
@@ -178,6 +219,44 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
       setApiError((err as Error).message || t('create_user_error', '创建用户失败，请重试'));
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  // Get role icon by RecordId
+  const getRoleIcon = (roleId: RecordId) => {
+    const role = roles.find(r => r.id.toString() === roleId.toString());
+    return role ? getRoleIconByName(role.name) : <PersonIcon fontSize="small" />;
+  };
+
+  // Get role icon by role name
+  const getRoleIconByName = (roleName: string) => {
+    switch (roleName) {
+      case 'case_manager':
+        return <AdminIcon fontSize="small" />;
+      case 'admin':
+        return <AdminIcon fontSize="small" />;
+      default:
+        return <PersonIcon fontSize="small" />;
+    }
+  };
+
+  // Get role display name
+  const getRoleDisplayName = (roleName: string): string => {
+    switch (roleName) {
+      case 'case_manager':
+        return t('role_case_manager', '案件负责人');
+      case 'member':
+        return t('role_member', '案件成员');
+      case 'admin':
+        return t('role_admin', '系统管理员');
+      case 'assistant_lawyer':
+        return t('role_assistant_lawyer', '协办律师');
+      case 'claim_reviewer':
+        return t('role_claim_reviewer', '债权审核员');
+      case 'creditor_representative':
+        return t('role_creditor_representative', '债权人代表');
+      default:
+        return roleName;
     }
   };
 
@@ -293,27 +372,38 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
              <FormControl fullWidth>
                <InputLabel>{t('role_in_case_label', '在案件中的角色')}</InputLabel>
                <Select
-                 value={formData.role}
+                 value={formData.role ? formData.role.toString() : ''}
                  onChange={handleRoleChange}
                  label={t('role_in_case_label', '在案件中的角色')}
+                 disabled={isLoadingRoles}
                  startAdornment={
                    <InputAdornment position="start">
-                     {formData.role === 'owner' ? <AdminIcon /> : <PersonIcon />}
+                     {formData.role && getRoleIcon(formData.role)}
                    </InputAdornment>
                  }
                >
-                 <MenuItem value="member">
-                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                     <PersonIcon fontSize="small" />
-                     {t('role_member', '普通成员')}
-                   </Box>
-                 </MenuItem>
-                 <MenuItem value="owner">
-                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                     <AdminIcon fontSize="small" />
-                     {t('role_owner', '案件负责人')}
-                   </Box>
-                 </MenuItem>
+                 {isLoadingRoles ? (
+                   <MenuItem disabled>
+                     <CircularProgress size={20} />
+                     <Typography sx={{ ml: 1 }}>{t('loading_roles', '加载角色中...')}</Typography>
+                   </MenuItem>
+                 ) : (
+                   roles.map((role) => (
+                     <MenuItem key={role.id.toString()} value={role.id.toString()}>
+                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                         {getRoleIconByName(role.name)}
+                         <Box>
+                           <Typography variant="body2">{getRoleDisplayName(role.name)}</Typography>
+                           {role.description && (
+                             <Typography variant="caption" color="text.secondary">
+                               {role.description}
+                             </Typography>
+                           )}
+                         </Box>
+                       </Box>
+                     </MenuItem>
+                   ))
+                 )}
                </Select>
              </FormControl>
            </Grid>

@@ -1,14 +1,31 @@
+import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach, type MockedFunction, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type MockedFunction, afterEach, Mock } from 'vitest';
+import { ThemeProvider } from '@mui/material/styles';
+import { RecordId } from 'surrealdb';
 import AddCaseMemberDialog from '@/src/components/case/AddCaseMemberDialog';
 import * as caseMemberService from '@/src/services/caseMemberService';
+import { getCaseMemberRoles } from '@/src/services/roleService';
+import { createUserAndAddToCase } from '@/src/services/caseMemberService';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { createTheme } from '@mui/material/styles';
 
-// Mock the caseMemberService
+// Mock modules
+vi.mock('@/src/services/roleService');
 vi.mock('@/src/services/caseMemberService');
+vi.mock('@/src/contexts/SurrealProvider');
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, fallback: string) => fallback,
+  }),
+}));
 
 const mockSearchSystemUsers = caseMemberService.searchSystemUsers as MockedFunction<typeof caseMemberService.searchSystemUsers>;
 const mockAddCaseMember = caseMemberService.addCaseMember as MockedFunction<typeof caseMemberService.addCaseMember>;
+const mockGetCaseMemberRoles = getCaseMemberRoles as Mock;
+const mockCreateUserAndAddToCase = createUserAndAddToCase as Mock;
+const mockUseSurrealClient = useSurrealClient as Mock;
 
 const mockOnClose = vi.fn();
 const mockOnMemberAdded = vi.fn();
@@ -21,9 +38,41 @@ const systemUsersMock: caseMemberService.SystemUser[] = [
   { id: 'user:005', name: 'Eve Member' }, // 测试没有email的用户
 ];
 
+const mockRoles = [
+  {
+    id: new RecordId('role', 'case_manager'),
+    name: 'case_manager',
+    description: '案件管理人，负责案件的全面管理',
+  },
+  {
+    id: new RecordId('role', 'member'),
+    name: 'member',
+    description: '案件成员',
+  },
+  {
+    id: new RecordId('role', 'assistant_lawyer'),
+    name: 'assistant_lawyer',
+    description: '协办律师，协助处理案件事务',
+  },
+];
+
+const mockClient = {};
+const mockCaseId = new RecordId('case', 'test-case-id');
+
+const renderWithTheme = (component: React.ReactElement) => {
+  const theme = createTheme();
+  return render(
+    <ThemeProvider theme={theme}>
+      {component}
+    </ThemeProvider>
+  );
+};
+
 describe('AddCaseMemberDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseSurrealClient.mockReturnValue(mockClient);
+    mockGetCaseMemberRoles.mockResolvedValue(mockRoles);
     // Set default successful add member response
     mockAddCaseMember.mockResolvedValue({
       id: 'user:002',
@@ -456,6 +505,238 @@ describe('AddCaseMemberDialog', () => {
         'avatar_bob.png',
         'member'
       );
+    });
+  });
+
+  it('renders dialog with all form fields', async () => {
+    renderWithTheme(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    expect(screen.getByText('创建用户并添加到案件')).toBeInTheDocument();
+    expect(screen.getByLabelText('用户名')).toBeInTheDocument();
+    expect(screen.getByLabelText('密码')).toBeInTheDocument();
+    expect(screen.getByLabelText('邮箱')).toBeInTheDocument();
+    expect(screen.getByLabelText('显示姓名')).toBeInTheDocument();
+    
+    // Wait for roles to load
+    await waitFor(() => {
+      expect(screen.getByLabelText('在案件中的角色')).toBeInTheDocument();
+    });
+  });
+
+  it('loads and displays roles from database', async () => {
+    renderWithTheme(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    // Wait for roles to load
+    await waitFor(() => {
+      expect(mockGetCaseMemberRoles).toHaveBeenCalledWith(mockClient);
+    });
+
+    // Open role select dropdown
+    const roleSelect = screen.getByLabelText('在案件中的角色');
+    fireEvent.mouseDown(roleSelect);
+
+    // Check that roles are displayed
+    await waitFor(() => {
+      expect(screen.getByText('案件负责人')).toBeInTheDocument();
+      expect(screen.getByText('案件成员')).toBeInTheDocument();
+      expect(screen.getByText('协办律师')).toBeInTheDocument();
+    });
+  });
+
+  it('shows loading state while fetching roles', async () => {
+    // Mock slow role loading
+    mockGetCaseMemberRoles.mockImplementation(() => 
+      new Promise(resolve => setTimeout(() => resolve(mockRoles), 100))
+    );
+
+    renderWithTheme(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    // Open role select dropdown to see loading state
+    const roleSelect = screen.getByLabelText('在案件中的角色');
+    fireEvent.mouseDown(roleSelect);
+
+    expect(screen.getByText('加载角色中...')).toBeInTheDocument();
+
+    // Wait for roles to load
+    await waitFor(() => {
+      expect(screen.getByText('案件负责人')).toBeInTheDocument();
+    }, { timeout: 200 });
+  });
+
+  it('validates required fields', async () => {
+    renderWithTheme(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    // Wait for roles to load
+    await waitFor(() => {
+      expect(mockGetCaseMemberRoles).toHaveBeenCalled();
+    });
+
+    const submitButton = screen.getByText('创建用户并添加');
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('用户名不能为空')).toBeInTheDocument();
+      expect(screen.getByText('密码不能为空')).toBeInTheDocument();
+      expect(screen.getByText('邮箱不能为空')).toBeInTheDocument();
+      expect(screen.getByText('姓名不能为空')).toBeInTheDocument();
+    });
+  });
+
+  it('submits form with selected role', async () => {
+    const mockNewMember = {
+      id: 'user123',
+      caseId: mockCaseId,
+      roleInCase: 'owner' as const,
+      userName: 'Test User',
+      userEmail: 'test@example.com',
+      avatarUrl: 'https://i.pravatar.cc/150?u=test@example.com'
+    };
+
+    mockCreateUserAndAddToCase.mockResolvedValue(mockNewMember);
+
+    renderWithTheme(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    // Wait for roles to load and form to be ready
+    await waitFor(() => {
+      expect(mockGetCaseMemberRoles).toHaveBeenCalled();
+    }, { timeout: 3000 });
+
+    // Wait for roles to be in state and select to render
+    await waitFor(() => {
+      // Look for any role-related element instead of the exact label
+      const selects = screen.getAllByRole('combobox');
+      expect(selects).toHaveLength(1); // Should have the role select
+    }, { timeout: 3000 });
+
+    // Fill form
+    fireEvent.change(screen.getByLabelText('用户名'), {
+      target: { value: 'testuser' }
+    });
+    fireEvent.change(screen.getByLabelText('密码'), {
+      target: { value: 'password123' }
+    });
+    fireEvent.change(screen.getByLabelText('邮箱'), {
+      target: { value: 'test@example.com' }
+    });
+    fireEvent.change(screen.getByLabelText('显示姓名'), {
+      target: { value: 'Test User' }
+    });
+
+    // The role should already have a default value (case_manager), so we can submit directly
+    // Submit form
+    const submitButton = screen.getByText('创建用户并添加');
+    fireEvent.click(submitButton);
+
+    await waitFor(() => {
+      expect(mockCreateUserAndAddToCase).toHaveBeenCalledWith(
+        mockClient,
+        mockCaseId,
+        {
+          username: 'testuser',
+          password_hash: 'password123',
+          email: 'test@example.com',
+          name: 'Test User',
+          roleId: mockRoles[0].id // 使用默认选中的角色RecordId
+        }
+      );
+      expect(mockOnMemberAdded).toHaveBeenCalledWith(mockNewMember);
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  it('handles role loading error', async () => {
+    mockGetCaseMemberRoles.mockRejectedValue(new Error('Failed to load roles'));
+
+    renderWithTheme(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('加载角色列表失败')).toBeInTheDocument();
+    });
+  });
+
+  it('resets form when dialog is closed and reopened', async () => {
+    const { rerender } = renderWithTheme(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    // Fill form
+    fireEvent.change(screen.getByLabelText('用户名'), {
+      target: { value: 'testuser' }
+    });
+
+    // Close dialog
+    rerender(
+      <AddCaseMemberDialog
+        open={false}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    // Reopen dialog
+    rerender(
+      <AddCaseMemberDialog
+        open={true}
+        onClose={mockOnClose}
+        caseId={mockCaseId}
+        onMemberAdded={mockOnMemberAdded}
+      />
+    );
+
+    // Check form is reset
+    expect((screen.getByLabelText('用户名') as HTMLInputElement).value).toBe('');
+    
+    // Should reload roles
+    await waitFor(() => {
+      expect(mockGetCaseMemberRoles).toHaveBeenCalledTimes(2);
     });
   });
 });

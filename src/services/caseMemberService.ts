@@ -170,7 +170,7 @@ export interface CreateUserAndAddToCaseParams {
   password_hash: string;
   email: string;
   name: string;
-  role: 'owner' | 'member';
+  roleId: RecordId; // 直接使用角色RecordId，不再需要查询
 }
 
 export const createUserAndAddToCase = async (
@@ -178,12 +178,16 @@ export const createUserAndAddToCase = async (
   caseId: RecordId,
   params: CreateUserAndAddToCaseParams
 ): Promise<CaseMember> => {
-  console.log(`[SurrealDB API] Creating user ${params.username} and adding to case ${caseId} as ${params.role}`);
+  console.log(`[SurrealDB API] Creating/finding user ${params.username} and adding to case ${caseId} with role ${params.roleId}`);
   
   try {
+    let userId: RecordId;
+    let userName: string;
+    let userEmail: string;
+    
     // 首先检查用户名和邮箱是否已存在
     const existingUserQuery = `
-      SELECT id FROM user 
+      SELECT id, name, email FROM user 
       WHERE username = $username OR email = $email
       LIMIT 1;
     `;
@@ -194,44 +198,94 @@ export const createUserAndAddToCase = async (
     });
     
     if (existingResult && existingResult[0] && existingResult[0].result && existingResult[0].result.length > 0) {
-      throw new Error('用户名或邮箱已存在');
+      // 用户已存在，使用已存在的用户
+      const existingUser = existingResult[0].result[0];
+      userId = existingUser.id;
+      userName = existingUser.name;
+      userEmail = existingUser.email;
+      
+      console.log(`[SurrealDB API] User already exists: ${userId}, using existing user`);
+    } else {
+      // 用户不存在，创建新用户
+      const createUserQuery = `
+        CREATE user SET
+          username = $username,
+          password_hash = crypto::bcrypt::generate($password_hash),
+          email = $email,
+          name = $name,
+          created_at = time::now(),
+          updated_at = time::now(),
+          is_active = true;
+      `;
+      
+      const createUserResult = await client.query<[any[]]>(createUserQuery, {
+        username: params.username,
+        password_hash: params.password_hash,
+        email: params.email,
+        name: params.name
+      });
+      
+      if (!createUserResult || !createUserResult[0] || !createUserResult[0].length) {
+        throw new Error('Failed to create user');
+      }
+      
+      const newUser = createUserResult[0][0];
+      userId = newUser.id;
+      userName = params.name;
+      userEmail = params.email;
+      
+      console.log(`[SurrealDB API] Created new user: ${userId}`);
     }
     
-    // 创建新用户
-    const createUserQuery = `
-      CREATE user SET
-        username = $username,
-        password_hash = crypto::bcrypt::generate($password_hash),
-        email = $email,
-        name = $name,
-        created_at = time::now(),
-        updated_at = time::now(),
-        is_active = true;
+    // 检查用户是否已经在案件中
+    const existingMemberQuery = `
+      SELECT * FROM user_case_role 
+      WHERE user_id = $userId 
+      AND case_id = $caseId;
     `;
     
-    const createUserResult = await client.query<[any[]]>(createUserQuery, {
-      username: params.username,
-      password_hash: params.password_hash,
-      email: params.email,
-      name: params.name
+    const existingMemberResult = await client.query<[{ result: any[] }]>(existingMemberQuery, { 
+      userId, 
+      caseId 
     });
     
-    if (!createUserResult || !createUserResult[0] || !createUserResult[0].length) {
-      throw new Error('Failed to create user');
+    if (existingMemberResult && existingMemberResult[0] && existingMemberResult[0].result && existingMemberResult[0].result.length > 0) {
+      throw new Error('用户已在当前案件中');
     }
     
-    const newUser = createUserResult[0][0];
+    // 将用户添加到案件中，直接使用roleId
+    const createMemberQuery = `
+      CREATE user_case_role SET
+        user_id = $userId,
+        case_id = $caseId,
+        role_id = $roleId,
+        assigned_at = time::now();
+    `;
     
-    // 将用户添加到案件中
-    const caseMember = await addCaseMember(
-      client,
+    const createMemberResult = await client.query<[{ result: any[] }]>(createMemberQuery, { 
+      userId, 
+      caseId, 
+      roleId: params.roleId 
+    });
+    
+    if (!createMemberResult || !createMemberResult[0] || !createMemberResult[0].result || createMemberResult[0].result.length === 0) {
+      throw new Error('Failed to create case member relationship');
+    }
+    
+    // 获取角色信息用于返回
+    const roleQuery = `SELECT name FROM role WHERE id = $roleId LIMIT 1;`;
+    const roleResult = await client.query<[{ result: any[] }]>(roleQuery, { roleId: params.roleId });
+    const roleName = roleResult && roleResult[0] && roleResult[0].result && roleResult[0].result.length > 0 
+      ? roleResult[0].result[0].name : 'member';
+    
+    const caseMember: CaseMember = {
+      id: userId,
       caseId,
-      newUser.id,
-      params.name,
-      params.email,
-      `https://i.pravatar.cc/150?u=${params.email}`,
-      params.role
-    );
+      roleInCase: mapRoleToMemberRole(roleName),
+      userName,
+      userEmail,
+      avatarUrl: userEmail ? `https://i.pravatar.cc/150?u=${userEmail}` : `https://i.pravatar.cc/150?u=${userId}`
+    };
     
     return caseMember;
     
