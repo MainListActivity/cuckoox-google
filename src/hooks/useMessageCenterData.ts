@@ -127,7 +127,7 @@ export function useConversationsList(userId: RecordId | null): {
 
           // For simplicity, we'll use one live query ID, re-fetching on either event.
           // A more robust solution might involve multiple live queries or more specific backend events.
-          const { result: qid } = (await client.query<[{result: Uuid}]>(liveMessageQuery, {userId}))[0]; // Or use conversation query
+          const qid = (await client.query<[Uuid]>(liveMessageQuery, {userId}))[0]; // Or use conversation query
           if (qid) {
             liveQueryIdRef.current = qid;
             client.subscribeLive(qid, () => {
@@ -236,7 +236,7 @@ export function useSystemNotifications(userId: RecordId | null, caseId?: RecordI
           const params: { userId: RecordId; caseId?: RecordId | null } = { userId: userId };
           if (caseId !== undefined) params.caseId = caseId;
 
-          const { result: qid } = (await client.query<[{result: Uuid}]>(liveQuery, params))[0];
+          const qid = (await client.query<[Uuid]>(liveQuery, params))[0];
           if (qid) {
             liveQueryIdRef.current = qid;
             client.subscribeLive(qid, () => {

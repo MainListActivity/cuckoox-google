@@ -124,10 +124,10 @@ function createLiveMetricHook<TResultType, TDataType>(
           queryParams.limit = limit || 5;
         }
 
-        const result = await client.query<[{ result: TResultType[] }]>(finalQuery, queryParams);
+        const result = await client.query<[TResultType[]]>(finalQuery, queryParams);
 
-        if (result && result[0] && result[0].result) {
-          const parsed = parseResult(result[0].result, currentCaseId, limit);
+        if (result && result[0]) {
+          const parsed = parseResult(result[0], currentCaseId, limit);
           setMetricValue(parsed);
         } else {
           setMetricValue(defaultValue);
@@ -160,10 +160,10 @@ function createLiveMetricHook<TResultType, TDataType>(
 
           // Step 2: Set up the live query for the claim table
           const liveSelectQuery = `LIVE SELECT * FROM claim WHERE case_id = $caseId;`;
-          const queryResponse = await client.query<[{ result: Uuid }]>(liveSelectQuery, { caseId });
+          const queryResponse = await client.query<[Uuid]>(liveSelectQuery, { caseId });
           
-          if (queryResponse && queryResponse[0] && queryResponse[0].result) {
-            liveQueryId = queryResponse[0].result;
+          if (queryResponse && queryResponse[0]) {
+            liveQueryId = queryResponse[0];
             
             // Step 3: Subscribe to live events
             client.subscribeLive(liveQueryId, (_action, _data) => {

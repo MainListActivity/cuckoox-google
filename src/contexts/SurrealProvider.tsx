@@ -12,6 +12,7 @@ import {
     useQuery,
     useQueryClient,
 } from '@tanstack/react-query';
+import { access } from 'node:fs';
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = 'access_token';
@@ -27,7 +28,6 @@ interface SurrealProviderProps {
     database: string; // SurrealDB database
     auth?: AnyAuth; // Optional authentication details
     params?: Parameters<Surreal["connect"]>[1]; // Other connection params for Surreal.connect
-    token?: string; // Optional token for JWT authentication
     onConnect?: () => void;
     onDisconnect?: (code: number, reason: string) => void;
     onError?: (error: Error) => void;
@@ -109,7 +109,6 @@ export function SurrealProvider({
                                     database,
                                     auth,
                                     params,
-                                    token,
                                     onError,
                                     autoConnect = true,
                                     onSessionExpired,
@@ -141,9 +140,13 @@ export function SurrealProvider({
                 } else if (auth) { 
                     // Apply auth if provided during initial connect
                     await surrealInstance.signin(auth);
-                } else if (token) { 
+                } else if (accessToken) { 
                     // Or authenticate with token
-                    await surrealInstance.authenticate(token);
+                    if (onSessionExpired) {
+                        onSessionExpired();
+                        // 不设置错误状态，直接返回false，避免显示错误页面
+                        return false;
+                    }
                 }
                 
                 return conn && useRlt;

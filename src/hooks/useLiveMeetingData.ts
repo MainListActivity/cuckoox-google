@@ -49,16 +49,16 @@ export function useLiveMeetings(caseId: string | null): Meeting[] {
     const setupLiveSubscription = async () => {
       try {
         // Step 1: Fetch initial data and sort it
-        const queryResult = await client.query<[{ result: Meeting[] }]>('SELECT * FROM meeting WHERE case_id = $caseId', { caseId });
+        const queryResult = await client.query<[Meeting[]]>('SELECT * FROM meeting WHERE case_id = $caseId', { caseId });
         if (!isMounted) return;
-        const initialMeetings = queryResult && queryResult[0] && queryResult[0].result ? queryResult[0].result : [];
+        const initialMeetings = queryResult && queryResult[0] ? queryResult[0] : [];
         setMeetingsList(sortMeetings(initialMeetings));
         setError(null);
 
         // Step 2: Set up the live query
-        const liveQueryResult = await client.query<[{ result: Uuid }]>('LIVE SELECT * FROM meeting WHERE case_id = $caseId;', { caseId });
-        if (!isMounted || !liveQueryResult || !liveQueryResult[0] || !liveQueryResult[0].result) return;
-        liveQueryId = liveQueryResult[0].result;
+        const liveQueryResult = await client.query<[Uuid]>('LIVE SELECT * FROM meeting WHERE case_id = $caseId;', { caseId });
+        if (!isMounted || !liveQueryResult || !liveQueryResult[0]) return;
+        liveQueryId = liveQueryResult[0];
         if (!isMounted) return;
 
         // Step 3: Subscribe to live events

@@ -33,7 +33,7 @@ import {
   SupervisorAccount as MakeOwnerIcon, // Added for make owner action
 } from '@mui/icons-material';
 import { CaseMember } from '@/src/types/caseMember';
-import { fetchCaseMembers, removeCaseMember, changeCaseOwner } from '@/src/services/caseMemberService'; // Added changeCaseOwner
+import { fetchCaseMembers, removeCaseMember, changeCaseOwner, fetchCaseInfo, CaseInfo } from '@/src/services/caseMemberService';
 import AddCaseMemberDialog from './AddCaseMemberDialog';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
@@ -53,6 +53,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
   const currentUserId = user?.id; // Get current user's ID as string
 
   const [members, setMembers] = useState<CaseMember[]>([]);
+  const [caseInfo, setCaseInfo] = useState<CaseInfo | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false);
@@ -80,14 +81,23 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     'case_member_change_owner'
   ]);
 
+  // Helper function to check if a user is the case lead
+  const isCaseLead = (memberId: RecordId): boolean => {
+    return caseInfo?.case_lead_user_id?.toString() === memberId.toString();
+  };
+
 
   const loadMembers = useCallback(async () => {
     if (!caseId) return; // Do not load if caseId is not available
     setIsLoading(true);
     setError(null);
     try {
-      const fetchedMembers = await fetchCaseMembers(client,caseId);
+      const [fetchedMembers, fetchedCaseInfo] = await Promise.all([
+        fetchCaseMembers(client, caseId),
+        fetchCaseInfo(client, caseId)
+      ]);
       setMembers(fetchedMembers);
+      setCaseInfo(fetchedCaseInfo);
     } catch (err) {
       console.error('Failed to fetch case members:', err);
       setError((err as Error).message || t('case_members_error_load_failed', 'Failed to load members.'));
@@ -95,7 +105,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [caseId, t, showError]);
+  }, [caseId, client, t, showError]);
 
   useEffect(() => {
     if (caseId) {
@@ -164,16 +174,12 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsChangingOwner(true);
     setError(null);
     try {
-      // Find current owner
-      const currentOwner = members.find(m => m.roleInCase === 'owner');
-      const currentOwnerUserId = currentOwner?.id || currentUserId;
-      
-      await changeCaseOwner(client, caseId, selectedMemberForMenu.id, currentOwnerUserId);
+      await changeCaseOwner(client, caseId, selectedMemberForMenu.id);
       loadMembers();
-      showSuccess(t('case_members_success_owner_changed', `Ownership transferred to ${selectedMemberForMenu.userName}.`));
+      showSuccess(t('case_members_success_owner_changed', `Case lead transferred to ${selectedMemberForMenu.userName}.`));
     } catch (err) {
-      console.error('Failed to change owner:', err);
-      const errorMsg = (err as Error).message || t('case_members_error_owner_change_failed', 'Failed to change owner.');
+      console.error('Failed to change case lead:', err);
+      const errorMsg = (err as Error).message || t('case_members_error_owner_change_failed', 'Failed to change case lead.');
       setError(errorMsg);
       showError(errorMsg);
     } finally {
@@ -235,19 +241,26 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
             >
               <ListItemAvatar sx={{pl:1.5}}>
                 <Avatar src={member.avatarUrl}>
-                    {member.roleInCase === 'owner' ? <AdminIcon /> : <PersonIcon />}
+                    {isCaseLead(member.id) ? <AdminIcon /> : <PersonIcon />}
                 </Avatar>
               </ListItemAvatar>
               <ListItemText
                 primary={
-                  <Box component="span" display="flex" alignItems="center">
+                  <Box component="span" display="flex" alignItems="center" gap={1}>
                     {member.userName}
-                    {member.roleInCase === 'owner' && (
-                      <Chip icon={<AdminIcon />} label={t('role_owner', 'Owner')} size="small" color="primary" sx={{ ml: 1 }} variant="outlined"/>
+                    {isCaseLead(member.id) && (
+                      <Chip icon={<AdminIcon />} label={t('role_case_lead', 'Case Lead')} size="small" color="primary" sx={{ ml: 1 }} variant="outlined"/>
                     )}
-                     {member.roleInCase === 'member' && (
-                      <Chip icon={<PersonIcon />} label={t('role_member', 'Member')} size="small" sx={{ ml: 1 }} variant="outlined"/>
-                    )}
+                    {member.roles.map((role) => (
+                      <Chip 
+                        key={role.id.toString()}
+                        label={role.name} 
+                        size="small" 
+                        sx={{ ml: 0.5 }} 
+                        variant="outlined"
+                        title={role.description} // 添加描述作为tooltip
+                      />
+                    ))}
                   </Box>
                 }
                 secondary={
@@ -307,12 +320,12 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
         anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
       >
-        {selectedMemberForMenu?.roleInCase === 'member' && permissions['case_member_change_owner'] && (
+        {selectedMemberForMenu && !isCaseLead(selectedMemberForMenu.id) && permissions['case_member_change_owner'] && (
            <MenuItem onClick={handleOpenChangeOwnerConfirmDialog}>
             <ListItemIcon>
               <MakeOwnerIcon fontSize="small" />
             </ListItemIcon>
-            {t('make_owner_action', 'Make Case Owner')}
+            {t('make_owner_action', 'Make Case Lead')}
           </MenuItem>
         )}
         {permissions['case_member_remove'] && (

@@ -73,3 +73,4 @@ This is a legal case management system with the following key architectural comp
 - Strict TypeScript configuration with experimental decorators
 - E2E tests require Playwright browser installation
 - Uses CSS custom properties for theming integration MUI
+- 在涉及到surreal的代码中尽可能使用`RecordId`而不是`string`
