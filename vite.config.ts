@@ -67,7 +67,8 @@ export default defineConfig(({ command, mode }) => {
     server: {
       fs: {
         strict: false
-      }
+      },
+      allowedHosts:['dev.cuckoox.cn']
     },
     test: { // Vitest configuration
       globals: true,
