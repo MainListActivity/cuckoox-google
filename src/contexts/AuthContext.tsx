@@ -170,14 +170,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Handle the current backend response which returns 501 Not Implemented
       if (response.status === 501) {
         console.warn('Token refresh not yet implemented on backend:', data.message);
-        // For now, we'll extend the current token expiry by 1 hour as a fallback
-        const currentExpiresAt = localStorage.getItem('token_expires_at'); // Updated key name
-        if (currentExpiresAt) {
-          const newExpiryTime = parseInt(currentExpiresAt, 10) + (60 * 60 * 1000); // Add 1 hour
-          localStorage.setItem('token_expires_at', newExpiryTime.toString()); // Updated key name
-          console.log('Token expiry extended by 1 hour as fallback');
-          return true;
-        }
+        clearAuthState();//Token过期且无法刷新的情况下，直接重新登录
         return false;
       }
 

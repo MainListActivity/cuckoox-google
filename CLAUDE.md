@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. 
 
-Always use Chinese output.
+Always respond in Chinese-simplified.
 
 ## Development Commands
 
@@ -73,4 +73,4 @@ This is a legal case management system with the following key architectural comp
 - Strict TypeScript configuration with experimental decorators
 - E2E tests require Playwright browser installation
 - Uses CSS custom properties for theming integration MUI
-- 在涉及到surreal的代码中尽可能使用`RecordId`而不是`string`
+- 在涉及到surreal的方法、存储代码中尽可能使用`RecordId`而不是`string`
