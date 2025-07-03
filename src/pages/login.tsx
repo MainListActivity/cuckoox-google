@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth,AppUser } from '@/src/contexts/AuthContext';
-import authService from '@/src/services/authService'; // For OIDC login
+// import authService from '@/src/services/authService'; // GitHub OIDC login - 暂时屏蔽
 import { useSurrealClient, useSurreal } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
@@ -26,7 +26,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '@mui/material';
-import { mdiGithub, mdiEye, mdiEyeOff } from '@mdi/js';
+import { mdiEye, mdiEyeOff } from '@mdi/js';
 import Logo from '../components/Logo';
 
 const LoginPage: React.FC = () => {
@@ -50,9 +50,12 @@ const LoginPage: React.FC = () => {
   const [showTurnstile, setShowTurnstile] = useState<boolean>(false);
 
   const searchParams = new URLSearchParams(location.search);
-  const isAdminLoginAttempt = searchParams.get('admin') === 'true';
+  // 默认使用租户登录，除非明确指定root模式
   const isRootAdminMode = searchParams.get('root') === 'true';
+  const isAdminLoginAttempt = !isRootAdminMode; // 默认为租户登录
   const justRegistered = searchParams.get('registered') === 'true';
+  // 从URL获取租户代码
+  const tenantFromUrl = searchParams.get('tenant') || '';
 
   // Unsplash image URL with random parameter for variety
   const unsplashImageUrl = `https://images.unsplash.com/photo-1557804506-669a67965ba0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2074&q=80`;
@@ -62,6 +65,13 @@ const LoginPage: React.FC = () => {
     // Use the 'user' destructured from useAuth() context directly
     return user?.github_id === '--admin--';
   }, [user]);
+
+  // 从URL参数填充租户代码
+  useEffect(() => {
+    if (tenantFromUrl && !isRootAdminMode) {
+      setTenantCode(tenantFromUrl.toUpperCase());
+    }
+  }, [tenantFromUrl, isRootAdminMode]);
 
   useEffect(() => {
     if (!isAdminLoginAttempt && isLoggedIn && !isAuthContextLoading) {
@@ -102,14 +112,14 @@ const LoginPage: React.FC = () => {
       
       if (isRootAdminMode) {
         // Root管理员登录
-        apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/root-admins/login`;
+        apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/root-admins/login`;
         requestBody = {
           username: adminUsername,
           password: adminPassword,
         };
       } else {
         // 租户管理员或普通用户登录
-        apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/login`;
+        apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/auth/login`;
         requestBody = {
           username: adminUsername,
           password: adminPassword,
@@ -219,18 +229,17 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleOidcLogin = async () => {
-    setAdminLoginError(null);
-    if (isProcessingAdminLogin) return;
-
-    // GitHub 登录暂时不需要 Turnstile 验证
-    try {
-      await authService.loginRedirect();
-    } catch (error) {
-      console.error("Error initiating OIDC login redirect:", error);
-      setAdminLoginError(t('error_oidc_init_failed', 'OIDC login initiation failed. Please try again.'));
-    }
-  };
+  // GitHub OIDC 登录功能已屏蔽
+  // const handleOidcLogin = async () => {
+  //   setAdminLoginError(null);
+  //   if (isProcessingAdminLogin) return;
+  //   try {
+  //     await authService.loginRedirect();
+  //   } catch (error) {
+  //     console.error("Error initiating OIDC login redirect:", error);
+  //     setAdminLoginError(t('error_oidc_init_failed', 'OIDC login initiation failed. Please try again.'));
+  //   }
+  // };
 
   if (isAuthContextLoading && !isProcessingAdminLogin) {
     return <GlobalLoader message={t('loading_session', 'Loading session...')} />;
@@ -360,8 +369,8 @@ const LoginPage: React.FC = () => {
                 <Alert severity="error" sx={{ mb: 3 }}>{adminLoginError}</Alert>
               )}
 
-              {(isAdminLoginAttempt || isRootAdminMode) ? (
-                /* Tenant/Root Admin Login Form */
+              {/* Always show login form - either tenant or root admin */}
+              {/* Tenant/Root Admin Login Form */}
                 <form onSubmit={handleAdminFormLogin}>
                   {!isRootAdminMode && (
                     <TextField
@@ -481,7 +490,7 @@ const LoginPage: React.FC = () => {
                   <Button 
                     component="button" 
                     type="button" 
-                    onClick={() => navigate('/login')} 
+                    onClick={() => navigate(isRootAdminMode ? '/login' : '/login?root=true')} 
                     variant="outlined" 
                     fullWidth
                     sx={{ 
@@ -492,10 +501,11 @@ const LoginPage: React.FC = () => {
                   >
                     {isRootAdminMode 
                       ? t('back_to_tenant_login_link', 'Back to Tenant Login')
-                      : t('back_to_github_login_link', 'Back to GitHub login')
+                      : t('switch_to_root_admin_link', 'Switch to Root Administrator')
                     }
                   </Button>
 
+                  {/* 暂时屏蔽注册功能
                   <Box sx={{ textAlign: 'center', mt: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                       {t('no_account_yet', "Don't have an account?")}{' '}
@@ -517,89 +527,8 @@ const LoginPage: React.FC = () => {
                       </Link>
                     </Typography>
                   </Box>
+                  */}
                 </form>
-              ) : (
-                /* GitHub Login */
-                <>
-                  <Button
-                    onClick={handleOidcLogin}
-                    disabled={isAuthContextLoading}
-                    fullWidth
-                    variant="contained"
-                    size="large"
-                    sx={{ 
-                      py: 1.5,
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      fontSize: '1rem',
-                      fontWeight: 600,
-                      backgroundColor: '#24292e',
-                      color: 'white',
-                      boxShadow: theme.shadows[4],
-                      '&:hover': {
-                        backgroundColor: '#1a1e22',
-                        boxShadow: theme.shadows[8],
-                      },
-                      '&:disabled': {
-                        backgroundColor: '#586069',
-                        color: '#959da5',
-                      },
-                    }}
-                    startIcon={<SvgIcon><path d={mdiGithub} /></SvgIcon>}
-                  >
-                    {t('login_github_button', 'Sign in with GitHub')}
-                  </Button>
-                  
-                  <Typography 
-                    variant="body2" 
-                    color="text.secondary" 
-                    sx={{ mt: 2, mb: 3, textAlign: 'center' }}
-                  >
-                    {t('login_github_redirect_info', 'You will be redirected to GitHub for authentication.')}
-                  </Typography>
-
-                  <Divider sx={{ my: 3 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('or', 'OR')}
-                    </Typography>
-                  </Divider>
-
-                  <Box sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Link
-                      component="button"
-                      type="button"
-                      onClick={() => navigate('/login?admin=true')}
-                      variant="body2"
-                      sx={{
-                        textDecoration: 'none',
-                        color: theme.palette.primary.main,
-                        fontWeight: 500,
-                        '&:hover': {
-                          textDecoration: 'underline',
-                        },
-                      }}
-                    >
-                      {t('tenant_login_link', 'Tenant Login')}
-                    </Link>
-                    <Link
-                      component="button"
-                      type="button"
-                      onClick={() => navigate('/login?root=true')}
-                      variant="body2"
-                      sx={{
-                        textDecoration: 'none',
-                        color: theme.palette.secondary.main,
-                        fontWeight: 500,
-                        '&:hover': {
-                          textDecoration: 'underline',
-                        },
-                      }}
-                    >
-                      {t('root_admin_login_link', 'Root Administrator')}
-                    </Link>
-                  </Box>
-                </>
-              )}
 
               {/* Footer */}
               <Box sx={{ mt: 4, textAlign: 'center' }}>
