@@ -48,6 +48,7 @@ const AdminCreateClaimAttachmentsPage = React.lazy(() => import('@/src/pages/adm
 // Note: ReviewStatusManagementPage and RoleManagementPage were not previously imported in App.tsx, so no path update needed here for them.
 const PermissionManagementPage = React.lazy(() => import('@/src/pages/admin/manage/permissions'));
 const CaseMemberManagementPage = React.lazy(() => import('@/src/pages/case-members/index'));
+const RootAdminPage = React.lazy(() => import('@/src/pages/root-admin/index'));
 
 
 function App() {
@@ -117,8 +118,8 @@ function App() {
 
     // If connected, proceed with the rest of the application logic
 
-    // Define routes that don't need the main layout (e.g., Login, OidcCallback, Register)
-    if (location.pathname === '/login' || location.pathname === '/oidc-callback' || location.pathname === '/register') {
+    // Define routes that don't need the main layout (e.g., Login, OidcCallback, Register, Root Admin)
+    if (location.pathname === '/login' || location.pathname === '/oidc-callback' || location.pathname === '/register' || location.pathname === '/root-admin') {
         return (
             <CustomThemeProvider>
                 <SnackbarProvider>
@@ -128,6 +129,7 @@ function App() {
                                 <Route path="/login" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
                                 <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
                                 <Route path="/register" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <RegisterPage/>}/>
+                                <Route path="/root-admin" element={<RootAdminPage/>}/>
                             </Routes>
                         </Suspense>
                         {import.meta.env.DEV && <DebugPanel />}

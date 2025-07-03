@@ -42,6 +42,7 @@ const LoginPage: React.FC = () => {
 
   const [adminUsername, setAdminUsername] = useState<string>('');
   const [adminPassword, setAdminPassword] = useState<string>('');
+  const [tenantCode, setTenantCode] = useState<string>('');
   const [isProcessingAdminLogin, setIsProcessingAdminLogin] = useState<boolean>(false);
   const [adminLoginError, setAdminLoginError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -50,6 +51,7 @@ const LoginPage: React.FC = () => {
 
   const searchParams = new URLSearchParams(location.search);
   const isAdminLoginAttempt = searchParams.get('admin') === 'true';
+  const isRootAdminMode = searchParams.get('root') === 'true';
   const justRegistered = searchParams.get('registered') === 'true';
 
   // Unsplash image URL with random parameter for variety
@@ -94,17 +96,34 @@ const LoginPage: React.FC = () => {
 
   const handleAdminLoginWithToken = async (token: string) => {
     try {
-      // 调用后端密码登录API，包含 Turnstile token
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/login`, {
+      // 根据登录模式选择不同的API端点
+      let apiUrl: string;
+      let requestBody: any;
+      
+      if (isRootAdminMode) {
+        // Root管理员登录
+        apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/root-admins/login`;
+        requestBody = {
+          username: adminUsername,
+          password: adminPassword,
+        };
+      } else {
+        // 租户管理员或普通用户登录
+        apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/login`;
+        requestBody = {
+          username: adminUsername,
+          password: adminPassword,
+          tenant_code: tenantCode,
+          turnstile_token: token,
+        };
+      }
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          username: adminUsername,
-          password: adminPassword,
-          turnstile_token: token,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -114,29 +133,48 @@ const LoginPage: React.FC = () => {
 
       const data = await response.json();
       
-      // 使用SurrealProvider存储令牌
-      setTokens(data.access_token, data.refresh_token, data.expires_in);
+      if (isRootAdminMode) {
+        // Root管理员登录成功
+        console.log('Root admin successfully logged in.');
+        
+        // 创建Root管理员用户对象
+        const rootAdminUser: AppUser = {
+          id: new RecordId('root_admin', data.admin.username),
+          github_id: `root_admin_${data.admin.username}`,
+          name: data.admin.full_name,
+          email: data.admin.email,
+        };
 
-      // 使用SurrealDB认证（使用JWT令牌）
-      await client.authenticate(data.access_token);
-
-      console.log('Admin successfully logged in with password.');
-
-      // 创建用户对象
-      const adminAppUser: AppUser = {
-        id: new RecordId('user', data.user.id.split(':')[1]), // 从 "user:xxx" 格式提取ID
-        github_id: `local_${data.user.username}`,
-        name: data.user.name,
-        email: data.user.email,
-      };
-
-      setAuthState(adminAppUser, null);
-      
-      // 根据用户角色决定跳转页面
-      if (data.user.roles.includes('admin')) {
-        navigate('/admin', { replace: true });
+        setAuthState(rootAdminUser, null);
+        
+        // 跳转到Root管理员控制台
+        navigate('/root-admin', { replace: true });
       } else {
-        navigate('/dashboard', { replace: true });
+        // 租户用户登录成功
+        // 使用SurrealProvider存储令牌
+        setTokens(data.access_token, data.refresh_token, data.expires_in);
+
+        // 使用SurrealDB认证（使用JWT令牌）
+        await client.authenticate(data.access_token);
+
+        console.log('User successfully logged in with password.');
+
+        // 创建用户对象
+        const userAppUser: AppUser = {
+          id: new RecordId('user', data.user.id.split(':')[1]), // 从 "user:xxx" 格式提取ID
+          github_id: `local_${data.user.username}`,
+          name: data.user.name,
+          email: data.user.email,
+        };
+
+        setAuthState(userAppUser, null);
+        
+        // 根据用户角色决定跳转页面
+        if (data.user.roles.includes('admin')) {
+          navigate('/admin', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
       }
 
     } catch (error: unknown) {
@@ -159,9 +197,19 @@ const LoginPage: React.FC = () => {
         throw new Error(t('error_admin_credentials_required', 'Username and password are required.'));
       }
 
-      // 显示 Turnstile 验证
+      // 如果不是Root管理员模式，需要验证租户编码
+      if (!isRootAdminMode && !tenantCode) {
+        throw new Error(t('error_tenant_code_required', 'Tenant code is required.'));
+      }
+
+      // 显示 Turnstile 验证（Root管理员不需要）
       setIsProcessingAdminLogin(true);
-      setShowTurnstile(true);
+      if (isRootAdminMode) {
+        // Root管理员直接登录，不需要Turnstile验证
+        await handleAdminLoginWithToken('');
+      } else {
+        setShowTurnstile(true);
+      }
       
     } catch (error: unknown) {
       console.error("Admin form validation failed:", error);
@@ -284,9 +332,11 @@ const LoginPage: React.FC = () => {
               <Box sx={{ mb: 4, textAlign: 'center' }}>
                 <Logo size="large" variant="full" color="primary" />
                 <Typography variant="body1" color="text.secondary">
-                  {isAdminLoginAttempt 
-                    ? t('password_login_subtitle', 'Sign in with Username and Password')
-                    : t('login_subtitle', 'Sign in to your account')
+                  {isRootAdminMode
+                    ? t('root_admin_login_subtitle', 'Root Administrator Login')
+                    : isAdminLoginAttempt 
+                      ? t('tenant_login_subtitle', 'Tenant Login')
+                      : t('login_subtitle', 'Sign in to your account')
                   }
                 </Typography>
               </Box>
@@ -310,9 +360,32 @@ const LoginPage: React.FC = () => {
                 <Alert severity="error" sx={{ mb: 3 }}>{adminLoginError}</Alert>
               )}
 
-              {isAdminLoginAttempt ? (
-                /* Admin Login Form */
+              {(isAdminLoginAttempt || isRootAdminMode) ? (
+                /* Tenant/Root Admin Login Form */
                 <form onSubmit={handleAdminFormLogin}>
+                  {!isRootAdminMode && (
+                    <TextField
+                      id="tenantCode"
+                      label={t('tenant_code_label', 'Tenant Code')}
+                      type="text"
+                      value={tenantCode}
+                      onChange={(e) => {
+                        setTenantCode(e.target.value.toUpperCase());
+                        // Clear error when user starts typing
+                        if (adminLoginError) setAdminLoginError(null);
+                      }}
+                      required
+                      fullWidth
+                      variant="outlined"
+                      margin="normal"
+                      placeholder={t('tenant_code_placeholder', 'Enter tenant code')}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                        },
+                      }}
+                    />
+                  )}
                   <TextField
                     id="adminUsername"
                     label={t('admin_username_label', 'Username')}
@@ -327,7 +400,10 @@ const LoginPage: React.FC = () => {
                     fullWidth
                     variant="outlined"
                     margin="normal"
-                    placeholder={t('admin_username_placeholder', 'Enter admin username')}
+                    placeholder={isRootAdminMode 
+                      ? t('root_admin_username_placeholder', 'Enter root admin username')
+                      : t('admin_username_placeholder', 'Enter username')
+                    }
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: 2,
@@ -414,7 +490,10 @@ const LoginPage: React.FC = () => {
                       py: 1,
                     }}
                   >
-                    {t('back_to_github_login_link', 'Back to GitHub login')}
+                    {isRootAdminMode 
+                      ? t('back_to_tenant_login_link', 'Back to Tenant Login')
+                      : t('back_to_github_login_link', 'Back to GitHub login')
+                    }
                   </Button>
 
                   <Box sx={{ textAlign: 'center', mt: 2 }}>
@@ -485,7 +564,7 @@ const LoginPage: React.FC = () => {
                     </Typography>
                   </Divider>
 
-                  <Box sx={{ textAlign: 'center' }}>
+                  <Box sx={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 1 }}>
                     <Link
                       component="button"
                       type="button"
@@ -500,7 +579,23 @@ const LoginPage: React.FC = () => {
                         },
                       }}
                     >
-                      {t('password_login_link', 'Login with Username/Password')}
+                      {t('tenant_login_link', 'Tenant Login')}
+                    </Link>
+                    <Link
+                      component="button"
+                      type="button"
+                      onClick={() => navigate('/login?root=true')}
+                      variant="body2"
+                      sx={{
+                        textDecoration: 'none',
+                        color: theme.palette.secondary.main,
+                        fontWeight: 500,
+                        '&:hover': {
+                          textDecoration: 'underline',
+                        },
+                      }}
+                    >
+                      {t('root_admin_login_link', 'Root Administrator')}
                     </Link>
                   </Box>
                 </>
