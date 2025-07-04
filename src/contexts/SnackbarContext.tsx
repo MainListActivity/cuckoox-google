@@ -8,6 +8,7 @@ export interface SnackbarContextType {
   showError: (message: string) => void;
   showWarning: (message: string) => void;
   showInfo: (message: string) => void;
+  enqueueSnackbar: (message: string, severity?: AlertColor) => void;
 }
 
 const SnackbarContext = createContext<SnackbarContextType | undefined>(undefined);
@@ -21,6 +22,12 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
   const [message, setMessage] = useState('');
   const [severity, setSeverity] = useState<AlertColor>('success'); // Add severity state
   // const { currentTheme } = useTheme(); // Get current theme
+
+  const enqueueSnackbar = (msg: string, sev: AlertColor = 'info') => {
+    setMessage(msg);
+    setSeverity(sev);
+    setOpen(true);
+  };
 
   const showSuccess = React.useCallback((newMessage: string) => {
     setMessage(newMessage);
@@ -66,7 +73,7 @@ export const SnackbarProvider: React.FC<SnackbarProviderProps> = ({ children }) 
 
 
   return (
-    <SnackbarContext.Provider value={{ showSuccess, showError, showWarning, showInfo }}>
+    <SnackbarContext.Provider value={{ showSuccess, showError, showWarning, showInfo, enqueueSnackbar }}>
       {children}
       <Snackbar
         open={open}

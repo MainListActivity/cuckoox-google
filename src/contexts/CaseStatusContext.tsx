@@ -5,15 +5,17 @@ export type CaseStatus = "立案" | "公告" | "债权申报" | "第一次债权
 interface CaseStatusContextType {
   caseStatus: CaseStatus;
   setCaseStatus: (status: CaseStatus) => void;
+  isLoading: boolean;
 }
 
 const CaseStatusContext = createContext<CaseStatusContextType | undefined>(undefined);
 
 export const CaseStatusProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [caseStatus, setCaseStatus] = useState<CaseStatus>("债权申报"); // Default to "债权申报" for initial access
+  const [caseStatus, setCaseStatus] = useState<CaseStatus>("债权申报");
+  const [isLoading] = useState(false); // Placeholder for potential async load
 
   return (
-    <CaseStatusContext.Provider value={{ caseStatus, setCaseStatus }}>
+    <CaseStatusContext.Provider value={{ caseStatus, setCaseStatus, isLoading }}>
       {children}
     </CaseStatusContext.Provider>
   );
