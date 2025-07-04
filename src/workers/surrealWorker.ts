@@ -29,6 +29,10 @@ export interface SurrealWorkerAPI {
   kill(uuid: string): Promise<void>;
   /** Authenticate with JWT */
   authenticate(token: string): Promise<void>;
+  /** Sign in with username/password etc */
+  signin(auth: AnyAuth): Promise<void>;
+  /** Invalidate current session */
+  invalidate(): Promise<void>;
   /** Close the underlying SurrealDB connection */
   close(): Promise<void>;
 }
@@ -48,8 +52,7 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
 
   async query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
     const res = await this.db.query<T[]>(sql, vars);
-    // Surreal returns array of result sets; return first for convenience
-    return (res as any)[0] as T;
+    return res as any;
   }
 
   async mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
@@ -93,6 +96,14 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
 
   async authenticate(token: string): Promise<void> {
     await this.db.authenticate(token);
+  }
+
+  async signin(auth: AnyAuth): Promise<void> {
+    await this.db.signin(auth);
+  }
+
+  async invalidate(): Promise<void> {
+    await this.db.invalidate();
   }
 
   async close(): Promise<void> {
