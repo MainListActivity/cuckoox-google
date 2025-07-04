@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth,AppUser } from '@/src/contexts/AuthContext';
 // import authService from '@/src/services/authService'; // GitHub OIDC login - 暂时屏蔽
-import { useSurrealClient, useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { surrealClient } from '@/src/lib/surrealClient';
 import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader';
@@ -31,7 +32,6 @@ import Logo from '../components/Logo';
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
-  const client = useSurrealClient();
   const { setTokens } = useSurreal();
   const auth = useAuth(); // Store the full context
   const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState, user } = auth; // Destructure user here
@@ -165,7 +165,8 @@ const LoginPage: React.FC = () => {
         setTokens(data.access_token, data.refresh_token, data.expires_in);
 
         // 使用SurrealDB认证（使用JWT令牌）
-        await client.authenticate(data.access_token);
+        const surrealProxy = await surrealClient();
+        await surrealProxy.authenticate(data.access_token);
 
         console.log('User successfully logged in with password.');
 
