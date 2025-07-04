@@ -35,10 +35,24 @@ export interface SurrealWorkerAPI {
   invalidate(): Promise<void>;
   /** Close the underlying SurrealDB connection */
   close(): Promise<void>;
+  /** Store auth / refresh tokens and optionally expiry */
+  setTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void>;
+  /** Clear in-memory tokens */
+  clearTokens(): Promise<void>;
+  /** Get stored access token */
+  getStoredAccessToken(): Promise<string | null>;
+  /** Get cached user info */
+  getCurrentUser(): Promise<any>;
+  /** Cache user info inside worker */
+  setCurrentUser(user: any): Promise<void>;
 }
 
 class SurrealWorkerImpl implements SurrealWorkerAPI {
   private db = new Surreal();
+  private accessToken: string | null = null;
+  private refreshToken: string | null = null;
+  private tokenExpiresAt: number | null = null;
+  private currentUser: any = null;
 
   async connect({ endpoint, namespace, database, params, auth }: SurrealWorkerAPI['connect'] extends (arg: infer P) => any ? P : never): Promise<boolean> {
     if (this.db.status === 'connected') return true;
@@ -99,11 +113,41 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
   }
 
   async signin(auth: AnyAuth): Promise<void> {
-    await this.db.signin(auth);
+    const result = await this.db.signin(auth);
+    return result as any;
   }
 
   async invalidate(): Promise<void> {
     await this.db.invalidate();
+    await this.clearTokens();
+  }
+
+  async setTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void> {
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken ?? null;
+    this.tokenExpiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
+  }
+
+  async clearTokens(): Promise<void> {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.tokenExpiresAt = null;
+  }
+
+  async getStoredAccessToken(): Promise<string | null> {
+    // If token is about to expire (<1min), consider expired
+    if (this.tokenExpiresAt && Date.now() >= this.tokenExpiresAt - 60_000) {
+      return null;
+    }
+    return this.accessToken;
+  }
+
+  async getCurrentUser(): Promise<any> {
+    return this.currentUser;
+  }
+
+  async setCurrentUser(user: any): Promise<void> {
+    this.currentUser = user;
   }
 
   async close(): Promise<void> {

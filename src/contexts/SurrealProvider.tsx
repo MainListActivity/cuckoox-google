@@ -151,22 +151,31 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     clearTokens();
   }, [client]);
 
-  const setTokens = useCallback((accessToken: string, refreshToken?: string, expiresIn?: number) => {
+  const setTokens = useCallback(async (accessToken: string, refreshToken?: string, expiresIn?: number) => {
+    if (client) {
+      await client.setTokens(accessToken, refreshToken, expiresIn);
+    }
+    // Persist in localStorage for reload resilience
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
     if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
     if (expiresIn) {
       const expiresAt = Date.now() + expiresIn * 1000;
       localStorage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAt));
     }
-  }, []);
+  }, [client]);
 
-  const clearTokens = useCallback(() => {
+  const clearTokens = useCallback(async () => {
+    if (client) {
+      await client.clearTokens();
+    }
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
-  }, []);
+  }, [client]);
 
-  const getStoredAccessToken = useCallback(() => localStorage.getItem(ACCESS_TOKEN_KEY), []);
+  const getStoredAccessToken = useCallback((): string | null => {
+    return localStorage.getItem(ACCESS_TOKEN_KEY);
+  }, []);
 
   const handleSessionError = useCallback<SurrealContextValue['handleSessionError']>(async (e) => {
     if (isSessionExpiredError(e)) {
