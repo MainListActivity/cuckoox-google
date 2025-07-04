@@ -1,10 +1,10 @@
 {
   "snapshot": "POPULATED_FROM_SETTINGS",
-  "install": "npm install",
+  "install": "bun install",
   "terminals": [
     {
       "name": "Run React.js",
-      "command": "npm run dev"
+      "command": "bun run dev"
     }
   ]
 }
