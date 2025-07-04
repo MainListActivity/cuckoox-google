@@ -1,3 +1,4 @@
+/// <reference types="react" />
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Box,
@@ -80,13 +81,14 @@ import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { messageService } from '@/src/services/messageService';
 import { RecordId } from 'surrealdb';
 
-// 消息类型
+// 消息类型 (与后端 `type` 字段保持一致，便于类型收窄)
 const messageTypes = {
-  system: { label: '系统通知', icon: <Notifications />, color: 'info' },
-  robot: { label: '案件提醒', icon: <SmartToy />, color: 'warning' },
-  user: { label: '用户消息', icon: <Person />, color: 'primary' },
-  group: { label: '群组消息', icon: <Group />, color: 'secondary' },
-};
+  BUSINESS_NOTIFICATION: { label: '系统通知', icon: <Notifications />, color: 'info' },
+  CASE_ROBOT_REMINDER: { label: '案件提醒', icon: <SmartToy />, color: 'warning' },
+  IM: { label: '用户消息', icon: <Person />, color: 'primary' },
+  GROUP_IM: { label: '群组消息', icon: <Group />, color: 'secondary' },
+} as const;
+type MessageTypeKey = keyof typeof messageTypes;
 
 // Define a union type for items in the left panel list
 type DisplayListItem = (ConversationSummary & { itemType: 'conversation' }) | (MessageType & { itemType: 'notification' });
@@ -148,9 +150,13 @@ const MessageCenterPage: React.FC = () => {
     return notificationUnread + conversationUnread;
   }, [notifications, conversations]);
 
-  // 系统消息和聊天消息分类
-  const systemMessages = useMemo(() =>
-    notifications.filter((n: any) => n.type === 'SYSTEM_NOTIFICATION' || n.type === 'CASE_ROBOT_REMINDER'),
+  // 系统/提醒消息 (目前未直接使用，但保留示例)
+  const systemMessages = useMemo(
+    () =>
+      notifications.filter(
+        (n): n is CaseRobotReminderMessage | BusinessNotificationMessage =>
+          n.type === 'BUSINESS_NOTIFICATION' || n.type === 'CASE_ROBOT_REMINDER'
+      ),
     [notifications]
   );
 
@@ -161,7 +167,7 @@ const MessageCenterPage: React.FC = () => {
 
   // Combine conversations and notifications into a single list for display, sorted by timestamp
   const combinedList = useMemo((): DisplayListItem[] => {
-    const convItems: DisplayListItem[] = conversations.map((c: any) => ({
+    const convItems: DisplayListItem[] = conversations.map((c: ConversationSummary) => ({
       ...c,
       itemType: 'conversation' as const,
       created_at: c.last_message_timestamp,
@@ -169,7 +175,7 @@ const MessageCenterPage: React.FC = () => {
       is_read: c.unread_count === 0
     }));
 
-    const notifItems: DisplayListItem[] = notifications.map((n: any) => ({
+    const notifItems: DisplayListItem[] = notifications.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) => ({
       ...n,
       itemType: 'notification' as const
     }));
@@ -219,14 +225,16 @@ const MessageCenterPage: React.FC = () => {
     setSelectedMessageId('');
   };
 
-  const handleSelectItem = useCallback(async (item: DisplayListItem) => {
+  const handleSelectItem = useCallback(async (item: DisplayListItem): Promise<void> => {
     setSelectedItem(item);
 
     if (item.itemType === 'notification' && !item.is_read && client) {
       try {
         // Optimistic UI update
-        setNotifications((prev: any) => // Use the destructured setter
-          prev.map((n: any) => n.id === item.id ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n)
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
+            n.id === item.id ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n
+          )
         );
         await client.merge(String(item.id), {
           is_read: true,
@@ -237,8 +245,10 @@ const MessageCenterPage: React.FC = () => {
         console.error("Error marking notification as read:", error);
         showError('标记通知为已读失败');
         // Revert optimistic update on error
-        setNotifications((prev: any) => // Use the destructured setter
-          prev.map((n: any) => n.id === item.id ? { ...n, is_read: false, updated_at: item.updated_at } : n) // Revert to original updated_at
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
+            n.id === item.id ? { ...n, is_read: false, updated_at: (item as BusinessNotificationMessage | CaseRobotReminderMessage).updated_at } : n
+          )
         );
       }
     }
@@ -249,13 +259,15 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item: any) => item.id === selectedMessageId);
+      const item = [...notifications, ...conversations].find((item) => item.id === selectedMessageId);
       if (!item) return;
 
       // Optimistic UI update
       if ('is_read' in item) {
-        setNotifications((prev: any) =>
-          prev.map((n: any) => n.id === selectedMessageId ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n)
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
+            n.id === selectedMessageId ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n
+          )
         );
       }
 
@@ -277,13 +289,15 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item: any) => item.id === selectedMessageId);
+      const item = [...notifications, ...conversations].find((item) => item.id === selectedMessageId);
       if (!item) return;
 
       // Optimistic UI update
       if ('is_read' in item) {
-        setNotifications((prev: any) =>
-          prev.map((n: any) => n.id === selectedMessageId ? { ...n, is_read: false, updated_at: new Date().toISOString() } : n)
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
+            n.id === selectedMessageId ? { ...n, is_read: false, updated_at: new Date().toISOString() } : n
+          )
         );
       }
 
@@ -305,14 +319,14 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item: any) => item.id === selectedMessageId);
+      const item = [...notifications, ...conversations].find((item) => item.id === selectedMessageId);
       if (!item) return;
 
       // Optimistic UI update
-      if ('type' in item && (item.type === 'SYSTEM_NOTIFICATION' || item.type === 'CASE_ROBOT_REMINDER')) {
-        setNotifications((prev: any) => prev.filter((n: any) => n.id !== selectedMessageId));
+      if ('type' in item && (item.type === 'BUSINESS_NOTIFICATION' || item.type === 'CASE_ROBOT_REMINDER')) {
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) => prev.filter((n: CaseRobotReminderMessage | BusinessNotificationMessage) => n.id !== selectedMessageId));
       } else {
-        setConversations((prev: any) => prev.filter((c: any) => c.id !== selectedMessageId));
+        setConversations((prev: ConversationSummary[]) => prev.filter((c: ConversationSummary) => c.id !== selectedMessageId));
       }
 
       await client.delete(String(selectedMessageId));
@@ -330,7 +344,7 @@ const MessageCenterPage: React.FC = () => {
     }
   }, [selectedMessageId, client, notifications, conversations, selectedItem, setNotifications, setConversations, showSuccess, showError]);
 
-  const handleArchive = useCallback(async () => {
+  const handleArchive = useCallback(async (): Promise<void> => {
     if (!selectedMessageId || !client) return;
 
     try {
@@ -340,7 +354,7 @@ const MessageCenterPage: React.FC = () => {
       });
 
       // Optimistic UI update
-      const updatedList = combinedList.filter((item) => item.id !== selectedMessageId);
+      const updatedList: DisplayListItem[] = combinedList.filter((item: DisplayListItem) => item.id !== selectedMessageId);
       if (selectedItem && selectedItem.id === selectedMessageId) {
         setSelectedItem(null);
       }
@@ -371,7 +385,7 @@ const MessageCenterPage: React.FC = () => {
       isSender: true,
       senderName: user.name || '我',
     };
-    setCurrentConversation(prev => [...prev, newMessage]);
+    setCurrentConversation((prev: ChatMessageDisplay[]) => [...prev, newMessage]);
     setChatInput('');
 
     try {
@@ -400,7 +414,7 @@ const MessageCenterPage: React.FC = () => {
       console.error('Error sending message:', error);
       showError('发送消息失败');
       // Revert optimistic update on error
-      setCurrentConversation((prev: ChatMessageDisplay[]) => prev.filter(msg => msg.id !== newMessage.id));
+      setCurrentConversation((prev: ChatMessageDisplay[]) => prev.filter((msg: ChatMessageDisplay) => msg.id !== newMessage.id));
       setChatInput(chatInput);
     }
       }, [chatInput, selectedItem, user, setConversations, showWarning, showError]);
@@ -417,10 +431,10 @@ const MessageCenterPage: React.FC = () => {
 
   const filteredDisplayList = useMemo((): DisplayListItem[] => {
     if (currentFilter === 'im') {
-      return combinedList.filter(item => item.itemType === 'conversation');
+      return combinedList.filter((item: DisplayListItem) => item.itemType === 'conversation');
     }
     if (currentFilter === 'reminders') {
-      return combinedList.filter(item => item.itemType === 'notification');
+      return combinedList.filter((item: DisplayListItem) => item.itemType === 'notification');
     }
     return combinedList; // 'all'
   }, [combinedList, currentFilter]);
@@ -447,8 +461,8 @@ const MessageCenterPage: React.FC = () => {
             variant="dot"
             invisible={!message.unread}
           >
-            <Avatar sx={{ bgcolor: theme.palette[messageTypes[message.type as keyof typeof messageTypes]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main }}>
-              {typeof message.avatar === 'string' ? message.avatar : messageTypes[message.type as keyof typeof messageTypes]?.icon}
+            <Avatar sx={{ bgcolor: theme.palette[messageTypes[message.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main }}>
+              {typeof message.avatar === 'string' ? message.avatar : messageTypes[message.type as MessageTypeKey]?.icon}
             </Avatar>
           </Badge>
         </ListItemAvatar>
@@ -485,7 +499,7 @@ const MessageCenterPage: React.FC = () => {
             <IconButton
               edge="end"
               size="small"
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                 e.stopPropagation();
                 handleMenuOpen(e, message.id);
               }}
@@ -522,7 +536,7 @@ const MessageCenterPage: React.FC = () => {
                 fullWidth
                 placeholder="搜索消息..."
                 value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchKeyword(e.target.value)}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -534,7 +548,7 @@ const MessageCenterPage: React.FC = () => {
               />
               <Tabs
                 value={activeTab}
-                onChange={(e, newValue) => setActiveTab(newValue)}
+                onChange={(e: React.SyntheticEvent, newValue: number) => setActiveTab(newValue)}
                 sx={{ mt: 1 }}
                 variant="fullWidth"
               >
@@ -623,7 +637,7 @@ const MessageCenterPage: React.FC = () => {
                   // 聊天消息
                   <>
                     <Box p={2} sx={{ flexGrow: 1, overflow: 'auto' }}>
-                      {currentConversation.map((msg) => (
+                      {currentConversation.map((msg: ChatMessageDisplay) => (
                         <Box
                           key={msg.id}
                           sx={{
@@ -666,7 +680,7 @@ const MessageCenterPage: React.FC = () => {
                         fullWidth
                         placeholder="输入消息..."
                         value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setChatInput(e.target.value)}
                         multiline
                         rows={2}
                         InputProps={{
@@ -697,11 +711,11 @@ const MessageCenterPage: React.FC = () => {
                         <Box display="flex" alignItems="center" mb={2}>
                           <Avatar
                             sx={{
-                              bgcolor: theme.palette[messageTypes[selectedItem.type as keyof typeof messageTypes]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                              bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
                               mr: 2,
                             }}
                           >
-                            {messageTypes[selectedItem.type as keyof typeof messageTypes]?.icon}
+                            {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
                           </Avatar>
                           <Box>
                             <Typography variant="h6">{selectedItem.title}</Typography>
