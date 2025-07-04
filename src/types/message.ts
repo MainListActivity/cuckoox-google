@@ -8,6 +8,8 @@ export interface BaseMessage {
   is_read: boolean;
   case_id?: RecordId | string; // Optional link to a case
   content: string; // Main textual content
+  priority?: 'high' | 'normal'; // generic priority, mainly for notifications
+  title?: string; // optional title for notifications
 }
 
 // Specific type for IM (Instant Messaging) messages

@@ -80,6 +80,7 @@ import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { messageService } from '@/src/services/messageService';
 import { RecordId } from 'surrealdb';
+import { idToStr } from '@/src/utils/id';
 
 // 消息类型 (与后端 `type` 字段保持一致，便于类型收窄)
 const messageTypes = {
@@ -217,9 +218,9 @@ const MessageCenterPage: React.FC = () => {
   }, [currentConversation]);
 
   // 处理菜单
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, messageId: string) => {
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, messageId: RecordId | string) => {
     setAnchorEl(event.currentTarget);
-    setSelectedMessageId(messageId);
+    setSelectedMessageId(idToStr(messageId));
   };
 
   const handleMenuClose = () => {
@@ -261,7 +262,7 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item) => item.id === selectedMessageId);
+      const item = [...notifications, ...conversations].find((item) => idToStr(item.id) === selectedMessageId);
       if (!item) return;
 
       // Optimistic UI update
@@ -291,7 +292,7 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item) => item.id === selectedMessageId);
+      const item = [...notifications, ...conversations].find((item) => idToStr(item.id) === selectedMessageId);
       if (!item) return;
 
       // Optimistic UI update
@@ -321,7 +322,7 @@ const MessageCenterPage: React.FC = () => {
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item) => item.id === selectedMessageId);
+      const item = [...notifications, ...conversations].find((item) => idToStr(item.id) === selectedMessageId);
       if (!item) return;
 
       // Optimistic UI update
@@ -356,7 +357,7 @@ const MessageCenterPage: React.FC = () => {
       });
 
       // Optimistic UI update
-      const updatedList: DisplayListItem[] = combinedList.filter((item: DisplayListItem) => item.id !== selectedMessageId);
+      const updatedList: DisplayListItem[] = combinedList.filter((item: DisplayListItem) => idToStr(item.id) !== selectedMessageId);
       if (selectedItem && selectedItem.id === selectedMessageId) {
         setSelectedItem(null);
       }
