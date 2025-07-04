@@ -98,8 +98,8 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       }
 
       // Restore stored access token (if not passed via props)
-      const { accessToken, expiresAt } = await proxy.getStoredTokens();
-      if (accessToken && !isTokenExpired(expiresAt)) {
+      const { accessToken } = await proxy.getStoredTokens();
+      if (accessToken) {
         try {
           await proxy.authenticate(accessToken);
         } catch (_) {
