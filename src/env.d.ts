@@ -2,7 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_URL: string;
-  readonly VITE_SURREALDB_URL: string;
+  readonly VITE_SURREALDB_WS_URL: string;
   readonly VITE_SURREALDB_NAMESPACE: string;
   readonly VITE_SURREALDB_DATABASE: string;
   readonly VITE_OIDC_AUTHORITY: string;

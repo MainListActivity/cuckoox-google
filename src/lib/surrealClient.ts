@@ -19,7 +19,7 @@ export async function surrealClient(): Promise<Remote<SurrealWorkerAPI>> {
 
   clientPromise = (async () => {
     await proxy.connect({
-      endpoint: import.meta.env.VITE_SURREALDB_URL || 'http://localhost:8000/rpc',
+      endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'http://localhost:8000/rpc',
       namespace: import.meta.env.VITE_SURREALDB_NS || 'test',
       database: import.meta.env.VITE_SURREALDB_DB || 'test',
     });
