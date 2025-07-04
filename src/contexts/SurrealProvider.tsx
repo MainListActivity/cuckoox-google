@@ -142,16 +142,56 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   }, [client]);
 
   const setTokens = useCallback(async (accessToken: string, refreshToken?: string, expiresIn?: number) => {
-    if (client) {
-      await client.setTokens(accessToken, refreshToken, expiresIn);
+    let proxy = client;
+
+    // Ensure we have a connected client first
+    if (!proxy || typeof proxy.setTokens !== 'function') {
+      await connect();
+      proxy = client;
     }
-  }, [client]);
+
+    // Fallback – obtain proxy directly if still unavailable
+    if (!proxy || typeof proxy.setTokens !== 'function') {
+      try {
+        proxy = await surrealClient();
+        setClient(proxy);
+      } catch (e) {
+        console.error('SurrealProvider.setTokens: failed to obtain SurrealDB proxy', e);
+        return;
+      }
+    }
+
+    try {
+      await proxy.setTokens(accessToken, refreshToken, expiresIn);
+    } catch (e) {
+      console.error('SurrealProvider.setTokens: error while setting tokens', e);
+    }
+  }, [client, connect]);
 
   const clearTokens = useCallback(async () => {
-    if (client) {
-      await client.clearTokens();
+    let proxy = client;
+
+    if (!proxy || typeof proxy.clearTokens !== 'function') {
+      await connect();
+      proxy = client;
     }
-  }, [client]);
+
+    if (!proxy || typeof proxy.clearTokens !== 'function') {
+      try {
+        proxy = await surrealClient();
+        setClient(proxy);
+      } catch (e) {
+        console.error('SurrealProvider.clearTokens: failed to obtain SurrealDB proxy', e);
+        return;
+      }
+    }
+
+    try {
+      await proxy.clearTokens();
+    } catch (e) {
+      console.error('SurrealProvider.clearTokens: error while clearing tokens', e);
+    }
+  }, [client, connect]);
 
   const getStoredAccessToken = useCallback((): string | null => {
     // Worker is source of truth; direct read unavailable synchronously
