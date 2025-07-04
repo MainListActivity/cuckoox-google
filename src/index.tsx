@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from '@/src/App';
 import { AuthProvider } from '@/src/contexts/AuthContext';
-import { SurrealProvider } from '@/src/contexts/SurrealProvider'; // <-- IMPORT NEW PROVIDER
+import { SurrealProvider } from '@/src/contexts/SurrealProvider';
 import '@/src/styles/main.css'; // Tailwind CSS and global styles
 // REMOVED: import { connectSurrealDB } from './lib/surreal';
 import { I18nextProvider } from 'react-i18next';
@@ -50,15 +50,10 @@ root.render(
         <SurrealProvider
           endpoint={surrealEndpoint}
           namespace={surrealNamespace}
-        database={surrealDatabase}
-        onSessionExpired={handleSessionExpired}
-        // autoConnect is typically handled by the provider's useEffect internally based on props.
-        // If your SurrealProvider implementation from the previous step explicitly uses an autoConnect prop,
-        // you can set it here. Otherwise, it will likely attempt connection on mount.
-        // For the example SurrealProvider provided earlier, it attempts connection on mount if endpoint/ns/db are present.
-        // Let's assume autoConnect={true} behavior is default or managed by an effect in SurrealProvider.
-        // If an explicit prop is needed, add it: autoConnect={true}
-      >
+          database={surrealDatabase}
+          onSessionExpired={handleSessionExpired}
+        >
+          {/* SurrealWorkerProvider does not yet expose sessionExpired handler; can extend later */}
           <StyledEngineProvider injectFirst> {/* ADDED */}
             <BrowserRouter>
               <AuthProvider>
