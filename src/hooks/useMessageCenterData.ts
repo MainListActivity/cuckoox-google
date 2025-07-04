@@ -5,8 +5,10 @@ import {
   Message, 
   ConversationSummary, 
   CaseRobotReminderMessage, 
-  BusinessNotificationMessage
+  BusinessNotificationMessage,
+  IMMessage
 } from '@/src/types/message';
+import { messageService } from '@/src/services/messageService';
 
 // --- useConversationsList Hook ---
 interface RawConversationParticipant {

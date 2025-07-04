@@ -41,16 +41,37 @@ DEFINE FIELD updated_at ON case TYPE datetime READONLY VALUE time::now() ASSERT 
 
 
 -- ------------------------------
+-- TABLE: case_bot
+-- ------------------------------
+
+DEFINE TABLE case_bot TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'read'],
+  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'create'],
+  FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'update'],
+  FOR delete WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'delete'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'delete'];
+
+DEFINE FIELD case_id ON case_bot TYPE record<case> PERMISSIONS FULL;
+DEFINE FIELD bot_user_id ON case_bot TYPE record<user> PERMISSIONS FULL;
+DEFINE FIELD bot_name ON case_bot TYPE string PERMISSIONS FULL;
+DEFINE FIELD avatar_url ON case_bot TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD is_active ON case_bot TYPE bool DEFAULT true PERMISSIONS FULL;
+DEFINE FIELD created_at ON case_bot TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
+DEFINE FIELD updated_at ON case_bot TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
+
+DEFINE INDEX case_bot_case_idx ON case_bot FIELDS case_id UNIQUE;
+DEFINE INDEX case_bot_user_idx ON case_bot FIELDS bot_user_id UNIQUE;
+
+-- ------------------------------
 -- TABLE: case_bot_subscription
 -- ------------------------------
 
-DEFINE TABLE case_bot_subscription TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select, create, delete WHERE user_id = $auth.id OR $auth.roles CONTAINS 'admin', FOR update NONE;
+DEFINE TABLE case_bot_subscription TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select, create, delete WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin', FOR update NONE;
 
-DEFINE FIELD case_id ON case_bot_subscription TYPE record<case> PERMISSIONS FULL;
-DEFINE FIELD subscribed_at ON case_bot_subscription TYPE datetime VALUE time::now() PERMISSIONS FULL;
+DEFINE FIELD case_bot_id ON case_bot_subscription TYPE record<case_bot> PERMISSIONS FULL;
 DEFINE FIELD user_id ON case_bot_subscription TYPE record<user> PERMISSIONS FULL;
+DEFINE FIELD subscribed_at ON case_bot_subscription TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
 
-DEFINE INDEX user_case_subscription_idx ON case_bot_subscription FIELDS user_id, case_id UNIQUE;
+DEFINE INDEX user_case_bot_subscription_idx ON case_bot_subscription FIELDS user_id, case_bot_id UNIQUE;
 
 
 -- ------------------------------
@@ -256,31 +277,109 @@ DEFINE FIELD updated_at ON meeting TYPE datetime READONLY VALUE time::now() ASSE
 DEFINE INDEX meeting_case_idx ON meeting FIELDS case_id;
 
 
-
-
 -- ------------------------------
 -- TABLE: message
 -- ------------------------------
 
 DEFINE TABLE message TYPE NORMAL SCHEMAFULL PERMISSIONS 
-  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'read'] OR sender_id = $auth.id OR receiver_id = $auth.id,
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'read'] OR sender_id = $auth.id OR target_user_id = $auth.id OR conversation_id.participants CONTAINS $auth.id,
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'create'],
   FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'update'] OR sender_id = $auth.id,
   FOR delete WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'delete'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'delete'] OR sender_id = $auth.id;
 
+DEFINE FIELD type ON message TYPE string DEFAULT 'IM' ASSERT $value INSIDE ['IM', 'CASE_ROBOT_REMINDER', 'BUSINESS_NOTIFICATION', 'SYSTEM_NOTIFICATION'] PERMISSIONS FULL;
+DEFINE FIELD conversation_id ON message TYPE option<record<conversation>> PERMISSIONS FULL;
+DEFINE FIELD sender_id ON message TYPE record<user> PERMISSIONS FULL;
+DEFINE FIELD sender_name ON message TYPE string PERMISSIONS FULL;
+DEFINE FIELD target_user_id ON message TYPE option<record<user>> PERMISSIONS FULL;
 DEFINE FIELD case_id ON message TYPE option<record<case>> PERMISSIONS FULL;
-DEFINE FIELD chat_id ON message TYPE string PERMISSIONS FULL;
-DEFINE FIELD content ON message TYPE any PERMISSIONS FULL;
-DEFINE FIELD created_at ON message TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
-DEFINE FIELD message_type ON message TYPE string DEFAULT 'USER_CHAT' PERMISSIONS FULL;
+DEFINE FIELD content ON message TYPE string PERMISSIONS FULL;
+DEFINE FIELD title ON message TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD priority ON message TYPE string DEFAULT 'NORMAL' ASSERT $value INSIDE ['LOW', 'NORMAL', 'HIGH', 'URGENT'] PERMISSIONS FULL;
+DEFINE FIELD action_link ON message TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD is_read ON message TYPE bool DEFAULT false PERMISSIONS FULL;
 DEFINE FIELD read_at ON message TYPE option<datetime> PERMISSIONS FULL;
-DEFINE FIELD receiver_id ON message TYPE option<string> PERMISSIONS FULL;
-DEFINE FIELD sender_id ON message TYPE string PERMISSIONS FULL;
+DEFINE FIELD is_archived ON message TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD archived_at ON message TYPE option<datetime> PERMISSIONS FULL;
+DEFINE FIELD created_at ON message TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
 DEFINE FIELD updated_at ON message TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
 
-DEFINE INDEX message_case_created_idx ON message FIELDS case_id, created_at;
-DEFINE INDEX message_chat_created_idx ON message FIELDS chat_id, created_at;
+DEFINE INDEX message_conversation_created_idx ON message FIELDS conversation_id, created_at DESC;
+DEFINE INDEX message_case_created_idx ON message FIELDS case_id, created_at DESC;
+DEFINE INDEX message_target_user_idx ON message FIELDS target_user_id, is_read, created_at DESC;
+DEFINE INDEX message_sender_idx ON message FIELDS sender_id, created_at DESC;
 
+-- ------------------------------
+-- TABLE: conversation
+-- ------------------------------
+
+DEFINE TABLE conversation TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id IN participants OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id,
+  FOR update WHERE $auth.id IN participants OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD type ON conversation TYPE string DEFAULT 'DIRECT' ASSERT $value INSIDE ['DIRECT', 'GROUP', 'SYSTEM'] PERMISSIONS FULL;
+DEFINE FIELD name ON conversation TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD description ON conversation TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD avatar_url ON conversation TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD case_id ON conversation TYPE option<record<case>> PERMISSIONS FULL;
+DEFINE FIELD created_by ON conversation TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD participants ON conversation TYPE array<record<user>> PERMISSIONS FULL;
+DEFINE FIELD is_archived ON conversation TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD last_message_at ON conversation TYPE option<datetime> PERMISSIONS FULL;
+DEFINE FIELD created_at ON conversation TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
+DEFINE FIELD updated_at ON conversation TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
+
+DEFINE INDEX conversation_participants_idx ON conversation FIELDS participants;
+DEFINE INDEX conversation_case_idx ON conversation FIELDS case_id;
+DEFINE INDEX conversation_last_message_idx ON conversation FIELDS last_message_at DESC;
+
+-- ------------------------------
+-- TABLE: conversation_participant
+-- ------------------------------
+
+DEFINE TABLE conversation_participant TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id,
+  FOR update WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD conversation_id ON conversation_participant TYPE record<conversation> PERMISSIONS FULL;
+DEFINE FIELD user_id ON conversation_participant TYPE record<user> PERMISSIONS FULL;
+DEFINE FIELD role ON conversation_participant TYPE string DEFAULT 'MEMBER' ASSERT $value INSIDE ['MEMBER', 'ADMIN', 'OWNER'] PERMISSIONS FULL;
+DEFINE FIELD joined_at ON conversation_participant TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
+DEFINE FIELD last_read_at ON conversation_participant TYPE option<datetime> PERMISSIONS FULL;
+DEFINE FIELD unread_count ON conversation_participant TYPE int DEFAULT 0 PERMISSIONS FULL;
+DEFINE FIELD is_muted ON conversation_participant TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD notification_preference ON conversation_participant TYPE string DEFAULT 'ALL' ASSERT $value INSIDE ['ALL', 'MENTIONS', 'NONE'] PERMISSIONS FULL;
+DEFINE FIELD created_at ON conversation_participant TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
+DEFINE FIELD updated_at ON conversation_participant TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
+
+DEFINE INDEX conversation_participant_unique_idx ON conversation_participant FIELDS conversation_id, user_id UNIQUE;
+DEFINE INDEX conversation_participant_user_idx ON conversation_participant FIELDS user_id;
+DEFINE INDEX conversation_participant_unread_idx ON conversation_participant FIELDS user_id, unread_count;
+
+-- ------------------------------
+-- TABLE: message_attachment
+-- ------------------------------
+
+DEFINE TABLE message_attachment TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE message_id.sender_id = $auth.id OR message_id.receiver_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id,
+  FOR update WHERE message_id.sender_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE message_id.sender_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD message_id ON message_attachment TYPE record<message> PERMISSIONS FULL;
+DEFINE FIELD file_name ON message_attachment TYPE string PERMISSIONS FULL;
+DEFINE FIELD file_type ON message_attachment TYPE string PERMISSIONS FULL;
+DEFINE FIELD file_size ON message_attachment TYPE int PERMISSIONS FULL;
+DEFINE FIELD mime_type ON message_attachment TYPE string PERMISSIONS FULL;
+DEFINE FIELD s3_object_key ON message_attachment TYPE string PERMISSIONS FULL;
+DEFINE FIELD thumbnail_url ON message_attachment TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD created_at ON message_attachment TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
+
+DEFINE INDEX message_attachment_message_idx ON message_attachment FIELDS message_id;
 
 -- ------------------------------
 -- TABLE: notification_rule
@@ -583,3 +682,13 @@ FOR $op_id IN ['claim_list_view', 'claim_review'] {
 
 -- 给admin用户赋予admin角色（全局角色）
 RELATE user:admin->has_role->role:admin SET assigned_at = time::now();
+
+-- 初始化通知规则数据
+INSERT INTO notification_rule (procedure_phase, trigger_condition, message_template, notification_frequency, notification_time, is_active, created_at, updated_at) VALUES 
+('立案', '受理时间+25天-当前时间 <= 5天', '距离最迟公告时间仅有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now()),
+('公告', '公告时间+30天-当前时间 <= 3天', '距离开始债权申报时间还有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now()),
+('债权申报', '公告时间+3月-当前时间 <= 3天', '距离债权申报截止还有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now()),
+('债权人第一次会议', '债权申报截止时间+15日-当前时间 <= 3天', '距离第一次债权人会议截止时间还有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now()),
+('裁定重整', '裁定重整时间+6月-当前时间 <= 5天', '距离提交重整计划截止时间还有 {{days}} 天，超时未提交将宣告破产清算', 'DAILY', '10:00', true, time::now(), time::now()),
+('延迟提交重整计划', '延迟提交重整计划时间+3月-当前时间 <= 5天', '距离提交重整计划截止时间还有 {{days}} 天，超时未提交将宣告破产清算', 'DAILY', '10:00', true, time::now(), time::now()),
+('债权人第二次会议', '提交重整计划时间+15日-当前时间 <= 3天', '距离第二次债权人会议通知截止时间还有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now());
