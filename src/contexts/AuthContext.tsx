@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback, useMemo } from 'react';
 import authService from '@/src/services/authService';
 // import { db } from '@/src/lib/surreal'; // REMOVED
 import {useSurreal} from '@/src/contexts/SurrealProvider'; // ADDED
@@ -63,6 +63,7 @@ export interface AuthContextType {
 
   // Case and Role specific state and functions
   selectedCaseId: RecordId | null; // Store as string (e.g. "case:xxxx")
+  selectedCase: Case | null;
   userCases: Case[];
   currentUserCaseRoles: Role[];
   isCaseLoading: boolean; // For loading cases and case-specific roles
@@ -131,6 +132,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const [selectedCaseId, setSelectedCaseId] = useState<RecordId | null>(deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null'));
   const [userCases, setUserCases] = useState<Case[]>([]);
+  const selectedCase = useMemo(() => {
+    return userCases.find(c => selectedCaseId && String(c.id) === String(selectedCaseId)) || null;
+  }, [userCases, selectedCaseId]);
   const [currentUserCaseRoles, setCurrentUserCaseRoles] = useState<Role[]>([]);
   const [isCaseLoading, setIsCaseLoading] = useState<boolean>(false);
   const [navMenuItems, setNavMenuItems] = useState<NavItemType[] | null>(null);
@@ -693,11 +697,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   return (
     <AuthContext.Provider value={{ 
-      isLoggedIn, user, oidcUser, setAuthState, logout, isLoading,
-      selectedCaseId, userCases, currentUserCaseRoles, isCaseLoading, selectCase, hasRole, refreshUserCasesAndRoles,
-      navMenuItems, isMenuLoading, // Expose new menu state
-      navigateTo, clearNavigateTo, // Expose navigation state and clear function
-      __TEST_setCurrentUserCaseRoles, __TEST_setSelectedCaseId, __TEST_setUserCases // Expose test-only methods
+      isLoggedIn,
+      user,
+      oidcUser,
+      setAuthState,
+      logout,
+      isLoading,
+      selectedCaseId,
+      selectedCase,
+      userCases,
+      currentUserCaseRoles,
+      isCaseLoading,
+      selectCase,
+      hasRole,
+      refreshUserCasesAndRoles,
+      navMenuItems,
+      isMenuLoading, // Expose new menu state
+      navigateTo,
+      clearNavigateTo, // Expose navigation state and clear function
+      __TEST_setCurrentUserCaseRoles,
+      __TEST_setSelectedCaseId,
+      __TEST_setUserCases // Expose test-only methods
     }}>
       {children}
     </AuthContext.Provider>

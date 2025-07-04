@@ -32,7 +32,7 @@ import { CaseMember } from '@/src/types/caseMember';
 import { createUserAndAddToCase, CreateUserAndAddToCaseParams } from '@/src/services/caseMemberService';
 import { getCaseMemberRoles, Role } from '@/src/services/roleService';
 import { useTranslation } from 'react-i18next';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { surrealClient } from '@/src/lib/surrealClient';
 import { RecordId } from 'surrealdb';
 
 interface AddCaseMemberDialogProps {
@@ -78,13 +78,14 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   
-  const client = useSurrealClient();
+  // Client will be fetched lazily using surrealClient()
   const { t } = useTranslation();
 
   // Load roles from database
   const loadRoles = React.useCallback(async () => {
     setIsLoadingRoles(true);
     try {
+      const client = await surrealClient();
       const roleList = await getCaseMemberRoles(client);
       setRoles(roleList);
       
@@ -105,7 +106,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
     } finally {
       setIsLoadingRoles(false);
     }
-  }, [client]);
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -211,6 +212,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         roleId: formData.role, // 直接使用角色RecordId
       };
 
+      const client = await surrealClient();
       const newMember = await createUserAndAddToCase(client, caseId, params);
       onMemberAdded(newMember);
       onClose();

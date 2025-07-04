@@ -20,6 +20,7 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
+  ListItemButton,
   Checkbox,
   Typography,
   CircularProgress,
@@ -27,7 +28,7 @@ import {
 } from '@mui/material';
 import { Person, Group } from '@mui/icons-material';
 import { useAuth } from '@/src/contexts/AuthContext';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { surrealClient } from '@/src/lib/surrealClient';
 import { messageService } from '@/src/services/messageService';
 import { RecordId } from 'surrealdb';
 
@@ -47,7 +48,6 @@ interface UserOption {
 const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props) => {
   const { open, onClose, onCreated } = props;
   const { user, selectedCaseId } = useAuth();
-  const client = useSurrealClient();
   
   const [conversationType, setConversationType] = useState<'DIRECT' | 'GROUP'>('DIRECT');
   const [conversationName, setConversationName] = useState('');
@@ -60,13 +60,13 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
   
   // Load available users when dialog opens
   useEffect(() => {
-    if (open && client && selectedCaseId) {
+    if (open && selectedCaseId) {
       loadAvailableUsers();
     }
-  }, [open, client, selectedCaseId]);
+  }, [open, selectedCaseId]);
   
   const loadAvailableUsers = async () => {
-    if (!client || !selectedCaseId || !user?.id) return;
+    if (!selectedCaseId || !user?.id) return;
     
     setIsLoading(true);
     setError(null);
@@ -79,13 +79,14 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
         AND out != $current_user
       `;
       
-      const [[result]] = await client.query(query, {
-        case_id: selectedCaseId,
-        current_user: user.id
-      });
-      
-      if (result && Array.isArray(result)) {
-        const users = result.map((item: any) => ({
+      const client = await surrealClient();
+      const queryVars: Record<string, unknown> = { current_user: user.id };
+      if (selectedCaseId) queryVars.case_id = selectedCaseId;
+
+      const queryResult: unknown = await client.query(query, queryVars);
+      const firstSet: any[] = Array.isArray(queryResult) ? queryResult : [];
+      if (firstSet.length > 0) {
+        const users = firstSet.map((item: any) => ({
           id: item.user.id,
           name: item.user.name || 'Unknown User',
           email: item.user.email,
@@ -95,8 +96,8 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
       } else {
         setAvailableUsers([]);
       }
-    } catch (error) {
-      console.error('Error loading users:', error);
+    } catch (err: unknown) {
+      console.error('Error loading users:', err);
       setError('加载用户列表失败');
     } finally {
       setIsLoading(false);
@@ -258,29 +259,19 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
               const isSelected = selectedUsers.some(id => String(id) === String(user.id));
               
               return (
-                <ListItem
-                  key={String(user.id)}
-                  button
-                  onClick={() => handleUserSelect(user.id)}
-                  selected={isSelected}
-                >
-                  <ListItemAvatar>
-                    <Avatar src={user.avatar_url}>
-                      {user.name[0]}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={user.name}
-                    secondary={user.email}
-                  />
-                  {conversationType === 'GROUP' && (
-                    <Checkbox
-                      edge="end"
-                      checked={isSelected}
-                      tabIndex={-1}
-                      disableRipple
-                    />
-                  )}
+                <ListItem key={String(user.id)} disablePadding>
+                  <ListItemButton
+                    onClick={() => handleUserSelect(user.id)}
+                    selected={isSelected}
+                  >
+                    <ListItemAvatar>
+                      <Avatar src={user.avatar_url}>{user.name.charAt(0)}</Avatar>
+                    </ListItemAvatar>
+                    <ListItemText primary={user.name} secondary={user.email} />
+                    {conversationType === 'GROUP' && (
+                      <Checkbox edge="end" checked={isSelected} tabIndex={-1} disableRipple />
+                    )}
+                  </ListItemButton>
                 </ListItem>
               );
             })}

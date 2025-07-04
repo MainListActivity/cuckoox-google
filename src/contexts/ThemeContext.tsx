@@ -4,10 +4,26 @@ import { getAppTheme } from '@/src/theme'; // Corrected path
 import { grey } from '@mui/material/colors';
 
 // 1. Define Context Types
-interface ThemeContextType {
+export interface ThemeMeta {
+  name: string;
+}
+
+export interface CurrentTheme extends MuiTheme {
+  name: string;
+  colors?: Record<string, string>;
+}
+
+export interface ThemeContextType {
   themeMode: 'light' | 'dark';
   toggleThemeMode: () => void;
-  muiTheme: MuiTheme; // Provide the current MUI theme object
+  /** MUI theme instance for the active mode */
+  muiTheme: MuiTheme;
+  /** List of themes that can be selected in the UI */
+  availableThemes: ThemeMeta[];
+  /** Convenience object that merges name with muiTheme */
+  currentTheme: CurrentTheme;
+  /** Switch active theme by its name */
+  setCurrentThemeByName: (name: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -92,24 +108,42 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
   // Memoize the MUI theme object to prevent unnecessary re-renders
   const muiTheme = useMemo(() => getAppTheme(themeMode), [themeMode]);
 
+  const availableThemes: ThemeMeta[] = useMemo(() => [
+    { name: 'dark' },
+    { name: 'light' },
+  ], []);
+
+  const currentTheme: CurrentTheme = useMemo(() => (
+    { ...muiTheme, name: themeMode }
+  ) as CurrentTheme, [muiTheme, themeMode]);
+
   useEffect(() => {
-    // Apply CSS variables whenever the MUI theme changes (due to themeMode change)
-    updateCssVariables(muiTheme);
+    const theme = muiTheme as MuiTheme;
+    updateCssVariables(theme);
     // Persist themeMode to localStorage
     localStorage.setItem('themeMode', themeMode);
     // Set data-theme attribute on document element for CSS variables
     document.documentElement.setAttribute('data-theme', themeMode);
-  }, [muiTheme, themeMode]); // muiTheme dependency ensures this runs when themeMode changes
+  }, [muiTheme, themeMode]);
 
   const toggleThemeMode = () => {
-    setThemeMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+    setThemeMode(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const contextValue = useMemo(() => ({
+  const setCurrentThemeByName = (name: string) => {
+    if (name === 'light' || name === 'dark') {
+      setThemeMode(name);
+    }
+  };
+
+  const contextValue: ThemeContextType = useMemo(() => ({
     themeMode,
     toggleThemeMode,
-    muiTheme, // Provide the muiTheme object itself
-  }), [themeMode, muiTheme]);
+    muiTheme,
+    availableThemes,
+    currentTheme,
+    setCurrentThemeByName,
+  }), [themeMode, muiTheme, availableThemes, currentTheme]);
 
 
   return (
@@ -122,7 +156,7 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
 };
 
 // 4. Export useTheme hook
-export const useTheme = () => { // Renamed to avoid conflict if there's another useTheme
+export const useThemeContext = (): ThemeContextType => {
   const context = useContext(ThemeContext);
   if (context === undefined) {
     throw new Error('useCustomTheme must be used within a CustomThemeProvider');
@@ -130,5 +164,8 @@ export const useTheme = () => { // Renamed to avoid conflict if there's another 
   return context;
 };
 
-// Export ThemeContext directly if needed for advanced use cases, though useCustomTheme is preferred.
+// Backwards compatibility alias
+export const useTheme = useThemeContext;
+
+// Export ThemeContext directly if needed for advanced use cases, though useThemeContext is preferred.
 export { ThemeContext as CustomThemeContext }; // Renamed for clarity

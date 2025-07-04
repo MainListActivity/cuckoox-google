@@ -39,14 +39,17 @@ import {
 } from '@mdi/js';
 import { Autocomplete } from '@mui/material'; 
 import { useAuth } from '@/src/contexts/AuthContext'; 
-import { useCaseStatus } from '@/src/contexts/CaseStatusContext'; 
+import { useCaseStatus, CaseStatus } from '@/src/contexts/CaseStatusContext'; 
 import RichTextEditor,{ QuillDelta } from '@/src/components/RichTextEditor'; 
 import { Delta } from 'quill/core'; 
-import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Import useSnackbar
+import { useSnackbar, SnackbarContextType } from '@/src/contexts/SnackbarContext';
+import type { AlertColor } from '@mui/material/Alert';
 
-import { useSurrealClient } from '@/src/contexts/SurrealProvider'; 
+import { surrealClient } from '@/src/lib/surrealClient';
 import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants'; 
+import type { SurrealLike } from '@/src/types/db';
+import type { SnackbarContextType } from '@/src/contexts/SnackbarContext';
 
 // Extended MeetingFormData to include attendees for the form
 type MeetingFormData = Omit<MeetingData, 'id' | 'case_id' | 'status' | 'recording_url' | 'minutes_exist' | 'minutes_delta_json' | 'created_at' | 'updated_at' | 'attendees' | 'attendee_ids'> & {
@@ -83,8 +86,13 @@ const OnlineMeetingPage: React.FC = () => {
 
   const { user, selectedCaseId, hasRole, isLoading: isAuthLoading } = useAuth(); 
   const { caseStatus, isLoading: isCaseStatusLoading } = useCaseStatus();
-  const { client } = useSurrealClient(); 
-  const { enqueueSnackbar } = useSnackbar(); // Instantiate snackbar
+  const [client, setClient] = useState<SurrealLike | null>(null);
+
+  // Initialize Surreal client once
+  useEffect(() => {
+    surrealClient().then(setClient);
+  }, []);
+  const { enqueueSnackbar } = useSnackbar();
   
   const liveMeetings = useLiveMeetings(selectedCaseId); 
   const { participants, isLoading: isLoadingParticipants } = useCaseParticipants(selectedCaseId); 
@@ -200,14 +208,16 @@ const OnlineMeetingPage: React.FC = () => {
     setIsViewMode(false); 
   };
 
-  const handleFormChange = (event: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | SelectChangeEvent<string>) => {
+  const handleFormChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
+  ) => {
     const { name, value } = event.target;
     setFormData(prev => ({ ...prev, [name as string]: value }));
   };
   
   const handleSaveMeeting = async () => {
     if (!selectedCaseId || !client) {
-      enqueueSnackbar('未选择案件或数据库连接不可用。', { variant: 'error' });
+      enqueueSnackbar('未选择案件或数据库连接不可用。', 'error' as AlertColor);
       return;
     }
     if (!formData.title || !formData.scheduled_time) {
@@ -233,10 +243,11 @@ const OnlineMeetingPage: React.FC = () => {
         console.log('Attempting to update meeting:', String(currentMeeting.id), meetingDataToUpdate);
         await client.merge(String(currentMeeting.id), meetingDataToUpdate); 
         console.log('Meeting updated successfully');
-        enqueueSnackbar('会议已成功更新', { variant: 'success' });
+        enqueueSnackbar('会议已成功更新', 'success');
       } catch (error) {
         console.error('Error updating meeting:', error);
-        enqueueSnackbar(`更新会议失败: ${error.message || '请查看控制台'}`, { variant: 'error' });
+        const msg = error instanceof Error ? error.message : '请查看控制台';
+        enqueueSnackbar(`更新会议失败: ${msg}`, 'error');
       }
     } else { // Creating new meeting
       if (!selectedCaseId || !user?.id) {
@@ -264,7 +275,7 @@ const OnlineMeetingPage: React.FC = () => {
         console.log('Attempting to create meeting:', meetingDataToCreate);
         await client.create('meeting', meetingDataToCreate);
         console.log('Meeting created successfully');
-        enqueueSnackbar('会议已成功创建', { variant: 'success' });
+        enqueueSnackbar('会议已成功创建', 'success');
       } catch (error) {
         console.error('Error creating meeting:', error);
         enqueueSnackbar(`创建会议失败: ${error.message || '请查看控制台'}`, { variant: 'error' });
@@ -439,7 +450,7 @@ const OnlineMeetingPage: React.FC = () => {
 
                 return (
                 <TableRow
-                  key={String(meeting.id)} // Use String(meeting.id) as key for RecordId
+                  key={String(meeting.id)}
                   sx={{ '&:last-child td, &:last-child th': { border: 0 } , 
                         '&:hover': { backgroundColor: (theme) => alpha(theme.palette.action.hover, 0.08)}
                   }}
