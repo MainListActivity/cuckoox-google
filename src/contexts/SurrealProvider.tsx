@@ -215,8 +215,22 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Provide a dummy proxy that has async no-op methods to prevent "x is not a function" runtime errors
+  // before the real Surreal worker is ready. Each method simply throws a descriptive error so callers
+  // can handle it gracefully (and their existing try / catch will surface a meaningful message).
+  const dummySurreal = useMemo(() => {
+    const handler: ProxyHandler<Record<string, unknown>> = {
+      get(_, prop) {
+        return async () => {
+          throw new Error(`Surreal client not ready – attempted to call \"${String(prop)}\" before connection established`);
+        };
+      },
+    };
+    return new Proxy({}, handler) as unknown as Remote<SurrealWorkerAPI>;
+  }, []);
+
   const value = useMemo<SurrealContextValue>(() => ({
-    surreal: (client ?? ({} as Remote<SurrealWorkerAPI>)),
+    surreal: (client ?? dummySurreal),
     isConnecting,
     isSuccess,
     isError,
@@ -229,7 +243,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     clearTokens,
     getStoredAccessToken,
     handleSessionError,
-  }), [client, isConnecting, isSuccess, isError, error, connect, disconnect, signin, signout, setTokens, clearTokens, getStoredAccessToken, handleSessionError]);
+  }), [client, dummySurreal, isConnecting, isSuccess, isError, error, connect, disconnect, signin, signout, setTokens, clearTokens, getStoredAccessToken, handleSessionError]);
 
   return <SurrealContext.Provider value={value}>{children}</SurrealContext.Provider>;
 };
