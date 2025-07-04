@@ -44,7 +44,7 @@ import RichTextEditor,{ QuillDelta } from '@/src/components/RichTextEditor';
 import { Delta } from 'quill/core'; 
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Import useSnackbar
 
-import { useSurrealClient } from '@/src/contexts/SurrealProvider'; 
+import { surrealClient } from '@/src/lib/surrealClient';
 import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants'; 
 
@@ -83,7 +83,12 @@ const OnlineMeetingPage: React.FC = () => {
 
   const { user, selectedCaseId, hasRole, isLoading: isAuthLoading } = useAuth(); 
   const { caseStatus, isLoading: isCaseStatusLoading } = useCaseStatus();
-  const { client } = useSurrealClient(); 
+  const [client, setClient] = useState<any>(null);
+
+  // Initialize Surreal client once
+  useEffect(() => {
+    surrealClient().then(setClient);
+  }, []);
   const { enqueueSnackbar } = useSnackbar(); // Instantiate snackbar
   
   const liveMeetings = useLiveMeetings(selectedCaseId); 

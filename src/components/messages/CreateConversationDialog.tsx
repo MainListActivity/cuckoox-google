@@ -27,7 +27,7 @@ import {
 } from '@mui/material';
 import { Person, Group } from '@mui/icons-material';
 import { useAuth } from '@/src/contexts/AuthContext';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { surrealClient } from '@/src/lib/surrealClient';
 import { messageService } from '@/src/services/messageService';
 import { RecordId } from 'surrealdb';
 
@@ -47,7 +47,6 @@ interface UserOption {
 const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props) => {
   const { open, onClose, onCreated } = props;
   const { user, selectedCaseId } = useAuth();
-  const client = useSurrealClient();
   
   const [conversationType, setConversationType] = useState<'DIRECT' | 'GROUP'>('DIRECT');
   const [conversationName, setConversationName] = useState('');
@@ -60,13 +59,13 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
   
   // Load available users when dialog opens
   useEffect(() => {
-    if (open && client && selectedCaseId) {
+    if (open && selectedCaseId) {
       loadAvailableUsers();
     }
-  }, [open, client, selectedCaseId]);
+  }, [open, selectedCaseId]);
   
   const loadAvailableUsers = async () => {
-    if (!client || !selectedCaseId || !user?.id) return;
+    if (!selectedCaseId || !user?.id) return;
     
     setIsLoading(true);
     setError(null);
@@ -79,7 +78,8 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
         AND out != $current_user
       `;
       
-      const [[result]] = await client.query(query, {
+      const client = await surrealClient();
+      const [[result]] = await (client as any).query(query, {
         case_id: selectedCaseId,
         current_user: user.id
       });

@@ -39,7 +39,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
 import { useTranslation } from 'react-i18next'; // For i18n
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // For notifications
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { surrealClient } from '@/src/lib/surrealClient';
 import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
 import { RecordId } from 'surrealdb';
 
@@ -72,8 +72,6 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
   const { t } = useTranslation(); // For i18n
   const { showSuccess, showError } = useSnackbar(); // For notifications
 
-  const client = useSurrealClient();
-
   // Check operation permissions
   const { permissions, isLoading: isPermissionsLoading } = useOperationPermissions([
     'case_member_add',
@@ -92,9 +90,10 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsLoading(true);
     setError(null);
     try {
+      const client = await surrealClient();
       const [fetchedMembers, fetchedCaseInfo] = await Promise.all([
-        fetchCaseMembers(client, caseId),
-        fetchCaseInfo(client, caseId)
+        fetchCaseMembers(client as any, caseId),
+        fetchCaseInfo(client as any, caseId)
       ]);
       setMembers(fetchedMembers);
       setCaseInfo(fetchedCaseInfo);
@@ -105,7 +104,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [caseId, client, t, showError]);
+  }, [caseId, t, showError]);
 
   useEffect(() => {
     if (caseId) {
@@ -136,7 +135,8 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsRemovingMember(true);
     setError(null);
     try {
-      await removeCaseMember(client, caseId, memberToRemove.id);
+      const client = await surrealClient();
+      await removeCaseMember(client as any, caseId, memberToRemove.id);
       loadMembers();
       showSuccess(t('case_members_success_removed', `${memberToRemove.userName} has been removed.`));
     } catch (err) {
@@ -174,7 +174,8 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsChangingOwner(true);
     setError(null);
     try {
-      await changeCaseOwner(client, caseId, selectedMemberForMenu.id);
+      const client = await surrealClient();
+      await changeCaseOwner(client as any, caseId, selectedMemberForMenu.id);
       loadMembers();
       showSuccess(t('case_members_success_owner_changed', `Case lead transferred to ${selectedMemberForMenu.userName}.`));
     } catch (err) {
