@@ -39,7 +39,7 @@ import {
 } from '@mdi/js';
 import { Autocomplete } from '@mui/material'; 
 import { useAuth } from '@/src/contexts/AuthContext'; 
-import { useCaseStatus } from '@/src/contexts/CaseStatusContext'; 
+import { useCaseStatus, CaseStatus } from '@/src/contexts/CaseStatusContext'; 
 import RichTextEditor,{ QuillDelta } from '@/src/components/RichTextEditor'; 
 import { Delta } from 'quill/core'; 
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Import useSnackbar
@@ -48,6 +48,7 @@ import { surrealClient } from '@/src/lib/surrealClient';
 import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants'; 
 import type { SurrealLike } from '@/src/types/db';
+import type { SnackbarContextType } from '@/src/contexts/SnackbarContext';
 
 // Extended MeetingFormData to include attendees for the form
 type MeetingFormData = Omit<MeetingData, 'id' | 'case_id' | 'status' | 'recording_url' | 'minutes_exist' | 'minutes_delta_json' | 'created_at' | 'updated_at' | 'attendees' | 'attendee_ids'> & {
@@ -206,7 +207,9 @@ const OnlineMeetingPage: React.FC = () => {
     setIsViewMode(false); 
   };
 
-  const handleFormChange = (event: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }> | SelectChangeEvent<string>) => {
+  const handleFormChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement> | SelectChangeEvent<string>
+  ) => {
     const { name, value } = event.target;
     setFormData(prev => ({ ...prev, [name as string]: value }));
   };
@@ -445,7 +448,7 @@ const OnlineMeetingPage: React.FC = () => {
 
                 return (
                 <TableRow
-                  key={String(meeting.id)} // Use String(meeting.id) as key for RecordId
+                  key={String(meeting.id)}
                   sx={{ '&:last-child td, &:last-child th': { border: 0 } , 
                         '&:hover': { backgroundColor: (theme) => alpha(theme.palette.action.hover, 0.08)}
                   }}

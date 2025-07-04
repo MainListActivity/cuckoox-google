@@ -3,7 +3,7 @@ import Snackbar from '@mui/material/Snackbar';
 import Alert, { AlertProps, AlertColor } from '@mui/material/Alert'; // Import AlertColor
 // import { useTheme } from './ThemeContext'; // To access current theme for styling if needed
 
-interface SnackbarContextType {
+export interface SnackbarContextType {
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
   showWarning: (message: string) => void;
