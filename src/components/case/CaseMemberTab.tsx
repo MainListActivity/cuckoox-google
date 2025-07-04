@@ -92,8 +92,8 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     try {
       const client = await surrealClient();
       const [fetchedMembers, fetchedCaseInfo] = await Promise.all([
-        fetchCaseMembers(client as any, caseId),
-        fetchCaseInfo(client as any, caseId)
+        fetchCaseMembers(client, caseId),
+        fetchCaseInfo(client, caseId)
       ]);
       setMembers(fetchedMembers);
       setCaseInfo(fetchedCaseInfo);
@@ -136,7 +136,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setError(null);
     try {
       const client = await surrealClient();
-      await removeCaseMember(client as any, caseId, memberToRemove.id);
+      await removeCaseMember(client, caseId, memberToRemove.id);
       loadMembers();
       showSuccess(t('case_members_success_removed', `${memberToRemove.userName} has been removed.`));
     } catch (err) {
@@ -175,7 +175,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setError(null);
     try {
       const client = await surrealClient();
-      await changeCaseOwner(client as any, caseId, selectedMemberForMenu.id);
+      await changeCaseOwner(client, caseId, selectedMemberForMenu.id);
       loadMembers();
       showSuccess(t('case_members_success_owner_changed', `Case lead transferred to ${selectedMemberForMenu.userName}.`));
     } catch (err) {

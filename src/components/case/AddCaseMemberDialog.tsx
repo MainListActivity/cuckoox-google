@@ -86,7 +86,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
     setIsLoadingRoles(true);
     try {
       const client = await surrealClient();
-      const roleList = await getCaseMemberRoles(client as any);
+      const roleList = await getCaseMemberRoles(client);
       setRoles(roleList);
       
       // Set default role if roles are available and no role is selected
@@ -213,7 +213,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
       };
 
       const client = await surrealClient();
-      const newMember = await createUserAndAddToCase(client as any, caseId, params);
+      const newMember = await createUserAndAddToCase(client, caseId, params);
       onMemberAdded(newMember);
       onClose();
     } catch (err) {

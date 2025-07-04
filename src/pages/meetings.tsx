@@ -47,6 +47,7 @@ import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Import useSnack
 import { surrealClient } from '@/src/lib/surrealClient';
 import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants'; 
+import type { SurrealLike } from '@/src/types/db';
 
 // Extended MeetingFormData to include attendees for the form
 type MeetingFormData = Omit<MeetingData, 'id' | 'case_id' | 'status' | 'recording_url' | 'minutes_exist' | 'minutes_delta_json' | 'created_at' | 'updated_at' | 'attendees' | 'attendee_ids'> & {
@@ -83,7 +84,7 @@ const OnlineMeetingPage: React.FC = () => {
 
   const { user, selectedCaseId, hasRole, isLoading: isAuthLoading } = useAuth(); 
   const { caseStatus, isLoading: isCaseStatusLoading } = useCaseStatus();
-  const [client, setClient] = useState<any>(null);
+  const [client, setClient] = useState<SurrealLike | null>(null);
 
   // Initialize Surreal client once
   useEffect(() => {
