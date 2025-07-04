@@ -57,7 +57,7 @@ const CaseSelectionPage: React.FC = () => {
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const { surreal: client, isSuccess: isConnected, connect, isConnecting } = useSurreal();
 
   // Local state for cases with extended information
   const [cases, setCases] = useState<ExtendedCase[]>([]);
@@ -67,7 +67,18 @@ const CaseSelectionPage: React.FC = () => {
   // Fetch user's cases from SurrealDB
   useEffect(() => {
     const fetchUserCases = async () => {
-      if (!isConnected || !user || !user.id) {
+      // Ensure Surreal client is connected before querying
+      if (!isConnected) {
+        // Trigger connection if not already in progress
+        if (!isConnecting) {
+          try { await connect(); } catch { /* ignore */ }
+        }
+        // Wait for next effect cycle after connection succeeds
+        setIsLoadingCases(false);
+        return;
+      }
+
+      if (!user || !user.id || typeof (client as any)?.query !== 'function') {
         setIsLoadingCases(false);
         return;
       }
@@ -128,7 +139,7 @@ const CaseSelectionPage: React.FC = () => {
     };
 
     fetchUserCases();
-  }, [isConnected, client, user]);
+  }, [isConnected, client, user, connect, isConnecting]);
 
   // Handle case selection
   const handleCaseSelect = async (caseToSelect: ExtendedCase) => {
