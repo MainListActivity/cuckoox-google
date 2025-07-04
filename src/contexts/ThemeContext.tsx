@@ -10,6 +10,7 @@ export interface ThemeMeta {
 
 export interface CurrentTheme extends MuiTheme {
   name: string;
+  colors?: Record<string, string>;
 }
 
 export interface ThemeContextType {
@@ -117,13 +118,13 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
   ) as CurrentTheme, [muiTheme, themeMode]);
 
   useEffect(() => {
-    // Apply CSS variables whenever the MUI theme changes (due to themeMode change)
-    updateCssVariables(muiTheme);
+    const theme = muiTheme as MuiTheme;
+    updateCssVariables(theme);
     // Persist themeMode to localStorage
     localStorage.setItem('themeMode', themeMode);
     // Set data-theme attribute on document element for CSS variables
     document.documentElement.setAttribute('data-theme', themeMode);
-  }, [muiTheme, themeMode]); // muiTheme dependency ensures this runs when themeMode changes
+  }, [muiTheme, themeMode]);
 
   const toggleThemeMode = () => {
     setThemeMode(prev => (prev === 'light' ? 'dark' : 'light'));

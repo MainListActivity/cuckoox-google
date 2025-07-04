@@ -42,7 +42,8 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useCaseStatus, CaseStatus } from '@/src/contexts/CaseStatusContext'; 
 import RichTextEditor,{ QuillDelta } from '@/src/components/RichTextEditor'; 
 import { Delta } from 'quill/core'; 
-import { useSnackbar } from '@/src/contexts/SnackbarContext'; // Import useSnackbar
+import { useSnackbar, SnackbarContextType } from '@/src/contexts/SnackbarContext';
+import type { AlertColor } from '@mui/material/Alert';
 
 import { surrealClient } from '@/src/lib/surrealClient';
 import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
@@ -91,7 +92,7 @@ const OnlineMeetingPage: React.FC = () => {
   useEffect(() => {
     surrealClient().then(setClient);
   }, []);
-  const { enqueueSnackbar } = useSnackbar(); // Instantiate snackbar
+  const { enqueueSnackbar } = useSnackbar();
   
   const liveMeetings = useLiveMeetings(selectedCaseId); 
   const { participants, isLoading: isLoadingParticipants } = useCaseParticipants(selectedCaseId); 
@@ -216,7 +217,7 @@ const OnlineMeetingPage: React.FC = () => {
   
   const handleSaveMeeting = async () => {
     if (!selectedCaseId || !client) {
-      enqueueSnackbar('未选择案件或数据库连接不可用。', { variant: 'error' });
+      enqueueSnackbar('未选择案件或数据库连接不可用。', 'error' as AlertColor);
       return;
     }
     if (!formData.title || !formData.scheduled_time) {
@@ -242,10 +243,11 @@ const OnlineMeetingPage: React.FC = () => {
         console.log('Attempting to update meeting:', String(currentMeeting.id), meetingDataToUpdate);
         await client.merge(String(currentMeeting.id), meetingDataToUpdate); 
         console.log('Meeting updated successfully');
-        enqueueSnackbar('会议已成功更新', { variant: 'success' });
+        enqueueSnackbar('会议已成功更新', 'success');
       } catch (error) {
         console.error('Error updating meeting:', error);
-        enqueueSnackbar(`更新会议失败: ${error.message || '请查看控制台'}`, { variant: 'error' });
+        const msg = error instanceof Error ? error.message : '请查看控制台';
+        enqueueSnackbar(`更新会议失败: ${msg}`, 'error');
       }
     } else { // Creating new meeting
       if (!selectedCaseId || !user?.id) {
@@ -273,7 +275,7 @@ const OnlineMeetingPage: React.FC = () => {
         console.log('Attempting to create meeting:', meetingDataToCreate);
         await client.create('meeting', meetingDataToCreate);
         console.log('Meeting created successfully');
-        enqueueSnackbar('会议已成功创建', { variant: 'success' });
+        enqueueSnackbar('会议已成功创建', 'success');
       } catch (error) {
         console.error('Error creating meeting:', error);
         enqueueSnackbar(`创建会议失败: ${error.message || '请查看控制台'}`, { variant: 'error' });

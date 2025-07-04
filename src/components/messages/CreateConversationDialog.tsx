@@ -80,13 +80,11 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
       `;
       
       const client = await surrealClient();
-      const caseId = selectedCaseId as RecordId; // already checked not null
-      const queryResult: any = await client.query(query, {
-        case_id: caseId,
-        current_user: user.id
-      });
+      const queryVars: Record<string, unknown> = { current_user: user.id };
+      if (selectedCaseId) queryVars.case_id = selectedCaseId;
 
-      const firstSet = Array.isArray(queryResult) ? queryResult : [];
+      const queryResult: unknown = await client.query(query, queryVars);
+      const firstSet: any[] = Array.isArray(queryResult) ? queryResult : [];
       if (firstSet.length > 0) {
         const users = firstSet.map((item: any) => ({
           id: item.user.id,
