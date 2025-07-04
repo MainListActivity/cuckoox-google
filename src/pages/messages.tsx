@@ -32,6 +32,9 @@ import {
   MenuItem,
   CircularProgress,
   Skeleton,
+  SpeedDial,
+  SpeedDialIcon,
+  SpeedDialAction,
 } from '@mui/material';
 import {
   Message,
@@ -51,11 +54,14 @@ import {
   Warning,
   Info,
   CheckCircle,
+  Add,
+  Chat,
 } from '@mui/icons-material';
 import MessageListItem from '@/src/components/messages/MessageListItem';
 import ChatBubble, { ChatBubbleProps } from '@/src/components/messages/ChatBubble';
 import ChatInput from '@/src/components/messages/ChatInput';
 import NotificationCard from '@/src/components/messages/NotificationCard';
+import CreateConversationDialog from '@/src/components/messages/CreateConversationDialog';
 import {
   Message as MessageType,
   IMMessage,
@@ -70,6 +76,8 @@ import {
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { messageService } from '@/src/services/messageService';
+import { RecordId } from 'surrealdb';
 
 // 消息类型
 const messageTypes = {
@@ -118,6 +126,7 @@ const MessageCenterPage: React.FC = () => {
   const [selectedMessageId, setSelectedMessageId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [createConversationOpen, setCreateConversationOpen] = useState(false);
 
   const chatHistoryEndRef = useRef<HTMLDivElement>(null);
 
@@ -344,7 +353,7 @@ const MessageCenterPage: React.FC = () => {
   }, [selectedMessageId, client, combinedList, selectedItem, showSuccess, showError]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!chatInput.trim() || !selectedItem || selectedItem.itemType !== 'conversation' || !user?.id || !client) {
+    if (!chatInput.trim() || !selectedItem || selectedItem.itemType !== 'conversation' || !user?.id) {
       if (!selectedItem || selectedItem.itemType !== 'conversation') {
         showWarning('请先选择一个会话以发送消息。');
       }
@@ -352,16 +361,6 @@ const MessageCenterPage: React.FC = () => {
     }
 
     const convSummary = selectedItem as ConversationSummary;
-
-    const newMessageData: Omit<IMMessage, 'id' | 'updated_at'> = {
-      type: 'IM',
-      conversation_id: String(convSummary.id),
-      sender_id: user.id,
-      sender_name: user.name || '我',
-      content: chatInput,
-      created_at: new Date().toISOString(),
-      is_read: false,
-    };
 
     // Optimistic UI update for the new message in conversation
     const newMessage: ChatMessageDisplay = {
@@ -375,12 +374,15 @@ const MessageCenterPage: React.FC = () => {
     setChatInput('');
 
     try {
-      // Send to database
-      const result = await client.create('message', newMessageData);
-      console.log('Message sent:', result);
+      // Send message using messageService
+      const message = await messageService.sendMessage({
+        conversation_id: convSummary.id,
+        content: chatInput
+      });
+      console.log('Message sent:', message);
 
       // Update conversation list with new message info
-      setConversations(prev =>
+      setConversations((prev: ConversationSummary[]) =>
         prev.map(c =>
           c.id === convSummary.id
             ? {
@@ -396,8 +398,21 @@ const MessageCenterPage: React.FC = () => {
     } catch (error) {
       console.error('Error sending message:', error);
       showError('发送消息失败');
+      // Revert optimistic update on error
+      setCurrentConversation((prev: ChatMessageDisplay[]) => prev.filter(msg => msg.id !== newMessage.id));
+      setChatInput(chatInput);
     }
-  }, [chatInput, selectedItem, user, client, setConversations, showWarning, showError]);
+      }, [chatInput, selectedItem, user, setConversations, showWarning, showError]);
+
+  const handleConversationCreated = useCallback((conversationId: RecordId | string) => {
+    // Refresh conversations list
+    if (conversations && setConversations) {
+      // This will trigger a re-fetch through the live query
+      window.location.reload(); // Temporary solution, ideally should refresh data
+    }
+    setCreateConversationOpen(false);
+    showSuccess('会话创建成功');
+  }, [conversations, setConversations, showSuccess]);
 
   const filteredDisplayList = useMemo((): DisplayListItem[] => {
     if (currentFilter === 'im') {
@@ -499,7 +514,7 @@ const MessageCenterPage: React.FC = () => {
       <Grid container spacing={2}>
         {/* 左侧消息列表 */}
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
+          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
             {/* 搜索框和过滤器 */}
             <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <TextField
@@ -556,6 +571,30 @@ const MessageCenterPage: React.FC = () => {
                 </Box>
               )}
             </List>
+            
+            {/* 创建会话按钮 */}
+            <Box
+              sx={{
+                position: 'absolute',
+                bottom: 16,
+                right: 16,
+              }}
+            >
+              <IconButton
+                color="primary"
+                sx={{
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                  '&:hover': {
+                    bgcolor: 'primary.dark',
+                  },
+                  boxShadow: 3,
+                }}
+                onClick={() => setCreateConversationOpen(true)}
+              >
+                <Add />
+              </IconButton>
+            </Box>
           </Paper>
         </Grid>
 
@@ -742,6 +781,13 @@ const MessageCenterPage: React.FC = () => {
           删除
         </MenuItem>
       </Menu>
+      
+      {/* 创建会话对话框 */}
+      <CreateConversationDialog
+        open={createConversationOpen}
+        onClose={() => setCreateConversationOpen(false)}
+        onCreated={handleConversationCreated}
+      />
     </Box>
   );
 };
