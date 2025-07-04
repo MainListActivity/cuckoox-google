@@ -4,7 +4,7 @@ import { getAppTheme } from '@/src/theme'; // Corrected path
 import { grey } from '@mui/material/colors';
 
 // 1. Define Context Types
-interface ThemeContextType {
+export interface ThemeContextType {
   themeMode: 'light' | 'dark';
   toggleThemeMode: () => void;
   muiTheme: MuiTheme; // Provide the current MUI theme object
@@ -122,7 +122,7 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
 };
 
 // 4. Export useTheme hook
-export const useTheme = () => { // Renamed to avoid conflict if there's another useTheme
+export const useThemeContext = (): ThemeContextType => {
   const context = useContext(ThemeContext);
   if (context === undefined) {
     throw new Error('useCustomTheme must be used within a CustomThemeProvider');
@@ -130,5 +130,8 @@ export const useTheme = () => { // Renamed to avoid conflict if there's another 
   return context;
 };
 
-// Export ThemeContext directly if needed for advanced use cases, though useCustomTheme is preferred.
+// Backwards compatibility alias
+export const useTheme = useThemeContext;
+
+// Export ThemeContext directly if needed for advanced use cases, though useThemeContext is preferred.
 export { ThemeContext as CustomThemeContext }; // Renamed for clarity
