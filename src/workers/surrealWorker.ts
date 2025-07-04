@@ -29,12 +29,73 @@ export interface SurrealWorkerAPI {
   kill(uuid: string): Promise<void>;
   /** Authenticate with JWT */
   authenticate(token: string): Promise<void>;
+  /** Sign in with username/password etc */
+  signin(auth: AnyAuth): Promise<void>;
+  /** Invalidate current session */
+  invalidate(): Promise<void>;
   /** Close the underlying SurrealDB connection */
   close(): Promise<void>;
+  /** Store auth / refresh tokens and optionally expiry */
+  setTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void>;
+  /** Clear in-memory tokens */
+  clearTokens(): Promise<void>;
+  /** Get stored access token */
+  getStoredAccessToken(): Promise<string | null>;
+  /** Return both token and expiry */
+  getStoredTokens(): Promise<{ accessToken: string | null; expiresAt: number | null }>;
+  /** Return boolean authentication state */
+  isAuthenticated(): Promise<boolean>;
+  /** Get cached user info */
+  getCurrentUser(): Promise<any>;
+  /** Cache user info inside worker */
+  setCurrentUser(user: any): Promise<void>;
 }
 
 class SurrealWorkerImpl implements SurrealWorkerAPI {
   private db = new Surreal();
+  private accessToken: string | null = null;
+  private refreshToken: string | null = null;
+  private tokenExpiresAt: number | null = null;
+  private currentUser: any = null;
+  private STORAGE_KEYS = {
+    ACCESS: 'access_token',
+    REFRESH: 'refresh_token',
+    EXPIRES: 'token_expires_at',
+  };
+
+  private storageSet(key: string, val: string | null) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        if (val === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, val);
+      }
+    } catch {}
+  }
+
+  private storageGet(key: string): string | null {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(key);
+      }
+    } catch {}
+    return null;
+  }
+
+  private isTokenExpired(expiresAt: number | null): boolean {
+    if (!expiresAt) return true;
+    return Date.now() >= expiresAt - 60_000; // 1 minute leeway
+  }
+
+  private isSessionExpiredError(err: any): boolean {
+    if (!(err instanceof Error)) return false;
+    const m = err.message.toLowerCase();
+    return (
+      m.includes('session') && m.includes('expired')) ||
+      m.includes('token expired') ||
+      m.includes('jwt') ||
+      m.includes('unauthorized') ||
+      m.includes('401');
+  }
 
   async connect({ endpoint, namespace, database, params, auth }: SurrealWorkerAPI['connect'] extends (arg: infer P) => any ? P : never): Promise<boolean> {
     if (this.db.status === 'connected') return true;
@@ -47,14 +108,27 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
   }
 
   async query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
-    const res = await this.db.query<T[]>(sql, vars);
-    // Surreal returns array of result sets; return first for convenience
-    return (res as any)[0] as T;
+    try {
+      const res = await this.db.query<T[]>(sql, vars);
+      return (res as any)[0] as T;
+    } catch (e) {
+      if (this.isSessionExpiredError(e)) {
+        await this.clearTokens();
+      }
+      throw e;
+    }
   }
 
   async mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
-    const res = await this.db.query<T[]>(sql, vars);
-    return (res as any)[0] as T;
+    try {
+      const res = await this.db.query<T[]>(sql, vars);
+      return (res as any)[0] as T;
+    } catch (e) {
+      if (this.isSessionExpiredError(e)) {
+        await this.clearTokens();
+      }
+      throw e;
+    }
   }
 
   async create(thing: string, data: unknown): Promise<any> {
@@ -93,6 +167,66 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
 
   async authenticate(token: string): Promise<void> {
     await this.db.authenticate(token);
+  }
+
+  async signin(auth: AnyAuth): Promise<void> {
+    const result = await this.db.signin(auth);
+    return result as any;
+  }
+
+  async invalidate(): Promise<void> {
+    await this.db.invalidate();
+    await this.clearTokens();
+  }
+
+  async setTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void> {
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken ?? null;
+    this.tokenExpiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
+
+    this.storageSet(this.STORAGE_KEYS.ACCESS, accessToken);
+    if (refreshToken) this.storageSet(this.STORAGE_KEYS.REFRESH, refreshToken);
+    if (this.tokenExpiresAt) this.storageSet(this.STORAGE_KEYS.EXPIRES, String(this.tokenExpiresAt));
+  }
+
+  async clearTokens(): Promise<void> {
+    this.accessToken = null;
+    this.refreshToken = null;
+    this.tokenExpiresAt = null;
+
+    this.storageSet(this.STORAGE_KEYS.ACCESS, null);
+    this.storageSet(this.STORAGE_KEYS.REFRESH, null);
+    this.storageSet(this.STORAGE_KEYS.EXPIRES, null);
+  }
+
+  async getStoredAccessToken(): Promise<string | null> {
+    if (this.isTokenExpired(this.tokenExpiresAt)) return null;
+    return this.accessToken;
+  }
+
+  async getStoredTokens(): Promise<{ accessToken: string | null; expiresAt: number | null }> {
+    // Lazy load from localStorage if memory empty
+    if (!this.accessToken) {
+      this.accessToken = this.storageGet(this.STORAGE_KEYS.ACCESS);
+      const expiresStr = this.storageGet(this.STORAGE_KEYS.EXPIRES);
+      this.tokenExpiresAt = expiresStr ? parseInt(expiresStr, 10) : null;
+    }
+    if (this.isTokenExpired(this.tokenExpiresAt)) {
+      return { accessToken: null, expiresAt: null };
+    }
+    return { accessToken: this.accessToken, expiresAt: this.tokenExpiresAt };
+  }
+
+  async isAuthenticated(): Promise<boolean> {
+    return !!(await this.getStoredAccessToken());
+  }
+
+  async getCurrentUser(): Promise<any> {
+    return this.currentUser;
+  }
+
+  async setCurrentUser(user: any): Promise<void> {
+    this.currentUser = user;
   }
 
   async close(): Promise<void> {
