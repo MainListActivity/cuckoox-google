@@ -1,4 +1,4 @@
-import { RecordId } from 'surrealdb.js'; // Assuming RecordId is used for IDs
+import { RecordId } from 'surrealdb'; // Assuming RecordId is used for IDs
 
 // Base for all message types
 export interface BaseMessage {

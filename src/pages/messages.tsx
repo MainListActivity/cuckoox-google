@@ -136,10 +136,12 @@ const MessageCenterPage: React.FC = () => {
   // Handle errors from hooks
   useEffect(() => {
     if (conversationsError) {
-      showError(`加载会话列表失败: ${conversationsError.message || '未知错误'}`);
+      const errMsg = (conversationsError as Error)?.message ?? '未知错误';
+      showError(`加载会话列表失败: ${errMsg}`);
     }
     if (notificationsError) {
-      showError(`加载通知列表失败: ${notificationsError.message || '未知错误'}`);
+      const errMsg = (notificationsError as Error)?.message ?? '未知错误';
+      showError(`加载通知列表失败: ${errMsg}`);
     }
   }, [conversationsError, notificationsError, showError]);
 
@@ -419,15 +421,12 @@ const MessageCenterPage: React.FC = () => {
     }
       }, [chatInput, selectedItem, user, setConversations, showWarning, showError]);
 
-  const handleConversationCreated = useCallback((conversationId: RecordId | string) => {
-    // Refresh conversations list
-    if (conversations && setConversations) {
-      // This will trigger a re-fetch through the live query
-      window.location.reload(); // Temporary solution, ideally should refresh data
-    }
+  const handleConversationCreated = useCallback((_conversationId: RecordId | string) => {
+    // 临时刷新页面，后续可改为局部数据刷新
+    window.location.reload();
     setCreateConversationOpen(false);
     showSuccess('会话创建成功');
-  }, [conversations, setConversations, showSuccess]);
+  }, [showSuccess]);
 
   const filteredDisplayList = useMemo((): DisplayListItem[] => {
     if (currentFilter === 'im') {
@@ -440,78 +439,48 @@ const MessageCenterPage: React.FC = () => {
   }, [combinedList, currentFilter]);
 
   // 渲染消息列表项
-  const renderMessageItem = (message: any) => (
-    <React.Fragment key={message.id}>
-      <ListItem
-        onClick={() => handleSelectItem(message)}
-        sx={{
-          cursor: 'pointer',
-          backgroundColor: message.unread ? 'action.hover' : 'transparent',
-          '&:hover': {
-            backgroundColor: 'action.hover',
-          },
-          '&.Mui-selected': {
-            backgroundColor: 'action.selected',
-          },
-        }}
-      >
-        <ListItemAvatar>
-          <Badge
-            color="error"
-            variant="dot"
-            invisible={!message.unread}
-          >
-            <Avatar sx={{ bgcolor: theme.palette[messageTypes[message.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main }}>
-              {typeof message.avatar === 'string' ? message.avatar : messageTypes[message.type as MessageTypeKey]?.icon}
-            </Avatar>
-          </Badge>
-        </ListItemAvatar>
-        <ListItemText
-          primary={
-            <Box display="flex" alignItems="center" gap={1}>
-              <Typography variant="subtitle2" fontWeight={message.unread ? 'bold' : 'normal'}>
-                {message.title || message.last_message_sender_name}
-              </Typography>
-              {message.priority === 'high' && (
-                <Chip
-                  label="重要"
-                  size="small"
-                  color="error"
-                  sx={{ height: 20 }}
-                />
-              )}
-              {message.hasAttachment && (
-                <AttachFile fontSize="small" color="action" />
-              )}
+  const renderMessageItem = (message: DisplayListItem) => {
+    const isNotif = message.itemType === 'notification';
+    const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage) : undefined;
+    const primaryText = isNotif ? (notifMsg?.title ?? '通知') : (message as ConversationSummary).last_message_sender_name ?? '会话';
+    const hasHighPriority = isNotif && notifMsg?.priority === 'high';
+    const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : 'IM';
+
+    return (
+      <React.Fragment key={message.id}>
+        <ListItem
+          onClick={() => handleSelectItem(message)}
+          sx={{
+            cursor: 'pointer',
+            backgroundColor: (message as any).unread ? 'action.hover' : 'transparent',
+            '&:hover': { backgroundColor: 'action.hover' },
+            '&.Mui-selected': { backgroundColor: 'action.selected' },
+          }}
+        >
+          <ListItemAvatar>
+            <Badge color="error" variant="dot" invisible={!((message as any).unread)}>
+              <Avatar sx={{ bgcolor: theme.palette[messageTypes[avatarColorKey].color as 'info' | 'warning' | 'primary' | 'secondary'].main }}>
+                {typeof (message as any).avatar === 'string' ? (message as any).avatar : messageTypes[avatarColorKey].icon}
+              </Avatar>
+            </Badge>
+          </ListItemAvatar>
+          <ListItemText
+            primary={<Box display="flex" alignItems="center" gap={1}><Typography variant="subtitle2" fontWeight={(message as any).unread ? 'bold' : 'normal'}>{primaryText}</Typography>{hasHighPriority && (<Chip label="重要" size="small" color="error" sx={{ height: 20 }} />)}{(message as any).hasAttachment && (<AttachFile fontSize="small" color="action" />)}</Box>}
+            secondary={<Typography variant="body2" color="text.secondary" noWrap>{isNotif ? notifMsg?.content : (message as ConversationSummary).last_message_snippet}</Typography>}
+          />
+          <ListItemSecondaryAction>
+            <Box display="flex" flexDirection="column" alignItems="flex-end">
+              <Typography variant="caption" color="text.secondary">{(message as any).time || new Date(((message as any).updated_at || (message as any).created_at || (message as any).last_message_timestamp)).toLocaleTimeString()}</Typography>
+              <IconButton edge="end" size="small" onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); handleMenuOpen(e, message.id); }}>
+                <MoreVert fontSize="small" />
+              </IconButton>
             </Box>
-          }
-          secondary={
-            <Typography variant="body2" color="text.secondary" noWrap>
-              {message.content || message.last_message_snippet}
-            </Typography>
-          }
-        />
-        <ListItemSecondaryAction>
-          <Box display="flex" flexDirection="column" alignItems="flex-end">
-            <Typography variant="caption" color="text.secondary">
-              {message.time || new Date(message.updated_at || message.created_at || message.last_message_timestamp).toLocaleTimeString()}
-            </Typography>
-            <IconButton
-              edge="end"
-              size="small"
-              onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                e.stopPropagation();
-                handleMenuOpen(e, message.id);
-              }}
-            >
-              <MoreVert fontSize="small" />
-            </IconButton>
-          </Box>
-        </ListItemSecondaryAction>
-      </ListItem>
-      <Divider variant="inset" component="li" />
-    </React.Fragment>
-  );
+          </ListItemSecondaryAction>
+        </ListItem>
+        <Divider variant="inset" component="li" />
+      </React.Fragment>
+    );
+  };
 
   return (
     <Box>
