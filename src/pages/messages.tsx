@@ -56,6 +56,7 @@ import {
   CheckCircle,
   Add,
   Chat,
+  ArrowBack,
 } from '@mui/icons-material';
 import MessageListItem from '@/src/components/messages/MessageListItem';
 import ChatBubble, { ChatBubbleProps } from '@/src/components/messages/ChatBubble';
@@ -513,8 +514,8 @@ const MessageCenterPage: React.FC = () => {
       {/* 主内容区域 */}
       <Grid container spacing={2}>
         {/* 左侧消息列表 */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isMobile && selectedItem ? 'none' : 'block' }}>
+          <Paper sx={{ height: isMobile ? 'calc(100vh - 140px)' : '70vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
             {/* 搜索框和过滤器 */}
             <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <TextField
@@ -599,13 +600,18 @@ const MessageCenterPage: React.FC = () => {
         </Grid>
 
         {/* 右侧消息详情 */}
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
+        <Grid size={{ xs: 12, md: 8 }} sx={{ display: isMobile && !selectedItem ? 'none' : 'block' }}>
+          <Paper sx={{ height: isMobile ? '100vh' : '70vh', display: 'flex', flexDirection: 'column' }}>
             {selectedItem ? (
               <>
                 {/* 消息详情头部 */}
-                <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                  <Typography variant="h6">
+                <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
+                  {isMobile && (
+                    <IconButton edge="start" onClick={() => setSelectedItem(null)} sx={{ mr: 1 }}>
+                      <ArrowBack />
+                    </IconButton>
+                  )}
+                  <Typography variant="h6" noWrap>
                     {selectedItem.itemType === 'conversation'
                       ? (selectedItem.participants?.find((p: any) => p.id !== user?.id)?.name || '对话')
                       : (selectedItem.title || '系统通知')}
