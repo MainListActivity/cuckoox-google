@@ -11,20 +11,10 @@ import { surrealClient, disposeSurrealClient } from '@/src/lib/surrealClient';
 import type { SurrealWorkerAPI } from '@/src/workers/surrealWorker';
 import type { Remote } from 'comlink';
 
-// Re-exported constants for token storage (kept for backwards compatibility)
-const ACCESS_TOKEN_KEY = 'access_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
-const TOKEN_EXPIRES_AT_KEY = 'token_expires_at';
+// Token keys kept in worker; provider should not touch localStorage
 
-// Helper functions for token management
-const getStoredTokens = () => {
-  const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
-  const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-  const expiresAtStr = localStorage.getItem(TOKEN_EXPIRES_AT_KEY);
-  const expiresAt = expiresAtStr ? parseInt(expiresAtStr, 10) : null;
-  return { accessToken, refreshToken, expiresAt } as const;
-};
-
+// No localStorage helpers in provider – worker is single source of truth
+// Helper to evaluate if expiry is reached
 const isTokenExpired = (expiresAt: number | null) => {
   if (!expiresAt) return true;
   return Date.now() >= expiresAt - 60_000; // 1 min leeway
@@ -64,8 +54,8 @@ export interface SurrealContextValue {
   disconnect: () => Promise<void>;
   signin: (auth: AnyAuth) => Promise<void>;
   signout: () => Promise<void>;
-  setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => void;
-  clearTokens: () => void;
+  setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => any;
+  clearTokens: () => any;
   getStoredAccessToken: () => string | null;
   handleSessionError: (error: any) => Promise<boolean>;
 }
@@ -108,7 +98,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       }
 
       // Restore stored access token (if not passed via props)
-      const { accessToken, expiresAt } = getStoredTokens();
+      const { accessToken, expiresAt } = await proxy.getStoredTokens();
       if (accessToken && !isTokenExpired(expiresAt)) {
         try {
           await proxy.authenticate(accessToken);
@@ -155,26 +145,17 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     if (client) {
       await client.setTokens(accessToken, refreshToken, expiresIn);
     }
-    // Persist in localStorage for reload resilience
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    if (expiresIn) {
-      const expiresAt = Date.now() + expiresIn * 1000;
-      localStorage.setItem(TOKEN_EXPIRES_AT_KEY, String(expiresAt));
-    }
   }, [client]);
 
   const clearTokens = useCallback(async () => {
     if (client) {
       await client.clearTokens();
     }
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
   }, [client]);
 
   const getStoredAccessToken = useCallback((): string | null => {
-    return localStorage.getItem(ACCESS_TOKEN_KEY);
+    // Worker is source of truth; direct read unavailable synchronously
+    return null;
   }, []);
 
   const handleSessionError = useCallback<SurrealContextValue['handleSessionError']>(async (e) => {

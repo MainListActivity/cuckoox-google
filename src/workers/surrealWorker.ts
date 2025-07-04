@@ -41,6 +41,8 @@ export interface SurrealWorkerAPI {
   clearTokens(): Promise<void>;
   /** Get stored access token */
   getStoredAccessToken(): Promise<string | null>;
+  /** Return both token and expiry */
+  getStoredTokens(): Promise<{ accessToken: string | null; expiresAt: number | null }>;
   /** Get cached user info */
   getCurrentUser(): Promise<any>;
   /** Cache user info inside worker */
@@ -53,6 +55,29 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
   private refreshToken: string | null = null;
   private tokenExpiresAt: number | null = null;
   private currentUser: any = null;
+  private STORAGE_KEYS = {
+    ACCESS: 'access_token',
+    REFRESH: 'refresh_token',
+    EXPIRES: 'token_expires_at',
+  };
+
+  private storageSet(key: string, val: string | null) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        if (val === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, val);
+      }
+    } catch {}
+  }
+
+  private storageGet(key: string): string | null {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(key);
+      }
+    } catch {}
+    return null;
+  }
 
   async connect({ endpoint, namespace, database, params, auth }: SurrealWorkerAPI['connect'] extends (arg: infer P) => any ? P : never): Promise<boolean> {
     if (this.db.status === 'connected') return true;
@@ -66,7 +91,7 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
 
   async query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
     const res = await this.db.query<T[]>(sql, vars);
-    return res as any;
+    return (res as any)[0] as T;
   }
 
   async mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
@@ -126,12 +151,20 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
     this.accessToken = accessToken;
     this.refreshToken = refreshToken ?? null;
     this.tokenExpiresAt = expiresIn ? Date.now() + expiresIn * 1000 : null;
+
+    this.storageSet(this.STORAGE_KEYS.ACCESS, accessToken);
+    if (refreshToken) this.storageSet(this.STORAGE_KEYS.REFRESH, refreshToken);
+    if (this.tokenExpiresAt) this.storageSet(this.STORAGE_KEYS.EXPIRES, String(this.tokenExpiresAt));
   }
 
   async clearTokens(): Promise<void> {
     this.accessToken = null;
     this.refreshToken = null;
     this.tokenExpiresAt = null;
+
+    this.storageSet(this.STORAGE_KEYS.ACCESS, null);
+    this.storageSet(this.STORAGE_KEYS.REFRESH, null);
+    this.storageSet(this.STORAGE_KEYS.EXPIRES, null);
   }
 
   async getStoredAccessToken(): Promise<string | null> {
@@ -140,6 +173,16 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
       return null;
     }
     return this.accessToken;
+  }
+
+  async getStoredTokens(): Promise<{ accessToken: string | null; expiresAt: number | null }> {
+    // Lazy load from localStorage if memory empty
+    if (!this.accessToken) {
+      this.accessToken = this.storageGet(this.STORAGE_KEYS.ACCESS);
+      const expiresStr = this.storageGet(this.STORAGE_KEYS.EXPIRES);
+      this.tokenExpiresAt = expiresStr ? parseInt(expiresStr, 10) : null;
+    }
+    return { accessToken: this.accessToken, expiresAt: this.tokenExpiresAt };
   }
 
   async getCurrentUser(): Promise<any> {
