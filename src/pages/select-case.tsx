@@ -101,28 +101,21 @@ const CaseSelectionPage: React.FC = () => {
             updated_at
           FROM case;
         `;
-        
-        const result = await client.query(query);
-        
-        if (result && result[0] && Array.isArray(result[0])) {
-          // Transform the results to match our ExtendedCase interface
-          const userCases: ExtendedCase[] = result[0].map((caseDetails: any) => {
-            return {
-              id: caseDetails.id,
-              name: caseDetails.name || '未命名案件',
-              case_number: caseDetails.case_number,
-              case_procedure: caseDetails.case_procedure,
-              procedure_phase: caseDetails.procedure_phase,
-              acceptance_date: caseDetails.acceptance_date,
-              case_manager_name: caseDetails.case_manager_name,
-              created_at: caseDetails.created_at,
-              updated_at: caseDetails.updated_at,
-            };
-          });
 
-          // Remove duplicates
+        // Execute query and cast result – Surreal worker returns a result object; extract rows safely
+        const raw = (await client.query(query)) as unknown;
+
+        // Surreal JavaScript driver returns an object with a `result` field; the worker may return rows directly.
+        const rows: unknown = (raw as { result?: unknown }).result ?? raw;
+
+        if (Array.isArray(rows)) {
+          const typedRows = rows as ExtendedCase[];
+
+          // Ensure name has fallback and deduplicate by id
           const uniqueCases = Array.from(
-            new Map(userCases.map(c => [c.id.toString(), c])).values()
+            new Map<string, ExtendedCase>(
+              typedRows.map((c) => [c.id.toString(), { ...c, name: c.name ?? '未命名案件' }])
+            ).values()
           );
 
           setCases(uniqueCases);
