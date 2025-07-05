@@ -1,5 +1,4 @@
 import type Surreal from 'surrealdb';
-import type { Remote } from 'comlink';
-import type { SurrealWorkerAPI } from '@/src/workers/surrealWorker';
+import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 
-export type SurrealLike = Surreal | Remote<SurrealWorkerAPI>;
+export type SurrealLike = Surreal | SurrealWorkerAPI;

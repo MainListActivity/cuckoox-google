@@ -1,5 +1,5 @@
 import { RecordId } from 'surrealdb';
-import { SurrealWorkerAPI } from '@/src/workers/surrealWorker';
+import { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 import { surrealClient } from '@/src/lib/surrealClient';
 
 // Generic query result interface

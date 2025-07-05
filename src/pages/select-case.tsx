@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { Case } from '@/src/contexts/AuthContext'; // Import Case interface
 import { useTranslation } from 'react-i18next';
-import { useDataService } from '@/src/contexts/NewSurrealProvider';
+import { useDataService } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import GlobalLoader from '@/src/components/GlobalLoader';
 import PageContainer from '@/src/components/PageContainer';

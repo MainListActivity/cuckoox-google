@@ -6,14 +6,13 @@ import React, {
   useState,
 } from 'react';
 import { surrealClient } from '@/src/lib/surrealClient';
-import type { SurrealWorkerAPI } from '@/src/workers/surrealWorker';
-import type { Remote } from 'comlink';
+import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 import { dataService } from '@/src/services/dataService';
 
 interface SurrealProviderProps {
   children: React.ReactNode;
   /** Provide a pre-initialised Surreal-like client (used in unit tests) */
-  client?: Remote<SurrealWorkerAPI> | any;
+  client?: SurrealWorkerAPI | any;
   autoConnect?: boolean;
 }
 
@@ -21,8 +20,8 @@ export interface SurrealContextValue {
   // Data operations (via DataService)
   dataService: typeof dataService;
   
-  // Direct worker access for raw operations
-  client: Remote<SurrealWorkerAPI> | null;
+  // Direct Service Worker access for raw operations
+  client: SurrealWorkerAPI | null;
   
   // Connection state
   isConnected: boolean;
@@ -40,7 +39,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   client: externalClient,
   autoConnect = true,
 }) => {
-  const [client, setClient] = useState<Remote<SurrealWorkerAPI> | null>(externalClient ?? null);
+  const [client, setClient] = useState<SurrealWorkerAPI | null>(externalClient ?? null);
   const [isConnecting, setConnecting] = useState(false);
   const [isConnected, setConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -110,7 +109,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         return undefined;
       },
     };
-    return new Proxy({}, handler) as unknown as Remote<SurrealWorkerAPI>;
+    return new Proxy({}, handler) as unknown as SurrealWorkerAPI;
   }, []);
 
   const value = useMemo<SurrealContextValue>(() => ({

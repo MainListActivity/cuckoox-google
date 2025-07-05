@@ -1,7 +1,6 @@
 import type { Delta as QuillDeltaType, Range as QuillRange } from 'quill/core';
 import Quill from 'quill';
-import type { SurrealWorkerAPI } from '@/src/workers/surrealWorker';
-import type { Remote } from 'comlink';
+import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 
 // 导出Delta类型
 export type QuillDelta = QuillDeltaType;
@@ -70,7 +69,7 @@ export interface CollaborationConfig {
   documentId?: string;
   userId?: string;
   userName?: string;
-  surreal?: Remote<SurrealWorkerAPI>;
+  surreal?: SurrealWorkerAPI;
 }
 
 // 文件上传接口

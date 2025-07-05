@@ -1,5 +1,4 @@
-import { wrap, Remote } from 'comlink';
-import type { SurrealWorkerAPI } from '@/src/workers/surrealWorker';
+import { SurrealServiceWorkerClient, type SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 
 // 租户代码检查错误类型
 export class TenantCodeMissingError extends Error {
@@ -10,8 +9,8 @@ export class TenantCodeMissingError extends Error {
 }
 
 // Singleton variables
-let clientPromise: Promise<Remote<SurrealWorkerAPI>> | null = null;
-let workerRef: Worker | null = null;
+let clientPromise: Promise<SurrealWorkerAPI> | null = null;
+let serviceWorkerClient: SurrealServiceWorkerClient | null = null;
 
 /**
  * 检查租户代码是否存在，如果不存在则清除认证状态并重定向到登录页面
@@ -40,28 +39,25 @@ export function checkTenantCodeAndRedirect(): boolean {
 }
 
 /**
- * Obtain a proxy to the SurrealDB worker. The worker will be created lazily on the
+ * Obtain a proxy to the SurrealDB Service Worker client. The client will be created lazily on the
  * first invocation and reused for subsequent calls.
  */
-export async function surrealClient(): Promise<Remote<SurrealWorkerAPI>> {
+export async function surrealClient(): Promise<SurrealWorkerAPI> {
   if (clientPromise) return clientPromise;
 
-  workerRef = new Worker(new URL('../workers/surrealWorker.ts', import.meta.url), {
-    type: 'module',
-  });
-  const proxy = wrap<SurrealWorkerAPI>(workerRef);
+  serviceWorkerClient = new SurrealServiceWorkerClient();
 
   clientPromise = (async () => {
     // 从localStorage获取租户代码，如果存在则使用租户代码作为database
     const tenantCode = localStorage.getItem('tenant_code');
     const database = tenantCode || import.meta.env.VITE_SURREALDB_DB || 'test';
     
-    await proxy.connect({
-      endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'http://localhost:8000/rpc',
+    await serviceWorkerClient!.connect({
+      endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
       namespace: import.meta.env.VITE_SURREALDB_NS || 'test',
       database: database,
     });
-    return proxy;
+    return serviceWorkerClient!;
   })();
 
   return clientPromise;
@@ -70,7 +66,7 @@ export async function surrealClient(): Promise<Remote<SurrealWorkerAPI>> {
 /**
  * 安全的 SurrealDB 客户端获取函数，在非登录页面时检查租户代码
  */
-export async function surrealClientSafe(): Promise<Remote<SurrealWorkerAPI>> {
+export async function surrealClientSafe(): Promise<SurrealWorkerAPI> {
   // 在非登录页面时检查租户代码
   if (window.location.pathname !== '/login' && !checkTenantCodeAndRedirect()) {
     throw new TenantCodeMissingError('Tenant code is missing, redirecting to login');
@@ -80,18 +76,19 @@ export async function surrealClientSafe(): Promise<Remote<SurrealWorkerAPI>> {
 }
 
 /**
- * Clean up the worker and reset the cached client. Call this when you need to fully
+ * Clean up the Service Worker client and reset the cached client. Call this when you need to fully
  * terminate the SurrealDB connection, e.g. on global logout.
  */
 export async function disposeSurrealClient() {
-  if (!clientPromise || !workerRef) return;
+  if (!clientPromise || !serviceWorkerClient) return;
   try {
     const client = await clientPromise;
     await client.close();
   } catch {
     // ignore
   }
-  workerRef.terminate();
+  // Note: Service Workers persist across tabs, so we don't terminate them
+  // We just reset our client reference
   clientPromise = null;
-  workerRef = null;
+  serviceWorkerClient = null;
 }

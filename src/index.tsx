@@ -12,6 +12,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'; // ADD
 import { CustomThemeProvider } from '@/src/contexts/ThemeContext'; // ADDED
 import { StyledEngineProvider } from '@mui/material/styles'; // ADDED
 
+// Register the service worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw-surreal.js')
+      .then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      })
+      .catch(error => {
+        console.log('ServiceWorker registration failed: ', error);
+      });
+  });
+}
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");
