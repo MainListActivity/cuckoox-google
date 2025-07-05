@@ -1,8 +1,7 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import authService from '@/src/services/authService';
-import { useAuth, AppUser } from '@/src/contexts/AuthContext'; // Import AppUser
-import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // ADDED
+import { useAuth, AppUser } from '@/src/contexts/AuthContext';
 import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
@@ -11,12 +10,12 @@ const OidcCallbackPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { setAuthState } = useAuth(); // Get setAuthState directly
-  const client = useSurrealClient(); // ADDED
+  // 移除直接使用SurrealClient
 
   useEffect(() => {
     const processCallback = async () => {
       try {
-        const oidcUser = await authService.loginRedirectCallback(client); // MODIFIED: pass client
+        const oidcUser = await authService.handleOidcCallback();
         
         if (oidcUser && oidcUser.profile) {
             // Construct AppUser from OIDC profile.
@@ -53,7 +52,7 @@ const OidcCallbackPage: React.FC = () => {
     };
 
     processCallback();
-  }, [navigate, setAuthState, client, t]); // Added client and t to dependency array
+  }, [navigate, setAuthState, t]);
 
   return (
     <GlobalLoader message={t('oidc_callback_loading_session', 'Processing login...')} />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSurreal } from '@/src/contexts/SurrealProvider'; // Adjust path as needed
+import { useSurrealContext } from '@/src/contexts/SurrealProvider'; // Adjust path as needed
 import { RecordId, Uuid } from 'surrealdb';
 
 // Interface for Meeting data, aligning with expected DB structure
@@ -30,7 +30,7 @@ export interface MeetingAttendee {
 }
 
 export function useLiveMeetings(caseId: string | null): Meeting[] {
-  const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const { client, isConnected } = useSurrealContext();
   const [meetingsList, setMeetingsList] = useState<Meeting[]>([]);
   const [error, setError] = useState<any>(null);
 
@@ -41,6 +41,18 @@ export function useLiveMeetings(caseId: string | null): Meeting[] {
   useEffect(() => {
     if (!client || !isConnected || !caseId) {
       setMeetingsList([]);
+      return;
+    }
+
+    // Check if client is ready by verifying it's a real client, not the dummy proxy
+    try {
+      // Try to access a property to see if it's the real client
+      if (!client.query || typeof client.query !== 'function') {
+        console.log('Client not ready yet, waiting...');
+        return;
+      }
+    } catch (e) {
+      console.log('Client proxy error, waiting for real client...');
       return;
     }
 

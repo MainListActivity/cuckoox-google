@@ -121,8 +121,7 @@ const DebugPanel: React.FC = () => {
     });
     console.log('Surreal State:', {
       isConnecting: surreal.isConnecting,
-      isSuccess: surreal.isSuccess,
-      isError: surreal.isError,
+      isConnected: surreal.isConnected,
       error: surreal.error?.message
     });
     console.groupEnd();
@@ -223,8 +222,8 @@ const DebugPanel: React.FC = () => {
         <AccordionDetails>
           <Typography variant="body2">
             Connecting: {surreal.isConnecting ? '⏳' : '✅'}<br/>
-            Connected: {surreal.isSuccess ? '✅' : '❌'}<br/>
-            Error: {surreal.isError ? '❌' : '✅'}<br/>
+            Connected: {surreal.isConnected ? '✅' : '❌'}<br/>
+            Error: {surreal.error ? '❌' : '✅'}<br/>
             Message: {surreal.error?.message || 'None'}
           </Typography>
         </AccordionDetails>

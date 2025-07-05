@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useDataService } from '@/src/contexts/SurrealProvider';
+import { RecordId } from 'surrealdb';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { addCaseMember } from '@/src/services/caseMemberService';
@@ -36,7 +37,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
   onCaseCreated 
 }) => {
   const { t } = useTranslation();
-  const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const dataService = useDataService();
   const { user } = useAuth();
   const { showSuccess } = useSnackbar();
 
@@ -133,7 +134,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
   }, [open]);
 
   const handleSave = async () => {
-    if (!isConnected) {
+    if (!dataService) {
       setError(t('create_case_error_no_connection', '数据库连接失败'));
       return;
     }
@@ -179,7 +180,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
 
     setIsSaving(true);
     try {
-      const createdCase = await client.create('case', caseData);
+      const createdCase = await dataService.create('case', caseData);
       console.log('Case created:', createdCase);
       
       let newCaseIdString: string | null = null;
@@ -197,13 +198,13 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
         try {
           // Add current user as owner to this new case
           await addCaseMember(
-            client,
-            newCaseIdString,
-            user.id.toString(),
+            dataService,
+            new RecordId('case', newCaseIdString),
+            user.id, // user.id已经是RecordId类型
             user.name,
             user.email,
             undefined,
-            'owner'
+            [new RecordId('role', 'owner')] // roleIds应该是数组
           );
           console.log(`Successfully added user ${user.id.toString()} as owner to case ${newCaseIdString}`);
         } catch (memberError) {

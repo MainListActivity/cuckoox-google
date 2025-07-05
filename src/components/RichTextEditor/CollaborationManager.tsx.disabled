@@ -1,0 +1,5 @@
+// CollaborationManager temporarily disabled due to worker refactoring
+// TODO: Refactor this component to work with new SurrealWorkerAPI
+export default function CollaborationManager() {
+  return null;
+}

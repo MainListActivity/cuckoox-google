@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurrealContext } from '@/src/contexts/SurrealProvider';
 import { Uuid } from 'surrealdb';
 
 // Generic type for count results
@@ -106,13 +106,19 @@ function createLiveMetricHook<TResultType, TDataType>(
 
   // The hook itself can now accept additional parameters like 'limit'
   return function useLiveMetric(caseId: string | null, limit?: number): LiveMetricReturn {
-    const { surreal: client, isSuccess: isConnected } = useSurreal();
+    const { client, isConnected } = useSurrealContext();
     const [metricValue, setMetricValue] = useState<TDataType>(defaultValue);
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
 
     const fetchMetric = useCallback(async (currentCaseId: string) => {
       if (!client || !isConnected) {
+        return;
+      }
+      
+      // Check if client is ready by verifying it's not the dummy proxy
+      if (typeof client.query !== 'function') {
+        console.log('Client not ready yet, waiting...');
         return;
       }
       
@@ -145,6 +151,13 @@ function createLiveMetricHook<TResultType, TDataType>(
     useEffect(() => {
       if (!client || !isConnected || !caseId) {
         setMetricValue(defaultValue);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check if client is ready by verifying it's not the dummy proxy
+      if (typeof client.query !== 'function') {
+        console.log('Client not ready yet, waiting...');
         setIsLoading(false);
         return;
       }

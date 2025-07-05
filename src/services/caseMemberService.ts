@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { CaseMember, Role } from '@/src/types/caseMember';
-import type { SurrealLike } from '@/src/types/db';
+import type { DataServiceType } from '@/src/services/dataService';
 import { RecordId } from 'surrealdb';
 
 // 案件信息接口
@@ -42,7 +42,7 @@ interface RoleQueryResult {
 }
 
 // 获取案件基本信息
-export const fetchCaseInfo = async (client: SurrealLike, caseId: RecordId): Promise<CaseInfo | null> => {
+export const fetchCaseInfo = async (dataService: DataServiceType, caseId: RecordId): Promise<CaseInfo | null> => {
   console.log(`[SurrealDB API] Fetching case info for: ${caseId}`);
   
   try {
@@ -51,7 +51,7 @@ export const fetchCaseInfo = async (client: SurrealLike, caseId: RecordId): Prom
       WHERE id = $caseId;
     `;
     
-    const result = await client.query<[CaseInfo[]]>(query, { caseId });
+    const result = await dataService.query<[CaseInfo[]]>(query, { caseId });
     
     if (!result || !result[0] || result[0].length === 0) {
       return null;
@@ -65,7 +65,7 @@ export const fetchCaseInfo = async (client: SurrealLike, caseId: RecordId): Prom
 };
 
 // 基于SurrealDB的案件成员服务
-export const fetchCaseMembers = async (client: SurrealLike, caseId: RecordId): Promise<CaseMember[]> => {
+export const fetchCaseMembers = async (dataService: DataServiceType, caseId: RecordId): Promise<CaseMember[]> => {
   console.log(`[SurrealDB API] Fetching members for case: ${caseId}`);
   
   try {
@@ -81,7 +81,7 @@ export const fetchCaseMembers = async (client: SurrealLike, caseId: RecordId): P
       FETCH out;
     `;
     
-    const result = await client.query<[MemberQueryResult[]]>(query, { caseId });
+    const result = await dataService.query<[MemberQueryResult[]]>(query, { caseId });
     
     if (!result || !result[0]) {
       return [];
@@ -104,7 +104,7 @@ export const fetchCaseMembers = async (client: SurrealLike, caseId: RecordId): P
 };
 
 export const addCaseMember = async (
-  client: SurrealLike, 
+  dataService: DataServiceType, 
   caseId: RecordId, 
   userId: RecordId, 
   userName: string, 
@@ -122,7 +122,7 @@ export const addCaseMember = async (
       AND out = $userId;
     `;
     
-    const existingResult = await client.query<[HasMemberQueryResult[]]>(existingQuery, { userId, caseId });
+    const existingResult = await dataService.query<[HasMemberQueryResult[]]>(existingQuery, { userId, caseId });
     
     if (existingResult && existingResult[0] && existingResult[0].length > 0) {
       console.warn(`[SurrealDB API] User ${userId} already exists in case ${caseId}.`);
@@ -132,7 +132,7 @@ export const addCaseMember = async (
         WHERE in = $userId AND case_id = $caseId 
         FETCH role_id;
       `;
-      const roleResult = await client.query<[RoleQueryResult[]]>(roleQuery, { userId, caseId });
+      const roleResult = await dataService.query<[RoleQueryResult[]]>(roleQuery, { userId, caseId });
       const existingRoles = roleResult && roleResult[0] 
         ? roleResult[0].map((r: RoleQueryResult) => r.role_id) : [];
       
@@ -152,7 +152,7 @@ export const addCaseMember = async (
         assigned_at = time::now();
     `;
     
-    const createMemberResult = await client.query<[HasMemberQueryResult[]]>(createMemberQuery, { userId, caseId });
+    const createMemberResult = await dataService.query<[HasMemberQueryResult[]]>(createMemberQuery, { userId, caseId });
     
     if (!createMemberResult || !createMemberResult[0] || createMemberResult[0].length === 0) {
       throw new Error('Failed to create case member relationship');
@@ -167,10 +167,10 @@ export const addCaseMember = async (
           assigned_at = time::now();
       `;
       
-      await client.query(createRoleQuery, { userId, roleId, caseId });
+      await dataService.query(createRoleQuery, { userId, roleId, caseId });
       
       // 获取角色详细信息
-      const roleInfo = await client.select<Role>(roleId);
+      const roleInfo = await dataService.select<Role>(roleId);
       if (roleInfo) {
         roles.push(roleInfo);
       }
@@ -192,7 +192,7 @@ export const addCaseMember = async (
   }
 };
 
-export const removeCaseMember = async (client: SurrealLike, caseId: RecordId, userId: RecordId): Promise<void> => {
+export const removeCaseMember = async (dataService: DataServiceType, caseId: RecordId, userId: RecordId): Promise<void> => {
   console.log(`[SurrealDB API] Removing user ${userId} from case ${caseId}`);
   
   try {
@@ -202,7 +202,7 @@ export const removeCaseMember = async (client: SurrealLike, caseId: RecordId, us
       WHERE id = $caseId;
     `;
     
-    const caseResult = await client.query<[CaseInfo[]]>(caseQuery, { caseId });
+    const caseResult = await dataService.query<[CaseInfo[]]>(caseQuery, { caseId });
     const caseData = caseResult && caseResult[0] && caseResult[0].length > 0 
       ? caseResult[0][0] : null;
     
@@ -216,7 +216,7 @@ export const removeCaseMember = async (client: SurrealLike, caseId: RecordId, us
       WHERE in = $userId AND case_id = $caseId;
     `;
     
-    await client.query(deleteRolesQuery, { userId, caseId });
+    await dataService.query(deleteRolesQuery, { userId, caseId });
     
     // 删除案件成员关系
     const deleteMemberQuery = `
@@ -225,7 +225,7 @@ export const removeCaseMember = async (client: SurrealLike, caseId: RecordId, us
       AND out = $userId;
     `;
     
-    await client.query(deleteMemberQuery, { userId, caseId });
+    await dataService.query(deleteMemberQuery, { userId, caseId });
     
   } catch (error) {
     console.error('[SurrealDB API] Error removing case member:', error);
@@ -251,7 +251,7 @@ export interface CreateUserAndAddToCaseParams {
 }
 
 export const createUserAndAddToCase = async (
-  client: SurrealLike,
+  dataService: DataServiceType,
   caseId: RecordId,
   params: CreateUserAndAddToCaseParams
 ): Promise<CaseMember> => {
@@ -269,7 +269,7 @@ export const createUserAndAddToCase = async (
       LIMIT 1;
     `;
     
-    const existingResult = await client.query<[UserQueryResult[]]>(existingUserQuery, {
+    const existingResult = await dataService.query<[UserQueryResult[]]>(existingUserQuery, {
       username: params.username,
       email: params.email
     });
@@ -295,7 +295,7 @@ export const createUserAndAddToCase = async (
           is_active = true;
       `;
       
-      const createUserResult = await client.query<[UserQueryResult[]]>(createUserQuery, {
+      const createUserResult = await dataService.query<[UserQueryResult[]]>(createUserQuery, {
         username: params.username,
         password_hash: params.password_hash,
         email: params.email,
@@ -321,7 +321,7 @@ export const createUserAndAddToCase = async (
       AND out = $userId;
     `;
     
-    const existingMemberResult = await client.query<[HasMemberQueryResult[]]>(existingMemberQuery, { 
+    const existingMemberResult = await dataService.query<[HasMemberQueryResult[]]>(existingMemberQuery, { 
       userId, 
       caseId 
     });
@@ -337,7 +337,7 @@ export const createUserAndAddToCase = async (
         assigned_at = time::now();
     `;
     
-    const createMemberResult = await client.query<[HasMemberQueryResult[]]>(createMemberQuery, { 
+    const createMemberResult = await dataService.query<[HasMemberQueryResult[]]>(createMemberQuery, { 
       userId, 
       caseId, 
       roleId: params.roleId 
@@ -354,10 +354,10 @@ export const createUserAndAddToCase = async (
         assigned_at = time::now();
     `;
     
-    await client.query(createRoleQuery, { userId, roleId: params.roleId, caseId });
+    await dataService.query(createRoleQuery, { userId, roleId: params.roleId, caseId });
     
     // 获取角色信息用于返回
-    const roleInfo = await client.select<Role>(params.roleId);
+    const roleInfo = await dataService.select<Role>(params.roleId);
     const roles = roleInfo ? [roleInfo] : [];
     
     const caseMember: CaseMember = {
@@ -377,7 +377,7 @@ export const createUserAndAddToCase = async (
   }
 };
 
-export const searchSystemUsers = async (client: SurrealLike, query: string): Promise<SystemUser[]> => {
+export const searchSystemUsers = async (dataService: DataServiceType, query: string): Promise<SystemUser[]> => {
   console.log(`[SurrealDB API] Searching system users with query: ${query}`);
   
   try {
@@ -398,7 +398,7 @@ export const searchSystemUsers = async (client: SurrealLike, query: string): Pro
       params.query = query;
     }
     
-    const result = await client.query<[UserQueryResult[]]>(searchQuery, params);
+    const result = await dataService.query<[UserQueryResult[]]>(searchQuery, params);
     
     if (!result || !result[0]) {
       return [];
@@ -419,7 +419,7 @@ export const searchSystemUsers = async (client: SurrealLike, query: string): Pro
 };
 
 export const changeCaseOwner = async (
-  client: SurrealLike, 
+  dataService: DataServiceType, 
   caseId: RecordId, 
   newOwnerUserId: RecordId
 ): Promise<void> => {
@@ -432,7 +432,7 @@ export const changeCaseOwner = async (
       WHERE in = $caseId AND out = $newOwnerUserId;
     `;
     
-    const memberResult = await client.query<[HasMemberQueryResult[]]>(memberQuery, { caseId, newOwnerUserId });
+    const memberResult = await dataService.query<[HasMemberQueryResult[]]>(memberQuery, { caseId, newOwnerUserId });
     
     if (!memberResult || !memberResult[0] || memberResult[0].length === 0) {
       throw new Error('New case lead must be a member of the case.');
@@ -446,7 +446,7 @@ export const changeCaseOwner = async (
       WHERE id = $caseId;
     `;
     
-    const result = await client.query<[CaseInfo[]]>(updateCaseQuery, { 
+    const result = await dataService.query<[CaseInfo[]]>(updateCaseQuery, { 
       caseId, 
       newOwnerUserId 
     });
@@ -464,7 +464,7 @@ export const changeCaseOwner = async (
 };
 
 export const changeMemberRole = async (
-  client: SurrealLike, 
+  dataService: DataServiceType, 
   caseId: RecordId, 
   userId: RecordId, 
   newRoleIds: RecordId[]
@@ -478,7 +478,7 @@ export const changeMemberRole = async (
       WHERE in = $caseId AND out = $userId;
     `;
     
-    const memberResult = await client.query<[HasMemberQueryResult[]]>(memberQuery, { userId, caseId });
+    const memberResult = await dataService.query<[HasMemberQueryResult[]]>(memberQuery, { userId, caseId });
     
     if (!memberResult || !memberResult[0] || memberResult[0].length === 0) {
       throw new Error(`User ${userId} not found in case ${caseId}`);
@@ -490,7 +490,7 @@ export const changeMemberRole = async (
       WHERE in = $userId AND case_id = $caseId;
     `;
     
-    await client.query(deleteRolesQuery, { userId, caseId });
+    await dataService.query(deleteRolesQuery, { userId, caseId });
     
     // 为每个新角色创建 has_case_role 关系，同时获取角色信息
     const roles: Role[] = [];
@@ -501,10 +501,10 @@ export const changeMemberRole = async (
           assigned_at = time::now();
       `;
       
-      await client.query(createRoleQuery, { userId, roleId, caseId });
+      await dataService.query(createRoleQuery, { userId, roleId, caseId });
       
       // 获取角色详细信息
-      const roleInfo = await client.select<Role>(roleId);
+      const roleInfo = await dataService.select<Role>(roleId);
       if (roleInfo) {
         roles.push(roleInfo);
       }
@@ -512,7 +512,7 @@ export const changeMemberRole = async (
     
     // 获取用户信息
     const userQuery = `SELECT id, name, email FROM user WHERE id = $userId;`;
-    const userResult = await client.query<[UserQueryResult[]]>(userQuery, { userId });
+    const userResult = await dataService.query<[UserQueryResult[]]>(userQuery, { userId });
     const user = userResult && userResult[0] && userResult[0].length > 0 
       ? userResult[0][0] : null;
     

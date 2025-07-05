@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurrealContext } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 
 export interface Participant {
@@ -24,16 +24,24 @@ interface RawCreditorParticipant {
 }
 
 export function useCaseParticipants(caseId: string | null): { participants: Participant[], isLoading: boolean } {
-  const { surreal, isSuccess } = useSurreal();
+  const { client: surreal, isConnected } = useSurrealContext();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const fetchParticipants = useCallback(async (currentCaseId: string) => {
-    if (!surreal || !isSuccess) {
+    if (!surreal || !isConnected) {
       // console.warn('Surreal client not connected, skipping participant fetch.');
       setParticipants([]);
       return;
     }
+    
+    // Check if client is ready by verifying it's not the dummy proxy
+    if (typeof surreal.query !== 'function') {
+      console.log('Client not ready yet, waiting...');
+      setParticipants([]);
+      return;
+    }
+    
     setIsLoading(true);
     try {
       // 使用图查询获取案件成员
@@ -88,16 +96,16 @@ export function useCaseParticipants(caseId: string | null): { participants: Part
     } finally {
       setIsLoading(false);
     }
-  }, [surreal, isSuccess]);
+  }, [surreal, isConnected]);
 
   useEffect(() => {
-    if (caseId && surreal && isSuccess) {
+    if (caseId && surreal && isConnected) {
       fetchParticipants(caseId);
     } else {
       setParticipants([]); // Clear if no caseId or client not ready
       setIsLoading(false);
     }
-  }, [caseId, surreal, isSuccess, fetchParticipants]);
+  }, [caseId, surreal, isConnected, fetchParticipants]);
 
   return { participants, isLoading };
 }

@@ -12,7 +12,7 @@ import {
   useTheme,
   useMediaQuery,
 } from '@mui/material';
-import { useSurrealClient as useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurrealContext } from '@/src/contexts/SurrealProvider';
 import { useTranslation } from 'react-i18next';
 import { uploadFile } from '@/src/services/fileUploadService';
 
@@ -29,7 +29,7 @@ import type {
   RemoteCursor,
   QuillDelta,
 } from './types';
-import { StringRecordId } from 'surrealdb';
+// RecordId removed as not needed after refactor
 
 // 检查是否在测试环境
 const isTestEnvironment = process.env.NODE_ENV === 'test';
@@ -69,7 +69,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
     const { t } = useTranslation();
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const surreal = useSurreal();
+    const { client: surreal, isConnected } = useSurrealContext();
     
     // Refs
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -109,19 +109,19 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         ? () => onSave(currentContent)
         : async () => {
             // 默认保存逻辑：写入 SurrealDB
-            if (!surreal || surreal.status !== 'connected' || !documentId || isTestEnvironment) {
+            if (!surreal || !isConnected || !documentId || isTestEnvironment) {
               console.warn('[RichTextEditor] 未提供 onSave，且 SurrealDB 未连接或缺少 documentId，跳过保存');
               return;
             }
 
             try {
               // 如果文档不存在则先创建
-              const existing = await surreal.select(new StringRecordId(documentId));
+              const existing = await surreal.select(documentId);
               if (!existing) {
-                await surreal.create(new StringRecordId(documentId), { content: currentContent });
+                await surreal.create(documentId, { content: currentContent });
               } else {
                 existing.content = currentContent;
-                await surreal.update(new StringRecordId(documentId), existing);
+                await surreal.update(documentId, existing);
               }
             } catch (e) {
               console.error('[RichTextEditor] 默认保存到 SurrealDB 失败:', e);
@@ -148,7 +148,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       if (!enableAutoSave) return;
 
       // 如果没有外部 onSave，则需要确保内部默认保存可用
-      if (!onSave && (!surreal || surreal.status !== 'connected' || !documentId)) {
+      if (!onSave && (!surreal || !isConnected || !documentId)) {
         return; // 无法自动保存
       }
 
@@ -162,7 +162,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           handleSave();
         }
       }, autoSaveInterval);
-    }, [enableAutoSave, onSave, hasUnsavedChanges, isSaving, autoSaveInterval, handleSave, surreal, documentId]);
+    }, [enableAutoSave, onSave, hasUnsavedChanges, isSaving, autoSaveInterval, handleSave, surreal, documentId, isConnected]);
 
     // 内容变化处理器
     const handleTextChange = useCallback((currentContentsDelta: QuillDelta, changeDelta: QuillDelta, source: string) => {
@@ -675,22 +675,8 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
           />
         </Box>
 
-        {/* 协作管理器 */}
-        {documentId && userId && surreal && (
-          <CollaborationManager
-            key={`collaboration-${documentId}-${userId}`}
-            quillRef={editorCoreRef}
-            config={{
-              documentId,
-              userId,
-              userName,
-              surreal,
-            }}
-            onTextChange={handleTextChange}
-            onSelectionChange={onSelectionChange}
-            onRemoteCursorsChange={setRemoteCursors}
-          />
-        )}
+        {/* 协作管理器 - 暂时禁用直到worker重构完成 */}
+        {/* TODO: 重新启用协作功能 */}
       </Box>
     );
   }

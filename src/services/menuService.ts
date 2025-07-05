@@ -1,6 +1,6 @@
 import { RecordId } from 'surrealdb';
 import { NavItemType } from '../contexts/AuthContext';
-import { surrealClient } from '@/src/lib/surrealClient';
+import { dataService } from '@/src/services/dataService';
 
 // 菜单元数据接口，对应数据库中的 menu_metadata 表
 interface MenuMetadata {
@@ -34,33 +34,14 @@ interface OperationQueryResult {
   operation_id: string;
 }
 
-type SurrealQueryable = {
-  query: (sql: string, vars?: Record<string, unknown>) => Promise<unknown>;
-};
-
 class MenuService {
-  private client: SurrealQueryable | null = null;
-
   /**
-   * Allow external injection of a pre-initialised client (e.g. via SurrealProvider).
+   * Set DataService for dependency injection (for backward compatibility)
+   * @param dataService DataService instance 
    */
-  setClient(client: SurrealQueryable | null) {
-    this.client = client;
-  }
-
-  /**
-   * Ensure we have a usable Surreal client with a `query` method. Falls back to creating
-   * (or reusing) the global worker proxy via `surrealClient()` if the injected client is
-   * missing or invalid.
-   */
-  private async ensureClient(): Promise<SurrealQueryable> {
-    if (this.client && typeof (this.client as any).query === 'function') {
-      return this.client;
-    }
-
-    // Create / reuse the global proxy
-    this.client = await surrealClient();
-    return this.client;
+  setDataService(dataService: any) {
+    // For backward compatibility - we use the global dataService
+    console.log('MenuService.setDataService called with:', dataService);
   }
 
   /**
@@ -70,8 +51,7 @@ class MenuService {
    * @returns 用户可访问的菜单列表
    */
   async loadUserMenus(caseId?: RecordId | null): Promise<NavItemType[]> {
-    const client = await this.ensureClient();
-    console.log('MenuService.loadUserMenus using client:', client);
+    console.log('MenuService.loadUserMenus using dataService');
     
     try {
       // 使用数据库中定义的图查询函数获取用户可访问的菜单
@@ -80,23 +60,19 @@ class MenuService {
       const params = caseId ? { case_id: caseId } : {};
       console.log('Executing query:', query, 'with params:', params);
       
-      const raw = (await client.query(query, params)) as unknown;
+      const menuItems = await dataService.query<MenuMetadata[]>(query, params);
 
-      const rows: unknown = (raw as { result?: unknown }).result ?? raw;
-
-      if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(rows[0])) {
+      if (!Array.isArray(menuItems) || menuItems.length === 0) {
         console.log('No menus found in results');
         return [];
       }
-
-      const menuItems = rows[0] as MenuMetadata[];
       console.log('Menu items from DB:', menuItems);
       
       // 转换为 NavItemType 格式
       const navItems: NavItemType[] = menuItems
-        .filter((menu: MenuMetadata) => menu.is_active) // 只返回激活的菜单
-        .sort((a: MenuMetadata, b: MenuMetadata) => a.display_order - b.display_order) // 按显示顺序排序
-        .map((menu: MenuMetadata) => ({
+        .filter((menu) => menu.is_active) // 只返回激活的菜单
+        .sort((a, b) => a.display_order - b.display_order) // 按显示顺序排序
+        .map((menu) => ({
           id: menu.menu_id,
           path: menu.path,
           labelKey: menu.label_key,
@@ -123,18 +99,15 @@ class MenuService {
    * @returns 用户可执行的操作列表
    */
   async loadUserOperations(menuId: string, caseId?: RecordId | null): Promise<OperationMetadata[]> {
-    const client = await this.ensureClient();
     try {
       const query = `select * from operation_metadata where menu_id = $menu_id`;
       const params = caseId ? { case_id: caseId, menu_id: menuId } : { menu_id: menuId };
-      const raw = (await client.query(query, params)) as unknown;
-      const rows: unknown = (raw as { result?: unknown }).result ?? raw;
+      const ops = await dataService.query<OperationMetadata[]>(query, params);
 
-      if (!Array.isArray(rows) || rows.length === 0 || !Array.isArray(rows[0])) {
+      if (!Array.isArray(ops) || ops.length === 0) {
         console.log(`No operations found in menu ${menuId}`);
         return [];
       }
-      const ops = rows[0] as OperationMetadata[];
       console.log('Operations from DB:', ops);
       return ops;
     } catch (error) {
@@ -151,13 +124,11 @@ class MenuService {
    * @returns 是否有权限
    */
   async hasOperation(operationId: string, caseId?: RecordId | null): Promise<boolean> {
-    const client = await this.ensureClient();
     try {
       const query = `select * from operation_metadata where operation_id = $operation_id`;
       const params = caseId ? { case_id: caseId, operation_id: operationId } : { operation_id: operationId };
-      const raw = (await client.query(query, params)) as unknown;
-      const rows: unknown = (raw as { result?: unknown }).result ?? raw;
-      return Array.isArray(rows) && Array.isArray(rows[0]) && rows[0].length > 0;
+      const result = await dataService.query<OperationMetadata[]>(query, params);
+      return Array.isArray(result) && result.length > 0;
     } catch (error) {
       console.error(`Error checking operation ${operationId}:`, error);
       return false;
@@ -172,15 +143,12 @@ class MenuService {
    * @returns 操作ID到权限的映射
    */
   async hasOperations(operationIds: string[], caseId?: RecordId | null): Promise<Record<string, boolean>> {
-    const client = await this.ensureClient();
-    
     try {
       const query = `select * from operation_metadata`;
       const params = caseId ? { case_id: caseId } : {};
-      const raw = (await client.query(query, params)) as unknown;
-      const rows: unknown = (raw as { result?: unknown }).result ?? raw;
-      const firstRowArray = Array.isArray(rows) && Array.isArray(rows[0]) ? (rows[0] as OperationQueryResult[]) : [];
-      const availableOperations = new Set(firstRowArray.map((item) => item.operation_id));
+      const operations = await dataService.query<OperationQueryResult[]>(query, params);
+      const operationsArray = Array.isArray(operations) ? operations : [];
+      const availableOperations = new Set(operationsArray.map((item) => item.operation_id));
       console.log('Available operations:', availableOperations);
       const permissions: Record<string, boolean> = {};
       operationIds.forEach(id => {
@@ -207,8 +175,6 @@ class MenuService {
    * @returns 是否有权限
    */
   async hasMenuAccess(userId: string, menuId: string, caseId?: string | null): Promise<boolean> {
-    const client = await this.ensureClient();
-    
     try {
       const query = `
         LET $global_roles = (SELECT out FROM $user_id->has_role);
@@ -226,13 +192,12 @@ class MenuService {
         ) LIMIT 1;
       `;
       
-      const raw = (await client.query(query, {
+      const result = await dataService.query<any[]>(query, {
         user_id: userId,
         menu_id: menuId,
         case_id: caseId || null
-      })) as unknown;
-      const rows: unknown = (raw as { result?: unknown }).result ?? raw;
-      return Array.isArray(rows) && Array.isArray(rows[0]) && rows[0].length > 0;
+      });
+      return Array.isArray(result) && result.length > 0;
     } catch (error) {
       console.error(`Error checking menu access ${menuId} for user ${userId}:`, error);
       return false;

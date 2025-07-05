@@ -1,6 +1,7 @@
 import type { Delta as QuillDeltaType, Range as QuillRange } from 'quill/core';
 import Quill from 'quill';
-import type Surreal from 'surrealdb';
+import type { SurrealWorkerAPI } from '@/src/workers/surrealWorker';
+import type { Remote } from 'comlink';
 
 // 导出Delta类型
 export type QuillDelta = QuillDeltaType;
@@ -69,7 +70,7 @@ export interface CollaborationConfig {
   documentId?: string;
   userId?: string;
   userName?: string;
-  surreal?: Surreal;
+  surreal?: Remote<SurrealWorkerAPI>;
 }
 
 // 文件上传接口
@@ -80,6 +81,8 @@ export interface FileUploadHandler {
 // 主要Props接口
 export interface RichTextEditorProps {
   defaultValue?: QuillDelta | string;
+  value?: QuillDelta | string; // 支持受控组件模式
+  onChange?: (newDelta: QuillDelta) => void; // 支持受控组件模式
   onTextChange?: (currentContentsDelta: QuillDelta, changeDelta: QuillDelta, source: string) => void;
   onSelectionChange?: (range: QuillRange | null, oldRange: QuillRange | null, source: string) => void;
   placeholder?: string;
@@ -91,6 +94,10 @@ export interface RichTextEditorProps {
   contextInfo?: ContextInfo;
   breadcrumbs?: React.ReactNode;
   actions?: React.ReactNode;
+  
+  // 全屏相关props
+  enableFullscreen?: boolean;
+  onFullscreenChange?: (isFullscreen: boolean) => void;
 
   // 保存相关功能
   onSave?: (content: QuillDelta) => Promise<void>;

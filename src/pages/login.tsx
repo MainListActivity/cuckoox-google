@@ -2,8 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth,AppUser } from '@/src/contexts/AuthContext';
 // import authService from '@/src/services/authService'; // GitHub OIDC login - 暂时屏蔽
-import { useSurreal } from '@/src/contexts/SurrealProvider';
-import { surrealClient } from '@/src/lib/surrealClient';
+import authService from '@/src/services/authService';
 import { RecordId } from 'surrealdb';
 import { useTranslation } from 'react-i18next';
 import GlobalLoader from '@/src/components/GlobalLoader';
@@ -32,7 +31,7 @@ import Logo from '../components/Logo';
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
-  const { setTokens, setTenantCode: setSurrealTenantCode } = useSurreal();
+  // 移除直接使用SurrealProvider的认证方法
   const auth = useAuth(); // Store the full context
   const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState, user } = auth; // Destructure user here
   const navigate = useNavigate();
@@ -167,17 +166,13 @@ const LoginPage: React.FC = () => {
         navigate('/root-admin', { replace: true });
       } else {
         // 租户用户登录成功
-        // 保存租户代码到SurrealProvider
+        // 使用AuthService统一处理认证和连接
         if (tenantCode) {
-          await setSurrealTenantCode(tenantCode);
+          await authService.setTenantCode(tenantCode);
         }
         
-        // 使用SurrealProvider存储令牌
-        setTokens(data.access_token, data.refresh_token, data.expires_in);
-
-        // 使用SurrealDB认证（使用JWT令牌）
-        const surrealProxy = await surrealClient();
-        await surrealProxy.authenticate(data.access_token);
+        // 通过AuthService设置tokens并自动认证
+        await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
 
         console.log('User successfully logged in with password.');
 

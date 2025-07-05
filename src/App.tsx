@@ -1,7 +1,7 @@
 import React, {Suspense, ReactNode, useEffect} from 'react';
 import {Routes, Route, Navigate, useLocation, useNavigate} from 'react-router-dom';
 import {useAuth} from '@/src/contexts/AuthContext';
-import {useSurreal} from '@/src/contexts/SurrealProvider';
+import {useSurrealContext} from '@/src/contexts/SurrealProvider';
 import {useTranslation} from 'react-i18next';
 import DebugPanel from '@/src/components/DebugPanel';
 // Remove MUI ThemeProvider, use our own from ThemeContext
@@ -52,7 +52,7 @@ const RootAdminPage = React.lazy(() => import('@/src/pages/root-admin/index'));
 
 
 function App() {
-    const {isSuccess, isConnecting, isError, error: surrealError} = useSurreal();
+    const {isConnected, isConnecting, error: surrealError} = useSurrealContext();
     const {t} = useTranslation();
     const auth = useAuth();
     const location = useLocation();
@@ -94,17 +94,17 @@ function App() {
     }
 
     // Use auth.isLoggedIn in the condition for rendering LoginPage
-    if (isError) {
+    if (surrealError) {
         return (
             <GlobalError
                 title={t('error.globalTitle', 'Application Error')}
-                message={surrealError ? surrealError.message : t('error.unknownDbError', 'An unknown database error occurred.')}
+                message={surrealError.message || t('error.unknownDbError', 'An unknown database error occurred.')}
             />
         );
     }
 
     // Potentially handle disconnected state differently, e.g., show a specific message or loader
-    if (!isSuccess && !surrealError) { // No initial connection error, but now disconnected
+    if (!isConnected && !surrealError) { // No initial connection error, but now disconnected
         return <GlobalLoader
             message={t('error.disconnectedMessage', 'Database connection lost. Attempting to reconnect...')}/>;
         // Or use GlobalError:

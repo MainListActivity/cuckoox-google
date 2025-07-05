@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { Case } from '@/src/contexts/AuthContext'; // Import Case interface
 import { useTranslation } from 'react-i18next';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useDataService } from '@/src/contexts/NewSurrealProvider';
 import { RecordId } from 'surrealdb';
 import GlobalLoader from '@/src/components/GlobalLoader';
 import PageContainer from '@/src/components/PageContainer';
@@ -57,7 +57,7 @@ const CaseSelectionPage: React.FC = () => {
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { surreal: client, isSuccess: isConnected, connect, isConnecting } = useSurreal();
+  const dataService = useDataService();
 
   // Local state for cases with extended information
   const [cases, setCases] = useState<ExtendedCase[]>([]);
@@ -67,18 +67,7 @@ const CaseSelectionPage: React.FC = () => {
   // Fetch user's cases from SurrealDB
   useEffect(() => {
     const fetchUserCases = async () => {
-      // Ensure Surreal client is connected before querying
-      if (!isConnected) {
-        // Trigger connection if not already in progress
-        if (!isConnecting) {
-          try { await connect(); } catch { /* ignore */ }
-        }
-        // Wait for next effect cycle after connection succeeds
-        setIsLoadingCases(false);
-        return;
-      }
-
-      if (!user || !user.id || typeof (client as any)?.query !== 'function') {
+      if (!user || !user.id) {
         setIsLoadingCases(false);
         return;
       }
@@ -102,19 +91,14 @@ const CaseSelectionPage: React.FC = () => {
           FROM case;
         `;
 
-        // Execute query and cast result – Surreal worker returns a result object; extract rows safely
-        const raw = (await client.query(query)) as unknown;
-
-        // Surreal JavaScript driver returns an object with a `result` field; the worker may return rows directly.
-        const rows: unknown = (raw as { result?: unknown }).result ?? raw;
+        // Execute query using DataService
+        const rows = await dataService.query<ExtendedCase[]>(query);
 
         if (Array.isArray(rows)) {
-          const typedRows = rows as ExtendedCase[];
-
           // Ensure name has fallback and deduplicate by id
           const uniqueCases = Array.from(
             new Map<string, ExtendedCase>(
-              typedRows.map((c) => [c.id.toString(), { ...c, name: c.name ?? '未命名案件' }])
+              rows.map((c) => [c.id.toString(), { ...c, name: c.name ?? '未命名案件' }])
             ).values()
           );
 
@@ -132,7 +116,7 @@ const CaseSelectionPage: React.FC = () => {
     };
 
     fetchUserCases();
-  }, [isConnected, client, user, connect, isConnecting]);
+  }, [dataService, user]);
 
   // Handle case selection
   const handleCaseSelect = async (caseToSelect: ExtendedCase) => {

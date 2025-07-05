@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurrealContext } from '@/src/contexts/SurrealProvider';
 import { RecordId, Uuid } from 'surrealdb';
 import { 
   Message, 
@@ -33,7 +33,7 @@ export function useConversationsList(userId: RecordId | null): {
   error: unknown; 
   setConversations: React.Dispatch<React.SetStateAction<ConversationSummary[]>>; // Added setter
 } {
-  const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const { client, isConnected } = useSurrealContext();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<unknown>(null);
@@ -41,6 +41,13 @@ export function useConversationsList(userId: RecordId | null): {
 
   const fetchConversations = useCallback(async (currentUserId: RecordId) => {
     if (!client || !isConnected) return;
+    
+    // Check if client is ready by verifying it's not the dummy proxy
+    if (typeof client.query !== 'function') {
+      console.log('Client not ready yet, waiting...');
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -164,7 +171,7 @@ export function useSystemNotifications(userId: RecordId | null, caseId?: RecordI
   error: unknown; 
   setNotifications: React.Dispatch<React.SetStateAction<(CaseRobotReminderMessage | BusinessNotificationMessage)[]>>; // Added setter
 } {
-  const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const { client, isConnected } = useSurrealContext();
   const [notifications, setNotifications] = useState<(CaseRobotReminderMessage | BusinessNotificationMessage)[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<unknown>(null);
@@ -172,6 +179,13 @@ export function useSystemNotifications(userId: RecordId | null, caseId?: RecordI
 
   const fetchNotifications = useCallback(async (currentUserId: RecordId, currentCaseId?: RecordId | null) => {
     if (!client || !isConnected) return;
+    
+    // Check if client is ready by verifying it's not the dummy proxy
+    if (typeof client.query !== 'function') {
+      console.log('Client not ready yet, waiting...');
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     try {

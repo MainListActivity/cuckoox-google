@@ -1,0 +1,20 @@
+{
+    "mcpServers": {
+        "context7": {
+            "command": "bunx",
+            "args": [
+                "-y",
+                "@upstash/context7-mcp"
+            ]
+        },
+        "browsermcp": {
+            "command": "bunx",
+            "args": [
+                "@browsermcp/mcp"
+            ]
+        }
+    },
+    "usageStatisticsEnabled": true,
+    "hideTips": false,
+    "contextFileName":"CLAUDE.md"
+}
