@@ -94,7 +94,7 @@ const RootAdminPage: React.FC = () => {
   const loadTenants = async () => {
     setIsLoadingTenants(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/tenants`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/tenants`);
       if (response.ok) {
         const data = await response.json();
         setTenants(data);
@@ -109,7 +109,7 @@ const RootAdminPage: React.FC = () => {
   const loadRootAdmins = async () => {
     setIsLoadingRootAdmins(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/root-admins`);
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/root-admins`);
       if (response.ok) {
         const data = await response.json();
         setRootAdmins(data);
@@ -125,7 +125,7 @@ const RootAdminPage: React.FC = () => {
     setCreateTenantError(null);
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/tenants`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/tenants`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,7 +155,7 @@ const RootAdminPage: React.FC = () => {
     setCreateRootAdminError(null);
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/api/root-admins`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/root-admins`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

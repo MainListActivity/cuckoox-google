@@ -96,7 +96,7 @@ const jwtAuth = {
 // These settings need to be configured based on your Quarkus OIDC provider.
 // Use Vite environment variables (import.meta.env.VITE_...)
 const oidcSettings: UserManagerSettings = {
-  authority: import.meta.env.VITE_OIDC_AUTHORITY || 'http://localhost:8080/realms/your-realm', // e.g., Quarkus Keycloak realm URL
+  authority: import.meta.env.VITE_OIDC_AUTHORITY || 'http://localhost:8082/realms/your-realm', // e.g., Quarkus Keycloak realm URL
   client_id: import.meta.env.VITE_OIDC_CLIENT_ID || 'your-client-id', // Client ID configured in Quarkus/Keycloak
   redirect_uri: import.meta.env.VITE_OIDC_REDIRECT_URI || window.location.origin + '/oidc-callback', // Callback URL registered with OIDC provider
   post_logout_redirect_uri: import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || window.location.origin + '/login',

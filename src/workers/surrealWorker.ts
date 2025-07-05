@@ -49,6 +49,10 @@ export interface SurrealWorkerAPI {
   getCurrentUser(): Promise<any>;
   /** Cache user info inside worker */
   setCurrentUser(user: any): Promise<void>;
+  /** Store tenant code */
+  setTenantCode(tenantCode: string): Promise<void>;
+  /** Get stored tenant code */
+  getTenantCode(): Promise<string | null>;
 }
 
 class SurrealWorkerImpl implements SurrealWorkerAPI {
@@ -57,11 +61,32 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
   private refreshToken: string | null = null;
   private tokenExpiresAt: number | null = null;
   private currentUser: any = null;
+  // 存储当前连接的配置
+  private currentEndpoint: string | null = null;
+  private currentNamespace: string | null = null;
+  private currentDatabase: string | null = null;
   private STORAGE_KEYS = {
     ACCESS: 'access_token',
     REFRESH: 'refresh_token',
     EXPIRES: 'token_expires_at',
+    TENANT_CODE: 'tenant_code',
   };
+
+  constructor() {
+    // 在 worker 启动时从 localStorage 加载 token 信息
+    this.loadTokensFromStorage();
+  }
+
+  private loadTokensFromStorage() {
+    try {
+      this.accessToken = this.storageGet(this.STORAGE_KEYS.ACCESS);
+      this.refreshToken = this.storageGet(this.STORAGE_KEYS.REFRESH);
+      const expiresStr = this.storageGet(this.STORAGE_KEYS.EXPIRES);
+      this.tokenExpiresAt = expiresStr ? parseInt(expiresStr, 10) : null;
+    } catch (e) {
+      console.error('SurrealWorker: Failed to load tokens from storage:', e);
+    }
+  }
 
   private storageSet(key: string, val: string | null) {
     try {
@@ -98,19 +123,59 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
   }
 
   async connect({ endpoint, namespace, database, params, auth }: SurrealWorkerAPI['connect'] extends (arg: infer P) => any ? P : never): Promise<boolean> {
-    if (this.db.status === 'connected') return true;
+    // 检查是否需要重新连接
+    const needReconnect = this.db.status !== 'connected' || 
+                         this.currentEndpoint !== endpoint ||
+                         this.currentNamespace !== namespace ||
+                         this.currentDatabase !== database;
+    
+    if (!needReconnect) {
+      return true;
+    }
+    
+    // 如果已连接但参数不同，先关闭连接
+    if (this.db.status === 'connected') {
+      await this.db.close();
+    }
+    
+    // 建立新连接
     await this.db.connect(endpoint, params);
     await this.db.use({ namespace, database });
+    
+    // 保存连接配置
+    this.currentEndpoint = endpoint;
+    this.currentNamespace = namespace;
+    this.currentDatabase = database;
+    
+    // 如果有认证信息，进行认证
     if (auth) {
       await this.db.signin(auth);
     }
+    
+    // 尝试使用存储的 token 进行认证
+    const storedToken = this.storageGet(this.STORAGE_KEYS.ACCESS);
+    if (storedToken && !this.isTokenExpired(this.tokenExpiresAt)) {
+      try {
+        await this.db.authenticate(storedToken);
+        console.log('SurrealWorker: Successfully authenticated with stored token');
+      } catch (e) {
+        console.log('SurrealWorker: Stored token authentication failed:', e);
+        // 清除无效的 token
+        await this.clearTokens();
+      }
+    }
+    
     return true;
   }
 
   async query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
     try {
       const res = await this.db.query<T[]>(sql, vars);
-      return (res as any)[0] as T;
+      // SurrealDB query returns an array of results, get the first result
+      if (Array.isArray(res) && res.length > 0) {
+        return res[0] as T;
+      }
+      return res as T;
     } catch (e) {
       if (this.isSessionExpiredError(e)) {
         await this.clearTokens();
@@ -122,7 +187,11 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
   async mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
     try {
       const res = await this.db.query<T[]>(sql, vars);
-      return (res as any)[0] as T;
+      // SurrealDB query returns an array of results, get the first result
+      if (Array.isArray(res) && res.length > 0) {
+        return res[0] as T;
+      }
+      return res as T;
     } catch (e) {
       if (this.isSessionExpiredError(e)) {
         await this.clearTokens();
@@ -167,6 +236,10 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
 
   async authenticate(token: string): Promise<void> {
     await this.db.authenticate(token);
+    // 更新存储的 token
+    this.accessToken = token;
+    this.storageSet(this.STORAGE_KEYS.ACCESS, token);
+    console.log('SurrealWorker: Successfully authenticated and stored token');
   }
 
   async signin(auth: AnyAuth): Promise<void> {
@@ -187,6 +260,26 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
     this.storageSet(this.STORAGE_KEYS.ACCESS, accessToken);
     if (refreshToken) this.storageSet(this.STORAGE_KEYS.REFRESH, refreshToken);
     if (this.tokenExpiresAt) this.storageSet(this.STORAGE_KEYS.EXPIRES, String(this.tokenExpiresAt));
+    
+    // 自动使用新的 token 进行认证
+    if (this.db.status === 'connected') {
+      try {
+        await this.db.authenticate(accessToken);
+        console.log('SurrealWorker: Successfully authenticated with new token');
+      } catch (e) {
+        console.error('SurrealWorker: Failed to authenticate with new token:', e);
+        throw e;
+      }
+    }
+  }
+  
+  // 添加租户代码存储方法
+  async setTenantCode(tenantCode: string): Promise<void> {
+    this.storageSet(this.STORAGE_KEYS.TENANT_CODE, tenantCode);
+  }
+  
+  async getTenantCode(): Promise<string | null> {
+    return this.storageGet(this.STORAGE_KEYS.TENANT_CODE);
   }
 
   async clearTokens(): Promise<void> {
@@ -197,6 +290,8 @@ class SurrealWorkerImpl implements SurrealWorkerAPI {
     this.storageSet(this.STORAGE_KEYS.ACCESS, null);
     this.storageSet(this.STORAGE_KEYS.REFRESH, null);
     this.storageSet(this.STORAGE_KEYS.EXPIRES, null);
+    // 清理租户代码
+    this.storageSet(this.STORAGE_KEYS.TENANT_CODE, null);
   }
 
   async getStoredAccessToken(): Promise<string | null> {

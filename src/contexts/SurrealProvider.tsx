@@ -58,6 +58,8 @@ export interface SurrealContextValue {
   clearTokens: () => any;
   getStoredAccessToken: () => string | null;
   handleSessionError: (error: any) => Promise<boolean>;
+  setTenantCode: (tenantCode: string) => Promise<void>;
+  getTenantCode: () => Promise<string | null>;
 }
 
 const SurrealContext = createContext<SurrealContextValue | undefined>(undefined);
@@ -89,22 +91,27 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     try {
       const proxy = await surrealClient();
 
-      // If the worker is not yet connected (e.g. singleton initialised elsewhere with default env vars)
-      // we perform an explicit connect with the provided props to ensure correct NS/DB.
-      try {
-        await proxy.connect({ endpoint, namespace, database, params, auth });
-      } catch (e) {
-        // ignore duplicate connect errors
-      }
+      // 获取存储的租户代码，如果存在则使用租户代码作为database
+      const storedTenantCode = await proxy.getTenantCode();
+      const effectiveDatabase = storedTenantCode || database;
+      
+      // 执行完整的连接流程：connect -> use -> authenticate
+      await proxy.connect({ 
+        endpoint, 
+        namespace, 
+        database: effectiveDatabase, 
+        params, 
+        auth 
+      });
 
-      // Restore stored access token (if not passed via props)
+      // 恢复存储的访问令牌
       const { accessToken } = await proxy.getStoredTokens();
       if (accessToken) {
         try {
           await proxy.authenticate(accessToken);
         } catch (_) {
           // token invalid – clear and optionally notify
-          clearTokens();
+          await clearTokens();
           onSessionExpired?.();
         }
       }
@@ -114,6 +121,10 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       setConnecting(false);
       return true;
     } catch (e) {
+      // if(e === 'needLogin' || (e instanceof Error && e.message === 'TENANT_CODE_MISSING')){
+      //   await clearTokens();
+      //   onSessionExpired?.();
+      // }
       setError(e as Error);
       setErrorFlag(true);
       setConnecting(false);
@@ -200,12 +211,61 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
 
   const handleSessionError = useCallback<SurrealContextValue['handleSessionError']>(async (e) => {
     if (isSessionExpiredError(e)) {
-      clearTokens();
+      await clearTokens();
       onSessionExpired?.();
       return true;
     }
     return false;
   }, [onSessionExpired, clearTokens]);
+
+  const setTenantCode = useCallback(async (tenantCode: string) => {
+    let proxy = client;
+    
+    if (!proxy || typeof proxy.setTenantCode !== 'function') {
+      await connect();
+      proxy = client;
+    }
+    
+    if (!proxy || typeof proxy.setTenantCode !== 'function') {
+      try {
+        proxy = await surrealClient();
+        setClient(proxy);
+      } catch (e) {
+        console.error('SurrealProvider.setTenantCode: failed to obtain SurrealDB proxy', e);
+        return;
+      }
+    }
+    
+    try {
+      await proxy.setTenantCode(tenantCode);
+      // 重置连接状态以便下次connect时使用新的租户代码
+      setSuccess(false);
+      await disposeSurrealClient();
+    } catch (e) {
+      console.error('SurrealProvider.setTenantCode: error while setting tenant code', e);
+    }
+  }, [client, connect]);
+
+  const getTenantCode = useCallback(async () => {
+    let proxy = client;
+    
+    if (!proxy || typeof proxy.getTenantCode !== 'function') {
+      try {
+        proxy = await surrealClient();
+        setClient(proxy);
+      } catch (e) {
+        console.error('SurrealProvider.getTenantCode: failed to obtain SurrealDB proxy', e);
+        return null;
+      }
+    }
+    
+    try {
+      return await proxy.getTenantCode();
+    } catch (e) {
+      console.error('SurrealProvider.getTenantCode: error while getting tenant code', e);
+      return null;
+    }
+  }, [client]);
 
   // Auto-connect once on mount
   useEffect(() => {
@@ -243,7 +303,9 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     clearTokens,
     getStoredAccessToken,
     handleSessionError,
-  }), [client, dummySurreal, isConnecting, isSuccess, isError, error, connect, disconnect, signin, signout, setTokens, clearTokens, getStoredAccessToken, handleSessionError]);
+    setTenantCode,
+    getTenantCode,
+  }), [client, dummySurreal, isConnecting, isSuccess, isError, error, connect, disconnect, signin, signout, setTokens, clearTokens, getStoredAccessToken, handleSessionError, setTenantCode, getTenantCode]);
 
   return <SurrealContext.Provider value={value}>{children}</SurrealContext.Provider>;
 };

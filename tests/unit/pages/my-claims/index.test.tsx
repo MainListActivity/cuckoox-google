@@ -101,6 +101,12 @@ interface SurrealContextType {
   disconnect: () => Promise<void>;
   signin: (auth: unknown) => Promise<any>;
   signout: () => Promise<void>;
+  setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => any;
+  clearTokens: () => any;
+  getStoredAccessToken: () => string | null;
+  handleSessionError: (error: any) => Promise<boolean>;
+  setTenantCode: (tenantCode: string) => Promise<void>;
+  getTenantCode: () => Promise<string | null>;
 }
 
 describe('MyClaimsPage', () => {
@@ -132,6 +138,12 @@ describe('MyClaimsPage', () => {
       disconnect: vi.fn().mockResolvedValue(undefined),
       signin: vi.fn().mockResolvedValue({}),
       signout: vi.fn().mockResolvedValue(undefined),
+      setTokens: vi.fn(),
+      clearTokens: vi.fn(),
+      getStoredAccessToken: vi.fn().mockReturnValue(null),
+      handleSessionError: vi.fn().mockResolvedValue(false),
+      setTenantCode: vi.fn().mockResolvedValue(undefined),
+      getTenantCode: vi.fn().mockResolvedValue(null),
     };
   });
 

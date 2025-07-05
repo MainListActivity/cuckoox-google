@@ -65,7 +65,7 @@ const RegisterPage: React.FC = () => {
       }
 
       // 调用注册API
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/register`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

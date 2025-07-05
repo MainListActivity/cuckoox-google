@@ -32,7 +32,7 @@ import Logo from '../components/Logo';
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
-  const { setTokens } = useSurreal();
+  const { setTokens, setTenantCode: setSurrealTenantCode } = useSurreal();
   const auth = useAuth(); // Store the full context
   const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState, user } = auth; // Destructure user here
   const navigate = useNavigate();
@@ -66,10 +66,16 @@ const LoginPage: React.FC = () => {
     return user?.github_id === '--admin--';
   }, [user]);
 
-  // 从URL参数填充租户代码
+  // 从URL参数或localStorage填充租户代码
   useEffect(() => {
     if (tenantFromUrl && !isRootAdminMode) {
       setTenantCode(tenantFromUrl.toUpperCase());
+    } else if (!isRootAdminMode) {
+      // 从localStorage恢复租户代码
+      const storedTenantCode = localStorage.getItem('tenant_code');
+      if (storedTenantCode) {
+        setTenantCode(storedTenantCode);
+      }
     }
   }, [tenantFromUrl, isRootAdminMode]);
 
@@ -161,6 +167,11 @@ const LoginPage: React.FC = () => {
         navigate('/root-admin', { replace: true });
       } else {
         // 租户用户登录成功
+        // 保存租户代码到SurrealProvider
+        if (tenantCode) {
+          await setSurrealTenantCode(tenantCode);
+        }
+        
         // 使用SurrealProvider存储令牌
         setTokens(data.access_token, data.refresh_token, data.expires_in);
 

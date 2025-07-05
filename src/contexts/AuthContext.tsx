@@ -5,6 +5,7 @@ import {useSurreal} from '@/src/contexts/SurrealProvider'; // ADDED
 import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb'; // Import for typing record IDs
 import { menuService } from '@/src/services/menuService';
+import { checkTenantCodeAndRedirect } from '@/src/lib/surrealClient';
 
 // Matches AppUser in authService and user table in SurrealDB
 export interface AppUser {
@@ -161,7 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8080'}/auth/refresh`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -209,6 +210,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     const checkAndRefreshToken = async () => {
+      // 首先检查租户代码是否存在
+      if (!checkTenantCodeAndRedirect()) {
+        // 租户代码丢失，用户已被重定向到登录页面
+        console.log('Tenant code missing, user redirected to login');
+        clearAuthState();
+        return;
+      }
+      
       const expiresAtStr = localStorage.getItem('token_expires_at'); // Updated key name
       if (!expiresAtStr) return;
       
@@ -251,13 +260,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(true);
       
       try {
-        // 首先检查本地存储的用户信息
+        // 首先检查租户代码是否存在（除了管理员用户）
         const storedUser = localStorage.getItem('cuckoox-user');
         const storedIsLoggedIn = localStorage.getItem('cuckoox-isLoggedIn');
         
         if (storedUser && storedIsLoggedIn === 'true') {
           // 如果有本地存储的用户信息，先使用它来初始化会话
           const appUser = deserializeAppUser(storedUser);
+          
+          // 对于非管理员用户，检查租户代码
+          if (appUser.github_id !== '--admin--' && !appUser.github_id.startsWith('root_admin_')) {
+            if (!checkTenantCodeAndRedirect()) {
+              // 租户代码丢失，清除状态并退出
+              if (isMounted) {
+                clearAuthState();
+                setIsLoading(false);
+              }
+              return;
+            }
+          }
           
           // 对于管理员用户，不需要检查 OIDC
           if (appUser.github_id === '--admin--') {
@@ -358,6 +379,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('cuckoox-isLoggedIn');
     localStorage.removeItem('cuckoox-user');
     localStorage.removeItem('cuckoox-selectedCaseId');
+    // 清理租户代码
+    localStorage.removeItem('tenant_code');
   };
 
   const initializeUserSession = async (appUser: AppUser, oidcUserInstance?: OidcUser | null) => { // MODIFIED

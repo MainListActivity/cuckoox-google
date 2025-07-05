@@ -10,7 +10,9 @@
       "Bash(mvn test:*)",
       "Bash(./mvnw test:*)",
       "Bash(grep:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(bun run lint:*)",
+      "Bash(bun run:*)"
     ],
     "deny": []
   }
