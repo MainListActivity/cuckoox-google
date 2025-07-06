@@ -110,6 +110,40 @@ class AuthService {
     return data;
   }
 
+  // Root Admin JWT Authentication
+  async loginRootAdminWithJWT(credentials: JwtLoginRequest): Promise<JwtLoginResponse> {
+    const response = await fetch('/api/root-admins/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Root admin login failed');
+    }
+
+    const data = await response.json();
+    
+    // Store tokens but don't authenticate with SurrealDB for root admin
+    // Root admin uses a different database and doesn't need SurrealDB connection
+    localStorage.setItem('access_token', data.access_token);
+    if (data.refresh_token) {
+      localStorage.setItem('refresh_token', data.refresh_token);
+    }
+    if (data.expires_in) {
+      const expiresAt = Date.now() + (data.expires_in * 1000);
+      localStorage.setItem('token_expires_at', expiresAt.toString());
+    }
+    
+    this.isAuthenticated = true;
+    this.currentUser = data.user;
+    
+    return data;
+  }
+
   async refreshToken(request: JwtRefreshRequest): Promise<JwtRefreshResponse> {
     const response = await fetch('/auth/refresh', {
       method: 'POST',

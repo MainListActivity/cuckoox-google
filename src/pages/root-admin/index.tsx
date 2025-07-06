@@ -30,6 +30,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Logo from '@/src/components/Logo';
+import { apiClient } from '@/src/utils/apiClient';
 
 interface Tenant {
   tenant_code: string;
@@ -79,11 +80,13 @@ const RootAdminPage: React.FC = () => {
 
   // 检查用户权限
   useEffect(() => {
-    if (!user || !user.github_id.startsWith('root_admin_')) {
-      navigate('/login');
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      navigate('/root-admin/login');
       return;
     }
-  }, [user, navigate]);
+    // TODO: Add JWT token validation to ensure it's for root admin
+  }, [navigate]);
 
   // 加载数据
   useEffect(() => {
@@ -94,11 +97,8 @@ const RootAdminPage: React.FC = () => {
   const loadTenants = async () => {
     setIsLoadingTenants(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/tenants`);
-      if (response.ok) {
-        const data = await response.json();
-        setTenants(data);
-      }
+      const data = await apiClient.getTenants();
+      setTenants(data);
     } catch (error) {
       console.error('Failed to load tenants:', error);
     } finally {
@@ -109,11 +109,8 @@ const RootAdminPage: React.FC = () => {
   const loadRootAdmins = async () => {
     setIsLoadingRootAdmins(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/root-admins`);
-      if (response.ok) {
-        const data = await response.json();
-        setRootAdmins(data);
-      }
+      const data = await apiClient.getRootAdmins();
+      setRootAdmins(data);
     } catch (error) {
       console.error('Failed to load root admins:', error);
     } finally {
@@ -125,29 +122,17 @@ const RootAdminPage: React.FC = () => {
     setCreateTenantError(null);
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/tenants`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          tenant_name: newTenantName,
-          admin_username: newTenantAdminUsername,
-        }),
+      const newTenant = await apiClient.createTenant({
+        tenant_name: newTenantName,
+        admin_username: newTenantAdminUsername,
       });
-
-      if (response.ok) {
-        const newTenant = await response.json();
-        setTenants([...tenants, newTenant]);
-        setShowCreateTenantDialog(false);
-        setNewTenantName('');
-        setNewTenantAdminUsername('');
-      } else {
-        const error = await response.json();
-        setCreateTenantError(error.error || 'Failed to create tenant');
-      }
+      
+      setTenants([...tenants, newTenant]);
+      setShowCreateTenantDialog(false);
+      setNewTenantName('');
+      setNewTenantAdminUsername('');
     } catch (error) {
-      setCreateTenantError('Failed to create tenant');
+      setCreateTenantError(error instanceof Error ? error.message : 'Failed to create tenant');
     }
   };
 
@@ -155,31 +140,19 @@ const RootAdminPage: React.FC = () => {
     setCreateRootAdminError(null);
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/root-admins`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: newRootAdminUsername,
-          email: newRootAdminEmail,
-          full_name: newRootAdminFullName,
-        }),
+      const newRootAdmin = await apiClient.createRootAdmin({
+        username: newRootAdminUsername,
+        email: newRootAdminEmail,
+        full_name: newRootAdminFullName,
       });
-
-      if (response.ok) {
-        const newRootAdmin = await response.json();
-        setRootAdmins([...rootAdmins, newRootAdmin]);
-        setShowCreateRootAdminDialog(false);
-        setNewRootAdminUsername('');
-        setNewRootAdminEmail('');
-        setNewRootAdminFullName('');
-      } else {
-        const error = await response.json();
-        setCreateRootAdminError(error.error || 'Failed to create root admin');
-      }
+      
+      setRootAdmins([...rootAdmins, newRootAdmin]);
+      setShowCreateRootAdminDialog(false);
+      setNewRootAdminUsername('');
+      setNewRootAdminEmail('');
+      setNewRootAdminFullName('');
     } catch (error) {
-      setCreateRootAdminError('Failed to create root admin');
+      setCreateRootAdminError(error instanceof Error ? error.message : 'Failed to create root admin');
     }
   };
 
@@ -206,7 +179,13 @@ const RootAdminPage: React.FC = () => {
         </Box>
         <Button
           variant="outlined"
-          onClick={() => navigate('/login')}
+          onClick={() => {
+            // Clear authentication tokens
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('token_expires_at');
+            navigate('/root-admin/login');
+          }}
         >
           {t('logout', 'Logout')}
         </Button>
@@ -216,7 +195,7 @@ const RootAdminPage: React.FC = () => {
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            {t('welcome_root_admin', 'Welcome, {{name}}', { name: user.name })}
+            {t('welcome_root_admin', 'Welcome, Root Administrator')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {t('root_admin_description', 'Manage tenants and root administrators from this dashboard.')}
