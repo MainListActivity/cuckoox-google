@@ -46,12 +46,7 @@ export interface SurrealWorkerAPI {
   }): Promise<void>;
   close(): Promise<void>;
   
-  // WASM-based local operations
-  wasmQuery<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
-  wasmCreate(thing: string, data: unknown): Promise<any>;
-  wasmSelect(thing: string | RecordId): Promise<any>;
-  wasmUpdate(thing: string | RecordId, data: unknown): Promise<any>;
-  wasmDelete(thing: string | RecordId): Promise<any>;
+  // Token recovery
   recoverTokens(): Promise<void>;
 }
 
@@ -282,27 +277,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     console.log('SurrealServiceWorkerClient: close() called - connection persists in Service Worker');
   }
 
-  // WASM-based local operations
-  async wasmQuery<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
-    return await this.sendMessage('wasm_query', { sql, vars });
-  }
-
-  async wasmCreate(thing: string, data: unknown): Promise<any> {
-    return await this.sendMessage('wasm_create', { thing, data });
-  }
-
-  async wasmSelect(thing: string | RecordId): Promise<any> {
-    return await this.sendMessage('wasm_select', { thing });
-  }
-
-  async wasmUpdate(thing: string | RecordId, data: unknown): Promise<any> {
-    return await this.sendMessage('wasm_update', { thing, data });
-  }
-
-  async wasmDelete(thing: string | RecordId): Promise<any> {
-    return await this.sendMessage('wasm_delete', { thing });
-  }
-
+  // Token recovery
   async recoverTokens(): Promise<void> {
     await this.sendMessage('recover_tokens');
   }

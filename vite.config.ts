@@ -1,14 +1,77 @@
 /// <reference types="vitest" />
-import { defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react'; // Standard Vite React plugin
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 import fs from 'fs';
 import path from 'path';
+import { resolve } from 'path';
+import { build } from 'vite';
 
-export default defineConfig(({ command, mode }) => {
+// 在 ES 模块中获取 __dirname
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 构建 Service Worker 的函数
+export async function buildServiceWorker() {
+  console.log('Building Service Worker...');
+  
+  // 为了避免 public 目录冲突，先构建到临时目录
+  const tempDir = resolve(__dirname, 'dist-sw');
+  
+  const result = await build({
+    configFile: false,
+    publicDir: false, // 禁用 public 目录复制
+    build: {
+      lib: {
+        entry: resolve(__dirname, 'src/workers/sw-surreal.ts'),
+        name: 'SurrealServiceWorker',
+        formats: ['es'],
+        fileName: () => 'sw-surreal.js'
+      },
+      rollupOptions: {
+        external: ['@surrealdb/wasm', '/wasm/surrealdb.js'],
+        output: {
+          format: 'es',
+          dir: tempDir,
+          entryFileNames: 'sw-surreal.js',
+          inlineDynamicImports: true
+        }
+      },
+      target: 'esnext',
+      outDir: tempDir,
+      emptyOutDir: true,
+      minify: true
+    },
+    define: {
+      'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'http://localhost:8082')
+    },
+    esbuild: {
+      target: 'esnext',
+      supported: {
+        'top-level-await': true
+      }
+    }
+  });
+  
+  // 复制构建结果到 public 目录
+  const swSource = resolve(tempDir, 'sw-surreal.js');
+  const swDest = resolve(__dirname, 'public', 'sw-surreal.js');
+  
+  if (fs.existsSync(swSource)) {
+    fs.copyFileSync(swSource, swDest);
+    // 清理临时目录
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    console.log('✅ Service Worker built successfully and placed in public/');
+  } else {
+    throw new Error('Service Worker build output not found');
+  }
+  
+  return result;
+}
+
+export default defineConfig(({ mode }) => {
   // 自定义环境变量加载逻辑
   const env = {} as Record<string, string>;
-  
+
   // 加载顺序：.env.local -> .env.dev (dev模式) -> .env
   const envFiles = [
     '.env',                    // 基础配置
@@ -20,7 +83,6 @@ export default defineConfig(({ command, mode }) => {
   envFiles.forEach(file => {
     const envPath = path.resolve(process.cwd(), file);
     if (fs.existsSync(envPath)) {
-      const fileEnv = loadEnv('', process.cwd(), '');
       // 读取文件内容并解析
       const content = fs.readFileSync(envPath, 'utf-8');
       content.split('\n').forEach(line => {
@@ -45,7 +107,9 @@ export default defineConfig(({ command, mode }) => {
     });
 
   return {
-    plugins: [react()], // Added react plugin, common for Vite React projects
+    plugins: [
+      react()
+    ],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('.', import.meta.url)),
@@ -60,15 +124,26 @@ export default defineConfig(({ command, mode }) => {
         return acc;
       }, {} as Record<string, string>)
     },
+    build: {
+      target: 'esnext'
+    },
     optimizeDeps: {
       include: ['@mui/material', '@mui/icons-material'],
-      exclude: ['@mui/icons-material/esm']
+      exclude: ['@mui/icons-material/esm', '@surrealdb/wasm'],
+      esbuildOptions: {
+        target: "esnext",
+      },
+    },
+    esbuild: {
+      supported: {
+        "top-level-await": true
+      },
     },
     server: {
       fs: {
         strict: false
       },
-      allowedHosts:['dev.cuckoox.cn']
+      allowedHosts: ['dev.cuckoox.cn']
     },
     test: { // Vitest configuration
       globals: true,

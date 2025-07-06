@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Service Worker WASM 测试</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .info {
+      background-color: #d1ecf1;
+      color: #0c5460;
+    }
+    pre {
+      background-color: #f4f4f4;
+      padding: 10px;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <h1>Service Worker WASM 功能测试</h1>
+  
+  <div id="status-container"></div>
+  
+  <button onclick="testLocalStorage()">测试本地存储</button>
+  <button onclick="testWasmStatus()">检查 WASM 状态</button>
+  <button onclick="clearLocalData()">清除本地数据</button>
+  
+  <script>
+    const statusContainer = document.getElementById('status-container');
+    
+    function log(message, type = 'info') {
+      const div = document.createElement('div');
+      div.className = `status ${type}`;
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      statusContainer.appendChild(div);
+      console.log(message);
+    }
+    
+    // 注册 Service Worker
+    async function registerServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw-surreal.js');
+          log('Service Worker 注册成功', 'success');
+          
+          // 等待 Service Worker 激活
+          if (registration.active) {
+            log('Service Worker 已激活', 'success');
+          } else {
+            registration.addEventListener('updatefound', () => {
+              const installingWorker = registration.installing;
+              installingWorker.addEventListener('statechange', () => {
+                if (installingWorker.state === 'activated') {
+                  log('Service Worker 已激活', 'success');
+                }
+              });
+            });
+          }
+          
+          // 监听来自 Service Worker 的消息
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            log(`收到 Service Worker 消息: ${JSON.stringify(event.data)}`, 'info');
+          });
+          
+        } catch (error) {
+          log(`Service Worker 注册失败: ${error.message}`, 'error');
+        }
+      } else {
+        log('浏览器不支持 Service Worker', 'error');
+      }
+    }
+    
+    // 测试本地存储功能
+    async function testLocalStorage() {
+      if (!navigator.serviceWorker.controller) {
+        log('Service Worker 未激活，请刷新页面', 'error');
+        return;
+      }
+      
+      log('开始测试本地存储功能...', 'info');
+      
+      // 创建一个消息通道来接收响应
+      const messageChannel = new MessageChannel();
+      
+      // 发送测试令牌到 Service Worker
+      const testData = {
+        access_token: 'test_access_token_' + Date.now(),
+        refresh_token: 'test_refresh_token_' + Date.now(),
+        tenant_code: 'test_tenant'
+      };
+      
+      navigator.serviceWorker.controller.postMessage({
+        type: 'authenticate',
+        payload: {
+          token: testData.access_token,
+          refresh_token: testData.refresh_token,
+          tenant_code: testData.tenant_code
+        },
+        messageId: 'test-' + Date.now()
+      }, [messageChannel.port2]);
+      
+      // 等待响应
+      messageChannel.port1.onmessage = (event) => {
+        if (event.data.type === 'authenticate_response') {
+          log('存储测试成功！', 'success');
+          log(`响应数据: ${JSON.stringify(event.data.payload)}`, 'info');
+        } else if (event.data.type === 'authenticate_error') {
+          log(`存储测试失败: ${event.data.payload.message}`, 'error');
+        }
+      };
+    }
+    
+    // 检查 WASM 状态
+    async function testWasmStatus() {
+      if (!navigator.serviceWorker.controller) {
+        log('Service Worker 未激活，请刷新页面', 'error');
+        return;
+      }
+      
+      log('检查 WASM 加载状态...', 'info');
+      
+      // 尝试连接到本地数据库
+      const messageChannel = new MessageChannel();
+      
+      navigator.serviceWorker.controller.postMessage({
+        type: 'connect',
+        payload: {
+          endpoint: 'ws://localhost:8000/rpc',
+          namespace: 'test',
+          database: 'test'
+        },
+        messageId: 'wasm-test-' + Date.now()
+      }, [messageChannel.port2]);
+      
+      messageChannel.port1.onmessage = (event) => {
+        if (event.data.type === 'connect_response') {
+          const status = event.data.payload.status;
+          log(`连接状态: ${status}`, status === 'connected' ? 'success' : 'info');
+          
+          // 检查控制台日志以确认 WASM 加载状态
+          log('请检查浏览器控制台以查看详细的 WASM 加载日志', 'info');
+        } else if (event.data.type === 'connect_error') {
+          log(`连接失败: ${event.data.payload.message}`, 'error');
+        }
+      };
+    }
+    
+    // 清除本地数据
+    async function clearLocalData() {
+      if (!navigator.serviceWorker.controller) {
+        log('Service Worker 未激活，请刷新页面', 'error');
+        return;
+      }
+      
+      log('清除本地数据...', 'info');
+      
+      const messageChannel = new MessageChannel();
+      
+      navigator.serviceWorker.controller.postMessage({
+        type: 'invalidate',
+        messageId: 'clear-' + Date.now()
+      }, [messageChannel.port2]);
+      
+      messageChannel.port1.onmessage = (event) => {
+        if (event.data.type === 'invalidate_response') {
+          log('本地数据已清除', 'success');
+        } else if (event.data.type === 'invalidate_error') {
+          log(`清除失败: ${event.data.payload.message}`, 'error');
+        }
+      };
+    }
+    
+    // 页面加载完成后注册 Service Worker
+    window.addEventListener('load', () => {
+      registerServiceWorker();
+    });
+  </script>
+</body>
+</html>
