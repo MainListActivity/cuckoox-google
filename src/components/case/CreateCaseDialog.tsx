@@ -150,7 +150,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
     // Generate case number with timestamp
     const timestamp = Date.now();
     const generatedCaseNumber = `BK-${new Date().getFullYear()}-${timestamp.toString().slice(-6)}`;
-
+    console.log('typeof user?.id===typeof RecordId',user?.id instanceof RecordId)
     // Convert date strings to Date objects for SurrealDB
     const caseData: any = {
       name: caseName.trim(),

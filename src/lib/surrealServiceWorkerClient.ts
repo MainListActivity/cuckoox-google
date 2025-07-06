@@ -44,6 +44,15 @@ export interface SurrealWorkerAPI {
     database?: string;
     auth?: AnyAuth;
   }): Promise<void>;
+  close(): Promise<void>;
+  
+  // WASM-based local operations
+  wasmQuery<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
+  wasmCreate(thing: string, data: unknown): Promise<any>;
+  wasmSelect(thing: string | RecordId): Promise<any>;
+  wasmUpdate(thing: string | RecordId, data: unknown): Promise<any>;
+  wasmDelete(thing: string | RecordId): Promise<any>;
+  recoverTokens(): Promise<void>;
 }
 
 interface PendingMessage {
@@ -56,7 +65,6 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
   private pendingMessages = new Map<string, PendingMessage>();
   private messageCounter = 0;
   private liveQueryCallbacks = new Map<string, (action: string, result: any) => void>();
-  private isRegistered = false;
 
   constructor() {
     this.setupMessageHandler();
@@ -83,6 +91,12 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
       return;
     }
 
+    if (type === 'request_token_sync') {
+      // Service Worker 请求同步 token
+      this.handleTokenSyncRequest();
+      return;
+    }
+
     // Handle response messages
     if (messageId && this.pendingMessages.has(messageId)) {
       const pending = this.pendingMessages.get(messageId)!;
@@ -93,6 +107,32 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
       } else if (type.endsWith('_error')) {
         pending.reject(new Error(payload.message || 'Unknown error'));
       }
+    }
+  }
+
+  private async handleTokenSyncRequest() {
+    try {
+      // 获取 localStorage 中的 token 并同步到 Service Worker
+      const syncTokens = {
+        access_token: localStorage.getItem('access_token'),
+        refresh_token: localStorage.getItem('refresh_token'),
+        token_expires_at: localStorage.getItem('token_expires_at'),
+        tenant_code: localStorage.getItem('tenant_code'),
+      };
+
+      const tenantCode = localStorage.getItem('tenant_code');
+      const database = tenantCode || 'test';
+
+      await this.sendMessage('connect', {
+        endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
+        namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
+        database: database,
+        sync_tokens: syncTokens,
+      });
+
+      console.log('Client: Successfully synced tokens to Service Worker');
+    } catch (error) {
+      console.error('Client: Failed to sync tokens to Service Worker:', error);
     }
   }
 
@@ -240,6 +280,31 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     // In Service Worker context, we don't really "close" the connection
     // since it persists across tabs. We could implement a reference counting system.
     console.log('SurrealServiceWorkerClient: close() called - connection persists in Service Worker');
+  }
+
+  // WASM-based local operations
+  async wasmQuery<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
+    return await this.sendMessage('wasm_query', { sql, vars });
+  }
+
+  async wasmCreate(thing: string, data: unknown): Promise<any> {
+    return await this.sendMessage('wasm_create', { thing, data });
+  }
+
+  async wasmSelect(thing: string | RecordId): Promise<any> {
+    return await this.sendMessage('wasm_select', { thing });
+  }
+
+  async wasmUpdate(thing: string | RecordId, data: unknown): Promise<any> {
+    return await this.sendMessage('wasm_update', { thing, data });
+  }
+
+  async wasmDelete(thing: string | RecordId): Promise<any> {
+    return await this.sendMessage('wasm_delete', { thing });
+  }
+
+  async recoverTokens(): Promise<void> {
+    await this.sendMessage('recover_tokens');
   }
 }
 

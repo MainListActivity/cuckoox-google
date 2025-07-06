@@ -74,6 +74,7 @@ This is a legal case management system with the following key architectural comp
 - E2E tests require Playwright browser installation
 - Uses CSS custom properties for theming integration MUI
 - 在涉及到surreal的方法、存储代码中尽可能使用`RecordId`而不是`string`
+- 不要尝试运行 bun run dev 判断代码是否可运行，lint检查通过并且单元测试通过就可完成任务
 
 
 

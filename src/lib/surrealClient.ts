@@ -52,10 +52,19 @@ export async function surrealClient(): Promise<SurrealWorkerAPI> {
     const tenantCode = localStorage.getItem('tenant_code');
     const database = tenantCode || import.meta.env.VITE_SURREALDB_DB || 'test';
     
+    // 同步 localStorage 中的 token 到 Service Worker
+    const syncTokens = {
+      access_token: localStorage.getItem('access_token'),
+      refresh_token: localStorage.getItem('refresh_token'),
+      token_expires_at: localStorage.getItem('token_expires_at'),
+      tenant_code: tenantCode,
+    };
+    
     await serviceWorkerClient!.connect({
       endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
       namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
       database: database,
+      sync_tokens: syncTokens,
     });
     return serviceWorkerClient!;
   })();

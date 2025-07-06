@@ -1,6 +1,15 @@
 /// <reference lib="WebWorker" />
 import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
 
+// SurrealDB WASM 相关常量
+const SURREALDB_WASM_URL = 'https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/index_bg.wasm';
+const SURREALDB_WASM_JS_URL = 'https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/index.js';
+const CACHE_NAME = 'surrealdb-wasm-cache';
+const INDEXEDDB_NAME = 'surrealdb-local-storage';
+const INDEXEDDB_VERSION = 1;
+const TOKENS_STORE = 'tokens';
+const DATA_STORE = 'data';
+
 // Define AnyAuth type based on SurrealDB
 export type AnyAuth = {
   username: string;
@@ -19,8 +28,10 @@ declare const self: ServiceWorkerGlobalScope;
 
 // --- Global State ---
 let db: Surreal | null = null;
+let wasmDb: any = null; // SurrealDB WASM instance for local storage
 let isConnected = false;
 let isInitialized = false;
+let isWasmInitialized = false;
 let connectionConfig: {
   endpoint: string;
   namespace: string;
@@ -30,6 +41,9 @@ let connectionConfig: {
 
 // In-memory storage to replace localStorage
 const memoryStore: Record<string, string> = {};
+
+// IndexedDB instance
+let indexedDB: IDBDatabase | null = null;
 
 // Live query management
 const liveQuerySubscriptions = new Map<string, {
@@ -43,7 +57,241 @@ let refreshTimer: NodeJS.Timeout | null = null;
 const REFRESH_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 const REFRESH_BEFORE_EXPIRY = 10 * 60 * 1000; // Refresh 10 minutes before expiry
 
+// --- Cache and Storage Functions ---
+
+/**
+ * 预缓存 SurrealDB WASM 文件
+ */
+async function precacheSurrealDBWasm(): Promise<void> {
+  try {
+    console.log('ServiceWorker: Precaching SurrealDB WASM files...');
+    
+    const cache = await caches.open(CACHE_NAME);
+    
+    // 检查是否已缓存
+    const wasmResponse = await cache.match(SURREALDB_WASM_URL);
+    const jsResponse = await cache.match(SURREALDB_WASM_JS_URL);
+    
+    if (!wasmResponse) {
+      console.log('ServiceWorker: Caching WASM file...');
+      await cache.add(SURREALDB_WASM_URL);
+    }
+    
+    if (!jsResponse) {
+      console.log('ServiceWorker: Caching JS file...');
+      await cache.add(SURREALDB_WASM_JS_URL);
+    }
+    
+    console.log('ServiceWorker: SurrealDB WASM files cached successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to precache SurrealDB WASM files:', error);
+  }
+}
+
+/**
+ * 初始化 IndexedDB
+ */
+async function initializeIndexedDB(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = self.indexedDB.open(INDEXEDDB_NAME, INDEXEDDB_VERSION);
+    
+    request.onerror = () => {
+      console.error('ServiceWorker: Failed to open IndexedDB');
+      reject(new Error('Failed to open IndexedDB'));
+    };
+    
+    request.onsuccess = () => {
+      indexedDB = request.result;
+      console.log('ServiceWorker: IndexedDB initialized successfully');
+      resolve();
+    };
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      
+      // 创建 tokens 存储
+      if (!db.objectStoreNames.contains(TOKENS_STORE)) {
+        const tokensStore = db.createObjectStore(TOKENS_STORE, { keyPath: 'key' });
+        tokensStore.createIndex('key', 'key', { unique: true });
+      }
+      
+      // 创建 data 存储
+      if (!db.objectStoreNames.contains(DATA_STORE)) {
+        const dataStore = db.createObjectStore(DATA_STORE, { keyPath: 'id' });
+        dataStore.createIndex('id', 'id', { unique: true });
+      }
+    };
+  });
+}
+
+/**
+ * 从 IndexedDB 读取数据
+ */
+async function getFromIndexedDB(storeName: string, key: string): Promise<any> {
+  if (!indexedDB) {
+    await initializeIndexedDB();
+  }
+  
+  return new Promise((resolve, reject) => {
+    const transaction = indexedDB!.transaction([storeName], 'readonly');
+    const store = transaction.objectStore(storeName);
+    const request = store.get(key);
+    
+    request.onsuccess = () => {
+      resolve(request.result?.value || null);
+    };
+    
+    request.onerror = () => {
+      reject(new Error(`Failed to get ${key} from ${storeName}`));
+    };
+  });
+}
+
+/**
+ * 向 IndexedDB 写入数据
+ */
+async function setToIndexedDB(storeName: string, key: string, value: any): Promise<void> {
+  if (!indexedDB) {
+    await initializeIndexedDB();
+  }
+  
+  return new Promise((resolve, reject) => {
+    const transaction = indexedDB!.transaction([storeName], 'readwrite');
+    const store = transaction.objectStore(storeName);
+    const request = store.put({ key, value });
+    
+    request.onsuccess = () => {
+      resolve();
+    };
+    
+    request.onerror = () => {
+      reject(new Error(`Failed to set ${key} in ${storeName}`));
+    };
+  });
+}
+
+/**
+ * 初始化 SurrealDB WASM
+ */
+async function initializeSurrealDBWasm(): Promise<void> {
+  if (isWasmInitialized && wasmDb) return;
+  
+  try {
+    console.log('ServiceWorker: Initializing SurrealDB WASM...');
+    
+    // 从缓存加载 WASM 文件
+    const cache = await caches.open(CACHE_NAME);
+    const jsResponse = await cache.match(SURREALDB_WASM_JS_URL);
+    
+    if (!jsResponse) {
+      throw new Error('SurrealDB WASM JS file not found in cache');
+    }
+    
+    // 动态导入 SurrealDB WASM 模块
+    const wasmModule = await import(SURREALDB_WASM_JS_URL);
+    
+    // 创建 WASM 实例用于本地存储
+    wasmDb = new wasmModule.Surreal();
+    
+    // 连接到内存数据库
+    await wasmDb.connect('mem://');
+    await wasmDb.use({ namespace: 'local', database: 'storage' });
+    
+    isWasmInitialized = true;
+    console.log('ServiceWorker: SurrealDB WASM initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize SurrealDB WASM:', error);
+    throw error;
+  }
+}
+
+/**
+ * 将 token 存储到 SurrealDB WASM 和 IndexedDB
+ */
+async function storeTokenInWasm(key: string, value: string | null): Promise<void> {
+  try {
+    // 存储到 IndexedDB
+    if (value === null) {
+      await setToIndexedDB(TOKENS_STORE, key, null);
+    } else {
+      await setToIndexedDB(TOKENS_STORE, key, value);
+    }
+    
+    // 存储到 SurrealDB WASM
+    if (wasmDb) {
+      if (value === null) {
+        await wasmDb.delete(`token:${key}`);
+      } else {
+        await wasmDb.create(`token:${key}`, {
+          key,
+          value,
+          timestamp: Date.now()
+        });
+      }
+    }
+  } catch (error) {
+    console.error(`ServiceWorker: Failed to store token ${key}:`, error);
+  }
+}
+
+/**
+ * 从 SurrealDB WASM 或 IndexedDB 读取 token
+ */
+async function getTokenFromWasm(key: string): Promise<string | null> {
+  try {
+    // 首先尝试从 SurrealDB WASM 读取
+    if (wasmDb) {
+      const result = await wasmDb.select(`token:${key}`);
+      if (result && result.length > 0) {
+        return result[0].value;
+      }
+    }
+    
+    // 如果 WASM 中没有，从 IndexedDB 读取
+    return await getFromIndexedDB(TOKENS_STORE, key);
+  } catch (error) {
+    console.error(`ServiceWorker: Failed to get token ${key}:`, error);
+    return null;
+  }
+}
+
 // --- Helper Functions ---
+
+/**
+ * 递归检查并重构被序列化的RecordId对象
+ * 当RecordId对象通过ServiceWorker传递时，会丢失其原型，变成普通对象
+ * 这个函数会检测这种情况并重新构造RecordId
+ */
+function deserializeRecordIds(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  // 检查是否是被序列化的RecordId对象（具有id和tb属性）
+  if (typeof obj === 'object' && obj.hasOwnProperty('id') && obj.hasOwnProperty('tb')) {
+    // 这很可能是一个被序列化的RecordId，重新构造它
+    return new RecordId(obj.tb, obj.id);
+  }
+
+  // 如果是数组，递归处理每个元素
+  if (Array.isArray(obj)) {
+    return obj.map(item => deserializeRecordIds(item));
+  }
+
+  // 如果是对象，递归处理每个属性
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = deserializeRecordIds(value);
+    }
+    if (Object.entries(result).length !== 0) {
+      return result;
+    }
+  }
+
+  // 其他类型直接返回
+  return obj;
+}
 
 function storageSet(key: string, val: string | null) {
   if (val === null) {
@@ -51,10 +299,37 @@ function storageSet(key: string, val: string | null) {
   } else {
     memoryStore[key] = val;
   }
+  // 同时存储到 WASM 和 IndexedDB
+  storeTokenInWasm(key, val).catch(error => {
+    console.warn(`ServiceWorker: Failed to store ${key} in WASM/IndexedDB:`, error);
+  });
 }
 
 function storageGet(key: string): string | null {
   return memoryStore[key] ?? null;
+}
+
+// 异步版本的 storageGet，可以从 WASM/IndexedDB 读取
+async function storageGetAsync(key: string): Promise<string | null> {
+  // 首先检查内存
+  const memoryValue = memoryStore[key];
+  if (memoryValue) {
+    return memoryValue;
+  }
+  
+  // 然后从 WASM/IndexedDB 读取
+  try {
+    const wasmValue = await getTokenFromWasm(key);
+    if (wasmValue) {
+      // 同步到内存
+      memoryStore[key] = wasmValue;
+      return wasmValue;
+    }
+  } catch (error) {
+    console.warn(`ServiceWorker: Failed to get ${key} from WASM/IndexedDB:`, error);
+  }
+  
+  return null;
 }
 
 async function postMessageToClient(clientId: string, message: Record<string, unknown>) {
@@ -77,8 +352,13 @@ async function broadcastToClients(message: Record<string, unknown>, clientIds: S
 /**
  * 检查租户代码是否存在
  */
-function checkTenantCode(): boolean {
-  const tenantCode = storageGet('tenant_code');
+async function checkTenantCode(): Promise<boolean> {
+  let tenantCode = storageGet('tenant_code');
+  
+  // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
+  if (!tenantCode) {
+    tenantCode = await storageGetAsync('tenant_code');
+  }
 
   if (!tenantCode) {
     // 清除认证状态
@@ -113,7 +393,13 @@ async function broadcastToAllClients(message: Record<string, unknown>) {
  */
 async function refreshAccessToken(): Promise<boolean> {
   try {
-    const refreshToken = storageGet('refresh_token');
+    let refreshToken = storageGet('refresh_token');
+    
+    // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
+    if (!refreshToken) {
+      refreshToken = await storageGetAsync('refresh_token');
+    }
+    
     if (!refreshToken) {
       console.error('ServiceWorker: No refresh token available');
       return false;
@@ -195,13 +481,19 @@ function clearAuthState() {
  */
 async function checkAndRefreshToken(): Promise<void> {
   // 首先检查租户代码是否存在
-  if (!checkTenantCode()) {
+  if (!(await checkTenantCode())) {
     console.log('ServiceWorker: Tenant code missing, user needs to login again');
     clearAuthState();
     return;
   }
 
-  const expiresAtStr = storageGet('token_expires_at');
+  let expiresAtStr = storageGet('token_expires_at');
+  
+  // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
+  if (!expiresAtStr) {
+    expiresAtStr = await storageGetAsync('token_expires_at');
+  }
+  
   if (!expiresAtStr) return;
 
   const expiresAt = parseInt(expiresAtStr, 10);
@@ -268,14 +560,14 @@ async function initializeSurreal(): Promise<void> {
 async function ensureConnection(newConfig?: typeof connectionConfig): Promise<boolean> {
   // Ensure SurrealDB is initialized first
   await initializeSurreal();
-  
+
   if (newConfig && connectionConfig) {
     // 检查配置变化的具体部分
     const endpointChanged = connectionConfig.endpoint !== newConfig.endpoint;
     const namespaceChanged = connectionConfig.namespace !== newConfig.namespace;
     const databaseChanged = connectionConfig.database !== newConfig.database;
     const authChanged = JSON.stringify(connectionConfig.auth) !== JSON.stringify(newConfig.auth);
-    
+
     if (endpointChanged) {
       // endpoint 变化需要重新建立连接
       console.log("ServiceWorker: Endpoint changed, reconnecting...", connectionConfig.endpoint, '->', newConfig.endpoint);
@@ -290,17 +582,23 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
       connectionConfig = newConfig;
     } else if (namespaceChanged || databaseChanged) {
       // namespace 或 database 变化只需要重新执行 use 和 authenticate
-      console.log("ServiceWorker: Namespace/Database changed, switching...", 
-        { namespace: connectionConfig.namespace, database: connectionConfig.database }, 
-        '->', 
+      console.log("ServiceWorker: Namespace/Database changed, switching...",
+        { namespace: connectionConfig.namespace, database: connectionConfig.database },
+        '->',
         { namespace: newConfig.namespace, database: newConfig.database });
-      
+
       if (isConnected && db) {
         try {
           await db.use({ namespace: newConfig.namespace, database: newConfig.database });
-          
+
           // 重新认证
-          const token = storageGet('access_token');
+          let token = storageGet('access_token');
+          
+          // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
+          if (!token) {
+            token = await storageGetAsync('access_token');
+          }
+          
           if (token) {
             await db.authenticate(token);
             console.log("ServiceWorker: Re-authenticated after namespace/database change.");
@@ -314,10 +612,16 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
     } else if (authChanged) {
       // 只有认证信息变化，只需要重新认证
       console.log("ServiceWorker: Auth changed, re-authenticating...");
-      
+
       if (isConnected && db) {
         try {
-          const token = storageGet('access_token');
+          let token = storageGet('access_token');
+          
+          // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
+          if (!token) {
+            token = await storageGetAsync('access_token');
+          }
+          
           if (token) {
             await db.authenticate(token);
             console.log("ServiceWorker: Re-authenticated with new auth info.");
@@ -348,15 +652,30 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
       await db!.use({ namespace: connectionConfig.namespace, database: connectionConfig.database });
 
       // Re-authenticate if token is available
-      const token = storageGet('access_token');
+      let token = storageGet('access_token');
+      
+      // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
+      if (!token) {
+        token = await storageGetAsync('access_token');
+      }
+      
       if (token) {
         try {
           await db!.authenticate(token);
           console.log("ServiceWorker: Re-authenticated successfully with stored token.");
 
           // Setup token refresh if we have authentication info
-          const refreshToken = storageGet('refresh_token');
-          const expiresAt = storageGet('token_expires_at');
+          let refreshToken = storageGet('refresh_token');
+          let expiresAt = storageGet('token_expires_at');
+          
+          // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
+          if (!refreshToken) {
+            refreshToken = await storageGetAsync('refresh_token');
+          }
+          if (!expiresAt) {
+            expiresAt = await storageGetAsync('token_expires_at');
+          }
+          
           if (refreshToken && expiresAt) {
             setupTokenRefresh();
           }
@@ -406,13 +725,69 @@ async function resubscribeAllLiveQueries() {
 
 self.addEventListener('install', (event) => {
   console.log("Service Worker installing");
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    Promise.all([
+      self.skipWaiting(),
+      precacheSurrealDBWasm(),
+      initializeIndexedDB()
+    ])
+  );
 });
 
 self.addEventListener('activate', (event) => {
   console.log("Service Worker activating");
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    self.clients.claim().then(async () => {
+      // 初始化 SurrealDB WASM
+      await initializeSurrealDBWasm();
+      // 首先从存储中恢复 token
+      await recoverTokensFromStorage();
+      // Service Worker 激活后，主动同步 localStorage 中的 token
+      await syncTokensFromLocalStorage();
+    })
+  );
 });
+
+/**
+ * 从客户端的 localStorage 同步 token 到 Service Worker
+ */
+async function syncTokensFromLocalStorage() {
+  try {
+    const clients = await self.clients.matchAll();
+    if (clients.length > 0) {
+      // 向第一个客户端请求同步 token
+      clients[0].postMessage({
+        type: 'request_token_sync',
+        payload: {}
+      });
+    }
+  } catch (error) {
+    console.error('ServiceWorker: Failed to sync tokens from localStorage:', error);
+  }
+}
+
+/**
+ * 从 WASM/IndexedDB 恢复所有 token 到内存
+ */
+async function recoverTokensFromStorage() {
+  try {
+    console.log('ServiceWorker: Recovering tokens from WASM/IndexedDB...');
+    
+    const tokenKeys = ['access_token', 'refresh_token', 'token_expires_at', 'tenant_code'];
+    
+    for (const key of tokenKeys) {
+      const value = await getTokenFromWasm(key);
+      if (value) {
+        memoryStore[key] = value;
+        console.log(`ServiceWorker: Recovered ${key} from storage`);
+      }
+    }
+    
+    console.log('ServiceWorker: Token recovery completed');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to recover tokens from storage:', error);
+  }
+}
 
 // Clean up when service worker is terminated
 self.addEventListener('beforeunload', () => {
@@ -424,7 +799,8 @@ self.addEventListener('message', async (event) => {
     return;
   }
 
-  const { type, payload, messageId } = event.data;
+  // 递归处理payload.data中可能被序列化的RecordId对象
+  const { type, payload, messageId } = deserializeRecordIds(event.data);
   const clientId = (event.source as any)?.id;
 
   if (!clientId) return;
@@ -607,8 +983,54 @@ self.addEventListener('message', async (event) => {
       }
 
       case 'check_tenant_code': {
-        const valid = checkTenantCode();
+        const valid = await checkTenantCode();
         respond({ valid });
+        break;
+      }
+
+      case 'wasm_query': {
+        await initializeSurrealDBWasm();
+        if (!wasmDb) throw new Error("WASM database not initialized");
+        const result = await wasmDb.query(payload.sql, payload.vars);
+        respond(result);
+        break;
+      }
+
+      case 'wasm_create': {
+        await initializeSurrealDBWasm();
+        if (!wasmDb) throw new Error("WASM database not initialized");
+        const result = await wasmDb.create(payload.thing, payload.data);
+        respond(result);
+        break;
+      }
+
+      case 'wasm_select': {
+        await initializeSurrealDBWasm();
+        if (!wasmDb) throw new Error("WASM database not initialized");
+        const result = await wasmDb.select(payload.thing);
+        respond(result);
+        break;
+      }
+
+      case 'wasm_update': {
+        await initializeSurrealDBWasm();
+        if (!wasmDb) throw new Error("WASM database not initialized");
+        const result = await wasmDb.update(payload.thing, payload.data);
+        respond(result);
+        break;
+      }
+
+      case 'wasm_delete': {
+        await initializeSurrealDBWasm();
+        if (!wasmDb) throw new Error("WASM database not initialized");
+        const result = await wasmDb.delete(payload.thing);
+        respond(result);
+        break;
+      }
+
+      case 'recover_tokens': {
+        await recoverTokensFromStorage();
+        respond({ success: true });
         break;
       }
 
