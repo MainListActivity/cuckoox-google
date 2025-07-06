@@ -177,11 +177,26 @@ class AuthService {
   }
 
   async clearAuthTokens(): Promise<void> {
-    const client = await getInternalClient();
-    await client.invalidate();
-    
-    this.isAuthenticated = false;
-    this.currentUser = null;
+    try {
+      const client = await getInternalClient();
+      await client.invalidate();
+      
+      // 清理localStorage中的token
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('token_expires_at');
+      
+      this.isAuthenticated = false;
+      this.currentUser = null;
+    } catch (error) {
+      console.error('Error clearing auth tokens:', error);
+      // 即使invalidate失败也要清理本地状态
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('token_expires_at');
+      this.isAuthenticated = false;
+      this.currentUser = null;
+    }
   }
 
   async getStoredAccessToken(): Promise<string | null> {
