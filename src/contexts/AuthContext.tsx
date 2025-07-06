@@ -624,6 +624,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setIsLoading(true);
     const isAdmin = user.github_id === '--admin--';
+    const isRootAdmin = user.github_id.startsWith('root_admin_');
+    const isPasswordUser = user.github_id.startsWith('local_') || isRootAdmin;
 
     try {
       // 统一先清理本地存储和状态
@@ -633,12 +635,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (isAdmin) {
         await authService.signout();
         console.log('Admin user signed out from SurrealDB.');
+      } else if (isPasswordUser) {
+        // 密码登录用户，只清理令牌，不走 OIDC 流程
+        await authService.signout();
+        console.log('Password user signed out from SurrealDB.');
+        // 直接重定向到登录页面
+        window.location.href = '/login';
       } else {
+        // OIDC 登录用户，走 OIDC 退出流程
         await authService.logoutRedirect();
       }
     } catch (error) {
       // 统一错误处理
       console.error("Error during logout process:", error);
+      // 确保即使出错也能重定向到登录页面
+      window.location.href = '/login';
     } finally {
       setIsLoading(false);
     }

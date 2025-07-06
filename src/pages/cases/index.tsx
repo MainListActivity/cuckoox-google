@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useDataService } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
 import {
@@ -100,7 +100,7 @@ const CaseListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError } = useSnackbar();
   const theme = useTheme();
-  const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const dataService = useDataService();
 
   // Check operation permissions
   const { permissions, isLoading: isPermissionsLoading } = useOperationPermissions([
@@ -138,7 +138,7 @@ const CaseListPage: React.FC = () => {
   // Fetch cases from database
   useEffect(() => {
     const fetchCases = async () => {
-      if (!isConnected) return;
+      if (!dataService) return;
       
       setIsLoading(true);
       setError(null);
@@ -164,10 +164,10 @@ const CaseListPage: React.FC = () => {
           ORDER BY created_at DESC
         `;
         
-        const result = await client.query(query);
+        const result = await dataService.query<RawCaseData[]>(query);
         
-        if (result && result[0]) {
-          const casesData = result[0] as RawCaseData[]; // MODIFIED: Use RawCaseData[]
+        if (Array.isArray(result)) {
+          const casesData = result as RawCaseData[];
           
           // Transform the data to match our CaseItem interface
           const transformedCases: CaseItem[] = casesData.map(caseData => ({
@@ -194,7 +194,7 @@ const CaseListPage: React.FC = () => {
     };
 
     fetchCases();
-  }, [isConnected, client, t, showError]);
+  }, [dataService, t, showError]);
 
   // Statistics
   const stats = [
@@ -328,7 +328,7 @@ const CaseListPage: React.FC = () => {
     
     // Refresh cases list to show the new case
     const fetchCases = async () => {
-      if (!isConnected) return;
+      if (!dataService) return;
       
       setIsLoading(true);
       setError(null);
@@ -354,10 +354,10 @@ const CaseListPage: React.FC = () => {
           ORDER BY created_at DESC
         `;
         
-        const result = await client.query(query);
+        const result = await dataService.query<RawCaseData[]>(query);
         
-        if (result && result[0]) {
-          const casesData = result[0] as RawCaseData[];
+        if (Array.isArray(result)) {
+          const casesData = result as RawCaseData[];
           
           // Transform the data to match our CaseItem interface
           const transformedCases: CaseItem[] = casesData.map(caseData => ({

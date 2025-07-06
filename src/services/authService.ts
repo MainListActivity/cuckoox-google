@@ -219,6 +219,7 @@ class AuthService {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('token_expires_at');
+      localStorage.removeItem('tenant_code');
       
       this.isAuthenticated = false;
       this.currentUser = null;
@@ -228,8 +229,10 @@ class AuthService {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
       localStorage.removeItem('token_expires_at');
+      localStorage.removeItem('tenant_code');
       this.isAuthenticated = false;
       this.currentUser = null;
+      // 不抛出错误，确保退出登录流程能继续
     }
   }
 
@@ -294,9 +297,24 @@ class AuthService {
   }
 
   async logoutOidc(): Promise<void> {
-    await userManager.signoutRedirect();
-    await userManager.clearStaleState();
-    await this.clearAuthTokens();
+    try {
+      // 先清理本地状态
+      await this.clearAuthTokens();
+      
+      // 清理 OIDC 用户状态
+      await userManager.removeUser();
+      await userManager.clearStaleState();
+      
+      // 简单重定向到登录页面，避免访问 OIDC 端点
+      const postLogoutUri = import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || window.location.origin + '/login';
+      window.location.href = postLogoutUri;
+    } catch (error) {
+      console.error('Error during OIDC logout:', error);
+      // 确保即使出错也能清理状态并重定向
+      await this.clearAuthTokens();
+      const postLogoutUri = import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || window.location.origin + '/login';
+      window.location.href = postLogoutUri;
+    }
   }
 
   // User Management

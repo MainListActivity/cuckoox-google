@@ -41,7 +41,7 @@ const CaseMemberManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const { showError } = useSnackbar();
   const theme = useTheme();
-  const { surreal: client, isSuccess: isConnected } = useSurreal();
+  const { client, isConnected } = useSurreal();
   const { selectedCaseId } = useAuth();
 
   // Check operation permissions
