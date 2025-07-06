@@ -30,8 +30,14 @@ export interface SurrealWorkerAPI {
     namespace: string;
     database: string;
     auth?: AnyAuth;
+    sync_tokens?: {
+      access_token?: string | null;
+      refresh_token?: string | null;
+      token_expires_at?: string | null;
+      tenant_code?: string | null;
+    };
   }): Promise<boolean>;
-  authenticate(token: string): Promise<void>;
+  authenticate(token: string, refreshToken?: string, expiresIn?: number, tenantCode?: string): Promise<void>;
   invalidate(): Promise<void>;
   setConfig(config: {
     namespace?: string;
@@ -148,13 +154,24 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     namespace: string;
     database: string;
     auth?: AnyAuth;
+    sync_tokens?: {
+      access_token?: string | null;
+      refresh_token?: string | null;
+      token_expires_at?: string | null;
+      tenant_code?: string | null;
+    };
   }): Promise<boolean> {
     const result = await this.sendMessage('connect', config);
     return result.status === 'connected';
   }
 
-  async authenticate(token: string): Promise<void> {
-    await this.sendMessage('authenticate', { token });
+  async authenticate(token: string, refreshToken?: string, expiresIn?: number, tenantCode?: string): Promise<void> {
+    await this.sendMessage('authenticate', { 
+      token, 
+      refresh_token: refreshToken, 
+      expires_in: expiresIn,
+      tenant_code: tenantCode
+    });
   }
 
   async invalidate(): Promise<void> {

@@ -156,11 +156,22 @@ class AuthService {
 
   // Token Management
   async setAuthTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void> {
+    // Store tokens in localStorage for service worker access
+    localStorage.setItem('access_token', accessToken);
+    if (refreshToken) {
+      localStorage.setItem('refresh_token', refreshToken);
+    }
+    if (expiresIn) {
+      const expiresAt = Date.now() + (expiresIn * 1000);
+      localStorage.setItem('token_expires_at', expiresAt.toString());
+    }
+    
     await connectToSurreal();
     const client = await getInternalClient();
     
     // Service Worker client handles token storage internally
-    await client.authenticate(accessToken);
+    const tenantCode = localStorage.getItem('tenant_code');
+    await client.authenticate(accessToken, refreshToken, expiresIn, tenantCode || undefined);
     
     this.isAuthenticated = true;
   }
@@ -181,9 +192,24 @@ class AuthService {
 
   // Tenant Management
   async setTenantCode(tenantCode: string): Promise<void> {
-    // For Service Worker implementation, tenant switching would require
-    // reconnecting with new database configuration
-    console.warn('Tenant switching not yet implemented for Service Worker architecture');
+    // Store tenant code in localStorage for service worker access
+    localStorage.setItem('tenant_code', tenantCode);
+    
+    // Reconnect to service worker with new tenant database
+    const client = await getInternalClient();
+    await client.connect({
+      endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
+      namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
+      database: tenantCode,
+      sync_tokens: {
+        access_token: localStorage.getItem('access_token'),
+        refresh_token: localStorage.getItem('refresh_token'),
+        token_expires_at: localStorage.getItem('token_expires_at'),
+        tenant_code: tenantCode
+      }
+    });
+    
+    console.log('Tenant code set and connection updated:', tenantCode);
   }
 
   async getTenantCode(): Promise<string | null> {

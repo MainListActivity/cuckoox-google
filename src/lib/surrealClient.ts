@@ -54,7 +54,7 @@ export async function surrealClient(): Promise<SurrealWorkerAPI> {
     
     await serviceWorkerClient!.connect({
       endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-      namespace: import.meta.env.VITE_SURREALDB_NS || 'test',
+      namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
       database: database,
     });
     return serviceWorkerClient!;

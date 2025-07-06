@@ -111,7 +111,7 @@ const LoginPage: React.FC = () => {
 
   const handleAdminLoginWithToken = async (token: string) => {
     try {
-      // 根据登录模式选择不同的API端点
+      // 统一使用后端认证API获取JWT token
       let apiUrl: string;
       let requestBody: any;
       
@@ -148,33 +148,43 @@ const LoginPage: React.FC = () => {
 
       const data = await response.json();
       
+      // 统一的登录处理逻辑，两种模式都使用SurrealDB认证
       if (isRootAdminMode) {
         // Root管理员登录成功
         console.log('Root admin successfully logged in.');
         
+        // 对于rootAdmin，使用特殊的租户代码 'root'
+        await authService.setTenantCode('root_system');
+        
+        // 使用返回的JWT token进行SurrealDB认证
+        // 注意：后端需要修改以返回JWT格式的token
+        const jwtToken = data.access_token || data.token;
+        if (!jwtToken) {
+          throw new Error('No JWT token returned from root admin login');
+        }
+        
+        await authService.setAuthTokens(jwtToken, data.refresh_token, data.expires_in);
+        
         // 创建Root管理员用户对象
         const rootAdminUser: AppUser = {
-          id: new RecordId('root_admin', data.admin.username),
-          github_id: `root_admin_${data.admin.username}`,
-          name: data.admin.full_name,
-          email: data.admin.email,
+          id: new RecordId('root_admin', data.admin?.username || adminUsername),
+          github_id: `root_admin_${data.admin?.username || adminUsername}`,
+          name: data.admin?.full_name || data.admin?.name || adminUsername,
+          email: data.admin?.email || '',
         };
 
         setAuthState(rootAdminUser, null);
-        
-        // 跳转到Root管理员控制台
         navigate('/root-admin', { replace: true });
       } else {
         // 租户用户登录成功
-        // 使用AuthService统一处理认证和连接
+        console.log('Tenant user successfully logged in.');
+        
+        // 设置租户代码并进行SurrealDB认证
         if (tenantCode) {
           await authService.setTenantCode(tenantCode);
         }
         
-        // 通过AuthService设置tokens并自动认证
         await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
-
-        console.log('User successfully logged in with password.');
 
         // 创建用户对象
         const userAppUser: AppUser = {
