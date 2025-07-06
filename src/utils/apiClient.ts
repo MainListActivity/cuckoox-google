@@ -164,7 +164,7 @@ class ApiClient {
   /**
    * Create new tenant
    */
-  async createTenant(data: { tenant_name: string; admin_username: string }): Promise<any> {
+  async createTenant(data: { tenant_code: string; tenant_name: string; admin_username: string }): Promise<any> {
     return this.post('/api/tenants', data);
   }
 

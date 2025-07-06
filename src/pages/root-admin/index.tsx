@@ -62,6 +62,7 @@ const RootAdminPage: React.FC = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [isLoadingTenants, setIsLoadingTenants] = useState(false);
   const [showCreateTenantDialog, setShowCreateTenantDialog] = useState(false);
+  const [newTenantCode, setNewTenantCode] = useState('');
   const [newTenantName, setNewTenantName] = useState('');
   const [newTenantAdminUsername, setNewTenantAdminUsername] = useState('');
   const [createTenantError, setCreateTenantError] = useState<string | null>(null);
@@ -77,6 +78,20 @@ const RootAdminPage: React.FC = () => {
 
   // 密码显示状态
   const [visiblePasswords, setVisiblePasswords] = useState<{[key: string]: boolean}>({});
+
+  // 验证租户编码格式
+  const validateTenantCode = (code: string): string | null => {
+    if (!code) {
+      return t('tenant_code_required', 'Tenant code is required');
+    }
+    if (code.length < 4 || code.length > 20) {
+      return t('tenant_code_length_error', 'Tenant code must be 4-20 characters long');
+    }
+    if (!/^[a-zA-Z0-9]+$/.test(code)) {
+      return t('tenant_code_format_error', 'Tenant code must contain only letters and numbers');
+    }
+    return null;
+  };
 
   // 检查用户权限
   useEffect(() => {
@@ -121,14 +136,23 @@ const RootAdminPage: React.FC = () => {
   const handleCreateTenant = async () => {
     setCreateTenantError(null);
     
+    // 验证租户编码
+    const validationError = validateTenantCode(newTenantCode);
+    if (validationError) {
+      setCreateTenantError(validationError);
+      return;
+    }
+    
     try {
       const newTenant = await apiClient.createTenant({
+        tenant_code: newTenantCode,
         tenant_name: newTenantName,
         admin_username: newTenantAdminUsername,
       });
       
       setTenants([...tenants, newTenant]);
       setShowCreateTenantDialog(false);
+      setNewTenantCode('');
       setNewTenantName('');
       setNewTenantAdminUsername('');
     } catch (error) {
@@ -382,7 +406,13 @@ const RootAdminPage: React.FC = () => {
       {/* 创建租户对话框 */}
       <Dialog
         open={showCreateTenantDialog}
-        onClose={() => setShowCreateTenantDialog(false)}
+        onClose={() => {
+          setShowCreateTenantDialog(false);
+          setNewTenantCode('');
+          setNewTenantName('');
+          setNewTenantAdminUsername('');
+          setCreateTenantError(null);
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -395,6 +425,17 @@ const RootAdminPage: React.FC = () => {
           )}
           <TextField
             autoFocus
+            margin="dense"
+            label={t('tenant_code', 'Tenant Code')}
+            placeholder={t('tenant_code_placeholder', 'e.g., ACME or TEST123 (4-20 characters, letters and numbers only)')}
+            fullWidth
+            variant="outlined"
+            value={newTenantCode}
+            onChange={(e) => setNewTenantCode(e.target.value.toUpperCase())}
+            helperText={t('tenant_code_help', 'Unique identifier for the tenant (4-20 characters, letters and numbers only, will be converted to uppercase)')}
+            sx={{ mb: 2 }}
+          />
+          <TextField
             margin="dense"
             label={t('tenant_name', 'Tenant Name')}
             fullWidth
@@ -413,13 +454,19 @@ const RootAdminPage: React.FC = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowCreateTenantDialog(false)}>
+          <Button onClick={() => {
+            setShowCreateTenantDialog(false);
+            setNewTenantCode('');
+            setNewTenantName('');
+            setNewTenantAdminUsername('');
+            setCreateTenantError(null);
+          }}>
             {t('cancel', 'Cancel')}
           </Button>
           <Button
             onClick={handleCreateTenant}
             variant="contained"
-            disabled={!newTenantName || !newTenantAdminUsername}
+            disabled={!newTenantCode || !newTenantName || !newTenantAdminUsername}
           >
             {t('create', 'Create')}
           </Button>
