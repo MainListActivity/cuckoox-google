@@ -390,7 +390,7 @@ class MessageService {
       const client = await surrealClient();
       
       let query: string;
-      let params: any = {};
+      const params: any = {};
       
       if (conversationId) {
         // Live query for specific conversation

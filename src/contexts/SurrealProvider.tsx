@@ -5,14 +5,14 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { surrealClient } from '@/src/lib/surrealClient';
-import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
+import { surrealUnifiedClient } from '@/src/lib/surrealUnifiedClient';
+import type { UnifiedSurrealAPI } from '@/src/lib/surrealUnifiedClient';
 import { dataService } from '@/src/services/dataService';
 
 interface SurrealProviderProps {
   children: React.ReactNode;
   /** Provide a pre-initialised Surreal-like client (used in unit tests) */
-  client?: SurrealWorkerAPI | any;
+  client?: UnifiedSurrealAPI | any;
   autoConnect?: boolean;
 }
 
@@ -20,13 +20,20 @@ export interface SurrealContextValue {
   // Data operations (via DataService)
   dataService: typeof dataService;
   
-  // Direct Service Worker access for raw operations
-  client: SurrealWorkerAPI | null;
+  // Direct unified client access for raw operations
+  client: UnifiedSurrealAPI | null;
+  
+  // Backward compatibility alias
+  surreal: UnifiedSurrealAPI | null;
   
   // Connection state
   isConnected: boolean;
   isConnecting: boolean;
   error: Error | null;
+  
+  // Additional compatibility properties
+  isSuccess?: boolean;
+  handleSessionError?: (error: any) => void;
   
   // Connection management (internal use)
   reconnect: () => Promise<void>;
@@ -39,7 +46,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   client: externalClient,
   autoConnect = true,
 }) => {
-  const [client, setClient] = useState<SurrealWorkerAPI | null>(externalClient ?? null);
+  const [client, setClient] = useState<UnifiedSurrealAPI | null>(externalClient ?? null);
   const [isConnecting, setConnecting] = useState(false);
   const [isConnected, setConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -57,7 +64,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     setError(null);
 
     try {
-      const proxy = await surrealClient();
+      const proxy = await surrealUnifiedClient();
       setClient(proxy);
       setConnected(true);
       
@@ -109,15 +116,22 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         return undefined;
       },
     };
-    return new Proxy({}, handler) as unknown as SurrealWorkerAPI;
+    return new Proxy({}, handler) as unknown as UnifiedSurrealAPI;
   }, []);
 
   const value = useMemo<SurrealContextValue>(() => ({
     dataService,
     client: client ?? dummyClient,
+    surreal: client ?? dummyClient, // Backward compatibility alias
     isConnected,
     isConnecting,
     error,
+    isSuccess: isConnected, // Backward compatibility
+    handleSessionError: (error: any) => {
+      console.error('Session error:', error);
+      setConnected(false);
+      setError(error);
+    },
     reconnect,
   }), [client, dummyClient, isConnected, isConnecting, error, reconnect]);
 

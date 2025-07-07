@@ -54,7 +54,7 @@ class BusinessNotificationService {
         `SELECT id, case_number, name FROM ${String(claim.case_id)}`
       );
       
-      let title = `债权审核通知 - ${claim.claim_number}`;
+      const title = `债权审核通知 - ${claim.claim_number}`;
       let content = `您提交的债权申报（编号：${claim.claim_number}）已完成审核。\n`;
       let priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' = 'NORMAL';
       

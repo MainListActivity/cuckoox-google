@@ -1,6 +1,5 @@
 import { RecordId } from 'surrealdb';
-import { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
-import { surrealClient } from '@/src/lib/surrealClient';
+import { UnifiedSurrealAPI, surrealUnifiedClient } from '@/src/lib/surrealUnifiedClient';
 
 // Generic query result interface
 interface QueryResult<T = unknown> {
@@ -21,7 +20,7 @@ const isSessionExpiredError = (error: any): boolean => {
 
 // Data Service for database operations
 class DataService {
-  private client: SurrealWorkerAPI | null = null;
+  private client: UnifiedSurrealAPI | null = null;
   private onSessionExpired?: () => void;
 
   /**
@@ -34,22 +33,22 @@ class DataService {
   /**
    * Allow external injection of a pre-initialised client (e.g. via SurrealProvider).
    */
-  setClient(client: SurrealWorkerAPI | null) {
+  setClient(client: UnifiedSurrealAPI | null) {
     this.client = client;
   }
 
   /**
    * Ensure we have a usable Surreal client with a `query` method. Falls back to creating
-   * (or reusing) the global worker proxy via `surrealClient()` if the injected client is
+   * (or reusing) the global unified client if the injected client is
    * missing or invalid.
    */
-  private async ensureClient(): Promise<SurrealWorkerAPI> {
+  private async ensureClient(): Promise<UnifiedSurrealAPI> {
     if (this.client && typeof (this.client as any).query === 'function') {
       return this.client;
     }
 
-    // Create / reuse the global proxy
-    this.client = await surrealClient();
+    // Create / reuse the global unified client
+    this.client = await surrealUnifiedClient();
     return this.client;
   }
 

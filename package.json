@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "copy:wasm": "node scripts/copy-wasm.js",
-    "build:sw": "bun run copy:wasm && tsx build-sw.js",
+    "build:sw": "tsx build-sw.js",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",

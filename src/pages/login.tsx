@@ -25,9 +25,12 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  Autocomplete,
+  Chip,
 } from '@mui/material';
 import { mdiEye, mdiEyeOff } from '@mdi/js';
 import Logo from '../components/Logo';
+import TenantHistoryManager, { TenantHistoryItem } from '@/src/utils/tenantHistory';
 
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
@@ -47,6 +50,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [showTurnstile, setShowTurnstile] = useState<boolean>(false);
+  const [tenantHistory, setTenantHistory] = useState<TenantHistoryItem[]>([]);
 
   const searchParams = new URLSearchParams(location.search);
   // 默认使用租户登录，除非明确指定root模式
@@ -65,15 +69,21 @@ const LoginPage: React.FC = () => {
     return user?.github_id === '--admin--';
   }, [user]);
 
-  // 从URL参数或localStorage填充租户代码
+  // 从URL参数或历史记录填充租户代码
   useEffect(() => {
-    if (tenantFromUrl && !isRootAdminMode) {
-      setTenantCode(tenantFromUrl.toUpperCase());
-    } else if (!isRootAdminMode) {
-      // 从localStorage恢复租户代码
-      const storedTenantCode = localStorage.getItem('tenant_code');
-      if (storedTenantCode) {
-        setTenantCode(storedTenantCode);
+    if (!isRootAdminMode) {
+      // 加载租户历史记录
+      const history = TenantHistoryManager.getTenantHistory();
+      setTenantHistory(history);
+      
+      if (tenantFromUrl) {
+        setTenantCode(tenantFromUrl.toUpperCase());
+      } else {
+        // 使用最近使用的租户作为默认值
+        const lastUsedTenant = TenantHistoryManager.getLastUsedTenant();
+        if (lastUsedTenant) {
+          setTenantCode(lastUsedTenant);
+        }
       }
     }
   }, [tenantFromUrl, isRootAdminMode]);
@@ -182,6 +192,8 @@ const LoginPage: React.FC = () => {
         // 设置租户代码并进行SurrealDB认证
         if (tenantCode) {
           await authService.setTenantCode(tenantCode);
+          // 登录成功后，将租户添加到历史记录
+          TenantHistoryManager.addTenantToHistory(tenantCode);
         }
         
         await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
@@ -390,23 +402,68 @@ const LoginPage: React.FC = () => {
               {/* Tenant/Root Admin Login Form */}
                 <form onSubmit={handleAdminFormLogin}>
                   {!isRootAdminMode && (
-                    <TextField
+                    <Autocomplete
                       id="tenantCode"
-                      label={t('tenant_code_label', 'Tenant Code')}
-                      type="text"
+                      options={tenantHistory}
+                      getOptionLabel={(option) => typeof option === 'string' ? option : option.code}
                       value={tenantCode}
-                      onChange={(e) => {
-                        setTenantCode(e.target.value.toUpperCase());
+                      onChange={(_, newValue) => {
+                        const code = typeof newValue === 'string' ? newValue : newValue?.code || '';
+                        setTenantCode(code.toUpperCase());
+                        // Clear error when user selects
+                        if (adminLoginError) setAdminLoginError(null);
+                      }}
+                      inputValue={tenantCode}
+                      onInputChange={(_, newInputValue) => {
+                        setTenantCode(newInputValue.toUpperCase());
                         // Clear error when user starts typing
                         if (adminLoginError) setAdminLoginError(null);
                       }}
-                      required
-                      fullWidth
-                      variant="outlined"
-                      margin="normal"
-                      placeholder={t('tenant_code_placeholder', 'Enter tenant code')}
+                      freeSolo
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label={t('tenant_code_label', 'Tenant Code')}
+                          required
+                          fullWidth
+                          variant="outlined"
+                          margin="normal"
+                          placeholder={t('tenant_code_placeholder', 'Enter tenant code')}
+                          sx={{
+                            '& .MuiOutlinedInput-root': {
+                              borderRadius: 2,
+                            },
+                          }}
+                        />
+                      )}
+                      renderOption={(props, option) => (
+                        <Box
+                          component="li"
+                          {...props}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            py: 1,
+                          }}
+                        >
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {option.code}
+                            </Typography>
+                            {option.name && (
+                              <Typography variant="caption" color="text.secondary">
+                                {option.name}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {new Date(option.lastUsed).toLocaleDateString()}
+                          </Typography>
+                        </Box>
+                      )}
                       sx={{
-                        '& .MuiOutlinedInput-root': {
+                        '& .MuiAutocomplete-inputRoot': {
                           borderRadius: 2,
                         },
                       }}

@@ -1,15 +1,14 @@
 import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSettings } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
+import { surrealUnifiedClient } from '@/src/lib/surrealUnifiedClient';
 
-// Internal service worker client access - only for connection management
+// Internal unified client access - only for connection management
 let internalClientInstance: any = null;
 
-// Service Worker client connection management
+// Unified client connection management
 const getInternalClient = async () => {
   if (!internalClientInstance) {
-    // Dynamic import to get service worker client instance
-    const { surrealClient } = await import('@/src/lib/surrealClient');
-    internalClientInstance = await surrealClient();
+    internalClientInstance = await surrealUnifiedClient();
   }
   return internalClientInstance;
 };
@@ -247,19 +246,32 @@ class AuthService {
     // Store tenant code in localStorage for service worker access
     localStorage.setItem('tenant_code', tenantCode);
     
-    // Reconnect to service worker with new tenant database
+    // Reconnect with new tenant database
     const client = await getInternalClient();
-    await client.connect({
-      endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-      namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
-      database: tenantCode,
-      sync_tokens: {
-        access_token: localStorage.getItem('access_token'),
-        refresh_token: localStorage.getItem('refresh_token'),
-        token_expires_at: localStorage.getItem('token_expires_at'),
-        tenant_code: tenantCode
-      }
-    });
+    
+    // Check if client has connect method (Service Worker mode)
+    if (client.connect) {
+      await client.connect({
+        endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
+        namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
+        database: tenantCode,
+        sync_tokens: {
+          access_token: localStorage.getItem('access_token'),
+          refresh_token: localStorage.getItem('refresh_token'),
+          token_expires_at: localStorage.getItem('token_expires_at'),
+          tenant_code: tenantCode
+        }
+      });
+    } else {
+      // For direct connection mode, we need to recreate the client with new database
+      // Reset the unified client to force reconnection with new tenant database
+      const { resetUnifiedSurrealClient } = await import('@/src/lib/surrealUnifiedClient');
+      resetUnifiedSurrealClient();
+      
+      // Get new client instance which will connect to the new tenant database
+      internalClientInstance = null; // Reset cached instance
+      await getInternalClient(); // This will create new connection with tenant code from localStorage
+    }
     
     console.log('Tenant code set and connection updated:', tenantCode);
   }

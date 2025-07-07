@@ -44,7 +44,7 @@ export interface ClaimAttachmentData {
   last_saved_at: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 class ClaimService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private db: any;

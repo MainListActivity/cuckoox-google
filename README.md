@@ -1,6 +1,62 @@
-# Run and deploy your AI Studio app
+# CuckooX Google - 法律案件管理系统
 
-This contains everything you need to run your app locally.
+这是一个基于React + TypeScript + SurrealDB的法律案件管理系统，支持多种数据库访问方式。
+
+## 数据库访问模式
+
+系统支持两种数据库访问方式，可通过环境变量`VITE_DB_ACCESS_MODE`配置：
+
+### Service Worker 模式 (推荐)
+- **配置**: `VITE_DB_ACCESS_MODE=service-worker`
+- **特性**:
+  - 支持离线操作
+  - 后台数据同步
+  - Token自动刷新
+  - 跨标签页共享连接
+  - 更好的用户体验
+
+### 直接连接模式
+- **配置**: `VITE_DB_ACCESS_MODE=direct`
+- **特性**:
+  - 直接连接SurrealDB
+  - 调试更容易
+  - 延迟更低
+  - 不支持离线功能
+
+## 环境变量配置
+
+复制`.env.example`到`.env`并配置相应的环境变量：
+
+```bash
+# 数据库访问方式
+VITE_DB_ACCESS_MODE=service-worker  # 或 direct
+
+# SurrealDB配置
+VITE_SURREALDB_WS_URL=wss://your-surrealdb-url/rpc
+VITE_SURREALDB_NS=ck_go
+VITE_SURREALDB_DB=test
+
+# 其他配置...
+```
+
+## 使用说明
+
+### 切换数据库访问模式
+
+1. **修改环境变量**: 编辑`.env`文件中的`VITE_DB_ACCESS_MODE`
+2. **重启应用**: 重新运行`bun run dev`
+3. **验证切换**: 查看控制台日志确认使用的模式
+
+### 开发和调试
+
+- **Service Worker 模式**: 适合生产环境，支持离线功能
+- **直接连接模式**: 适合开发调试，更简单直接
+
+### 兼容性说明
+
+- 现有代码无需修改，统一客户端自动处理不同模式
+- 通过SurrealProvider的Context提供统一接口
+- 向后兼容原有的`surreal`属性访问方式
 
 ## Run Locally
 
