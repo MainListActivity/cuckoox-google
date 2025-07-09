@@ -179,7 +179,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
 
     try {
       // Register the service worker
-      const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`);
+      const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`, { type: 'module' });
       
       // Wait for the service worker to be ready
       await navigator.serviceWorker.ready;

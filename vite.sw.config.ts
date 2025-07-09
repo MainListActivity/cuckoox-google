@@ -1,6 +1,32 @@
-import { defineConfig } from 'vite'
+import { defineConfig, Plugin } from 'vite'
 import path from 'path'
 import topLevelAwait from 'vite-plugin-top-level-await'
+
+// 将import手动添加到文件开头 - 在所有插件处理完成后执行
+function prependImportToSwSurreal(): Plugin<any> {
+  return {
+    name: `prepend-import-to-sw-surreal`,
+    enforce: 'post', // 确保在所有其他插件之后执行
+    generateBundle: {
+      order: 'post', // 在最后阶段执行
+      handler(options, bundle) {
+        // 找到 sw-surreal.js 文件
+        const swSurrealFile = Object.keys(bundle).find(key => 
+          key.includes('sw-surreal.js') || key === 'sw-surreal.js'
+        );
+        
+        if (swSurrealFile && bundle[swSurrealFile]) {
+          const file = bundle[swSurrealFile];
+          if (file.type === 'chunk') {
+            // 强制在文件开头添加 import 语句，不管是否已存在
+            file.code = `import './wasm-shim.js';\n${file.code}`;
+            console.log(`Added import statement to ${swSurrealFile} (post-processing)`);
+          }
+        }
+      }
+    }
+  }
+}
 
 // Service Worker 专用构建配置
 export default defineConfig({
@@ -10,12 +36,16 @@ export default defineConfig({
     outDir: 'public/sw/',
     emptyOutDir: false,
     rollupOptions: {
-      input: path.resolve(__dirname, 'src/workers/sw-surreal.ts'),
+      input: {
+        'wasm-shim': path.resolve(__dirname, 'src/workers/wasm-shim.ts'),
+        'sw-surreal': path.resolve(__dirname, 'src/workers/sw-surreal.ts'),
+      },
       output: {
-        entryFileNames: 'sw-surreal.js',
+        entryFileNames: '[name].js',
         chunkFileNames: '[name].js',
         assetFileNames: '[name].[ext]',
-        format: 'es'
+        format: 'es',
+        inlineDynamicImports: false
       }
     }
   },
@@ -28,8 +58,9 @@ export default defineConfig({
   plugins: [
     topLevelAwait({
       promiseExportName: "__tla",
-      promiseImportName: i => `__tla_${i}`
+      promiseImportName: (i: number) => `__tla_${i}`
     }),
+    prependImportToSwSurreal(), // 这个插件会在最后执行 (enforce: 'post')
   ],
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),

@@ -15,7 +15,7 @@ import { StyledEngineProvider } from '@mui/material/styles'; // ADDED
 // Register the service worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw/sw-surreal.js')
+    navigator.serviceWorker.register('/sw/sw-surreal.js', { type: 'module' })
       .then(registration => {
         console.log('ServiceWorker registration successful with scope: ', registration.scope);
       })
@@ -51,7 +51,7 @@ const handleSessionExpired = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('token_expires_at');
-  
+
   // Redirect to login page by reloading
   window.location.href = '/login';
 };
@@ -70,9 +70,9 @@ root.render(
           <StyledEngineProvider injectFirst> {/* ADDED */}
             <BrowserRouter>
               <AuthProvider>
-              <CustomThemeProvider> {/* ADDED */}
-                <App />
-              </CustomThemeProvider> {/* ADDED */}
+                <CustomThemeProvider> {/* ADDED */}
+                  <App />
+                </CustomThemeProvider> {/* ADDED */}
               </AuthProvider>
             </BrowserRouter>
           </StyledEngineProvider> {/* ADDED */}

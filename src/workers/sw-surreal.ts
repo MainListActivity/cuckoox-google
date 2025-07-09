@@ -1,7 +1,296 @@
 /// <reference lib="WebWorker" />
 /// <reference path="./surrealdb-wasm.d.ts" />
+// Extend the global scope to include ServiceWorker-specific types
+declare const self: ServiceWorkerGlobalScope;
+
+// --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
+console.log("Service Worker script executing");
+
+const eventHandlers = {
+  install: (event: ExtendableEvent) => {
+    console.log("Service Worker installing");
+    event.waitUntil(
+      Promise.all([
+        self.skipWaiting(),
+        // 延迟加载 precacheSurrealDBWasm 以避免循环依赖
+        new Promise(resolve => {
+          setTimeout(async () => {
+            try {
+              await precacheSurrealDBWasm();
+            } catch (e) {
+              console.warn("Failed to precache WASM:", e);
+            }
+            resolve(void 0);
+          }, 0);
+        })
+      ])
+    );
+  },
+
+  activate: (event: ExtendableEvent) => {
+    console.log("Service Worker activating");
+    event.waitUntil(
+      self.clients.claim().then(async () => {
+        try {
+          // 初始化本地 SurrealDB
+          await initializeLocalSurrealDB();
+          // 首先从存储中恢复 token
+          await recoverTokensFromStorage();
+          // Service Worker 激活后，主动同步 localStorage 中的 token
+          await syncTokensFromLocalStorage();
+        } catch (e) {
+          console.error("Failed during activation:", e);
+        }
+      })
+    );
+  },
+
+  beforeunload: () => {
+    try {
+      clearTokenRefresh();
+    } catch (e) {
+      console.error("Failed during cleanup:", e);
+    }
+  },
+
+  message: async (event: ExtendableMessageEvent) => {
+    if (!event.data || !event.data.type) {
+      return;
+    }
+
+    // 递归处理payload.data中可能被序列化的RecordId对象
+    const { type, payload, messageId } = deserializeRecordIds(event.data);
+    const clientId = (event.source as any)?.id;
+
+    if (!clientId) return;
+
+    const respond = (responsePayload: unknown) => postMessageToClient(clientId, {
+      type: `${type}_response`,
+      messageId,
+      payload: responsePayload
+    });
+
+    const respondError = (error: Error) => postMessageToClient(clientId, {
+      type: `${type}_error`,
+      messageId,
+      payload: { message: error.message, stack: error.stack }
+    });
+
+    try {
+      switch (type) {
+        case 'connect':
+          // Sync token information from localStorage if provided
+          if (payload.sync_tokens) {
+            if (payload.sync_tokens.access_token) {
+              storageSet('access_token', payload.sync_tokens.access_token);
+            }
+            if (payload.sync_tokens.refresh_token) {
+              storageSet('refresh_token', payload.sync_tokens.refresh_token);
+            }
+            if (payload.sync_tokens.token_expires_at) {
+              storageSet('token_expires_at', payload.sync_tokens.token_expires_at);
+            }
+            if (payload.sync_tokens.tenant_code) {
+              storageSet('tenant_code', payload.sync_tokens.tenant_code);
+            }
+          }
+          await ensureConnection(payload);
+          respond({ status: isConnected ? 'connected' : 'disconnected' });
+          break;
+
+        case 'authenticate':
+          storageSet('access_token', payload.token);
+          // Store refresh token and expiry info if provided
+          if (payload.refresh_token) {
+            storageSet('refresh_token', payload.refresh_token);
+          }
+          if (payload.expires_in) {
+            const expiresAt = Date.now() + (payload.expires_in * 1000);
+            storageSet('token_expires_at', expiresAt.toString());
+          }
+          // Store tenant code if provided
+          if (payload.tenant_code) {
+            storageSet('tenant_code', payload.tenant_code);
+          }
+
+          await ensureConnection();
+          if (isConnected) {
+            await db!.authenticate(payload.token);
+            setupTokenRefresh(); // Set up token refresh after successful authentication
+            respond({ success: true });
+          } else {
+            throw new Error("Connection not established.");
+          }
+          break;
+
+        case 'invalidate':
+          storageSet('access_token', null);
+          storageSet('refresh_token', null);
+          storageSet('token_expires_at', null);
+          clearTokenRefresh(); // Clear token refresh when invalidating
+          if (isConnected) await db!.invalidate();
+          respond({ success: true });
+          break;
+
+        case 'query':
+        case 'mutate': {
+          await ensureConnection();
+          if (!db) throw new Error("Database not initialized");
+          const [result] = await db.query(payload.sql, payload.vars);
+          respond(result);
+          break;
+        }
+
+        case 'create': {
+          await ensureConnection();
+          if (!db) throw new Error("Database not initialized");
+          const createResult = await db.create(payload.thing, payload.data);
+          respond(createResult);
+          break;
+        }
+
+        case 'select': {
+          await ensureConnection();
+          if (!db) throw new Error("Database not initialized");
+          const selectResult = await db.select(payload.thing as string | RecordId);
+          respond(selectResult);
+          break;
+        }
+
+        case 'update': {
+          await ensureConnection();
+          if (!db) throw new Error("Database not initialized");
+          const updateResult = await db.update(payload.thing as string | RecordId, payload.data);
+          respond(updateResult);
+          break;
+        }
+
+        case 'merge': {
+          await ensureConnection();
+          if (!db) throw new Error("Database not initialized");
+          const mergeResult = await db.merge(payload.thing as string | RecordId, payload.data);
+          respond(mergeResult);
+          break;
+        }
+
+        case 'delete': {
+          await ensureConnection();
+          if (!db) throw new Error("Database not initialized");
+          const deleteResult = await db.delete(payload.thing as string | RecordId);
+          respond(deleteResult);
+          break;
+        }
+
+        case 'live': {
+          await ensureConnection();
+          if (!db) throw new Error("Database not initialized");
+          const { query, vars } = payload;
+
+          // For SurrealDB live queries, we need to run a query with variables, not use the live() method directly
+          const queryWithVars = vars ? query : query;
+          const uuid = await db.live(queryWithVars, (action, result) => {
+            const sub = liveQuerySubscriptions.get(String(uuid));
+            if (sub) {
+              broadcastToClients({
+                type: 'live_update',
+                payload: { uuid: String(uuid), action, result }
+              }, sub.clients);
+            }
+          });
+
+          const uuidStr = String(uuid);
+          if (!liveQuerySubscriptions.has(uuidStr)) {
+            liveQuerySubscriptions.set(uuidStr, { query, vars, clients: new Set() });
+          }
+          liveQuerySubscriptions.get(uuidStr)!.clients.add(clientId);
+
+          respond({ uuid: uuidStr });
+          break;
+        }
+
+        case 'kill': {
+          const { uuid: killUuid } = payload;
+          const subscription = liveQuerySubscriptions.get(killUuid);
+          if (subscription) {
+            subscription.clients.delete(clientId);
+            if (subscription.clients.size === 0 && db) {
+              await db.kill(killUuid);
+              liveQuerySubscriptions.delete(killUuid);
+              console.log(`ServiceWorker: Killed live query ${killUuid} as no clients are listening.`);
+            }
+          }
+          respond({ success: true });
+          break;
+        }
+
+        case 'setup_token_refresh': {
+          setupTokenRefresh();
+          respond({ success: true });
+          break;
+        }
+
+        case 'clear_token_refresh': {
+          clearTokenRefresh();
+          respond({ success: true });
+          break;
+        }
+
+        case 'refresh_token': {
+          const success = await refreshAccessToken();
+          respond({ success });
+          break;
+        }
+
+        case 'check_tenant_code': {
+          const valid = await checkTenantCode();
+          respond({ valid });
+          break;
+        }
+
+        case 'recover_tokens': {
+          await recoverTokensFromStorage();
+          respond({ success: true });
+          break;
+        }
+
+        default:
+          console.warn(`ServiceWorker: Unknown message type received: ${type}`);
+          respondError(new Error(`Unknown message type: ${type}`));
+      }
+    } catch (e: any) {
+      console.error(`ServiceWorker: Error processing message type ${type}:`, e);
+      respondError(e);
+    }
+  }
+};
+
+// 立即注册事件监听器
+self.addEventListener('install', eventHandlers.install);
+self.addEventListener('activate', eventHandlers.activate);
+self.addEventListener('beforeunload', eventHandlers.beforeunload);
+self.addEventListener('message', eventHandlers.message);
+
+console.log("Service Worker event listeners registered");
+
 import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
-import { surrealdbWasmEngines } from '@surrealdb/wasm';
+
+// 获取WASM引擎的函数（从wasm-shim.ts移过来，避免导入依赖）
+async function getWasmEngines() {
+  // 等待__surrealdbWasmEngines 加载
+  let retryCount = 0;
+  const maxRetries = 50; // 最多等待 5 秒（50 * 100ms）
+  
+  while (!(self as any).__surrealdbWasmEngines && retryCount < maxRetries) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retryCount++;
+  }
+  
+  if (!(self as any).__surrealdbWasmEngines) {
+    throw new Error('WASM engines not loaded after waiting');
+  }
+  
+  return (self as any).__surrealdbWasmEngines();
+}
 
 
 // SurrealDB WASM 相关常量（现在已通过 ES 模块导入，无需外部 URL）
@@ -21,9 +310,6 @@ export type AnyAuth = {
   scope: string;
   [key: string]: unknown;
 };
-
-// Extend the global scope to include ServiceWorker-specific types
-declare const self: ServiceWorkerGlobalScope;
 
 // --- Global State ---
 let db: Surreal | null = null;
@@ -52,6 +338,49 @@ const liveQuerySubscriptions = new Map<string, {
 let refreshTimer: NodeJS.Timeout | null = null;
 const REFRESH_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
 const REFRESH_BEFORE_EXPIRY = 10 * 60 * 1000; // Refresh 10 minutes before expiry
+
+// --- Helper Functions for Event Handlers ---
+
+/**
+ * 从客户端的 localStorage 同步 token 到 Service Worker
+ */
+async function syncTokensFromLocalStorage() {
+  try {
+    const clients = await self.clients.matchAll();
+    if (clients.length > 0) {
+      // 向第一个客户端请求同步 token
+      clients[0].postMessage({
+        type: 'request_token_sync',
+        payload: {}
+      });
+    }
+  } catch (error) {
+    console.error('ServiceWorker: Failed to sync tokens from localStorage:', error);
+  }
+}
+
+/**
+ * 从本地 SurrealDB 恢复所有 token 到内存
+ */
+async function recoverTokensFromStorage() {
+  try {
+    console.log('ServiceWorker: Recovering tokens from local DB...');
+
+    const tokenKeys = ['access_token', 'refresh_token', 'token_expires_at', 'tenant_code'];
+
+    for (const key of tokenKeys) {
+      const value = await getTokenFromLocalDB(key);
+      if (value) {
+        memoryStore[key] = value;
+        console.log(`ServiceWorker: Recovered ${key} from local storage`);
+      }
+    }
+
+    console.log('ServiceWorker: Token recovery completed');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to recover tokens from local storage:', error);
+  }
+}
 
 // --- Cache and Storage Functions ---
 
@@ -88,8 +417,9 @@ async function initializeLocalSurrealDB(): Promise<void> {
 
     // 尝试加载 WASM 引擎
     // 创建使用 WASM 引擎的 Surreal 实例
+    // const wasmEngines = (self as any).__surrealdbWasmEngines;
     localDb = new Surreal({
-      engines: surrealdbWasmEngines(),
+      engines: await getWasmEngines(),
     });
     isWasmAvailable = true;
     await localDb.connect('indxdb://cuckoox-storage');
@@ -627,288 +957,3 @@ async function resubscribeAllLiveQueries() {
     }
   }
 }
-
-// --- Service Worker Event Handlers ---
-
-self.addEventListener('install', (event) => {
-  console.log("Service Worker installing");
-  event.waitUntil(
-    Promise.all([
-      self.skipWaiting(),
-      precacheSurrealDBWasm()
-    ])
-  );
-});
-
-self.addEventListener('activate', (event) => {
-  console.log("Service Worker activating");
-  event.waitUntil(
-    self.clients.claim().then(async () => {
-      // 初始化本地 SurrealDB
-      await initializeLocalSurrealDB();
-      // 首先从存储中恢复 token
-      await recoverTokensFromStorage();
-      // Service Worker 激活后，主动同步 localStorage 中的 token
-      await syncTokensFromLocalStorage();
-    })
-  );
-});
-
-/**
- * 从客户端的 localStorage 同步 token 到 Service Worker
- */
-async function syncTokensFromLocalStorage() {
-  try {
-    const clients = await self.clients.matchAll();
-    if (clients.length > 0) {
-      // 向第一个客户端请求同步 token
-      clients[0].postMessage({
-        type: 'request_token_sync',
-        payload: {}
-      });
-    }
-  } catch (error) {
-    console.error('ServiceWorker: Failed to sync tokens from localStorage:', error);
-  }
-}
-
-/**
- * 从本地 SurrealDB 恢复所有 token 到内存
- */
-async function recoverTokensFromStorage() {
-  try {
-    console.log('ServiceWorker: Recovering tokens from local DB...');
-
-    const tokenKeys = ['access_token', 'refresh_token', 'token_expires_at', 'tenant_code'];
-
-    for (const key of tokenKeys) {
-      const value = await getTokenFromLocalDB(key);
-      if (value) {
-        memoryStore[key] = value;
-        console.log(`ServiceWorker: Recovered ${key} from local storage`);
-      }
-    }
-
-    console.log('ServiceWorker: Token recovery completed');
-  } catch (error) {
-    console.error('ServiceWorker: Failed to recover tokens from local storage:', error);
-  }
-}
-
-// Clean up when service worker is terminated
-self.addEventListener('beforeunload', () => {
-  clearTokenRefresh();
-});
-
-self.addEventListener('message', async (event) => {
-  if (!event.data || !event.data.type) {
-    return;
-  }
-
-  // 递归处理payload.data中可能被序列化的RecordId对象
-  const { type, payload, messageId } = deserializeRecordIds(event.data);
-  const clientId = (event.source as any)?.id;
-
-  if (!clientId) return;
-
-  const respond = (responsePayload: unknown) => postMessageToClient(clientId, {
-    type: `${type}_response`,
-    messageId,
-    payload: responsePayload
-  });
-
-  const respondError = (error: Error) => postMessageToClient(clientId, {
-    type: `${type}_error`,
-    messageId,
-    payload: { message: error.message, stack: error.stack }
-  });
-
-  try {
-    switch (type) {
-      case 'connect':
-        // Sync token information from localStorage if provided
-        if (payload.sync_tokens) {
-          if (payload.sync_tokens.access_token) {
-            storageSet('access_token', payload.sync_tokens.access_token);
-          }
-          if (payload.sync_tokens.refresh_token) {
-            storageSet('refresh_token', payload.sync_tokens.refresh_token);
-          }
-          if (payload.sync_tokens.token_expires_at) {
-            storageSet('token_expires_at', payload.sync_tokens.token_expires_at);
-          }
-          if (payload.sync_tokens.tenant_code) {
-            storageSet('tenant_code', payload.sync_tokens.tenant_code);
-          }
-        }
-        await ensureConnection(payload);
-        respond({ status: isConnected ? 'connected' : 'disconnected' });
-        break;
-
-      case 'authenticate':
-        storageSet('access_token', payload.token);
-        // Store refresh token and expiry info if provided
-        if (payload.refresh_token) {
-          storageSet('refresh_token', payload.refresh_token);
-        }
-        if (payload.expires_in) {
-          const expiresAt = Date.now() + (payload.expires_in * 1000);
-          storageSet('token_expires_at', expiresAt.toString());
-        }
-        // Store tenant code if provided
-        if (payload.tenant_code) {
-          storageSet('tenant_code', payload.tenant_code);
-        }
-
-        await ensureConnection();
-        if (isConnected) {
-          await db!.authenticate(payload.token);
-          setupTokenRefresh(); // Set up token refresh after successful authentication
-          respond({ success: true });
-        } else {
-          throw new Error("Connection not established.");
-        }
-        break;
-
-      case 'invalidate':
-        storageSet('access_token', null);
-        storageSet('refresh_token', null);
-        storageSet('token_expires_at', null);
-        clearTokenRefresh(); // Clear token refresh when invalidating
-        if (isConnected) await db!.invalidate();
-        respond({ success: true });
-        break;
-
-      case 'query':
-      case 'mutate': {
-        await ensureConnection();
-        if (!db) throw new Error("Database not initialized");
-        const [result] = await db.query(payload.sql, payload.vars);
-        respond(result);
-        break;
-      }
-
-      case 'create': {
-        await ensureConnection();
-        if (!db) throw new Error("Database not initialized");
-        const createResult = await db.create(payload.thing, payload.data);
-        respond(createResult);
-        break;
-      }
-
-      case 'select': {
-        await ensureConnection();
-        if (!db) throw new Error("Database not initialized");
-        const selectResult = await db.select(payload.thing as string | RecordId);
-        respond(selectResult);
-        break;
-      }
-
-      case 'update': {
-        await ensureConnection();
-        if (!db) throw new Error("Database not initialized");
-        const updateResult = await db.update(payload.thing as string | RecordId, payload.data);
-        respond(updateResult);
-        break;
-      }
-
-      case 'merge': {
-        await ensureConnection();
-        if (!db) throw new Error("Database not initialized");
-        const mergeResult = await db.merge(payload.thing as string | RecordId, payload.data);
-        respond(mergeResult);
-        break;
-      }
-
-      case 'delete': {
-        await ensureConnection();
-        if (!db) throw new Error("Database not initialized");
-        const deleteResult = await db.delete(payload.thing as string | RecordId);
-        respond(deleteResult);
-        break;
-      }
-
-      case 'live': {
-        await ensureConnection();
-        if (!db) throw new Error("Database not initialized");
-        const { query, vars } = payload;
-
-        // For SurrealDB live queries, we need to run a query with variables, not use the live() method directly
-        const queryWithVars = vars ? query : query;
-        const uuid = await db.live(queryWithVars, (action, result) => {
-          const sub = liveQuerySubscriptions.get(String(uuid));
-          if (sub) {
-            broadcastToClients({
-              type: 'live_update',
-              payload: { uuid: String(uuid), action, result }
-            }, sub.clients);
-          }
-        });
-
-        const uuidStr = String(uuid);
-        if (!liveQuerySubscriptions.has(uuidStr)) {
-          liveQuerySubscriptions.set(uuidStr, { query, vars, clients: new Set() });
-        }
-        liveQuerySubscriptions.get(uuidStr)!.clients.add(clientId);
-
-        respond({ uuid: uuidStr });
-        break;
-      }
-
-      case 'kill': {
-        const { uuid: killUuid } = payload;
-        const subscription = liveQuerySubscriptions.get(killUuid);
-        if (subscription) {
-          subscription.clients.delete(clientId);
-          if (subscription.clients.size === 0 && db) {
-            await db.kill(killUuid);
-            liveQuerySubscriptions.delete(killUuid);
-            console.log(`ServiceWorker: Killed live query ${killUuid} as no clients are listening.`);
-          }
-        }
-        respond({ success: true });
-        break;
-      }
-
-      case 'setup_token_refresh': {
-        setupTokenRefresh();
-        respond({ success: true });
-        break;
-      }
-
-      case 'clear_token_refresh': {
-        clearTokenRefresh();
-        respond({ success: true });
-        break;
-      }
-
-      case 'refresh_token': {
-        const success = await refreshAccessToken();
-        respond({ success });
-        break;
-      }
-
-      case 'check_tenant_code': {
-        const valid = await checkTenantCode();
-        respond({ valid });
-        break;
-      }
-
-
-      case 'recover_tokens': {
-        await recoverTokensFromStorage();
-        respond({ success: true });
-        break;
-      }
-
-      default:
-        console.warn(`ServiceWorker: Unknown message type received: ${type}`);
-        respondError(new Error(`Unknown message type: ${type}`));
-    }
-  } catch (e: any) {
-    console.error(`ServiceWorker: Error processing message type ${type}:`, e);
-    respondError(e);
-  }
-});
-
-console.log("Service Worker loaded");
