@@ -3,37 +3,6 @@
 import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
 import { surrealdbWasmEngines } from '@surrealdb/wasm';
 
-// Service Worker 原生引擎实现
-let wasmLoaded = false;
-
-
-// 在 Service Worker 中加载 WASM 引擎
-async function loadSurrealDBWasm() {
-  if (wasmLoaded && surrealdbWasmEngines) {
-    try {
-      const engines = surrealdbWasmEngines();
-      console.log('ServiceWorker: WASM engines loaded successfully');
-      return engines;
-    } catch (e) {
-      console.error('ServiceWorker: Failed to initialize WASM engines:', e);
-    }
-  }
-
-  // 检查WASM文件是否可用
-  try {
-    const wasmResponse = await fetch('https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/index_bg.wasm');
-    if (wasmResponse.ok) {
-      console.log('ServiceWorker: WASM file available, but using native engine for simplicity');
-    }
-  } catch (error) {
-    console.log('ServiceWorker: WASM file not available:', error);
-  }
-
-  // 使用原生引擎实现
-  console.log('ServiceWorker: Using native Service Worker engines');
-  wasmLoaded = true;
-  return surrealdbWasmEngines();
-}
 
 // SurrealDB WASM 相关常量（现在已通过 ES 模块导入，无需外部 URL）
 
@@ -118,38 +87,12 @@ async function initializeLocalSurrealDB(): Promise<void> {
     console.log('ServiceWorker: Initializing local SurrealDB...');
 
     // 尝试加载 WASM 引擎
-    const wasmEngines = await loadSurrealDBWasm();
-
-    if (wasmEngines) {
-      console.log('ServiceWorker: Using WASM-optimized SurrealDB engine');
-      try {
-        // 创建使用 WASM 引擎的 Surreal 实例
-        localDb = new Surreal({
-          engines: wasmEngines,
-        });
-        isWasmAvailable = true;
-      } catch (e) {
-        console.error('ServiceWorker: Failed to create Surreal instance with WASM:', e);
-        // 回退到标准引擎
-        localDb = new Surreal();
-        isWasmAvailable = false;
-      }
-    } else {
-      console.log('ServiceWorker: Using standard SurrealDB engine (WASM unavailable)');
-      // 回退到标准引擎
-      localDb = new Surreal();
-      isWasmAvailable = false;
-    }
-
-    // 连接到 IndexedDB (如果 WASM 可用) 或回退到内存存储
-    if (isWasmAvailable) {
-      await localDb.connect('indxdb://cuckoox-storage');
-    } else {
-      // 如果 WASM 不可用，使用内存存储作为回退
-      console.log('ServiceWorker: WASM not available, using memory storage for tokens');
-      isLocalDbInitialized = true;
-      return;
-    }
+    // 创建使用 WASM 引擎的 Surreal 实例
+    localDb = new Surreal({
+      engines: surrealdbWasmEngines(),
+    });
+    isWasmAvailable = true;
+    await localDb.connect('indxdb://cuckoox-storage');
 
     await localDb.use({ namespace: 'ck_go', database: 'local' });
 

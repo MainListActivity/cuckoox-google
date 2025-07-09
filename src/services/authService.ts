@@ -1,15 +1,10 @@
 import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSettings } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
-import { surrealUnifiedClient } from '@/src/lib/surrealUnifiedClient';
+import {surrealServiceWorkerClient as  internalClientInstance } from '@/src/lib/surrealServiceWorkerClient';
 
-// Internal unified client access - only for connection management
-let internalClientInstance: any = null;
 
 // Unified client connection management
 const getInternalClient = async () => {
-  if (!internalClientInstance) {
-    internalClientInstance = await surrealUnifiedClient();
-  }
   return internalClientInstance;
 };
 
@@ -17,11 +12,6 @@ const getInternalClient = async () => {
 let isConnected = false;
 const connectToSurreal = async () => {
   if (isConnected) return;
-  
-  const client = await getInternalClient();
-  // Note: Service Worker handles connection internally
-  // Connection is established when client is obtained
-  
   isConnected = true;
 };
 
@@ -102,14 +92,14 @@ class AuthService {
     }
 
     const data = await response.json();
-    
+
     // Store tokens and authenticate with SurrealDB
     await this.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
-    
+
     return data;
   }
 
-  // Root Admin JWT Authentication
+  // Root Admin JWT Authentication - 完全委托给service worker处理
   async loginRootAdminWithJWT(credentials: JwtLoginRequest): Promise<JwtLoginResponse> {
     const response = await fetch('/api/root-admins/login', {
       method: 'POST',
@@ -125,21 +115,12 @@ class AuthService {
     }
 
     const data = await response.json();
-    
-    // Store tokens but don't authenticate with SurrealDB for root admin
-    // Root admin uses a different database and doesn't need SurrealDB connection
-    localStorage.setItem('access_token', data.access_token);
-    if (data.refresh_token) {
-      localStorage.setItem('refresh_token', data.refresh_token);
-    }
-    if (data.expires_in) {
-      const expiresAt = Date.now() + (data.expires_in * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-    }
-    
-    this.isAuthenticated = true;
+
+    // Root admin token 管理也委托给service worker处理
+    await this.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
+
     this.currentUser = data.user;
-    
+
     return data;
   }
 
@@ -158,10 +139,10 @@ class AuthService {
     }
 
     const data = await response.json();
-    
+
     // Update tokens
     await this.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
-    
+
     return data;
   }
 
@@ -187,25 +168,15 @@ class AuthService {
     return response.json();
   }
 
-  // Token Management
+  // Token Management - 完全委托给service worker处理
   async setAuthTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void> {
-    // Store tokens in localStorage for service worker access
-    localStorage.setItem('access_token', accessToken);
-    if (refreshToken) {
-      localStorage.setItem('refresh_token', refreshToken);
-    }
-    if (expiresIn) {
-      const expiresAt = Date.now() + (expiresIn * 1000);
-      localStorage.setItem('token_expires_at', expiresAt.toString());
-    }
-    
     await connectToSurreal();
     const client = await getInternalClient();
-    
-    // Service Worker client handles token storage internally
+
+    // Service Worker client 完全处理token存储和管理
     const tenantCode = localStorage.getItem('tenant_code');
     await client.authenticate(accessToken, refreshToken, expiresIn, tenantCode || undefined);
-    
+
     this.isAuthenticated = true;
   }
 
@@ -213,21 +184,15 @@ class AuthService {
     try {
       const client = await getInternalClient();
       await client.invalidate();
-      
-      // 清理localStorage中的token
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('token_expires_at');
+
+      // Service Worker 完全处理token清理，只需要清理租户代码用于重新连接
       localStorage.removeItem('tenant_code');
-      
+
       this.isAuthenticated = false;
       this.currentUser = null;
     } catch (error) {
       console.error('Error clearing auth tokens:', error);
       // 即使invalidate失败也要清理本地状态
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('token_expires_at');
       localStorage.removeItem('tenant_code');
       this.isAuthenticated = false;
       this.currentUser = null;
@@ -245,10 +210,10 @@ class AuthService {
   async setTenantCode(tenantCode: string): Promise<void> {
     // Store tenant code in localStorage for service worker access
     localStorage.setItem('tenant_code', tenantCode);
-    
+
     // Reconnect with new tenant database
     const client = await getInternalClient();
-    
+
     // Check if client has connect method (Service Worker mode)
     if (client.connect) {
       await client.connect({
@@ -262,17 +227,8 @@ class AuthService {
           tenant_code: tenantCode
         }
       });
-    } else {
-      // For direct connection mode, we need to recreate the client with new database
-      // Reset the unified client to force reconnection with new tenant database
-      const { resetUnifiedSurrealClient } = await import('@/src/lib/surrealUnifiedClient');
-      resetUnifiedSurrealClient();
-      
-      // Get new client instance which will connect to the new tenant database
-      internalClientInstance = null; // Reset cached instance
-      await getInternalClient(); // This will create new connection with tenant code from localStorage
     }
-    
+
     console.log('Tenant code set and connection updated:', tenantCode);
   }
 
@@ -300,7 +256,7 @@ class AuthService {
       // Ensure connection and sync user to SurrealDB
       await connectToSurreal();
       await this.syncOidcUser(oidcUser);
-      
+
       return oidcUser;
     } catch (error) {
       console.error('Error during OIDC login callback:', error);
@@ -312,11 +268,11 @@ class AuthService {
     try {
       // 先清理本地状态
       await this.clearAuthTokens();
-      
+
       // 清理 OIDC 用户状态
       await userManager.removeUser();
       await userManager.clearStaleState();
-      
+
       // 简单重定向到登录页面，避免访问 OIDC 端点
       const postLogoutUri = import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || window.location.origin + '/login';
       window.location.href = postLogoutUri;
@@ -332,7 +288,7 @@ class AuthService {
   // User Management
   async syncOidcUser(oidcUser: OidcUser): Promise<AppUser> {
     const client = await getInternalClient();
-    
+
     const githubId = oidcUser.profile.sub;
     const name = oidcUser.profile.name || oidcUser.profile.preferred_username || 'Unknown User';
     const email = oidcUser.profile.email || '';
@@ -354,7 +310,7 @@ class AuthService {
         updated_at: new Date(),
       }) as AppUser;
     } else {
-      appUser = await client.create(recordId, {
+      appUser = await client.create('user', {
         id: recordId,
         github_id: githubId,
         name: name,
@@ -370,7 +326,7 @@ class AuthService {
 
     this.currentUser = appUser;
     this.isAuthenticated = true;
-    
+
     return appUser;
   }
 

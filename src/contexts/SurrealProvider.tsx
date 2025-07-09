@@ -5,14 +5,14 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import { surrealUnifiedClient } from '@/src/lib/surrealUnifiedClient';
-import type { UnifiedSurrealAPI } from '@/src/lib/surrealUnifiedClient';
+import { surrealServiceWorkerClient } from '@/src/lib/surrealServiceWorkerClient';
+import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 import { dataService } from '@/src/services/dataService';
 
 interface SurrealProviderProps {
   children: React.ReactNode;
   /** Provide a pre-initialised Surreal-like client (used in unit tests) */
-  client?: UnifiedSurrealAPI | any;
+  client?: SurrealWorkerAPI | any;
   autoConnect?: boolean;
 }
 
@@ -20,11 +20,11 @@ export interface SurrealContextValue {
   // Data operations (via DataService)
   dataService: typeof dataService;
   
-  // Direct unified client access for raw operations
-  client: UnifiedSurrealAPI | null;
+  // Direct service worker client access for raw operations
+  client: SurrealWorkerAPI | null;
   
   // Backward compatibility alias
-  surreal: UnifiedSurrealAPI | null;
+  surreal: SurrealWorkerAPI | null;
   
   // Connection state
   isConnected: boolean;
@@ -46,7 +46,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   client: externalClient,
   autoConnect = true,
 }) => {
-  const [client, setClient] = useState<UnifiedSurrealAPI | null>(externalClient ?? null);
+  const [client, setClient] = useState<SurrealWorkerAPI | null>(externalClient ?? null);
   const [isConnecting, setConnecting] = useState(false);
   const [isConnected, setConnected] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -64,18 +64,39 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     setError(null);
 
     try {
-      const proxy = await surrealUnifiedClient();
-      setClient(proxy);
-      setConnected(true);
+      // Use service worker client directly
+      const tenantCode = localStorage.getItem('tenant_code');
+      const database = tenantCode || 'test';
       
-      // Inject client into dataService for dependency injection
-      dataService.setClient(proxy);
-      
-      // Setup session expired callback
-      dataService.setSessionExpiredCallback(() => {
-        setConnected(false);
-        setError(new Error('Session expired'));
+      const syncTokens = {
+        access_token: localStorage.getItem('access_token'),
+        refresh_token: localStorage.getItem('refresh_token'),
+        token_expires_at: localStorage.getItem('token_expires_at'),
+        tenant_code: tenantCode,
+      };
+
+      const connected = await surrealServiceWorkerClient.connect({
+        endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
+        namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
+        database: database,
+        sync_tokens: syncTokens,
       });
+
+      if (connected) {
+        setClient(surrealServiceWorkerClient);
+        setConnected(true);
+        
+        // Inject client into dataService for dependency injection
+        dataService.setClient(surrealServiceWorkerClient);
+        
+        // Setup session expired callback
+        dataService.setSessionExpiredCallback(() => {
+          setConnected(false);
+          setError(new Error('Session expired'));
+        });
+      } else {
+        throw new Error('Failed to connect to database');
+      }
       
     } catch (e) {
       setError(e as Error);
@@ -116,7 +137,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         return undefined;
       },
     };
-    return new Proxy({}, handler) as unknown as UnifiedSurrealAPI;
+    return new Proxy({}, handler) as unknown as SurrealWorkerAPI;
   }, []);
 
   const value = useMemo<SurrealContextValue>(() => ({

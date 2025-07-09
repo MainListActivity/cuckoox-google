@@ -33,6 +33,6 @@ export default defineConfig({
   ],
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-    'import.meta.url': '"https://unpkg.com/\@surrealdb/wasm\@1.4.1/dist/surreal"',
+    'import.meta.url': '"https://unpkg.com/\@surrealdb/wasm\@1.4.1/dist/surreal/"',
   }
 })

@@ -158,21 +158,22 @@ const LoginPage: React.FC = () => {
 
       const data = await response.json();
       
-      // 统一的登录处理逻辑，两种模式都使用SurrealDB认证
+      // 统一的登录处理逻辑，token存储完全委托给service worker
       if (isRootAdminMode) {
         // Root管理员登录成功
         console.log('Root admin successfully logged in.');
         
         // 对于rootAdmin，使用特殊的租户代码 'root'
-        await authService.setTenantCode('root_system');
+        const rootTenantCode = 'root_system';
         
         // 使用返回的JWT token进行SurrealDB认证
-        // 注意：后端需要修改以返回JWT格式的token
         const jwtToken = data.access_token || data.token;
         if (!jwtToken) {
           throw new Error('No JWT token returned from root admin login');
         }
         
+        // 直接通过Service Worker进行认证和token管理
+        await authService.setTenantCode(rootTenantCode);
         await authService.setAuthTokens(jwtToken, data.refresh_token, data.expires_in);
         
         // 创建Root管理员用户对象
@@ -191,12 +192,13 @@ const LoginPage: React.FC = () => {
         
         // 设置租户代码并进行SurrealDB认证
         if (tenantCode) {
-          await authService.setTenantCode(tenantCode);
           // 登录成功后，将租户添加到历史记录
           TenantHistoryManager.addTenantToHistory(tenantCode);
+          
+          // 设置租户代码并直接通过Service Worker进行认证和token管理
+          await authService.setTenantCode(tenantCode);
+          await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
         }
-        
-        await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
 
         // 创建用户对象
         const userAppUser: AppUser = {

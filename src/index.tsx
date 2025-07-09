@@ -15,7 +15,7 @@ import { StyledEngineProvider } from '@mui/material/styles'; // ADDED
 // Register the service worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-surreal.js')
+    navigator.serviceWorker.register('/sw/sw-surreal.js')
       .then(registration => {
         console.log('ServiceWorker registration successful with scope: ', registration.scope);
       })
