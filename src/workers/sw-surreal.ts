@@ -1,148 +1,11 @@
 /// <reference lib="WebWorker" />
 /// <reference path="./surrealdb-wasm.d.ts" />
 import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
+import { surrealdbWasmEngines } from '@surrealdb/wasm';
 
 // Service Worker 原生引擎实现
-let surrealdbWasmEngines: any = null;
 let wasmLoaded = false;
 
-// 创建原生Service Worker引擎
-function createNativeServiceWorkerEngines() {
-  console.log('ServiceWorker: Creating native SurrealDB engines...');
-  
-  class ServiceWorkerEngine {
-    private namespace: string | null = null;
-    private database: string | null = null;
-    private memoryStore = new Map<string, any>();
-    private idCounter = 1;
-    
-    async connect(url: string) {
-      console.log(`ServiceWorker: [NativeEngine] Connecting to ${url}`);
-      return Promise.resolve();
-    }
-    
-    async use(options: { namespace: string; database: string }) {
-      this.namespace = options.namespace;
-      this.database = options.database;
-      console.log(`ServiceWorker: [NativeEngine] Using namespace: ${options.namespace}, database: ${options.database}`);
-    }
-    
-    async authenticate(_token: string) {
-      console.log('ServiceWorker: [NativeEngine] Authenticated with token');
-      return true;
-    }
-    
-    async query(sql: string, vars?: Record<string, any>) {
-      console.log(`ServiceWorker: [NativeEngine] Query: ${sql}`, vars);
-      
-      // 简单的SQL解析和执行
-      const sqlLower = sql.toLowerCase().trim();
-      
-      if (sqlLower.includes('select')) {
-        // 处理SELECT查询
-        const tableMatch = sql.match(/from\s+(\w+)/i);
-        if (tableMatch) {
-          const table = tableMatch[1];
-          const records = [];
-          for (const [key, value] of this.memoryStore.entries()) {
-            if (key.startsWith(`${this.namespace}:${this.database}:${table}`)) {
-              records.push(value);
-            }
-          }
-          return [{ result: records }];
-        }
-      } else if (sqlLower.includes('create')) {
-        // 处理CREATE查询
-        const tableMatch = sql.match(/create\s+(\w+)/i);
-        if (tableMatch) {
-          const table = tableMatch[1];
-          const id = `${table}:${this.idCounter++}`;
-          const record = { id, ...vars, _created: Date.now() };
-          const key = `${this.namespace}:${this.database}:${id}`;
-          this.memoryStore.set(key, record);
-          return [{ result: record }];
-        }
-      } else if (sqlLower.includes('update')) {
-        // 处理UPDATE查询
-        const recordMatch = sql.match(/update\s+(\w+:\w+)/i);
-        if (recordMatch) {
-          const recordId = recordMatch[1];
-          const key = `${this.namespace}:${this.database}:${recordId}`;
-          const existing = this.memoryStore.get(key) || {};
-          const record = { ...existing, ...vars, _updated: Date.now() };
-          this.memoryStore.set(key, record);
-          return [{ result: record }];
-        }
-      }
-      
-      return [{ result: [] }];
-    }
-    
-    async create(thing: string, data: any) {
-      const id = thing.includes(':') ? thing : `${thing}:${this.idCounter++}`;
-      const key = `${this.namespace}:${this.database}:${id}`;
-      const record = { id, ...data, _created: Date.now() };
-      this.memoryStore.set(key, record);
-      console.log(`ServiceWorker: [NativeEngine] Created record: ${key}`);
-      return record;
-    }
-    
-    async select(thing: string) {
-      const key = `${this.namespace}:${this.database}:${thing}`;
-      const record = this.memoryStore.get(key);
-      console.log(`ServiceWorker: [NativeEngine] Selected record: ${key}`);
-      return record || null;
-    }
-    
-    async update(thing: string, data: any) {
-      const key = `${this.namespace}:${this.database}:${thing}`;
-      const existing = this.memoryStore.get(key) || {};
-      const record = { ...existing, ...data, _updated: Date.now() };
-      this.memoryStore.set(key, record);
-      console.log(`ServiceWorker: [NativeEngine] Updated record: ${key}`);
-      return record;
-    }
-    
-    async upsert(thing: string, data: any) {
-      return this.update(thing, data);
-    }
-    
-    async delete(thing: string) {
-      const key = `${this.namespace}:${this.database}:${thing}`;
-      const record = this.memoryStore.get(key);
-      this.memoryStore.delete(key);
-      console.log(`ServiceWorker: [NativeEngine] Deleted record: ${key}`);
-      return record || null;
-    }
-    
-    async close() {
-      console.log('ServiceWorker: [NativeEngine] Connection closed');
-    }
-  }
-  
-  return {
-    mem: {
-      name: 'mem',
-      type: 'memory',
-      instance: null as ServiceWorkerEngine | null,
-      async connect(url: string) {
-        this.instance = new ServiceWorkerEngine();
-        await this.instance!.connect(url);
-        return this.instance;
-      }
-    },
-    indxdb: {
-      name: 'indxdb',
-      type: 'indexeddb', 
-      instance: null as ServiceWorkerEngine | null,
-      async connect(url: string) {
-        this.instance = new ServiceWorkerEngine();
-        await this.instance!.connect(url);
-        return this.instance;
-      }
-    }
-  };
-}
 
 // 在 Service Worker 中加载 WASM 引擎
 async function loadSurrealDBWasm() {
@@ -158,17 +21,16 @@ async function loadSurrealDBWasm() {
 
   // 检查WASM文件是否可用
   try {
-    const wasmResponse = await fetch('/wasm/surrealdb.wasm');
+    const wasmResponse = await fetch('https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/index_bg.wasm');
     if (wasmResponse.ok) {
       console.log('ServiceWorker: WASM file available, but using native engine for simplicity');
     }
   } catch (error) {
     console.log('ServiceWorker: WASM file not available:', error);
   }
-  
+
   // 使用原生引擎实现
   console.log('ServiceWorker: Using native Service Worker engines');
-  surrealdbWasmEngines = createNativeServiceWorkerEngines;
   wasmLoaded = true;
   return surrealdbWasmEngines();
 }
@@ -230,14 +92,13 @@ const REFRESH_BEFORE_EXPIRY = 10 * 60 * 1000; // Refresh 10 minutes before expir
 async function precacheSurrealDBWasm(): Promise<void> {
   try {
     console.log('ServiceWorker: Precaching WASM files...');
-    
+
     // 预加载WASM和JS文件
-    const [wasmResponse, jsResponse] = await Promise.all([
-      fetch('/wasm/surrealdb.wasm'),
-      fetch('/wasm/surrealdb.js')
+    const [wasmResponse] = await Promise.all([
+      fetch('https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/index_bg.wasm'),
     ]);
-    
-    if (wasmResponse.ok && jsResponse.ok) {
+
+    if (wasmResponse.ok) {
       console.log('ServiceWorker: WASM files precached successfully');
     } else {
       console.warn('ServiceWorker: Failed to precache some WASM files');
@@ -258,8 +119,8 @@ async function initializeLocalSurrealDB(): Promise<void> {
 
     // 尝试加载 WASM 引擎
     const wasmEngines = await loadSurrealDBWasm();
-    
-    if (wasmEngines && wasmEngines.indxdb) {
+
+    if (wasmEngines) {
       console.log('ServiceWorker: Using WASM-optimized SurrealDB engine');
       try {
         // 创建使用 WASM 引擎的 Surreal 实例
@@ -289,7 +150,7 @@ async function initializeLocalSurrealDB(): Promise<void> {
       isLocalDbInitialized = true;
       return;
     }
-    
+
     await localDb.use({ namespace: 'ck_go', database: 'local' });
 
     isLocalDbInitialized = true;

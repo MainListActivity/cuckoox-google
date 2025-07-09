@@ -12,7 +12,12 @@
       "Bash(grep:*)",
       "Bash(rm:*)",
       "Bash(bun run lint:*)",
-      "Bash(bun run:*)"
+      "Bash(bun run:*)",
+      "Bash(bunx tsc:*)",
+      "Bash(bunx tsx:*)",
+      "Bash(bunx eslint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node:*)"
     ],
     "deny": []
   },

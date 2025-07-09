@@ -63,7 +63,7 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
           operation_id: operationId
         });
 
-        const hasResult = !!(result && result[0] && (result[0] as unknown[]).length > 0);
+        const hasResult = !!(result && result.length > 0);
         setHasPermission(hasResult);
       } catch (err) {
         console.error('Error checking operation permission:', err);
@@ -141,7 +141,7 @@ export function useMenuPermission(menuId: string): PermissionCheckResult {
           menu_id: menuId
         });
 
-        const hasResult = !!(result && result[0] && (result[0] as unknown[]).length > 0);
+        const hasResult = !!(result && result.length > 0);
         setHasPermission(hasResult);
       } catch (err) {
         console.error('Error checking menu permission:', err);
@@ -286,7 +286,7 @@ export function useUserRoles() {
           case_id: selectedCaseId || null
         });
 
-        const roleNames = result && result[0] ? result[0] as string[] : [];
+        const roleNames = result && result.length > 0 ? result as string[] : [];
         setRoles(roleNames);
       } catch (err) {
         console.error('Error loading user roles:', err);

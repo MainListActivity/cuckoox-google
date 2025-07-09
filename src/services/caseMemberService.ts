@@ -51,13 +51,13 @@ export const fetchCaseInfo = async (dataService: DataServiceType, caseId: Record
       WHERE id = $caseId;
     `;
     
-    const result = await dataService.query<[CaseInfo[]]>(query, { caseId });
+    const result = await dataService.query<CaseInfo[]>(query, { caseId });
     
-    if (!result || !result[0] || result[0].length === 0) {
+    if (!result || result.length === 0) {
       return null;
     }
     
-    return result[0][0] as CaseInfo;
+    return result[0] as CaseInfo;
   } catch (error) {
     console.error('[SurrealDB API] Error fetching case info:', error);
     throw error;
@@ -81,13 +81,13 @@ export const fetchCaseMembers = async (dataService: DataServiceType, caseId: Rec
       FETCH out;
     `;
     
-    const result = await dataService.query<[MemberQueryResult[]]>(query, { caseId });
+    const result = await dataService.query<MemberQueryResult[]>(query, { caseId });
     
-    if (!result || !result[0]) {
+    if (!result || result.length === 0) {
       return [];
     }
     
-    const members: CaseMember[] = result[0].map((row: MemberQueryResult) => ({
+    const members: CaseMember[] = result.map((row: MemberQueryResult) => ({
       id: row.userId,
       caseId: caseId,
       roles: row.roles || [],
@@ -122,9 +122,9 @@ export const addCaseMember = async (
       AND out = $userId;
     `;
     
-    const existingResult = await dataService.query<[HasMemberQueryResult[]]>(existingQuery, { userId, caseId });
+    const existingResult = await dataService.query<HasMemberQueryResult[]>(existingQuery, { userId, caseId });
     
-    if (existingResult && existingResult[0] && existingResult[0].length > 0) {
+    if (existingResult && existingResult.length > 0) {
       console.warn(`[SurrealDB API] User ${userId} already exists in case ${caseId}.`);
       // 查询现有用户的角色
       const roleQuery = `
@@ -132,9 +132,9 @@ export const addCaseMember = async (
         WHERE in = $userId AND case_id = $caseId 
         FETCH role_id;
       `;
-      const roleResult = await dataService.query<[RoleQueryResult[]]>(roleQuery, { userId, caseId });
-      const existingRoles = roleResult && roleResult[0] 
-        ? roleResult[0].map((r: RoleQueryResult) => r.role_id) : [];
+      const roleResult = await dataService.query<RoleQueryResult[]>(roleQuery, { userId, caseId });
+      const existingRoles = roleResult && roleResult.length > 0 
+        ? roleResult.map((r: RoleQueryResult) => r.role_id) : [];
       
       return {
         id: userId,
@@ -152,9 +152,9 @@ export const addCaseMember = async (
         assigned_at = time::now();
     `;
     
-    const createMemberResult = await dataService.query<[HasMemberQueryResult[]]>(createMemberQuery, { userId, caseId });
+    const createMemberResult = await dataService.query<HasMemberQueryResult[]>(createMemberQuery, { userId, caseId });
     
-    if (!createMemberResult || !createMemberResult[0] || createMemberResult[0].length === 0) {
+    if (!createMemberResult || createMemberResult.length === 0) {
       throw new Error('Failed to create case member relationship');
     }
     
@@ -202,9 +202,9 @@ export const removeCaseMember = async (dataService: DataServiceType, caseId: Rec
       WHERE id = $caseId;
     `;
     
-    const caseResult = await dataService.query<[CaseInfo[]]>(caseQuery, { caseId });
-    const caseData = caseResult && caseResult[0] && caseResult[0].length > 0 
-      ? caseResult[0][0] : null;
+    const caseResult = await dataService.query<CaseInfo[]>(caseQuery, { caseId });
+    const caseData = caseResult && caseResult.length > 0 
+      ? caseResult[0] : null;
     
     if (caseData && caseData.case_lead_user_id && caseData.case_lead_user_id.toString() === userId.toString()) {
       throw new Error('Cannot remove the case lead user. Please change the case lead first.');
@@ -269,14 +269,14 @@ export const createUserAndAddToCase = async (
       LIMIT 1;
     `;
     
-    const existingResult = await dataService.query<[UserQueryResult[]]>(existingUserQuery, {
+    const existingResult = await dataService.query<UserQueryResult[]>(existingUserQuery, {
       username: params.username,
       email: params.email
     });
     
-    if (existingResult && existingResult[0] && existingResult[0].length > 0) {
+    if (existingResult && existingResult.length > 0) {
       // 用户已存在，使用已存在的用户
-      const existingUser = existingResult[0][0];
+      const existingUser = existingResult[0];
       userId = existingUser.id;
       userName = existingUser.name;
       userEmail = existingUser.email || params.email;
@@ -295,18 +295,18 @@ export const createUserAndAddToCase = async (
           is_active = true;
       `;
       
-      const createUserResult = await dataService.query<[UserQueryResult[]]>(createUserQuery, {
+      const createUserResult = await dataService.query<UserQueryResult[]>(createUserQuery, {
         username: params.username,
         password_hash: params.password_hash,
         email: params.email,
         name: params.name
       });
       
-      if (!createUserResult || !createUserResult[0] || !createUserResult[0].length) {
+      if (!createUserResult || !createUserResult.length) {
         throw new Error('Failed to create user');
       }
       
-      const newUser = createUserResult[0][0];
+      const newUser = createUserResult[0];
       userId = newUser.id;
       userName = params.name;
       userEmail = params.email;
@@ -321,12 +321,12 @@ export const createUserAndAddToCase = async (
       AND out = $userId;
     `;
     
-    const existingMemberResult = await dataService.query<[HasMemberQueryResult[]]>(existingMemberQuery, { 
+    const existingMemberResult = await dataService.query<HasMemberQueryResult[]>(existingMemberQuery, { 
       userId, 
       caseId 
     });
     
-    if (existingMemberResult && existingMemberResult[0] && existingMemberResult[0].length > 0) {
+    if (existingMemberResult && existingMemberResult.length > 0) {
       throw new Error('用户已在当前案件中');
     }
     
@@ -337,13 +337,13 @@ export const createUserAndAddToCase = async (
         assigned_at = time::now();
     `;
     
-    const createMemberResult = await dataService.query<[HasMemberQueryResult[]]>(createMemberQuery, { 
+    const createMemberResult = await dataService.query<HasMemberQueryResult[]>(createMemberQuery, { 
       userId, 
       caseId, 
       roleId: params.roleId 
     });
     
-    if (!createMemberResult || !createMemberResult[0] || createMemberResult[0].length === 0) {
+    if (!createMemberResult || createMemberResult.length === 0) {
       throw new Error('Failed to create case member relationship');
     }
     
@@ -398,13 +398,13 @@ export const searchSystemUsers = async (dataService: DataServiceType, query: str
       params.query = query;
     }
     
-    const result = await dataService.query<[UserQueryResult[]]>(searchQuery, params);
+    const result = await dataService.query<UserQueryResult[]>(searchQuery, params);
     
-    if (!result || !result[0]) {
+    if (!result || result.length === 0) {
       return [];
     }
     
-    const users: SystemUser[] = result[0].map((user: UserQueryResult) => ({
+    const users: SystemUser[] = result.map((user: UserQueryResult) => ({
       id: user.id.toString(),
       name: user.name,
       email: user.email,
@@ -432,9 +432,9 @@ export const changeCaseOwner = async (
       WHERE in = $caseId AND out = $newOwnerUserId;
     `;
     
-    const memberResult = await dataService.query<[HasMemberQueryResult[]]>(memberQuery, { caseId, newOwnerUserId });
+    const memberResult = await dataService.query<HasMemberQueryResult[]>(memberQuery, { caseId, newOwnerUserId });
     
-    if (!memberResult || !memberResult[0] || memberResult[0].length === 0) {
+    if (!memberResult || memberResult.length === 0) {
       throw new Error('New case lead must be a member of the case.');
     }
     
@@ -446,12 +446,12 @@ export const changeCaseOwner = async (
       WHERE id = $caseId;
     `;
     
-    const result = await dataService.query<[CaseInfo[]]>(updateCaseQuery, { 
+    const result = await dataService.query<CaseInfo[]>(updateCaseQuery, { 
       caseId, 
       newOwnerUserId 
     });
     
-    if (!result || !result[0] || result[0].length === 0) {
+    if (!result || result.length === 0) {
       throw new Error('Failed to update case lead user.');
     }
     
@@ -478,9 +478,9 @@ export const changeMemberRole = async (
       WHERE in = $caseId AND out = $userId;
     `;
     
-    const memberResult = await dataService.query<[HasMemberQueryResult[]]>(memberQuery, { userId, caseId });
+    const memberResult = await dataService.query<HasMemberQueryResult[]>(memberQuery, { userId, caseId });
     
-    if (!memberResult || !memberResult[0] || memberResult[0].length === 0) {
+    if (!memberResult || memberResult.length === 0) {
       throw new Error(`User ${userId} not found in case ${caseId}`);
     }
     
@@ -512,9 +512,9 @@ export const changeMemberRole = async (
     
     // 获取用户信息
     const userQuery = `SELECT id, name, email FROM user WHERE id = $userId;`;
-    const userResult = await dataService.query<[UserQueryResult[]]>(userQuery, { userId });
-    const user = userResult && userResult[0] && userResult[0].length > 0 
-      ? userResult[0][0] : null;
+    const userResult = await dataService.query<UserQueryResult[]>(userQuery, { userId });
+    const user = userResult && userResult.length > 0 
+      ? userResult[0] : null;
     
     if (!user) {
       throw new Error(`User ${userId} not found`);

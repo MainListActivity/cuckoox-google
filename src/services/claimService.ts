@@ -83,7 +83,7 @@ class ClaimService {
       
       query += ' ORDER BY created_at DESC';
       
-      const [result] = await this.db.query(query, params);
+      const result = await this.db.query(query, params);
       return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error('获取债权列表失败:', error);
@@ -97,7 +97,7 @@ class ClaimService {
   async getCreditorCases(creditorId: string): Promise<CaseData[]> {
     try {
       // 使用图查询获取债权人所属的案件
-      const [result] = await this.db.query(
+      const result = await this.db.query(
         'SELECT out.* FROM $creditorId->belongs_to',
         { creditorId }
       );
@@ -234,7 +234,7 @@ class ClaimService {
   private async generateClaimNumber(caseId: string): Promise<string> {
     try {
       // 获取案件中已有的债权数量
-      const [result] = await this.db.query(
+      const result = await this.db.query(
         'SELECT count() AS count FROM claim WHERE case_id = $caseId',
         { caseId }
       );

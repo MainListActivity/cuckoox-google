@@ -204,7 +204,7 @@ class MessageService {
         });
 
         // Get message to find conversation
-        const [[message]] = await client.query(`SELECT conversation_id FROM ${id}`);
+        const [message] = await client.query(`SELECT conversation_id FROM ${id}`);
         
         if (message?.conversation_id) {
           // Update unread count in conversation_participant
@@ -290,7 +290,7 @@ class MessageService {
         new RecordId('case', caseId.split(':')[1]) : caseId;
       
       // Check if bot already exists
-      const [[existingBot]] = await client.query(
+      const [existingBot] = await client.query(
         'SELECT * FROM case_bot WHERE case_id = $case_id',
         { case_id: caseIdRecord }
       );
@@ -300,7 +300,7 @@ class MessageService {
       }
 
       // Get case details
-      const [[caseData]] = await client.query(`SELECT case_number, name FROM ${String(caseIdRecord)}`);
+      const [caseData] = await client.query(`SELECT case_number, name FROM ${String(caseIdRecord)}`);
       
       // Create bot user
       const botUserData = {

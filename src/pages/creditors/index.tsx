@@ -133,9 +133,7 @@ const CreditorListPage: React.FC = () => {
 
       // Fetch paginated data
       const dataResult: unknown = await client.query(dataQuery, queryParams);
-      const fetchedData = Array.isArray(dataResult) && dataResult.length > 0 && Array.isArray(dataResult[0])
-                          ? dataResult[0] as any[]
-                          : [];
+      const fetchedData = Array.isArray(dataResult) ? dataResult as any[] : [];
       const formattedCreditors: Creditor[] = fetchedData.map((cred: any) => ({
         ...cred,
         id: typeof cred.id === 'string' ? cred.id : (cred.id as RecordId).toString(),

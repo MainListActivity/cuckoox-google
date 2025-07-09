@@ -17,7 +17,7 @@ export const getAllRoles = async (client: SurrealLike): Promise<Role[]> => {
   console.log('[RoleService] Fetching all roles from database');
   
   try {
-    const result = await (client as any).query('SELECT * FROM role ORDER BY name');
+    const result = await (client as any).query<Role[]>('SELECT * FROM role ORDER BY name');
     
     if (!Array.isArray(result) || result.length === 0) {
       console.warn('[RoleService] No roles found in database');
@@ -63,7 +63,7 @@ export const getRoleByName = async (client: SurrealLike, roleName: string): Prom
   console.log(`[RoleService] Fetching role by name: ${roleName}`);
   
   try {
-    const result = await (client as any).query('SELECT * FROM role WHERE name = $roleName LIMIT 1', {
+    const result = await (client as any).query<Role[]>('SELECT * FROM role WHERE name = $roleName LIMIT 1', {
       roleName
     });
     
@@ -90,7 +90,7 @@ export const getCaseMemberRoles = async (client: SurrealLike): Promise<Role[]> =
   
   try {
     // 获取适合案件成员的角色，排除系统管理员角色
-    const result = await (client as any).query(
+    const result = await (client as any).query<Role[]>(
       `
       SELECT * FROM role 
       WHERE name != 'admin' 

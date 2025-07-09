@@ -124,8 +124,8 @@ const PermissionManagementPage: React.FC = () => {
   // 加载角色列表
   const loadRoles = useCallback(async () => {
     try {
-      const result = await client.query<Role[][]>('SELECT * FROM role');
-      if (result && result[0]) {
+      const result = await client.query<Role[]>('SELECT * FROM role');
+      if (result && result.length > 0) {
         // 角色数据现在直接用于查询，不需要存储在状态中
       }
     } catch (error) {
@@ -138,9 +138,9 @@ const PermissionManagementPage: React.FC = () => {
   const loadMenus = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await client.query<MenuMetadata[][]>('SELECT * FROM menu_metadata ORDER BY display_order');
-      if (result && result[0]) {
-        setMenus(result[0]);
+      const result = await client.query<MenuMetadata[]>('SELECT * FROM menu_metadata ORDER BY display_order');
+      if (result && result.length > 0) {
+        setMenus(result);
       }
     } catch (error) {
       console.error('Error loading menus:', error);
@@ -154,9 +154,9 @@ const PermissionManagementPage: React.FC = () => {
   const loadOperations = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await client.query<OperationMetadata[][]>('SELECT * FROM operation_metadata ORDER BY menu_id, operation_id');
-      if (result && result[0]) {
-        setOperations(result[0]);
+      const result = await client.query<OperationMetadata[]>('SELECT * FROM operation_metadata ORDER BY menu_id, operation_id');
+      if (result && result.length > 0) {
+        setOperations(result);
       }
     } catch (error) {
       console.error('Error loading operations:', error);
@@ -171,7 +171,7 @@ const PermissionManagementPage: React.FC = () => {
     setLoading(true);
     try {
       // 获取所有角色及其权限关系
-      const result = await client.query<unknown[][]>(`
+      const result = await client.query<unknown[]>(`
         SELECT 
           id as role_id,
           name as role_name,
@@ -180,8 +180,8 @@ const PermissionManagementPage: React.FC = () => {
         FROM role
       `);
       
-      if (result && result[0]) {
-        const formattedRolePermissions = (result[0] as unknown[]).map((item: unknown) => {
+      if (result && result.length > 0) {
+        const formattedRolePermissions = (result as unknown[]).map((item: unknown) => {
           const roleItem = item as {
             role_id: RecordId;
             role_name: string;

@@ -41,21 +41,21 @@ class CaseReminderService {
       const client = await surrealClient();
       
       // Get all active notification rules
-      const [[rules]] = await client.query<[NotificationRule[]]>(
+      const rules = await client.query<NotificationRule[]>(
         'SELECT * FROM notification_rule WHERE is_active = true'
       );
       
-      if (!rules || rules.length === 0) {
+      if (rules.length === 0) {
         console.log('No active notification rules found');
         return;
       }
       
       // Get all active cases
-      const [[cases]] = await client.query<[CaseData[]]>(
+      const cases = await client.query<CaseData[]>(
         'SELECT * FROM case WHERE procedure_phase != "结案"'
       );
       
-      if (!cases || cases.length === 0) {
+      if (cases.length === 0) {
         console.log('No active cases found');
         return;
       }
@@ -180,23 +180,23 @@ class CaseReminderService {
       const client = await surrealClient();
       
       // Get case bot
-      const [[caseBot]] = await client.query(
+      const caseBotResult = await client.query(
         'SELECT * FROM case_bot WHERE case_id = $case_id',
         { case_id: caseData.id }
       );
       
-      if (!caseBot) {
+      if (caseBotResult.length === 0) {
         console.log(`No case bot found for case ${caseData.case_number}`);
         return;
       }
       
       // Get subscribers
-      const [[subscribers]] = await client.query<[CaseBotSubscriber[]]>(
+      const subscribers = await client.query<CaseBotSubscriber[]>(
         'SELECT user_id FROM case_bot_subscription WHERE case_bot_id = $case_bot_id',
-        { case_bot_id: caseBot.id }
+        { case_bot_id: caseBotResult[0].id }
       );
       
-      if (!subscribers || subscribers.length === 0) {
+      if (subscribers.length === 0) {
         console.log(`No subscribers for case bot ${caseData.case_number}`);
         return;
       }

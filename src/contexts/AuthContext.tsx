@@ -415,13 +415,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         WHERE user_id = $userId
         FETCH case_id, role_id;
       `;
-      const results: UserCaseRoleDetails[][] = await dataService.query(query, { userId: currentAppUser.id });
+      const results: UserCaseRoleDetails[] = await dataService.query(query, { userId: currentAppUser.id });
       
       const casesMap = new Map<RecordId, Case>();
       let actualResults: UserCaseRoleDetails[] = [];
 
-      if (results && results.length > 0 && Array.isArray(results[0])) {
-         actualResults = results[0]; // Assuming the first element of the outer array is the array of records
+      if (results && results.length > 0 && Array.isArray(results)) {
+         actualResults = results; // Direct array access
          actualResults.forEach(ucr => {
             if (ucr.case_details && ucr.case_details.id) {
                  casesMap.set(ucr.case_details.id, ucr.case_details);
@@ -565,11 +565,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const query = `
         SELECT id, user_id, case_id.* AS case_details, role_id.* AS role_details 
         FROM user_case_role WHERE user_id = $userId FETCH case_id, role_id;`;
-      const results: UserCaseRoleDetails[][] = await dataService.query(query, { userId: user.id });
+      const results: UserCaseRoleDetails[] = await dataService.query(query, { userId: user.id });
 
       let userCaseRolesDetails: UserCaseRoleDetails[] = [];
-      if (results && results.length > 0 && Array.isArray(results[0])) {
-        userCaseRolesDetails = results[0];
+      if (results && results.length > 0 && Array.isArray(results)) {
+        userCaseRolesDetails = results;
       }
       
       // Check if the caseIdToSelect is one of the user's cases

@@ -14,6 +14,43 @@ export type AnyAuth = {
   [key: string]: unknown;
 };
 
+
+/**
+ * 递归检查并重构被序列化的RecordId对象
+ * 当RecordId对象通过ServiceWorker传递时，会丢失其原型，变成普通对象
+ * 这个函数会检测这种情况并重新构造RecordId
+ */
+function deserializeRecordIds(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  // 检查是否是被序列化的RecordId对象（具有id和tb属性）
+  if (typeof obj === 'object' && obj.hasOwnProperty('id') && obj.hasOwnProperty('tb')) {
+    // 这很可能是一个被序列化的RecordId，重新构造它
+    return new RecordId(obj.tb, obj.id);
+  }
+
+  // 如果是数组，递归处理每个元素
+  if (Array.isArray(obj)) {
+    return obj.map(item => deserializeRecordIds(item));
+  }
+
+  // 如果是对象，递归处理每个属性
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = deserializeRecordIds(value);
+    }
+    if (Object.entries(result).length !== 0) {
+      return result;
+    }
+  }
+
+  // 其他类型直接返回
+  return obj;
+}
+
 export interface SurrealWorkerAPI {
   query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
   mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
@@ -74,7 +111,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
   }
 
   private handleMessage(data: any) {
-    const { type, messageId, payload } = data;
+    const { type, messageId, payload } = deserializeRecordIds(data);
 
     if (type === 'live_update') {
       // Handle live query updates
@@ -142,7 +179,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
 
     try {
       // Register the service worker
-      const registration = await navigator.serviceWorker.register('/sw-surreal.js');
+      const registration = await navigator.serviceWorker.register('/sw/sw-surreal.js');
       
       // Wait for the service worker to be ready
       await navigator.serviceWorker.ready;

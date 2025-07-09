@@ -38,6 +38,6 @@ playwright/.cache/
 
 # Vitest
 coverage/
-public/sw-surreal.js
+public/sw/
 
 test-results

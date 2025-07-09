@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "build:sw": "tsx build-sw.js",
+    "build": "vite build",
+    "build:sw": "vite build --config vite.sw.config.ts",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
@@ -63,6 +63,7 @@
     "tsx": "^4.7.2",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
+    "vite-plugin-top-level-await": "^1.5.0",
     "vitest": "^3.2.4"
   }
 }
