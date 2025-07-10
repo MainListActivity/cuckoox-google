@@ -2,12 +2,16 @@
 // Extend the global scope to include ServiceWorker-specific types
 declare const self: ServiceWorkerGlobalScope;
 
+// Service Worker 版本号
+const SW_VERSION = 'v1.0.0';
+const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
+
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
-console.log("Service Worker script executing");
+console.log(`Service Worker script executing - ${SW_VERSION}`);
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
-    console.log("Service Worker installing");
+    console.log(`Service Worker installing - ${SW_VERSION}`);
     event.waitUntil(
       Promise.all([
         self.skipWaiting(),
@@ -27,9 +31,13 @@ const eventHandlers = {
   },
 
   activate: (event: ExtendableEvent) => {
-    console.log("Service Worker activating");
+    console.log(`Service Worker activating - ${SW_VERSION}`);
     event.waitUntil(
-      self.clients.claim().then(async () => {
+      Promise.all([
+        self.clients.claim(),
+        // 清理旧版本的缓存
+        cleanupOldCaches()
+      ]).then(async () => {
         try {
           // 初始化本地 SurrealDB
           await initializeLocalSurrealDB();
@@ -288,6 +296,13 @@ const eventHandlers = {
           break;
         }
 
+        case 'SKIP_WAITING': {
+          console.log('ServiceWorker: 收到 SKIP_WAITING 消息，跳过等待');
+          self.skipWaiting();
+          respond({ success: true });
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -307,7 +322,7 @@ self.addEventListener('message', eventHandlers.message);
 
 console.log("Service Worker event listeners registered");
 
-import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
+import { Surreal, RecordId } from 'surrealdb';
 import { TokenManager, TokenInfo } from './token-manager';
 
 // 获取WASM引擎的函数
@@ -347,11 +362,12 @@ export type AnyAuth = {
 };
 
 // --- Global State ---
+// 远程 SurrealDB 实例 (单例)
 let db: Surreal | null = null;
-let localDb: Surreal | null = null; // SurrealDB WASM instance for local storage
+// 本地 SurrealDB WASM 实例 (单例)
+let localDb: Surreal | null = null; 
 let tokenManager: TokenManager | null = null;
 let isConnected = false;
-let isInitialized = false;
 let isLocalDbInitialized = false;
 let connectionConfig: {
   endpoint: string;
@@ -476,6 +492,7 @@ async function performReconnection() {
     if (db && isConnected) {
       try {
         await db.close();
+        console.log('ServiceWorker: Closed existing connection for reconnection');
       } catch (e) {
         console.warn('ServiceWorker: Error closing connection during reconnection:', e);
       }
@@ -483,7 +500,7 @@ async function performReconnection() {
 
     isConnected = false;
 
-    // 重新初始化数据库
+    // 确保数据库实例存在（使用单例模式）
     await initializeSurreal();
 
     // 设置连接超时
@@ -631,6 +648,30 @@ async function syncTokensFromLocalStorage() {
 // --- Cache and Storage Functions ---
 
 /**
+ * 清理旧版本的缓存
+ */
+async function cleanupOldCaches(): Promise<void> {
+  try {
+    console.log('ServiceWorker: Cleaning up old caches...');
+    const cacheNames = await caches.keys();
+    const oldCacheNames = cacheNames.filter(name => 
+      name.startsWith('cuckoox-sw-') && name !== SW_CACHE_NAME
+    );
+
+    await Promise.all(
+      oldCacheNames.map(cacheName => {
+        console.log(`ServiceWorker: Deleting old cache: ${cacheName}`);
+        return caches.delete(cacheName);
+      })
+    );
+
+    console.log('ServiceWorker: Old caches cleaned up successfully');
+  } catch (error) {
+    console.warn('ServiceWorker: Failed to cleanup old caches:', error);
+  }
+}
+
+/**
  * 预缓存 SurrealDB WASM 文件
  */
 async function precacheSurrealDBWasm(): Promise<void> {
@@ -656,12 +697,15 @@ async function precacheSurrealDBWasm(): Promise<void> {
  * 初始化本地 SurrealDB WASM 实例
  */
 async function initializeLocalSurrealDB(): Promise<void> {
-  if (isLocalDbInitialized && localDb) return;
+  if (isLocalDbInitialized && localDb) {
+    console.log('ServiceWorker: Local SurrealDB already initialized, reusing singleton instance');
+    return;
+  }
 
   try {
-    console.log('ServiceWorker: Initializing local SurrealDB...');
+    console.log('ServiceWorker: Initializing local SurrealDB singleton...');
 
-    // 创建使用 WASM 引擎的 Surreal 实例
+    // 创建使用 WASM 引擎的 Surreal 实例 (单例)
     localDb = new Surreal({
       engines: await getWasmEngines(),
     });
@@ -670,7 +714,7 @@ async function initializeLocalSurrealDB(): Promise<void> {
     await localDb.use({ namespace: 'ck_go', database: 'local' });
 
     isLocalDbInitialized = true;
-    console.log('ServiceWorker: Local SurrealDB initialized successfully');
+    console.log('ServiceWorker: Local SurrealDB singleton initialized successfully');
   } catch (error) {
     console.error('ServiceWorker: Failed to initialize local SurrealDB:', error);
     // 即使初始化失败，也标记为已尝试
@@ -693,7 +737,7 @@ async function initializeTokenManager(): Promise<void> {
     
     // 创建 TokenManager 并传入 localDb
     tokenManager = new TokenManager({
-      apiUrl: (globalThis as any).importMeta?.env?.VITE_API_URL || 'http://localhost:8082',
+      apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8082',
       broadcastToAllClients: broadcastToAllClients,
     });
 
@@ -811,13 +855,15 @@ async function broadcastToAllClients(message: Record<string, unknown>) {
 // --- SurrealDB Logic ---
 
 async function initializeSurreal(): Promise<void> {
-  if (isInitialized && db?.connection?.status === ConnectionStatus.Connected) return;
+  if (db) {
+    console.log("ServiceWorker: SurrealDB already initialized, reusing singleton instance");
+    return;
+  }
 
   try {
-    // Create a new SurrealDB instance
+    // Create a new SurrealDB instance (singleton)
     db = new Surreal();
-    isInitialized = true;
-    console.log("ServiceWorker: SurrealDB initialized successfully");
+    console.log("ServiceWorker: SurrealDB singleton initialized successfully");
   } catch (error) {
     console.error("ServiceWorker: Failed to initialize SurrealDB:", error);
     throw error;
@@ -848,6 +894,7 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
       if (isConnected && db) {
         try {
           await db.close();
+          console.log("ServiceWorker: Closed existing connection for endpoint change");
         } catch (e) {
           console.warn("ServiceWorker: Error closing connection:", e);
         }

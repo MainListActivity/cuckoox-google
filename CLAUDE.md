@@ -14,6 +14,7 @@ This is a React + TypeScript + Vite application using Bun as the package manager
 - `bun run build` - Build for production (runs TypeScript compilation + Vite build)
 - `bun run lint` - Run ESLint with TypeScript support
 - `bun run preview` - Preview production build
+- `bun run build:sw` - Build for service worker
 
 ### Testing Commands
 - `bun run test` - Run unit tests with Vitest
@@ -47,6 +48,7 @@ This is a legal case management system with the following key architectural comp
 - `src/pages/` - Route-based page components following file-based routing
 - `src/contexts/` - React Context providers (Auth, Theme, Layout, etc.)
 - `src/services/` - API service layers
+- `src/workers/` - service worker代码
 - `src/hooks/` - Custom React hooks
 - `tests/unit/` - Unit tests (Vitest + Testing Library)
 - `e2e/` - End-to-end tests (Playwright)
@@ -75,7 +77,7 @@ This is a legal case management system with the following key architectural comp
 - Uses CSS custom properties for theming integration MUI
 - 在涉及到surreal的方法、存储代码中尽可能使用`RecordId`而不是`string`
 - 不要尝试运行 bun run dev 判断代码是否可运行，lint检查通过并且单元测试通过就可完成任务
-
+- 使用service worker在后台保持与surrealdb的连接状态，所有页面与service worker通信获取数据
 
 
 # CuckooX Rust 项目结构指南

@@ -120,6 +120,69 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     }
   }
 
+  private setupServiceWorkerUpdateHandling(registration: ServiceWorkerRegistration) {
+    // 监听 service worker 更新
+    registration.addEventListener('updatefound', () => {
+      console.log('SurrealServiceWorkerClient: Service Worker 更新检测到');
+      const newWorker = registration.installing;
+      
+      if (newWorker) {
+        newWorker.addEventListener('statechange', () => {
+          console.log('SurrealServiceWorkerClient: Service Worker 状态变化:', newWorker.state);
+          
+          if (newWorker.state === 'installed') {
+            if (navigator.serviceWorker.controller) {
+              // 有旧的 service worker 在运行，需要更新
+              console.log('SurrealServiceWorkerClient: 新的 Service Worker 已安装，准备更新');
+              this.handleServiceWorkerUpdate(newWorker);
+            } else {
+              // 第一次安装
+              console.log('SurrealServiceWorkerClient: Service Worker 首次安装完成');
+            }
+          }
+        });
+      }
+    });
+
+    // 监听 service worker 控制器变化
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      console.log('SurrealServiceWorkerClient: Service Worker 控制器已变化，页面将重新加载');
+      // 重新加载页面以使用新的 service worker
+      window.location.reload();
+    });
+
+    // 定期检查更新
+    this.scheduleUpdateCheck(registration);
+  }
+
+  private handleServiceWorkerUpdate(newWorker: ServiceWorker) {
+    // 可以在这里显示通知给用户，或者自动更新
+    console.log('SurrealServiceWorkerClient: 发现新版本的 Service Worker');
+    
+    // 自动跳过等待并激活新的 service worker
+    if (newWorker.state === 'installed') {
+      newWorker.postMessage({ type: 'SKIP_WAITING' });
+    }
+  }
+
+  private scheduleUpdateCheck(registration: ServiceWorkerRegistration) {
+    // 每5分钟检查一次更新
+    setInterval(() => {
+      registration.update().catch(err => {
+        console.warn('SurrealServiceWorkerClient: 更新检查失败:', err);
+      });
+    }, 5 * 60 * 1000); // 5分钟
+
+    // 页面获得焦点时也检查更新
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        registration.update().catch(err => {
+          console.warn('SurrealServiceWorkerClient: 更新检查失败:', err);
+        });
+      }
+    });
+  }
+
   private handleMessage(data: any) {
     const { type, messageId, payload } = deserializeRecordIds(data);
 
@@ -237,8 +300,14 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
 
     try {
 
-      // Register the service worker
-      const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`, { type: 'module' });
+      // Register the service worker with update checking
+      const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`, { 
+        type: 'module',
+        updateViaCache: 'none' // 强制跳过 HTTP 缓存检查更新
+      });
+
+      // 设置更新检查
+      this.setupServiceWorkerUpdateHandling(registration);
 
       // Try to get a service worker instance right away
       this.serviceWorker = registration.active || registration.waiting || registration.installing;

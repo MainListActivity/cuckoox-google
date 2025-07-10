@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TokenManager, TokenInfo } from '../../../src/workers/token-manager';
+import { RecordId } from 'surrealdb';
 
 // Mock SurrealDB
 const mockLocalDb = {
@@ -44,7 +45,7 @@ describe('TokenManager', () => {
     await tokenManager.storeToken(tokenInfo);
 
     expect(mockLocalDb.upsert).toHaveBeenCalledWith(
-      'tokens:current',
+      new RecordId('tokens', 'current'),
       expect.objectContaining({
         access_token: 'test-access-token',
         refresh_token: 'test-refresh-token',
@@ -68,7 +69,7 @@ describe('TokenManager', () => {
 
     const result = await tokenManager.getToken();
 
-    expect(mockLocalDb.select).toHaveBeenCalledWith('tokens:current');
+    expect(mockLocalDb.select).toHaveBeenCalledWith(new RecordId('tokens', 'current'));
     expect(result).toEqual(mockTokenData);
   });
 
@@ -77,7 +78,7 @@ describe('TokenManager', () => {
     
     await tokenManager.clearToken();
 
-    expect(mockLocalDb.delete).toHaveBeenCalledWith('tokens:current');
+    expect(mockLocalDb.delete).toHaveBeenCalledWith(new RecordId('tokens', 'current'));
   });
 
   it('should get specific token field', async () => {
