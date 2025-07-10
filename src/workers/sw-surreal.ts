@@ -1,5 +1,4 @@
 /// <reference lib="WebWorker" />
-/// <reference path="./surrealdb-wasm.d.ts" />
 // Extend the global scope to include ServiceWorker-specific types
 declare const self: ServiceWorkerGlobalScope;
 
@@ -34,8 +33,8 @@ const eventHandlers = {
         try {
           // 初始化本地 SurrealDB
           await initializeLocalSurrealDB();
-          // 首先从存储中恢复 token
-          await recoverTokensFromStorage();
+          // 初始化 TokenManager
+          await initializeTokenManager();
           // Service Worker 激活后，主动同步 localStorage 中的 token
           await syncTokensFromLocalStorage();
         } catch (e) {
@@ -45,9 +44,23 @@ const eventHandlers = {
     );
   },
 
-  beforeunload: () => {
+  beforeunload: async () => {
     try {
-      clearTokenRefresh();
+      stopReconnection();
+      stopConnectionHealthCheck();
+      setConnectionState(ConnectionState.DISCONNECTED);
+      
+      // 关闭 TokenManager
+      if (tokenManager) {
+        await tokenManager.close();
+        tokenManager = null;
+      }
+      
+      // 关闭本地数据库
+      if (localDb) {
+        await localDb.close();
+        localDb = null;
+      }
     } catch (e) {
       console.error("Failed during cleanup:", e);
     }
@@ -81,53 +94,44 @@ const eventHandlers = {
         case 'connect':
           // Sync token information from localStorage if provided
           if (payload.sync_tokens) {
-            if (payload.sync_tokens.access_token) {
-              storageSet('access_token', payload.sync_tokens.access_token);
-            }
-            if (payload.sync_tokens.refresh_token) {
-              storageSet('refresh_token', payload.sync_tokens.refresh_token);
-            }
-            if (payload.sync_tokens.token_expires_at) {
-              storageSet('token_expires_at', payload.sync_tokens.token_expires_at);
-            }
-            if (payload.sync_tokens.tenant_code) {
-              storageSet('tenant_code', payload.sync_tokens.tenant_code);
-            }
+            await ensureTokenManager();
+            const tokenInfo: Partial<TokenInfo> = {
+              access_token: payload.sync_tokens.access_token,
+              refresh_token: payload.sync_tokens.refresh_token,
+              token_expires_at: payload.sync_tokens.token_expires_at,
+              tenant_code: payload.sync_tokens.tenant_code,
+            };
+            await tokenManager!.storeToken(tokenInfo);
           }
           await ensureConnection(payload);
           respond({ status: isConnected ? 'connected' : 'disconnected' });
           break;
 
-        case 'authenticate':
-          storageSet('access_token', payload.token);
-          // Store refresh token and expiry info if provided
-          if (payload.refresh_token) {
-            storageSet('refresh_token', payload.refresh_token);
-          }
-          if (payload.expires_in) {
-            const expiresAt = Date.now() + (payload.expires_in * 1000);
-            storageSet('token_expires_at', expiresAt.toString());
-          }
-          // Store tenant code if provided
-          if (payload.tenant_code) {
-            storageSet('tenant_code', payload.tenant_code);
-          }
+        case 'authenticate': {
+          await ensureTokenManager();
+          const tokenInfo: Partial<TokenInfo> = {
+            access_token: payload.token,
+            refresh_token: payload.refresh_token,
+            token_expires_at: payload.expires_in ? Date.now() + (payload.expires_in * 1000) : undefined,
+            tenant_code: payload.tenant_code,
+          };
+          await tokenManager!.storeToken(tokenInfo);
 
           await ensureConnection();
           if (isConnected) {
             await db!.authenticate(payload.token);
-            setupTokenRefresh(); // Set up token refresh after successful authentication
+            // Token refresh is now handled automatically by TokenManager
             respond({ success: true });
           } else {
             throw new Error("Connection not established.");
           }
           break;
+        }
 
         case 'invalidate':
-          storageSet('access_token', null);
-          storageSet('refresh_token', null);
-          storageSet('token_expires_at', null);
-          clearTokenRefresh(); // Clear token refresh when invalidating
+          await ensureTokenManager();
+          await tokenManager!.clearToken();
+          // Token refresh clearing is now handled by TokenManager
           if (isConnected) await db!.invalidate();
           respond({ success: true });
           break;
@@ -224,20 +228,20 @@ const eventHandlers = {
         }
 
         case 'setup_token_refresh': {
-          setupTokenRefresh();
+          // Token refresh is now handled automatically by TokenManager
           respond({ success: true });
           break;
         }
 
         case 'clear_token_refresh': {
-          clearTokenRefresh();
+          // Token refresh clearing is now handled by TokenManager
           respond({ success: true });
           break;
         }
 
         case 'refresh_token': {
-          const success = await refreshAccessToken();
-          respond({ success });
+          // Token refresh is now handled internally by TokenManager
+          respond({ success: false, message: 'Token refresh is handled automatically' });
           break;
         }
 
@@ -248,7 +252,38 @@ const eventHandlers = {
         }
 
         case 'recover_tokens': {
-          await recoverTokensFromStorage();
+          await ensureTokenManager();
+          const token = await tokenManager!.getToken();
+          respond({ success: !!token });
+          break;
+        }
+
+        case 'get_connection_state': {
+          respond({
+            state: currentConnectionState,
+            isConnected: isConnected,
+            isReconnecting: isReconnecting,
+            reconnectAttempts: reconnectAttempts,
+            endpoint: connectionConfig?.endpoint
+          });
+          break;
+        }
+
+        case 'force_reconnect': {
+          console.log('ServiceWorker: Force reconnection requested by client');
+          if (isConnected) {
+            stopConnectionHealthCheck();
+            if (db) {
+              try {
+                await db.close();
+              } catch (e) {
+                console.warn('ServiceWorker: Error closing connection during force reconnect:', e);
+              }
+            }
+            isConnected = false;
+          }
+          stopReconnection();
+          triggerReconnection();
           respond({ success: true });
           break;
         }
@@ -273,30 +308,30 @@ self.addEventListener('message', eventHandlers.message);
 console.log("Service Worker event listeners registered");
 
 import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
+import { TokenManager, TokenInfo } from './token-manager';
 
-// 获取WASM引擎的函数（从wasm-shim.ts移过来，避免导入依赖）
+// 获取WASM引擎的函数
 async function getWasmEngines() {
   // 等待__surrealdbWasmEngines 加载
   let retryCount = 0;
   const maxRetries = 50; // 最多等待 5 秒（50 * 100ms）
-  
+
   while (!(self as any).__surrealdbWasmEngines && retryCount < maxRetries) {
     await new Promise(resolve => setTimeout(resolve, 100));
     retryCount++;
   }
-  
+
   if (!(self as any).__surrealdbWasmEngines) {
     throw new Error('WASM engines not loaded after waiting');
   }
-  
+
   return (self as any).__surrealdbWasmEngines();
 }
 
 
+
 // SurrealDB WASM 相关常量（现在已通过 ES 模块导入，无需外部 URL）
 
-// WASM 可用性标志
-let isWasmAvailable = false;
 
 // Define AnyAuth type based on SurrealDB
 export type AnyAuth = {
@@ -314,6 +349,7 @@ export type AnyAuth = {
 // --- Global State ---
 let db: Surreal | null = null;
 let localDb: Surreal | null = null; // SurrealDB WASM instance for local storage
+let tokenManager: TokenManager | null = null;
 let isConnected = false;
 let isInitialized = false;
 let isLocalDbInitialized = false;
@@ -324,9 +360,6 @@ let connectionConfig: {
   auth?: AnyAuth;
 } | null = null;
 
-// In-memory storage to replace localStorage
-const memoryStore: Record<string, string> = {};
-
 // Live query management
 const liveQuerySubscriptions = new Map<string, {
   query: string;
@@ -334,12 +367,247 @@ const liveQuerySubscriptions = new Map<string, {
   clients: Set<string>; // Set of client IDs
 }>();
 
-// Token refresh management
-let refreshTimer: NodeJS.Timeout | null = null;
-const REFRESH_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
-const REFRESH_BEFORE_EXPIRY = 10 * 60 * 1000; // Refresh 10 minutes before expiry
+// Token refresh is now handled by TokenManager
+
+// Connection management and auto-reconnect
+let reconnectTimer: NodeJS.Timeout | null = null;
+let connectionHealthCheck: NodeJS.Timeout | null = null;
+let isReconnecting = false;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = Infinity; // 无限重连
+const RECONNECT_DELAY_BASE = 100; // 基础重连延迟 100ms
+const RECONNECT_DELAY_MAX = 5000; // 最大重连延迟 5秒
+const CONNECTION_TIMEOUT = 10000; // 10秒连接超时
+
+// 连接状态枚举
+enum ConnectionState {
+  DISCONNECTED = 'disconnected',
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected',
+  RECONNECTING = 'reconnecting',
+  ERROR = 'error'
+}
+
+let currentConnectionState = ConnectionState.DISCONNECTED;
 
 // --- Helper Functions for Event Handlers ---
+
+/**
+ * 设置连接状态并通知客户端
+ */
+function setConnectionState(newState: ConnectionState, error?: Error) {
+  const previousState = currentConnectionState;
+  currentConnectionState = newState;
+
+  console.log(`ServiceWorker: Connection state changed from ${previousState} to ${newState}`);
+
+  // 通知所有客户端连接状态变化
+  broadcastToAllClients({
+    type: 'connection_state_changed',
+    payload: {
+      state: newState,
+      previousState,
+      error: error?.message,
+      timestamp: Date.now()
+    }
+  });
+}
+
+/**
+ * 停止连接健康检查
+ */
+function stopConnectionHealthCheck() {
+  if (connectionHealthCheck) {
+    clearInterval(connectionHealthCheck);
+    connectionHealthCheck = null;
+    console.log('ServiceWorker: Connection health check stopped');
+  }
+}
+
+/**
+ * 计算重连延迟（指数退避，但有最大值限制）
+ */
+function calculateReconnectDelay(): number {
+  const delay = Math.min(
+    RECONNECT_DELAY_BASE * Math.pow(2, Math.min(reconnectAttempts, 6)), // 最多 64 倍基础延迟
+    RECONNECT_DELAY_MAX
+  );
+  return delay;
+}
+
+/**
+ * 触发重连
+ */
+function triggerReconnection() {
+  if (isReconnecting) {
+    console.log('ServiceWorker: Reconnection already in progress, skipping');
+    return;
+  }
+
+  isReconnecting = true;
+  setConnectionState(ConnectionState.RECONNECTING);
+
+  // 立即尝试重连（第一次重连延迟很小）
+  const delay = reconnectAttempts === 0 ? RECONNECT_DELAY_BASE : calculateReconnectDelay();
+
+  console.log(`ServiceWorker: Scheduling reconnection attempt ${reconnectAttempts + 1} in ${delay}ms`);
+
+  reconnectTimer = setTimeout(async () => {
+    await performReconnection();
+  }, delay);
+}
+
+/**
+ * 执行重连
+ */
+async function performReconnection() {
+  if (!connectionConfig) {
+    console.error('ServiceWorker: Cannot reconnect - no connection config available');
+    isReconnecting = false;
+    setConnectionState(ConnectionState.ERROR);
+    return;
+  }
+
+  reconnectAttempts++;
+  console.log(`ServiceWorker: Attempting reconnection #${reconnectAttempts} to ${connectionConfig.endpoint}`);
+
+  try {
+    // 清理当前连接
+    if (db && isConnected) {
+      try {
+        await db.close();
+      } catch (e) {
+        console.warn('ServiceWorker: Error closing connection during reconnection:', e);
+      }
+    }
+
+    isConnected = false;
+
+    // 重新初始化数据库
+    await initializeSurreal();
+
+    // 设置连接超时
+    const connectPromise = connectWithTimeout();
+    await connectPromise;
+
+    // 重连成功
+    isConnected = true;
+    reconnectAttempts = 0;
+    isReconnecting = false;
+
+    setConnectionState(ConnectionState.CONNECTED);
+    console.log('ServiceWorker: Reconnection successful');
+
+    // 重新订阅所有 Live Query
+    await resubscribeAllLiveQueries();
+
+  } catch (error) {
+    console.error(`ServiceWorker: Reconnection attempt #${reconnectAttempts} failed:`, error);
+
+    // 如果还需要继续重连
+    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+      isReconnecting = false;
+
+      // 立即触发下一次重连
+      triggerReconnection();
+    } else {
+      // 达到最大重连次数
+      isReconnecting = false;
+      setConnectionState(ConnectionState.ERROR, error as Error);
+      console.error('ServiceWorker: Max reconnection attempts reached');
+    }
+  }
+}
+
+/**
+ * 带超时的连接函数
+ */
+async function connectWithTimeout(): Promise<void> {
+  if (!connectionConfig) {
+    throw new Error('No connection config available');
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Connection timeout'));
+    }, CONNECTION_TIMEOUT);
+
+    const doConnect = async () => {
+      try {
+        await db!.connect(connectionConfig!.endpoint);
+
+        // 设置连接事件监听器
+        setupConnectionEventListeners();
+
+        await db!.use({ namespace: connectionConfig!.namespace, database: connectionConfig!.database });
+
+        // 重新认证
+        await ensureTokenManager();
+        const token = await tokenManager!.getToken();
+
+        if (token&&token.access_token) {
+          await db!.authenticate(token.access_token);
+          console.log('ServiceWorker: Re-authenticated successfully during reconnection');
+
+          // Token refresh is now handled automatically by TokenManager
+        }
+
+        clearTimeout(timeout);
+        resolve();
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    };
+
+    doConnect();
+  });
+}
+
+/**
+ * 设置连接事件监听器
+ */
+function setupConnectionEventListeners() {
+  if (!db || !db.emitter) {
+    return;
+  }
+
+  // 监听连接状态变化
+  db.emitter.subscribe('disconnected', () => {
+    console.warn('ServiceWorker: Database connection lost');
+    isConnected = false;
+    setConnectionState(ConnectionState.ERROR);
+    stopConnectionHealthCheck();
+
+    // 立即触发重连
+    triggerReconnection();
+  });
+
+  db.emitter.subscribe('error', (error: Error) => {
+    console.error('ServiceWorker: Database connection error:', error);
+    isConnected = false;
+    setConnectionState(ConnectionState.ERROR, error);
+    stopConnectionHealthCheck();
+
+    // 立即触发重连
+    triggerReconnection();
+  });
+
+  console.log('ServiceWorker: Connection event listeners set up');
+}
+
+/**
+ * 停止重连
+ */
+function stopReconnection() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  isReconnecting = false;
+  reconnectAttempts = 0;
+  console.log('ServiceWorker: Reconnection stopped');
+}
 
 /**
  * 从客户端的 localStorage 同步 token 到 Service Worker
@@ -359,28 +627,6 @@ async function syncTokensFromLocalStorage() {
   }
 }
 
-/**
- * 从本地 SurrealDB 恢复所有 token 到内存
- */
-async function recoverTokensFromStorage() {
-  try {
-    console.log('ServiceWorker: Recovering tokens from local DB...');
-
-    const tokenKeys = ['access_token', 'refresh_token', 'token_expires_at', 'tenant_code'];
-
-    for (const key of tokenKeys) {
-      const value = await getTokenFromLocalDB(key);
-      if (value) {
-        memoryStore[key] = value;
-        console.log(`ServiceWorker: Recovered ${key} from local storage`);
-      }
-    }
-
-    console.log('ServiceWorker: Token recovery completed');
-  } catch (error) {
-    console.error('ServiceWorker: Failed to recover tokens from local storage:', error);
-  }
-}
 
 // --- Cache and Storage Functions ---
 
@@ -415,80 +661,59 @@ async function initializeLocalSurrealDB(): Promise<void> {
   try {
     console.log('ServiceWorker: Initializing local SurrealDB...');
 
-    // 尝试加载 WASM 引擎
     // 创建使用 WASM 引擎的 Surreal 实例
-    // const wasmEngines = (self as any).__surrealdbWasmEngines;
     localDb = new Surreal({
       engines: await getWasmEngines(),
     });
-    isWasmAvailable = true;
+    
     await localDb.connect('indxdb://cuckoox-storage');
-
     await localDb.use({ namespace: 'ck_go', database: 'local' });
 
     isLocalDbInitialized = true;
     console.log('ServiceWorker: Local SurrealDB initialized successfully');
   } catch (error) {
     console.error('ServiceWorker: Failed to initialize local SurrealDB:', error);
-    // 即使初始化失败，也标记为已尝试，回退到内存存储
+    // 即使初始化失败，也标记为已尝试
     isLocalDbInitialized = true;
-    isWasmAvailable = false;
+    throw error;
   }
 }
 
 /**
- * 将 token 存储到本地 SurrealDB
+ * 初始化 TokenManager
  */
-async function storeTokenInLocalDB(key: string, value: string | null): Promise<void> {
+async function initializeTokenManager(): Promise<void> {
+  if (tokenManager) return;
+
   try {
+    console.log('ServiceWorker: Initializing TokenManager...');
+
+    // 先初始化本地数据库
     await initializeLocalSurrealDB();
+    
+    // 创建 TokenManager 并传入 localDb
+    tokenManager = new TokenManager({
+      apiUrl: (globalThis as any).importMeta?.env?.VITE_API_URL || 'http://localhost:8082',
+      broadcastToAllClients: broadcastToAllClients,
+    });
 
-    // 如果 WASM 不可用或本地数据库未初始化，跳过存储
-    if (!isWasmAvailable || !localDb) {
-      console.log(`ServiceWorker: Skipping local DB storage for ${key} (WASM unavailable)`);
-      return;
-    }
-
-    if (value === null) {
-      // 删除 token
-      await localDb.delete(`token:${key}`);
-    } else {
-      // 存储或更新 token
-      await localDb.upsert(`token:${key}`, {
-        key,
-        value,
-        timestamp: Date.now()
-      });
-    }
+    await tokenManager.initialize(localDb);
+    console.log('ServiceWorker: TokenManager initialized successfully');
   } catch (error) {
-    console.error(`ServiceWorker: Failed to store token ${key} in local DB:`, error);
+    console.error('ServiceWorker: Failed to initialize TokenManager:', error);
+    throw error;
   }
 }
 
 /**
- * 从本地 SurrealDB 读取 token
+ * 确保 TokenManager 已初始化
  */
-async function getTokenFromLocalDB(key: string): Promise<string | null> {
-  try {
-    await initializeLocalSurrealDB();
-
-    // 如果 WASM 不可用或本地数据库未初始化，返回 null
-    if (!isWasmAvailable || !localDb) {
-      return null;
-    }
-
-    const result = await localDb.select(`token:${key}`);
-
-    if (result && typeof result === 'object' && 'value' in result) {
-      return result.value as string;
-    }
-
-    return null;
-  } catch (error) {
-    console.error(`ServiceWorker: Failed to get token ${key} from local DB:`, error);
-    return null;
+async function ensureTokenManager(): Promise<void> {
+  if (!tokenManager) {
+    await initializeTokenManager();
   }
 }
+
 
 
 
@@ -505,7 +730,7 @@ function deserializeRecordIds(obj: any): any {
   }
 
   // 检查是否是被序列化的RecordId对象（具有id和tb属性）
-  if (typeof obj === 'object' && obj.hasOwnProperty('id') && obj.hasOwnProperty('tb')) {
+  if (typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, 'id') && Object.prototype.hasOwnProperty.call(obj, 'tb')) {
     // 这很可能是一个被序列化的RecordId，重新构造它
     return new RecordId(obj.tb, obj.id);
   }
@@ -530,44 +755,6 @@ function deserializeRecordIds(obj: any): any {
   return obj;
 }
 
-function storageSet(key: string, val: string | null) {
-  if (val === null) {
-    delete memoryStore[key];
-  } else {
-    memoryStore[key] = val;
-  }
-  // 同时存储到本地 SurrealDB
-  storeTokenInLocalDB(key, val).catch(error => {
-    console.warn(`ServiceWorker: Failed to store ${key} in local DB:`, error);
-  });
-}
-
-function storageGet(key: string): string | null {
-  return memoryStore[key] ?? null;
-}
-
-// 异步版本的 storageGet，可以从本地 SurrealDB 读取
-async function storageGetAsync(key: string): Promise<string | null> {
-  // 首先检查内存
-  const memoryValue = memoryStore[key];
-  if (memoryValue) {
-    return memoryValue;
-  }
-
-  // 然后从本地 SurrealDB 读取
-  try {
-    const dbValue = await getTokenFromLocalDB(key);
-    if (dbValue) {
-      // 同步到内存
-      memoryStore[key] = dbValue;
-      return dbValue;
-    }
-  } catch (error) {
-    console.warn(`ServiceWorker: Failed to get ${key} from local DB:`, error);
-  }
-
-  return null;
-}
 
 async function postMessageToClient(clientId: string, message: Record<string, unknown>) {
   const client = await self.clients.get(clientId);
@@ -590,18 +777,13 @@ async function broadcastToClients(message: Record<string, unknown>, clientIds: S
  * 检查租户代码是否存在
  */
 async function checkTenantCode(): Promise<boolean> {
-  let tenantCode = storageGet('tenant_code');
-
-  // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
-  if (!tenantCode) {
-    tenantCode = await storageGetAsync('tenant_code');
-  }
-
-  if (!tenantCode) {
+  await ensureTokenManager();
+  
+  const hasTenantCode = await tokenManager!.hasTenantCode();
+  
+  if (!hasTenantCode) {
     // 清除认证状态
-    storageSet('access_token', null);
-    storageSet('refresh_token', null);
-    storageSet('token_expires_at', null);
+    await tokenManager!.clearToken();
 
     // 广播租户代码丢失事件给所有客户端
     broadcastToAllClients({
@@ -625,158 +807,6 @@ async function broadcastToAllClients(message: Record<string, unknown>) {
   }
 }
 
-/**
- * 刷新访问令牌
- */
-async function refreshAccessToken(): Promise<boolean> {
-  try {
-    let refreshToken = storageGet('refresh_token');
-
-    // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
-    if (!refreshToken) {
-      refreshToken = await storageGetAsync('refresh_token');
-    }
-
-    if (!refreshToken) {
-      console.error('ServiceWorker: No refresh token available');
-      return false;
-    }
-
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8082';
-    const response = await fetch(`${apiUrl}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-
-    const data = await response.json();
-
-    // Handle the current backend response which returns 501 Not Implemented
-    if (response.status === 501) {
-      console.warn('ServiceWorker: Token refresh not yet implemented on backend:', data.message);
-      clearAuthState();
-      return false;
-    }
-
-    if (!response.ok) {
-      throw new Error('Failed to refresh token');
-    }
-
-    if (data.access_token) {
-      // Store the new tokens
-      storageSet('access_token', data.access_token);
-      if (data.refresh_token) {
-        storageSet('refresh_token', data.refresh_token);
-      }
-      if (data.expires_in) {
-        const expiresAt = Date.now() + (data.expires_in * 1000);
-        storageSet('token_expires_at', expiresAt.toString());
-      }
-
-      // Re-authenticate with the new token
-      if (isConnected && db) {
-        await db.authenticate(data.access_token);
-      }
-
-      console.log('ServiceWorker: Access token refreshed successfully');
-
-      // Broadcast success to all clients
-      broadcastToAllClients({
-        type: 'token_refreshed',
-        payload: { success: true }
-      });
-
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    console.error('ServiceWorker: Error refreshing access token:', error);
-    return false;
-  }
-}
-
-/**
- * 清除认证状态
- */
-function clearAuthState() {
-  storageSet('access_token', null);
-  storageSet('refresh_token', null);
-  storageSet('token_expires_at', null);
-
-  // Broadcast auth state cleared to all clients
-  broadcastToAllClients({
-    type: 'auth_state_cleared',
-    payload: { message: 'Authentication state cleared due to token refresh failure' }
-  });
-}
-
-/**
- * 检查并刷新令牌
- */
-async function checkAndRefreshToken(): Promise<void> {
-  // 首先检查租户代码是否存在
-  if (!(await checkTenantCode())) {
-    console.log('ServiceWorker: Tenant code missing, user needs to login again');
-    clearAuthState();
-    return;
-  }
-
-  let expiresAtStr = storageGet('token_expires_at');
-
-  // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
-  if (!expiresAtStr) {
-    expiresAtStr = await storageGetAsync('token_expires_at');
-  }
-
-  if (!expiresAtStr) return;
-
-  const expiresAt = parseInt(expiresAtStr, 10);
-  const now = Date.now();
-  const timeUntilExpiry = expiresAt - now;
-
-  // Refresh token if it expires within 10 minutes
-  if (timeUntilExpiry <= REFRESH_BEFORE_EXPIRY && timeUntilExpiry > 0) {
-    console.log('ServiceWorker: Token expiring soon, attempting refresh...');
-    const success = await refreshAccessToken();
-    if (!success) {
-      console.error('ServiceWorker: Failed to refresh token, clearing auth state');
-      clearAuthState();
-    }
-  }
-}
-
-/**
- * 设置令牌刷新定时器
- */
-function setupTokenRefresh() {
-  // 清除现有定时器
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-  }
-
-  // 设置新的定时器，每5分钟检查一次
-  refreshTimer = setInterval(checkAndRefreshToken, REFRESH_CHECK_INTERVAL);
-
-  // 立即检查一次，但延迟1秒以避免阻塞
-  setTimeout(checkAndRefreshToken, 1000);
-
-  console.log('ServiceWorker: Token refresh timer set up');
-}
-
-/**
- * 清除令牌刷新定时器
- */
-function clearTokenRefresh() {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-    console.log('ServiceWorker: Token refresh timer cleared');
-  }
-}
 
 // --- SurrealDB Logic ---
 
@@ -798,6 +828,11 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
   // Ensure SurrealDB is initialized first
   await initializeSurreal();
 
+  // 停止重连如果有新的连接配置
+  if (newConfig) {
+    stopReconnection();
+  }
+
   if (newConfig && connectionConfig) {
     // 检查配置变化的具体部分
     const endpointChanged = connectionConfig.endpoint !== newConfig.endpoint;
@@ -808,6 +843,8 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
     if (endpointChanged) {
       // endpoint 变化需要重新建立连接
       console.log("ServiceWorker: Endpoint changed, reconnecting...", connectionConfig.endpoint, '->', newConfig.endpoint);
+      stopConnectionHealthCheck();
+
       if (isConnected && db) {
         try {
           await db.close();
@@ -816,6 +853,7 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
         }
       }
       isConnected = false;
+      setConnectionState(ConnectionState.DISCONNECTED);
       connectionConfig = newConfig;
     } else if (namespaceChanged || databaseChanged) {
       // namespace 或 database 变化只需要重新执行 use 和 authenticate
@@ -829,20 +867,18 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
           await db.use({ namespace: newConfig.namespace, database: newConfig.database });
 
           // 重新认证
-          let token = storageGet('access_token');
+          await ensureTokenManager();
+          const token = await tokenManager!.getToken();
 
-          // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
-          if (!token) {
-            token = await storageGetAsync('access_token');
-          }
-
-          if (token) {
-            await db.authenticate(token);
+          if (token&&token.access_token) {
+            await db.authenticate(token.access_token);
             console.log("ServiceWorker: Re-authenticated after namespace/database change.");
           }
         } catch (e) {
           console.error("ServiceWorker: Failed to switch namespace/database:", e);
           isConnected = false;
+          setConnectionState(ConnectionState.ERROR, e as Error);
+          triggerReconnection();
         }
       }
       connectionConfig = newConfig;
@@ -852,19 +888,17 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
 
       if (isConnected && db) {
         try {
-          let token = storageGet('access_token');
+          await ensureTokenManager();
+          const token = await tokenManager!.getToken();
 
-          // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
-          if (!token) {
-            token = await storageGetAsync('access_token');
-          }
-
-          if (token) {
-            await db.authenticate(token);
+          if (token&&token.access_token) {
+            await db.authenticate(token.access_token);
             console.log("ServiceWorker: Re-authenticated with new auth info.");
           }
         } catch (e) {
           console.error("ServiceWorker: Re-authentication failed:", e);
+          setConnectionState(ConnectionState.ERROR, e as Error);
+          triggerReconnection();
         }
       }
       connectionConfig = newConfig;
@@ -879,54 +913,24 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
 
   if (!connectionConfig) {
     console.error("ServiceWorker: Connection config not set.");
+    setConnectionState(ConnectionState.ERROR);
     return false;
   }
 
   if (!isConnected) {
     try {
+      setConnectionState(ConnectionState.CONNECTING);
       console.log(`ServiceWorker: Connecting to ${connectionConfig.endpoint}...`);
-      await db!.connect(connectionConfig.endpoint);
-      await db!.use({ namespace: connectionConfig.namespace, database: connectionConfig.database });
 
-      // Re-authenticate if token is available
-      let token = storageGet('access_token');
-
-      // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
-      if (!token) {
-        token = await storageGetAsync('access_token');
-      }
-
-      if (token) {
-        try {
-          await db!.authenticate(token);
-          console.log("ServiceWorker: Re-authenticated successfully with stored token.");
-
-          // Setup token refresh if we have authentication info
-          let refreshToken = storageGet('refresh_token');
-          let expiresAt = storageGet('token_expires_at');
-
-          // 如果内存中没有，尝试从 WASM/IndexedDB 恢复
-          if (!refreshToken) {
-            refreshToken = await storageGetAsync('refresh_token');
-          }
-          if (!expiresAt) {
-            expiresAt = await storageGetAsync('token_expires_at');
-          }
-
-          if (refreshToken && expiresAt) {
-            setupTokenRefresh();
-          }
-        } catch (e) {
-          console.warn("ServiceWorker: Stored token authentication failed.", e);
-          storageSet('access_token', null); // Clear invalid token
-          storageSet('refresh_token', null);
-          storageSet('token_expires_at', null);
-          clearTokenRefresh();
-        }
-      }
+      // 使用带超时的连接
+      await connectWithTimeout();
 
       isConnected = true;
+      setConnectionState(ConnectionState.CONNECTED);
       console.log("ServiceWorker: Connection established.");
+
+      // 重置重连计数
+      reconnectAttempts = 0;
 
       // Resubscribe to all live queries
       await resubscribeAllLiveQueries();
@@ -934,6 +938,10 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
     } catch (e) {
       console.error("ServiceWorker: Connection failed.", e);
       isConnected = false;
+      setConnectionState(ConnectionState.ERROR, e as Error);
+
+      // 触发自动重连
+      triggerReconnection();
       return false;
     }
   }
@@ -942,18 +950,56 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
 
 async function resubscribeAllLiveQueries() {
   console.log("ServiceWorker: Resubscribing to all live queries...");
+  const subscriptionPromises: Promise<void>[] = [];
+
   for (const [uuid, sub] of liveQuerySubscriptions.entries()) {
-    try {
-      if (!db) throw new Error("Database not initialized");
-      await db.live(sub.query, (action, result) => {
+    const subscriptionPromise = (async () => {
+      try {
+        if (!db) throw new Error("Database not initialized");
+
+        // 重新创建 live query，使用原始的 uuid 作为标识
+        const newUuid = await db.live(sub.query, (action, result) => {
+          broadcastToClients({
+            type: 'live_update',
+            payload: { uuid, action, result }
+          }, sub.clients);
+        });
+
+        // 如果新的 UUID 与原来的不同，需要更新映射
+        if (String(newUuid) !== uuid) {
+          console.log(`ServiceWorker: Live query UUID changed from ${uuid} to ${newUuid}`);
+          // 创建新的订阅记录
+          liveQuerySubscriptions.set(String(newUuid), {
+            query: sub.query,
+            vars: sub.vars,
+            clients: sub.clients
+          });
+          // 删除旧的记录
+          liveQuerySubscriptions.delete(uuid);
+
+          // 通知客户端 UUID 变化
+          broadcastToClients({
+            type: 'live_query_uuid_changed',
+            payload: { oldUuid: uuid, newUuid: String(newUuid) }
+          }, sub.clients);
+        }
+
+        console.log(`ServiceWorker: Successfully resubscribed to live query ${uuid}`);
+      } catch (e) {
+        console.error(`ServiceWorker: Failed to resubscribe to live query ${uuid}`, e);
+
+        // 通知客户端重订阅失败
         broadcastToClients({
-          type: 'live_update',
-          payload: { uuid, action, result }
+          type: 'live_query_resubscribe_failed',
+          payload: { uuid, error: (e as Error).message }
         }, sub.clients);
-      });
-      console.log(`ServiceWorker: Successfully resubscribed to live query ${uuid}`);
-    } catch (e) {
-      console.error(`ServiceWorker: Failed to resubscribe to live query ${uuid}`, e);
-    }
+      }
+    })();
+
+    subscriptionPromises.push(subscriptionPromise);
   }
+
+  // 等待所有重订阅完成
+  await Promise.allSettled(subscriptionPromises);
+  console.log("ServiceWorker: Live queries resubscription completed");
 }

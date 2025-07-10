@@ -85,6 +85,16 @@ export interface SurrealWorkerAPI {
 
   // Token recovery
   recoverTokens(): Promise<void>;
+  
+  // Connection management
+  getConnectionState(): Promise<{
+    state: string;
+    isConnected: boolean;
+    isReconnecting: boolean;
+    reconnectAttempts: number;
+    endpoint?: string;
+  }>;
+  forceReconnect(): Promise<void>;
 }
 
 interface PendingMessage {
@@ -129,6 +139,32 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
       return;
     }
 
+    if (type === 'connection_state_changed') {
+      // Handle connection state changes
+      console.log('SurrealServiceWorkerClient: Connection state changed:', payload);
+      this.handleConnectionStateChange(payload);
+      return;
+    }
+
+    if (type === 'live_query_uuid_changed') {
+      // Handle live query UUID changes
+      const { oldUuid, newUuid } = payload;
+      const callback = this.liveQueryCallbacks.get(oldUuid);
+      if (callback) {
+        this.liveQueryCallbacks.delete(oldUuid);
+        this.liveQueryCallbacks.set(newUuid, callback);
+        console.log(`SurrealServiceWorkerClient: Live query UUID updated from ${oldUuid} to ${newUuid}`);
+      }
+      return;
+    }
+
+    if (type === 'live_query_resubscribe_failed') {
+      // Handle live query resubscription failures
+      const { uuid, error } = payload;
+      console.error(`SurrealServiceWorkerClient: Live query ${uuid} resubscription failed:`, error);
+      return;
+    }
+
     // Handle response messages
     if (messageId && this.pendingMessages.has(messageId)) {
       const pending = this.pendingMessages.get(messageId)!;
@@ -139,6 +175,28 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
       } else if (type.endsWith('_error')) {
         pending.reject(new Error(payload.message || 'Unknown error'));
       }
+    }
+  }
+
+  private handleConnectionStateChange(payload: any) {
+    const { state, previousState, error, timestamp } = payload;
+    
+    // 可以在这里添加自定义的连接状态处理逻辑
+    if (state === 'connected' && previousState !== 'connected') {
+      console.log('SurrealServiceWorkerClient: Connection established');
+    } else if (state === 'disconnected' || state === 'error') {
+      console.warn('SurrealServiceWorkerClient: Connection lost or error occurred', error);
+    } else if (state === 'reconnecting') {
+      console.log('SurrealServiceWorkerClient: Attempting to reconnect...');
+    }
+
+    // 发送自定义事件给应用程序其他部分
+    const event = new CustomEvent('surreal-connection-state-changed', {
+      detail: { state, previousState, error, timestamp }
+    });
+    
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(event);
     }
   }
 
@@ -374,6 +432,21 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
   // Token recovery
   async recoverTokens(): Promise<void> {
     await this.sendMessage('recover_tokens');
+  }
+
+  // Connection management
+  async getConnectionState(): Promise<{
+    state: string;
+    isConnected: boolean;
+    isReconnecting: boolean;
+    reconnectAttempts: number;
+    endpoint?: string;
+  }> {
+    return await this.sendMessage('get_connection_state');
+  }
+
+  async forceReconnect(): Promise<void> {
+    await this.sendMessage('force_reconnect');
   }
 }
 
