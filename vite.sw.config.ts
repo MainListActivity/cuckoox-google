@@ -3,7 +3,7 @@ import path from 'path'
 import topLevelAwait from 'vite-plugin-top-level-await'
 
 // 将import手动添加到文件开头 - 在所有插件处理完成后执行
-function prependImportToSwSurreal(): Plugin<any> {
+function prependImportToSwSurreal(): Plugin<unknown> {
   return {
     name: `prepend-import-to-sw-surreal`,
     enforce: 'post', // 确保在所有其他插件之后执行
@@ -64,6 +64,6 @@ export default defineConfig({
   ],
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-    'import.meta.url': '"https://unpkg.com/\@surrealdb/wasm\@1.4.1/dist/surreal/"',
+    'import.meta.url': '"https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/"',
   }
 })

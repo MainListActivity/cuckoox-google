@@ -82,7 +82,7 @@ export interface SurrealWorkerAPI {
     auth?: AnyAuth;
   }): Promise<void>;
   close(): Promise<void>;
-  
+
   // Token recovery
   recoverTokens(): Promise<void>;
 }
@@ -178,24 +178,81 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     }
 
     try {
+
       // Register the service worker
       const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`, { type: 'module' });
-      
-      // Wait for the service worker to be ready
-      await navigator.serviceWorker.ready;
-      
+
+      // Try to get a service worker instance right away
       this.serviceWorker = registration.active || registration.waiting || registration.installing;
-      
-      if (!this.serviceWorker) {
-        throw new Error('Service Worker registration failed');
+
+      if (this.serviceWorker) {
+        return this.serviceWorker;
       }
 
-      console.log('SurrealServiceWorkerClient: Service Worker registered successfully');
-      return this.serviceWorker;
+      // If no service worker available, use a more robust waiting mechanism
+      await this.waitForServiceWorkerWithRetry(registration);
+
+      return this.serviceWorker!;
     } catch (error) {
       console.error('SurrealServiceWorkerClient: Service Worker registration failed:', error);
       throw error;
     }
+  }
+
+  private async waitForServiceWorkerWithRetry(registration: ServiceWorkerRegistration): Promise<void> {
+    const maxRetries = 5;
+    const baseDelay = 1000; // 1 second
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        console.log(`SurrealServiceWorkerClient: Attempt ${attempt + 1} to get service worker`);
+
+        // Check if we have a service worker now
+        this.serviceWorker = registration.active || registration.waiting || registration.installing;
+
+        if (this.serviceWorker) {
+          console.log(`SurrealServiceWorkerClient: Got service worker on attempt ${attempt + 1}`);
+          return;
+        }
+
+        // Wait for the service worker to be ready with a shorter timeout
+        const readyPromise = navigator.serviceWorker.ready;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Service Worker ready timeout')), 3000);
+        });
+
+        await Promise.race([readyPromise, timeoutPromise]);
+
+        // Check again after ready
+        this.serviceWorker = registration.active || registration.waiting || registration.installing;
+
+        if (this.serviceWorker) {
+          console.log(`SurrealServiceWorkerClient: Service worker ready on attempt ${attempt + 1}`);
+          return;
+        }
+
+        // If this is not the last attempt, wait before retrying
+        if (attempt < maxRetries - 1) {
+          const delay = baseDelay * Math.pow(2, attempt);
+          console.log(`SurrealServiceWorkerClient: Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      } catch (error) {
+        console.warn(`SurrealServiceWorkerClient: Attempt ${attempt + 1} failed:`, error);
+
+        // If this is the last attempt, throw the error
+        if (attempt === maxRetries - 1) {
+          throw error;
+        }
+
+        // Wait before retrying
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.log(`SurrealServiceWorkerClient: Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+
+    throw new Error('Failed to get service worker after multiple attempts');
   }
 
   private async sendMessage(type: string, payload?: any): Promise<any> {
@@ -238,9 +295,9 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
   }
 
   async authenticate(token: string, refreshToken?: string, expiresIn?: number, tenantCode?: string): Promise<void> {
-    await this.sendMessage('authenticate', { 
-      token, 
-      refresh_token: refreshToken, 
+    await this.sendMessage('authenticate', {
+      token,
+      refresh_token: refreshToken,
       expires_in: expiresIn,
       tenant_code: tenantCode
     });
@@ -289,10 +346,10 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
   async live(query: string, callback: (action: string, result: any) => void, vars?: Record<string, unknown>): Promise<string> {
     const result = await this.sendMessage('live', { query, vars });
     const uuid = result.uuid;
-    
+
     // Store the callback for this live query
     this.liveQueryCallbacks.set(uuid, callback);
-    
+
     return uuid;
   }
 
