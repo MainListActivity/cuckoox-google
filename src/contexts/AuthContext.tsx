@@ -5,6 +5,7 @@ import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb';
 import { menuService } from '@/src/services/menuService';
 import { checkTenantCodeAndRedirect } from '@/src/lib/surrealClient';
+import { userPersonalDataService } from '@/src/services/userPersonalDataService';
 
 // Matches AppUser in authService and user table in SurrealDB
 export interface AppUser {
@@ -172,7 +173,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Handle the current backend response which returns 501 Not Implemented
       if (response.status === 501) {
         console.warn('Token refresh not yet implemented on backend:', data.message);
-        clearAuthState();//Token过期且无法刷新的情况下，直接重新登录
+        await clearAuthState();//Token过期且无法刷新的情况下，直接重新登录
         return false;
       }
 
@@ -208,7 +209,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!checkTenantCodeAndRedirect()) {
         // 租户代码丢失，用户已被重定向到登录页面
         console.log('Tenant code missing, user redirected to login');
-        clearAuthState();
+        await clearAuthState();
         return;
       }
       
@@ -226,7 +227,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (!success) {
           console.error('Failed to refresh token, logging out user');
           // Don't call logout here to avoid potential infinite loops
-          clearAuthState();
+          await clearAuthState();
         }
       }
     };
@@ -267,7 +268,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (!checkTenantCodeAndRedirect()) {
               // 租户代码丢失，清除状态并退出
               if (isMounted) {
-                clearAuthState();
+                await clearAuthState();
                 setIsLoading(false);
               }
               return;
@@ -338,16 +339,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }
             } else {
               console.warn(`User ${githubId} found in OIDC but not in DB. Logging out.`);
-              if (isMounted) clearAuthState();
+              if (isMounted) await clearAuthState();
             }
           } else {
             // 没有有效的会话
-            if (isMounted) clearAuthState();
+            if (isMounted) await clearAuthState();
           }
         }
       } catch (error) {
         console.error("Error checking current user session:", error);
-        if (isMounted) clearAuthState();
+        if (isMounted) await clearAuthState();
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -360,7 +361,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, []); // Empty dependency array is correct here
 
-  const clearAuthState = () => {
+  const clearAuthState = async () => {
+    const currentUser = user;
     setUser(null);
     setOidcUser(null);
     setIsLoggedIn(false);
@@ -375,6 +377,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('cuckoox-selectedCaseId');
     // 清理租户代码
     localStorage.removeItem('tenant_code');
+    
+    // 清除用户个人数据缓存
+    try {
+      if (currentUser?.id) {
+        await userPersonalDataService.clearUserPersonalData(currentUser.id.toString());
+      }
+    } catch (error) {
+      console.warn('Failed to clear user personal data cache:', error);
+    }
   };
 
   const initializeUserSession = async (appUser: AppUser, oidcUserInstance?: OidcUser | null) => {
@@ -453,6 +464,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setSelectedCaseId(null);
         localStorage.removeItem('cuckoox-selectedCaseId');
         setNavMenuItems([]); // Clear menu if no case is selected after loading
+      }
+      
+      // 同步用户个人数据到本地缓存
+      try {
+        await userPersonalDataService.syncUserPersonalData(
+          currentAppUser.id.toString(),
+          caseToSelect?.toString()
+        );
+      } catch (error) {
+        console.warn('Failed to sync user personal data to Service Worker:', error);
       }
 
     } catch (error) {
@@ -599,6 +620,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (user?.id) {
         await updateLastSelectedCaseInDB(user.id, recordId);
       }
+      
+      // 同步用户个人数据到本地缓存
+      try {
+        await userPersonalDataService.syncUserPersonalData(
+          user.id.toString(),
+          recordId.toString()
+        );
+      } catch (error) {
+        console.warn('Failed to sync user personal data to Service Worker:', error);
+      }
 
     } catch (error) {
       console.error(`Error selecting case ${recordId}:`, error);
@@ -617,7 +648,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 检查是否有用户会话
     if (!user) {
       console.warn("Logout called without a user session.");
-      clearAuthState();
+      await clearAuthState();
       setIsLoading(false);
       return;
     }
@@ -629,7 +660,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       // 统一先清理本地存储和状态
-      clearAuthState();
+      await clearAuthState();
 
       // 根据用户类型执行不同的登出操作
       if (isAdmin) {

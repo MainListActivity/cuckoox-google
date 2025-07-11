@@ -39,6 +39,7 @@ This is a legal case management system with the following key architectural comp
 - **Authentication**: OIDC (OpenID Connect)
 - **State Management**: React Context + TanStack Query
 - **Rich Text Editor**: Quill.js-based custom editor with collaboration features
+- **Data Caching**: Service Worker-based universal data table caching system
 
 ### Key Directories
 - `src/components/` - Reusable UI components
@@ -48,8 +49,19 @@ This is a legal case management system with the following key architectural comp
 - `src/pages/` - Route-based page components following file-based routing
 - `src/contexts/` - React Context providers (Auth, Theme, Layout, etc.)
 - `src/services/` - API service layers
+  - `userPersonalDataService.ts` - User personal data management service
+  - `pageDataCacheService.ts` - Page data caching service
+  - `incrementalSyncService.ts` - Incremental data synchronization service
+  - `bidirectionalSyncService.ts` - Bidirectional data synchronization service
 - `src/workers/` - service worker代码
+  - `sw-surreal.ts` - Service Worker main file
+  - `data-cache-manager.ts` - Universal data cache manager
+  - `token-manager.ts` - Token management
 - `src/hooks/` - Custom React hooks
+  - `useUserPersonalData.ts` - User personal data hooks
+  - `usePageDataCache.ts` - Page data caching hooks
+  - `usePageCacheManager.ts` - Page cache manager hooks
+  - `usePermission.ts` - Permission checking hooks (based on new cache architecture)
 - `tests/unit/` - Unit tests (Vitest + Testing Library)
 - `e2e/` - End-to-end tests (Playwright)
 
@@ -64,10 +76,11 @@ This is a legal case management system with the following key architectural comp
 ### Key Features
 - Real-time collaborative rich text editor
 - Case and claim management workflow
-- Role-based access control
+- Role-based access control (implemented through data caching system)
 - Document collaboration and version control
 - Multi-language support
 - Responsive design with theming support
+- Intelligent data caching and synchronization system
 
 ## Important Notes
 - Uses Bun as package manager instead of npm/yarn
@@ -75,9 +88,17 @@ This is a legal case management system with the following key architectural comp
 - Strict TypeScript configuration with experimental decorators
 - E2E tests require Playwright browser installation
 - Uses CSS custom properties for theming integration MUI
+- ts的类型错误尽量不要使用 `as any`来修复，应当在`typs.d.ts` 或 `index.d.ts` 中定义类型
 - 在涉及到surreal的方法、存储代码中尽可能使用`RecordId`而不是`string`
 - 不要尝试运行 bun run dev 判断代码是否可运行，lint检查通过并且单元测试通过就可完成任务
 - 使用service worker在后台保持与surrealdb的连接状态，所有页面与service worker通信获取数据
+- 数据库的权限全部由surrealdb数据库控制，这意味着当我们需要查询数据时，只需要加上用户输入的条件，比如查询案件时： `select * from case`，当用户输入关键字搜索： `select * form case where 'fox' IN name`;
+- 已实现完整的数据缓存架构，包含两种缓存策略：
+  - 持久化缓存：用户个人信息（权限、菜单、操作按钮等），登录时缓存，退出时清除
+  - 临时缓存：页面数据，进入页面时订阅，离开页面时取消订阅
+- 支持增量数据同步，基于更新时间获取变更数据
+- 支持双向数据同步，本地和远程数据库同时修改时自动同步
+- 权限检查现在基于本地缓存的用户个人数据，提供更快的响应速度
 
 
 # CuckooX Rust 项目结构指南

@@ -43,6 +43,8 @@ const eventHandlers = {
           await initializeLocalSurrealDB();
           // 初始化 TokenManager
           await initializeTokenManager();
+          // 初始化 DataCacheManager
+          await initializeDataCacheManager();
           // Service Worker 激活后，主动同步 localStorage 中的 token
           await syncTokensFromLocalStorage();
         } catch (e) {
@@ -62,6 +64,13 @@ const eventHandlers = {
       if (tokenManager) {
         await tokenManager.close();
         tokenManager = null;
+      }
+      
+      
+      // 关闭 DataCacheManager
+      if (dataCacheManager) {
+        await dataCacheManager.close();
+        dataCacheManager = null;
       }
       
       // 关闭本地数据库
@@ -303,6 +312,219 @@ const eventHandlers = {
           break;
         }
 
+
+        // 用户个人数据管理相关消息
+        case 'sync_user_personal_data': {
+          await ensureDataCacheManager();
+          const { userId, caseId, personalData } = payload;
+          
+          // 使用持久化缓存策略存储用户个人数据
+          await dataCacheManager!.subscribePersistent(
+            ['user_personal_data'],
+            userId,
+            caseId,
+            {
+              enableLiveQuery: true,
+              enableIncrementalSync: true,
+              syncInterval: 5 * 60 * 1000, // 5分钟
+              expirationMs: 24 * 60 * 60 * 1000 // 24小时
+            }
+          );
+          
+          // 直接缓存个人数据
+          await dataCacheManager!.cachePersonalData(userId, caseId, personalData);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'get_user_personal_data': {
+          await ensureDataCacheManager();
+          const { userId, caseId } = payload;
+          
+          const personalData = await dataCacheManager!.getPersonalData(userId, caseId);
+          respond({ personalData });
+          break;
+        }
+
+        case 'clear_user_personal_data': {
+          await ensureDataCacheManager();
+          const { userId, caseId } = payload;
+          
+          await dataCacheManager!.clearPersonalData(userId, caseId);
+          respond({ success: true });
+          break;
+        }
+
+        // 页面数据缓存管理相关消息
+        case 'subscribe_page_data': {
+          await ensureDataCacheManager();
+          const { tables, userId, caseId, config } = payload;
+          
+          // 使用临时缓存策略订阅页面数据
+          await dataCacheManager!.subscribeTemporary(tables, userId, caseId, config);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'unsubscribe_page_data': {
+          await ensureDataCacheManager();
+          const { tables, userId, caseId } = payload;
+          
+          // 取消临时缓存订阅
+          await dataCacheManager!.unsubscribe(tables, 'temporary', userId, caseId);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'query_cached_data': {
+          await ensureDataCacheManager();
+          const { table, query, params, userId, caseId } = payload;
+          
+          const data = await dataCacheManager!.queryCache(table, query, params, userId, caseId);
+          respond({ data });
+          break;
+        }
+
+        case 'update_cached_data': {
+          await ensureDataCacheManager();
+          const { table, recordId, data, userId, caseId } = payload;
+          
+          const result = await dataCacheManager!.updateData(table, recordId, data, userId, caseId);
+          respond({ result });
+          break;
+        }
+
+        case 'clear_table_cache': {
+          await ensureDataCacheManager();
+          const { table, userId, caseId } = payload;
+          
+          await dataCacheManager!.clearTableCache(table, userId, caseId);
+          respond({ success: true });
+          break;
+        }
+
+        case 'clear_all_cache': {
+          await ensureDataCacheManager();
+          await dataCacheManager!.clearAllCache();
+          respond({ success: true });
+          break;
+        }
+
+        case 'cache_query_result': {
+          await ensureDataCacheManager();
+          const { table, query, params, result, userId, caseId } = payload;
+          
+          // 直接缓存查询结果
+          await dataCacheManager!.cacheData(table, result, 'temporary', userId, caseId);
+          
+          respond({ success: true });
+          break;
+        }
+
+        // 增量同步相关消息
+        case 'process_incremental_update': {
+          await ensureDataCacheManager();
+          const { update, conflictResolution } = payload;
+          
+          // 处理增量更新
+          await processIncrementalUpdate(update, conflictResolution);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'create_sync_record': {
+          await ensureDataCacheManager();
+          const { syncRecord } = payload;
+          
+          // 创建同步记录
+          await createSyncRecord(syncRecord);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'get_sync_record': {
+          await ensureDataCacheManager();
+          const { table, userId, caseId } = payload;
+          
+          // 获取同步记录
+          const syncRecord = await getSyncRecord(table, userId, caseId);
+          
+          respond({ syncRecord });
+          break;
+        }
+
+        case 'update_sync_record': {
+          await ensureDataCacheManager();
+          const { syncRecordId, lastSyncTimestamp, lastSyncId, status } = payload;
+          
+          // 更新同步记录
+          await updateSyncRecord(syncRecordId, lastSyncTimestamp, lastSyncId, status);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'update_sync_status': {
+          await ensureDataCacheManager();
+          const { syncRecordId, status, lastSyncTimestamp, errorMessage } = payload;
+          
+          // 更新同步状态
+          await updateSyncStatus(syncRecordId, status, lastSyncTimestamp, errorMessage);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'clear_sync_records': {
+          await ensureDataCacheManager();
+          const { tables, userId, caseId } = payload;
+          
+          // 清除同步记录
+          await clearSyncRecords(tables, userId, caseId);
+          
+          respond({ success: true });
+          break;
+        }
+
+        // 双向同步相关消息
+        case 'persist_offline_queue': {
+          await ensureDataCacheManager();
+          const { syncKey, queue } = payload;
+          
+          // 持久化离线队列
+          await persistOfflineQueue(syncKey, queue);
+          
+          respond({ success: true });
+          break;
+        }
+
+        case 'restore_offline_queue': {
+          await ensureDataCacheManager();
+          const { syncKey } = payload;
+          
+          // 恢复离线队列
+          const queue = await restoreOfflineQueue(syncKey);
+          
+          respond({ queue });
+          break;
+        }
+
+        case 'clear_offline_queue': {
+          await ensureDataCacheManager();
+          const { syncKey } = payload;
+          
+          // 清除离线队列
+          await clearOfflineQueue(syncKey);
+          
+          respond({ success: true });
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -324,6 +546,7 @@ console.log("Service Worker event listeners registered");
 
 import { Surreal, RecordId } from 'surrealdb';
 import { TokenManager, TokenInfo } from './token-manager';
+import { DataCacheManager } from './data-cache-manager';
 
 // 获取WASM引擎的函数
 async function getWasmEngines() {
@@ -367,6 +590,7 @@ let db: Surreal | null = null;
 // 本地 SurrealDB WASM 实例 (单例)
 let localDb: Surreal | null = null; 
 let tokenManager: TokenManager | null = null;
+let dataCacheManager: DataCacheManager | null = null;
 let isConnected = false;
 let isLocalDbInitialized = false;
 let connectionConfig: {
@@ -759,6 +983,44 @@ async function ensureTokenManager(): Promise<void> {
 }
 
 
+/**
+ * 初始化 DataCacheManager
+ */
+async function initializeDataCacheManager(): Promise<void> {
+  if (dataCacheManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing DataCacheManager...');
+
+    // 先初始化本地数据库
+    await initializeLocalSurrealDB();
+    
+    // 创建 DataCacheManager 实例
+    dataCacheManager = new DataCacheManager({
+      localDb: localDb!,
+      remoteDb: db || undefined,
+      broadcastToAllClients: broadcastToAllClients,
+      defaultExpirationMs: 60 * 60 * 1000 // 1小时
+    });
+
+    await dataCacheManager.initialize();
+    console.log('ServiceWorker: DataCacheManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize DataCacheManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 DataCacheManager 已初始化
+ */
+async function ensureDataCacheManager(): Promise<void> {
+  if (!dataCacheManager) {
+    await initializeDataCacheManager();
+  }
+}
+
+
 
 
 // --- Helper Functions ---
@@ -1049,4 +1311,330 @@ async function resubscribeAllLiveQueries() {
   // 等待所有重订阅完成
   await Promise.allSettled(subscriptionPromises);
   console.log("ServiceWorker: Live queries resubscription completed");
+}
+
+// --- 增量同步辅助函数 ---
+
+/**
+ * 处理增量更新
+ */
+async function processIncrementalUpdate(
+  update: any,
+  conflictResolution: 'local' | 'remote' | 'timestamp'
+): Promise<void> {
+  try {
+    console.log('ServiceWorker: Processing incremental update:', update);
+    
+    // 获取本地数据
+    const localData = await dataCacheManager!.queryCache(
+      update.table_name,
+      `SELECT * FROM ${update.table_name} WHERE id = $id`,
+      { id: update.id }
+    );
+    
+    const hasLocalData = localData && localData.length > 0;
+    
+    // 处理不同的操作类型
+    switch (update.operation) {
+      case 'insert':
+        if (!hasLocalData) {
+          // 直接插入新数据
+          await dataCacheManager!.cacheData(
+            update.table_name,
+            [update.data],
+            'temporary'
+          );
+        } else {
+          // 存在冲突，根据策略处理
+          await handleConflict(update, localData[0], conflictResolution);
+        }
+        break;
+        
+      case 'update':
+        if (hasLocalData) {
+          // 检查版本冲突
+          const localVersion = localData[0].version || 0;
+          const remoteVersion = update.version || 0;
+          
+          if (remoteVersion > localVersion) {
+            // 远程版本更新，直接更新
+            await dataCacheManager!.updateData(
+              update.table_name,
+              update.id,
+              update.data
+            );
+          } else if (remoteVersion < localVersion) {
+            // 本地版本更新，根据策略处理
+            await handleConflict(update, localData[0], conflictResolution);
+          }
+          // 版本相同，不需要更新
+        } else {
+          // 本地没有数据，直接插入
+          await dataCacheManager!.cacheData(
+            update.table_name,
+            [update.data],
+            'temporary'
+          );
+        }
+        break;
+        
+      case 'delete':
+        if (hasLocalData) {
+          // 删除本地数据
+          await dataCacheManager!.clearTableCache(
+            update.table_name,
+            update.data.user_id,
+            update.data.case_id
+          );
+        }
+        break;
+    }
+    
+    // 广播更新事件
+    await broadcastToAllClients({
+      type: 'incremental_update_processed',
+      payload: {
+        table: update.table_name,
+        operation: update.operation,
+        recordId: update.id,
+        timestamp: Date.now()
+      }
+    });
+    
+  } catch (error) {
+    console.error('ServiceWorker: Error processing incremental update:', error);
+    throw error;
+  }
+}
+
+/**
+ * 处理冲突
+ */
+async function handleConflict(
+  remoteUpdate: any,
+  localData: any,
+  conflictResolution: 'local' | 'remote' | 'timestamp'
+): Promise<void> {
+  console.log('ServiceWorker: Handling conflict with strategy:', conflictResolution);
+  
+  switch (conflictResolution) {
+    case 'local':
+      // 保留本地数据，忽略远程更新
+      console.log('ServiceWorker: Keeping local data, ignoring remote update');
+      break;
+      
+    case 'remote':
+      // 使用远程数据覆盖本地数据
+      console.log('ServiceWorker: Using remote data, overwriting local');
+      await dataCacheManager!.updateData(
+        remoteUpdate.table_name,
+        remoteUpdate.id,
+        remoteUpdate.data
+      );
+      break;
+      
+    case 'timestamp':
+      // 根据时间戳决定使用哪个版本
+      const localTimestamp = new Date(localData.updated_at).getTime();
+      const remoteTimestamp = new Date(remoteUpdate.updated_at).getTime();
+      
+      if (remoteTimestamp > localTimestamp) {
+        console.log('ServiceWorker: Remote data is newer, using remote');
+        await dataCacheManager!.updateData(
+          remoteUpdate.table_name,
+          remoteUpdate.id,
+          remoteUpdate.data
+        );
+      } else {
+        console.log('ServiceWorker: Local data is newer, keeping local');
+      }
+      break;
+  }
+}
+
+/**
+ * 创建同步记录
+ */
+async function createSyncRecord(syncRecord: any): Promise<void> {
+  try {
+    await localDb!.create('sync_record', syncRecord);
+    console.log('ServiceWorker: Created sync record:', syncRecord.id);
+  } catch (error) {
+    console.error('ServiceWorker: Error creating sync record:', error);
+    throw error;
+  }
+}
+
+/**
+ * 获取同步记录
+ */
+async function getSyncRecord(
+  table: string,
+  userId: string,
+  caseId?: string
+): Promise<any> {
+  try {
+    const recordId = `sync_record:${table}_${userId}_${caseId || 'global'}`;
+    const result = await localDb!.select(recordId);
+    return result || null;
+  } catch (error) {
+    console.error('ServiceWorker: Error getting sync record:', error);
+    return null;
+  }
+}
+
+/**
+ * 更新同步记录
+ */
+async function updateSyncRecord(
+  syncRecordId: any,
+  lastSyncTimestamp: number,
+  lastSyncId?: string,
+  status?: string
+): Promise<void> {
+  try {
+    const updateData: any = {
+      last_sync_timestamp: lastSyncTimestamp,
+      updated_at: new Date()
+    };
+    
+    if (lastSyncId) {
+      updateData.last_sync_id = lastSyncId;
+    }
+    
+    if (status) {
+      updateData.sync_status = status;
+    }
+    
+    await localDb!.update(syncRecordId, updateData);
+    console.log('ServiceWorker: Updated sync record:', syncRecordId);
+  } catch (error) {
+    console.error('ServiceWorker: Error updating sync record:', error);
+    throw error;
+  }
+}
+
+/**
+ * 更新同步状态
+ */
+async function updateSyncStatus(
+  syncRecordId: any,
+  status: string,
+  lastSyncTimestamp?: number,
+  errorMessage?: string
+): Promise<void> {
+  try {
+    const updateData: any = {
+      sync_status: status,
+      updated_at: new Date()
+    };
+    
+    if (lastSyncTimestamp) {
+      updateData.last_sync_timestamp = lastSyncTimestamp;
+    }
+    
+    if (errorMessage) {
+      updateData.error_message = errorMessage;
+    }
+    
+    // 如果状态是失败，增加重试次数
+    if (status === 'failed') {
+      const currentRecord = await localDb!.select(syncRecordId);
+      updateData.retry_count = ((currentRecord as any)?.retry_count || 0) + 1;
+    }
+    
+    await localDb!.update(syncRecordId, updateData);
+    console.log('ServiceWorker: Updated sync status:', syncRecordId, status);
+  } catch (error) {
+    console.error('ServiceWorker: Error updating sync status:', error);
+    throw error;
+  }
+}
+
+/**
+ * 清除同步记录
+ */
+async function clearSyncRecords(
+  tables: string[],
+  userId: string,
+  caseId?: string
+): Promise<void> {
+  try {
+    for (const table of tables) {
+      const recordId = `sync_record:${table}_${userId}_${caseId || 'global'}`;
+      await localDb!.delete(recordId);
+    }
+    console.log('ServiceWorker: Cleared sync records for tables:', tables);
+  } catch (error) {
+    console.error('ServiceWorker: Error clearing sync records:', error);
+    throw error;
+  }
+}
+
+// --- 双向同步辅助函数 ---
+
+/**
+ * 持久化离线队列
+ */
+async function persistOfflineQueue(syncKey: string, queue: any[]): Promise<void> {
+  try {
+    const queueRecord = {
+      id: new RecordId('offline_queue', syncKey),
+      sync_key: syncKey,
+      queue_data: queue,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    
+    await localDb!.create('offline_queue', queueRecord);
+    console.log('ServiceWorker: Persisted offline queue for sync key:', syncKey);
+  } catch (error) {
+    // 如果创建失败，尝试更新
+    try {
+      const queueRecord = {
+        queue_data: queue,
+        updated_at: new Date()
+      };
+      
+      await localDb!.update(new RecordId('offline_queue', syncKey), queueRecord);
+      console.log('ServiceWorker: Updated offline queue for sync key:', syncKey);
+    } catch (updateError) {
+      console.error('ServiceWorker: Error persisting offline queue:', updateError);
+      throw updateError;
+    }
+  }
+}
+
+/**
+ * 恢复离线队列
+ */
+async function restoreOfflineQueue(syncKey: string): Promise<any[]> {
+  try {
+    const recordId = new RecordId('offline_queue', syncKey);
+    const result = await localDb!.select(recordId);
+    
+    if (result && (result as any).queue_data) {
+      console.log('ServiceWorker: Restored offline queue for sync key:', syncKey);
+      return (result as any).queue_data;
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('ServiceWorker: Error restoring offline queue:', error);
+    return [];
+  }
+}
+
+/**
+ * 清除离线队列
+ */
+async function clearOfflineQueue(syncKey: string): Promise<void> {
+  try {
+    const recordId = new RecordId('offline_queue', syncKey);
+    await localDb!.delete(recordId);
+    console.log('ServiceWorker: Cleared offline queue for sync key:', syncKey);
+  } catch (error) {
+    console.error('ServiceWorker: Error clearing offline queue:', error);
+    throw error;
+  }
 }

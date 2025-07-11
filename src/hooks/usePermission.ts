@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useUserPersonalData } from './useUserPersonalData';
 
 export interface PermissionCheckResult {
   hasPermission: boolean;
@@ -15,74 +15,35 @@ export interface PermissionCheckResult {
  */
 export function useOperationPermission(operationId: string): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client, handleSessionError } = useSurreal();
+  const { data: personalData, isLoading, error } = useUserPersonalData();
   const [hasPermission, setHasPermission] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
-    const checkPermission = async () => {
-      if (!user || !operationId) {
-        setHasPermission(false);
-        setIsLoading(false);
-        return;
-      }
-
-      // 管理员拥有所有权限
-      if (user.github_id === '--admin--') {
-        setHasPermission(true);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // 使用图查询检查用户是否有操作权限
-        // 查询用户的全局角色和案件角色中是否有权限执行该操作
-        const query = `
-          LET $global_roles = (SELECT out FROM $user_id->has_role);
-          LET $case_roles = IF $case_id THEN 
-            (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-          ELSE [];
-          END;
-          LET $all_roles = array::concat($global_roles, $case_roles);
-          
-          SELECT * FROM (
-            SELECT * FROM $all_roles->can_execute_operation 
-            WHERE out.operation_id = $operation_id 
-              AND can_execute = true 
-              AND out.is_active = true
-          ) LIMIT 1;
-        `;
-        
-        const result = await client.query(query, {
-          user_id: user.id,
-          case_id: selectedCaseId || null,
-          operation_id: operationId
-        });
-
-        const hasResult = !!(result && result.length > 0);
-        setHasPermission(hasResult);
-      } catch (err) {
-        console.error('Error checking operation permission:', err);
-        
-        // 检查是否为认证错误(session/token过期)并处理
-        const isSessionError = await handleSessionError(err);
-        if (!isSessionError) {
-          // 如果不是认证错误，设置一般错误状态
-          setError(err instanceof Error ? err.message : 'Unknown error');
-        }
-        setHasPermission(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkPermission();
-  }, [user, operationId, selectedCaseId, client, handleSessionError]);
-
+    if (!user || !operationId) {
+      setHasPermission(false);
+      return;
+    }
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      setHasPermission(true);
+      return;
+    }
+    
+    if (personalData && personalData.permissions) {
+      // 检查操作权限
+      const operationPermissions = personalData.permissions.operations || [];
+      const hasOp = operationPermissions.some(op => 
+        op.operation_id === operationId && 
+        op.can_execute &&
+        (!selectedCaseId || op.case_id === selectedCaseId || !op.case_id)
+      );
+      setHasPermission(hasOp);
+    } else {
+      setHasPermission(false);
+    }
+  }, [user, operationId, selectedCaseId, personalData]);
+  
   return { hasPermission, isLoading, error };
 }
 
@@ -93,74 +54,35 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
  */
 export function useMenuPermission(menuId: string): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client, handleSessionError } = useSurreal();
+  const { data: personalData, isLoading, error } = useUserPersonalData();
   const [hasPermission, setHasPermission] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
-    const checkPermission = async () => {
-      if (!user || !menuId) {
-        setHasPermission(false);
-        setIsLoading(false);
-        return;
-      }
-
-      // 管理员拥有所有权限
-      if (user.github_id === '--admin--') {
-        setHasPermission(true);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // 使用图查询检查用户是否有菜单权限
-        // 查询用户的全局角色和案件角色中是否有权限访问该菜单
-        const query = `
-          LET $global_roles = (SELECT out FROM $user_id->has_role);
-          LET $case_roles = IF $case_id THEN 
-            (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-          ELSE [];
-          END;
-          LET $all_roles = array::concat($global_roles, $case_roles);
-          
-          SELECT * FROM (
-            SELECT * FROM $all_roles->can_access_menu 
-            WHERE out.menu_id = $menu_id 
-              AND can_access = true 
-              AND out.is_active = true
-          ) LIMIT 1;
-        `;
-        
-        const result = await client.query(query, {
-          user_id: user.id,
-          case_id: selectedCaseId || null,
-          menu_id: menuId
-        });
-
-        const hasResult = !!(result && result.length > 0);
-        setHasPermission(hasResult);
-      } catch (err) {
-        console.error('Error checking menu permission:', err);
-        
-        // 检查是否为认证错误(session/token过期)并处理
-        const isSessionError = await handleSessionError(err);
-        if (!isSessionError) {
-          // 如果不是认证错误，设置一般错误状态
-          setError(err instanceof Error ? err.message : 'Unknown error');
-        }
-        setHasPermission(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkPermission();
-  }, [user, menuId, selectedCaseId, client, handleSessionError]);
-
+    if (!user || !menuId) {
+      setHasPermission(false);
+      return;
+    }
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      setHasPermission(true);
+      return;
+    }
+    
+    if (personalData && personalData.permissions) {
+      // 检查菜单权限
+      const menuPermissions = personalData.permissions.menus || [];
+      const hasMenu = menuPermissions.some(menu => 
+        menu.menu_id === menuId && 
+        menu.can_access &&
+        (!selectedCaseId || menu.case_id === selectedCaseId || !menu.case_id)
+      );
+      setHasPermission(hasMenu);
+    } else {
+      setHasPermission(false);
+    }
+  }, [user, menuId, selectedCaseId, personalData]);
+  
   return { hasPermission, isLoading, error };
 }
 
@@ -175,74 +97,36 @@ export function useDataPermission(
   crudType: 'create' | 'read' | 'update' | 'delete'
 ): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client, handleSessionError } = useSurreal();
+  const { data: personalData, isLoading, error } = useUserPersonalData();
   const [hasPermission, setHasPermission] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
-    const checkPermission = async () => {
-      if (!user || !tableName) {
-        setHasPermission(false);
-        setIsLoading(false);
-        return;
-      }
-
-      // 管理员拥有所有权限
-      if (user.github_id === '--admin--') {
-        setHasPermission(true);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        // 使用SurrealDB内置的权限系统进行数据权限检查
-        // 尝试执行一个简单的查询来测试权限
-        let testQuery = '';
-        switch (crudType) {
-          case 'read':
-            testQuery = `SELECT * FROM ${tableName} WHERE false LIMIT 0`;
-            break;
-          case 'create':
-            // 对于创建权限，我们检查表的权限定义
-            testQuery = `SELECT * FROM ONLY ${tableName} WHERE false LIMIT 0`;
-            break;
-          case 'update':
-          case 'delete':
-            // 对于更新和删除，检查是否能查询到记录（基础权限）
-            testQuery = `SELECT * FROM ${tableName} WHERE false LIMIT 0`;
-            break;
-        }
-
-        await client.query(testQuery);
-        // 如果查询成功执行（没有抛出权限错误），则说明有权限
-        setHasPermission(true);
-      } catch (err: unknown) {
-        // 首先检查是否为认证错误(session/token过期)
-        const isSessionError = await handleSessionError(err);
-        if (!isSessionError) {
-          // 检查是否是权限错误
-          if (err instanceof Error && err.message && err.message.includes('permission')) {
-            setHasPermission(false);
-          } else {
-            console.error('Error checking data permission:', err);
-            setError(err instanceof Error ? err.message : 'Unknown error');
-            setHasPermission(false);
-          }
-        } else {
-          setHasPermission(false);
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkPermission();
-  }, [user, tableName, crudType, selectedCaseId, client, handleSessionError]);
-
+    if (!user || !tableName) {
+      setHasPermission(false);
+      return;
+    }
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      setHasPermission(true);
+      return;
+    }
+    
+    if (personalData && personalData.permissions) {
+      // 检查数据权限
+      const dataPermissions = personalData.permissions.data || [];
+      const hasData = dataPermissions.some(data => 
+        data.table_name === tableName && 
+        data.crud_type === crudType &&
+        data.can_access &&
+        (!selectedCaseId || data.case_id === selectedCaseId || !data.case_id)
+      );
+      setHasPermission(hasData);
+    } else {
+      setHasPermission(false);
+    }
+  }, [user, tableName, crudType, selectedCaseId, personalData]);
+  
   return { hasPermission, isLoading, error };
 }
 
@@ -252,59 +136,184 @@ export function useDataPermission(
  */
 export function useUserRoles() {
   const { user, selectedCaseId } = useAuth();
-  const { surreal: client, handleSessionError } = useSurreal();
+  const { data: personalData, isLoading, error } = useUserPersonalData();
   const [roles, setRoles] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
-    const loadRoles = async () => {
-      if (!user) {
-        setRoles([]);
-        setIsLoading(false);
-        return;
-      }
+    if (!user) {
+      setRoles([]);
+      return;
+    }
+    
+    // 管理员默认有admin角色
+    if (user.github_id === '--admin--') {
+      setRoles(['admin']);
+      return;
+    }
+    
+    if (personalData && personalData.roles) {
+      // 获取用户角色
+      const userRoles = personalData.roles.filter(role => 
+        !selectedCaseId || role.case_id === selectedCaseId || !role.case_id
+      ).map(role => role.role_name);
+      setRoles(userRoles);
+    } else {
+      setRoles([]);
+    }
+  }, [user, selectedCaseId, personalData]);
+  
+  return { roles, isLoading, error };
+}
 
-      // 管理员默认有admin角色
-      if (user.github_id === '--admin--') {
-        setRoles(['admin']);
-        setIsLoading(false);
-        return;
-      }
+/**
+ * 批量检查操作权限
+ * @param operationIds 操作ID列表
+ * @returns 操作权限映射
+ */
+export function useOperationPermissions(operationIds: string[]) {
+  const { user, selectedCaseId } = useAuth();
+  const { data: personalData, isLoading, error } = useUserPersonalData();
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+  
+  useEffect(() => {
+    if (!user || !operationIds.length) {
+      setPermissions({});
+      return;
+    }
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      const adminPermissions: Record<string, boolean> = {};
+      operationIds.forEach(id => {
+        adminPermissions[id] = true;
+      });
+      setPermissions(adminPermissions);
+      return;
+    }
+    
+    if (personalData && personalData.permissions) {
+      const operationPermissions = personalData.permissions.operations || [];
+      const permissionMap: Record<string, boolean> = {};
+      
+      operationIds.forEach(opId => {
+        const hasOp = operationPermissions.some(op => 
+          op.operation_id === opId && 
+          op.can_execute &&
+          (!selectedCaseId || op.case_id === selectedCaseId || !op.case_id)
+        );
+        permissionMap[opId] = hasOp;
+      });
+      
+      setPermissions(permissionMap);
+    } else {
+      const emptyPermissions: Record<string, boolean> = {};
+      operationIds.forEach(id => {
+        emptyPermissions[id] = false;
+      });
+      setPermissions(emptyPermissions);
+    }
+  }, [user, operationIds, selectedCaseId, personalData]);
+  
+  return { permissions, isLoading, error };
+}
 
-      try {
-        setIsLoading(true);
-        setError(null);
+/**
+ * 清除用户权限缓存
+ */
+export function useClearPermissionCache() {
+  const { user, selectedCaseId } = useAuth();
 
-        // 使用定义的函数获取用户角色
-        const query = `
-          return $user_id->(select * from has_case_role,has_role where case_id = $case_id or case_id =none)->role.name;
-        `;
+  const clearUserPermissions = async (caseId?: string) => {
+    if (!user) return;
+
+    try {
+      // 使用新的数据缓存管理器清除用户个人数据
+      await sendMessageToServiceWorker('clear_user_personal_data', {
+        userId: user.id,
+        caseId: caseId || selectedCaseId || null
+      });
+    } catch (error) {
+      console.error('Error clearing user permissions:', error);
+    }
+  };
+
+  const clearAllPermissions = async () => {
+    try {
+      // 使用新的数据缓存管理器清除所有缓存
+      await sendMessageToServiceWorker('clear_all_cache', {});
+    } catch (error) {
+      console.error('Error clearing all permissions:', error);
+    }
+  };
+
+  return { clearUserPermissions, clearAllPermissions };
+}
+
+/**
+ * 同步权限数据到本地缓存
+ */
+export function useSyncPermissions() {
+  const { user, selectedCaseId } = useAuth();
+
+  const syncPermissions = async (personalData: unknown) => {
+    if (!user) return;
+
+    try {
+      // 使用新的数据缓存管理器同步用户个人数据
+      await sendMessageToServiceWorker('sync_user_personal_data', {
+        userId: user.id,
+        caseId: selectedCaseId || null,
+        personalData
+      });
+    } catch (error) {
+      console.error('Error syncing permissions:', error);
+      throw error;
+    }
+  };
+
+  return { syncPermissions };
+}
+
+// Service Worker 消息工具函数
+async function sendMessageToServiceWorker(type: string, payload: unknown): Promise<unknown> {
+  // 在测试环境中提供回退
+  if (typeof navigator === 'undefined' || !navigator.serviceWorker) {
+    return Promise.resolve({ success: true });
+  }
+  
+  return new Promise((resolve, reject) => {
+    if (!navigator.serviceWorker.controller) {
+      reject(new Error('Service Worker controller not available'));
+      return;
+    }
+    
+    const messageId = Date.now().toString();
+    
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.messageId === messageId) {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
         
-        const result = await client.query(query, {
-          user_id: user.id,
-          case_id: selectedCaseId || null
-        });
-
-        const roleNames = result && result.length > 0 ? result as string[] : [];
-        setRoles(roleNames);
-      } catch (err) {
-        console.error('Error loading user roles:', err);
-        
-        // 检查是否为认证错误(session/token过期)并处理
-        const isSessionError = await handleSessionError(err);
-        if (!isSessionError) {
-          // 如果不是认证错误，设置一般错误状态
-          setError(err instanceof Error ? err.message : 'Unknown error');
+        if (event.data.type === `${type}_response`) {
+          resolve(event.data.payload);
+        } else if (event.data.type === `${type}_error`) {
+          reject(new Error(event.data.payload?.message || 'Unknown error'));
         }
-        setRoles([]);
-      } finally {
-        setIsLoading(false);
       }
     };
 
-    loadRoles();
-  }, [user, selectedCaseId, client, handleSessionError]);
-
-  return { roles, isLoading, error };
-} 
+    navigator.serviceWorker.addEventListener('message', handleMessage);
+    
+    // 发送消息到 Service Worker
+    navigator.serviceWorker.controller.postMessage({
+      type,
+      payload,
+      messageId
+    });
+    
+    // 设置超时
+    setTimeout(() => {
+      navigator.serviceWorker.removeEventListener('message', handleMessage);
+      reject(new Error('Service Worker message timeout'));
+    }, 10000);
+  });
+}
