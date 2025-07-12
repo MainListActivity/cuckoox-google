@@ -63,9 +63,6 @@ describe('Case Creation with SurrealDB Integration', () => {
       if (key === 'cuckoox-user') {
         return JSON.stringify(mockUser);
       }
-      if (key === 'cuckoox-isLoggedIn') {
-        return 'true';
-      }
       return null;
     });
     

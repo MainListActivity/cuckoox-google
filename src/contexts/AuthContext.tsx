@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback, useMemo } from 'react';
 import authService from '@/src/services/authService';
-import { useDataService } from '@/src/contexts/SurrealProvider';
+import { useDataService, useServiceWorkerComm, useSurreal } from '@/src/contexts/SurrealProvider';
 import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb';
 import { menuService } from '@/src/services/menuService';
 import { checkTenantCodeAndRedirect } from '@/src/lib/surrealClient';
 import { userPersonalDataService } from '@/src/services/userPersonalDataService';
+
 
 // Matches AppUser in authService and user table in SurrealDB
 export interface AppUser {
@@ -100,10 +101,10 @@ const deserializeAppUser = (userJson: string): AppUser => {
   return {
     ...parsed,
     id: typeof parsed.id === 'string' ? new RecordId(parsed.id.split(':')[0], parsed.id.split(':')[1]) : parsed.id,
-    last_login_case_id: parsed.last_login_case_id 
-      ? (typeof parsed.last_login_case_id === 'string' 
-          ? new RecordId(parsed.last_login_case_id.split(':')[0], parsed.last_login_case_id.split(':')[1])
-          : parsed.last_login_case_id)
+    last_login_case_id: parsed.last_login_case_id
+      ? (typeof parsed.last_login_case_id === 'string'
+        ? new RecordId(parsed.last_login_case_id.split(':')[0], parsed.last_login_case_id.split(':')[1])
+        : parsed.last_login_case_id)
       : null
   };
 };
@@ -126,11 +127,14 @@ const deserializeRecordId = (recordIdJson: string): RecordId | null => {
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const dataService = useDataService(); // Use new dataService
+  const serviceWorkerComm = useServiceWorkerComm();
+  const { isConnected, getAuthStatus, surreal } = useSurreal(); // 获取连接状态
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [user, setUser] = useState<AppUser | null>(null);
   const [oidcUser, setOidcUser] = useState<OidcUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
+  authService.setSurrealClient(surreal);
+  dataService.setClient(surreal);
   const [selectedCaseId, setSelectedCaseId] = useState<RecordId | null>(deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null'));
   const [userCases, setUserCases] = useState<Case[]>([]);
   const selectedCase = useMemo(() => {
@@ -180,15 +184,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!response.ok) {
         throw new Error('Failed to refresh token');
       }
-      
+
       if (data.access_token) {
         // Store the new tokens
         await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
-        
+
         console.log('Access token refreshed successfully');
         return true;
       }
-      
+
       return false;
     } catch (error) {
       console.error('Error refreshing access token:', error);
@@ -212,14 +216,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await clearAuthState();
         return;
       }
-      
+
       const expiresAtStr = localStorage.getItem('token_expires_at');
       if (!expiresAtStr) return;
-      
+
       const expiresAt = parseInt(expiresAtStr, 10);
       const now = Date.now();
       const timeUntilExpiry = expiresAt - now;
-      
+
       // Refresh token if it expires within 10 minutes (600000 ms)
       if (timeUntilExpiry <= 600000 && timeUntilExpiry > 0) {
         console.log('Token expiring soon, attempting refresh...');
@@ -234,7 +238,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Check every 5 minutes instead of every minute to reduce frequency
     refreshTimerRef.current = setInterval(checkAndRefreshToken, 300000);
-    
+
     // Also check immediately, but with a delay to avoid blocking
     setTimeout(checkAndRefreshToken, 1000);
   };
@@ -249,20 +253,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     let isMounted = true; // Flag to prevent state updates after unmount
-    
+
     const checkCurrentUser = async () => {
       if (!isMounted) return;
       setIsLoading(true);
-      
+
       try {
         // 首先检查租户代码是否存在（除了管理员用户）
         const storedUser = localStorage.getItem('cuckoox-user');
-        const storedIsLoggedIn = localStorage.getItem('cuckoox-isLoggedIn');
-        
-        if (storedUser && storedIsLoggedIn === 'true') {
+
+        // 从SurrealDB获取登录状态，而不是从localStorage
+        const isLoggedInFromSurreal = await getAuthStatus();
+
+        if (storedUser && isLoggedInFromSurreal) {
           // 如果有本地存储的用户信息，先使用它来初始化会话
           const appUser = deserializeAppUser(storedUser);
-          
+
           // 对于非管理员用户，检查租户代码
           if (appUser.github_id !== '--admin--' && !appUser.github_id.startsWith('root_admin_')) {
             if (!checkTenantCodeAndRedirect()) {
@@ -274,7 +280,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               return;
             }
           }
-          
+
+          // 等待 SurrealDB 连接完成后再初始化用户会话
+          if (!isConnected) {
+            console.log('SurrealDB not connected yet, waiting...');
+            setIsLoading(false);
+            return;
+          }
+
           // 对于管理员用户，不需要检查 OIDC
           if (appUser.github_id === '--admin--') {
             if (isMounted) {
@@ -282,23 +295,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
             return;
           }
-          
+
           // 对于普通用户，先恢复会话，然后异步检查 OIDC 状态
           if (isMounted) {
             await initializeUserSession(appUser, null);
           }
-          
+
           // 异步检查 OIDC 状态（不阻塞用户使用）
           authService.getUser().then(async (currentOidcUser) => {
             if (!isMounted) return;
-            
+
             if (currentOidcUser && !currentOidcUser.expired) {
               // OIDC 会话有效，更新 oidcUser
               setOidcUser(currentOidcUser);
-              
+
               // 可选：同步更新数据库中的用户信息
               const githubId = currentOidcUser.profile.sub;
-              if (githubId && githubId === appUser.github_id) {
+              if (githubId && githubId === appUser.github_id && isConnected) {
                 const userRecordId = `user:${githubId}`;
                 try {
                   const result = await dataService.select(userRecordId);
@@ -324,7 +337,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } else {
           // 没有本地存储的用户信息，检查 OIDC
           const currentOidcUser = await authService.getUser();
-          if (currentOidcUser && !currentOidcUser.expired) {
+          if (currentOidcUser && !currentOidcUser.expired && isConnected) {
             const githubId = currentOidcUser.profile.sub;
             if (!githubId) {
               throw new Error("No github_id (sub) found in OIDC user profile during session check.");
@@ -353,13 +366,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (isMounted) setIsLoading(false);
       }
     };
-    
+
     checkCurrentUser();
-    
+
     return () => {
       isMounted = false; // Cleanup flag
     };
-  }, []); // Empty dependency array is correct here
+  }, [isConnected]); // 依赖 isConnected 状态，当连接状态变化时重新执行
 
   const clearAuthState = async () => {
     const currentUser = user;
@@ -372,16 +385,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setNavMenuItems([]);
     clearTokenRefresh(); // Clear token refresh timer
     authService.clearTokens(); // Clear tokens from localStorage
-    localStorage.removeItem('cuckoox-isLoggedIn');
     localStorage.removeItem('cuckoox-user');
     localStorage.removeItem('cuckoox-selectedCaseId');
     // 清理租户代码
     localStorage.removeItem('tenant_code');
-    
+
     // 清除用户个人数据缓存
     try {
       if (currentUser?.id) {
-        await userPersonalDataService.clearUserPersonalData(currentUser.id.toString());
+        await userPersonalDataService.clearUserPersonalDataCache(currentUser.id.toString());
       }
     } catch (error) {
       console.warn('Failed to clear user personal data cache:', error);
@@ -392,21 +404,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(appUser);
     setOidcUser(oidcUserInstance || null);
     setIsLoggedIn(true);
-    localStorage.setItem('cuckoox-isLoggedIn', 'true');
     localStorage.setItem('cuckoox-user', serializeAppUser(appUser));
-    
+
     // Set up automatic token refresh for authenticated users
     setupTokenRefresh();
-    
+
     await loadUserCasesAndRoles(appUser);
   };
-  
+
   const setAuthState = (appUser: AppUser, oidcUserInstance?: OidcUser | null) => {
     initializeUserSession(appUser, oidcUserInstance);
   };
 
   const loadUserCasesAndRoles = async (currentAppUser: AppUser | null) => {
-    if (!currentAppUser || !currentAppUser.id) {
+    if (!currentAppUser || !currentAppUser.id || !isConnected) {
+      if (!isConnected) {
+        console.log('loadUserCasesAndRoles: SurrealDB not connected, skipping...');
+      }
       setUserCases([]);
       setCurrentUserCaseRoles([]);
       setSelectedCaseId(null);
@@ -427,17 +441,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         FETCH case_id, role_id;
       `;
       const results: UserCaseRoleDetails[] = await dataService.query(query, { userId: currentAppUser.id });
-      
+
       const casesMap = new Map<RecordId, Case>();
       let actualResults: UserCaseRoleDetails[] = [];
 
       if (results && results.length > 0 && Array.isArray(results)) {
-         actualResults = results; // Direct array access
-         actualResults.forEach(ucr => {
-            if (ucr.case_details && ucr.case_details.id) {
-                 casesMap.set(ucr.case_details.id, ucr.case_details);
-            }
-         });
+        actualResults = results; // Direct array access
+        actualResults.forEach(ucr => {
+          if (ucr.case_details && ucr.case_details.id) {
+            casesMap.set(ucr.case_details.id, ucr.case_details);
+          }
+        });
       }
 
       const fetchedCases = Array.from(casesMap.values());
@@ -445,7 +459,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       const lastCaseId = currentAppUser.last_login_case_id;
       const previouslySelectedCaseId = deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null');
-      
+
       let caseToSelect: RecordId | null = null;
 
       if (previouslySelectedCaseId && casesMap.has(previouslySelectedCaseId)) {
@@ -465,10 +479,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.removeItem('cuckoox-selectedCaseId');
         setNavMenuItems([]); // Clear menu if no case is selected after loading
       }
-      
+
       // 同步用户个人数据到本地缓存
       try {
-        await userPersonalDataService.syncUserPersonalData(
+        // 确保Service Worker已就绪
+        await serviceWorkerComm.waitForReady();
+        await userPersonalDataService.syncUserPersonalDataToServiceWorker(
           currentAppUser.id.toString(),
           caseToSelect?.toString()
         );
@@ -491,7 +507,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // 更新菜单状态
   const fetchAndUpdateMenuPermissions = useCallback(async () => {
     console.log('fetchAndUpdateMenuPermissions called');
-    
+
     if (!user) {
       console.log('No user, clearing menu items');
       setNavMenuItems([]);
@@ -500,7 +516,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     console.log('Loading menus for user:', user.id, 'case:', selectedCaseId);
     setIsMenuLoading(true);
-    
+
     try {
       // 直接使用图查询函数加载用户可访问的菜单
       console.log('Loading menus using fn::get_user_menus...');
@@ -508,7 +524,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         selectedCaseId || null
       );
       console.log('Database menu items:', dbMenuItems);
-      
+
       // 设置菜单项，如果为空则显示空菜单
       setNavMenuItems(dbMenuItems);
       console.log('Menu items loaded:', {
@@ -525,11 +541,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsMenuLoading(false);
     }
   }, [user, selectedCaseId]);
-  
+
   // Helper function to update last selected case in DB
   const updateLastSelectedCaseInDB = async (userId: RecordId, caseId: RecordId) => {
-    if (!userId || !caseId) {
-      console.warn('updateLastSelectedCaseInDB: missing userId/caseId.');
+    if (!userId || !caseId || !isConnected) {
+      console.warn('updateLastSelectedCaseInDB: missing userId/caseId or DB not connected.');
       return;
     }
     try {
@@ -550,23 +566,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const rolesForSelectedCase: Role[] = [];
     if (allUserCaseRolesDetails && Array.isArray(allUserCaseRolesDetails)) {
-        allUserCaseRolesDetails.forEach(ucr => {
-            if (ucr.case_details && ucr.case_details.id === caseIdToSelect && ucr.role_details) {
-                rolesForSelectedCase.push(ucr.role_details);
-            }
-        });
+      allUserCaseRolesDetails.forEach(ucr => {
+        if (ucr.case_details && ucr.case_details.id === caseIdToSelect && ucr.role_details) {
+          rolesForSelectedCase.push(ucr.role_details);
+        }
+      });
     }
     setCurrentUserCaseRoles(rolesForSelectedCase);
     fetchAndUpdateMenuPermissions(); // Call menu update
   };
 
   const selectCase = async (caseIdToSelect: RecordId | string) => {
-    if (!user || !user.id) {
-      console.error("User not available for selecting case.");
+    if (!user || !user.id || !isConnected) {
+      console.error("User not available or SurrealDB not connected for selecting case.");
       setIsCaseLoading(false); // Ensure loading state is reset
       return;
     }
-    
+
     // 将字符串转换为RecordId对象
     let recordId: RecordId;
     if (typeof caseIdToSelect === 'string') {
@@ -579,7 +595,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } else {
       recordId = caseIdToSelect;
     }
-    
+
     setIsCaseLoading(true);
     try {
       // Fetch all user_case_role entries for the user to correctly populate roles for the selected case
@@ -592,38 +608,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (results && results.length > 0 && Array.isArray(results)) {
         userCaseRolesDetails = results;
       }
-      
+
       // Check if the caseIdToSelect is one of the user's cases
       const caseExistsForUser = userCases.some(c => c.id.toString() === recordId.toString());
       if (!caseExistsForUser && userCaseRolesDetails.some(ucrd => ucrd.case_details.id.toString() === recordId.toString())) {
-          // This implies userCases might be stale if selectCase is called with a new valid case not yet in userCases
-          // This could happen if roles/cases are modified externally and refreshUserCasesAndRoles wasn't called yet
-          // For simplicity, we'll rely on userCases being up-to-date from loadUserCasesAndRoles or refreshUserCasesAndRoles
-          // Or, ensure loadUserCasesAndRoles is called if caseIdToSelect is not in userCases
-          console.warn("selectCase called with a caseId not in the current userCases list. Roles might be based on a fresh fetch.");
+        // This implies userCases might be stale if selectCase is called with a new valid case not yet in userCases
+        // This could happen if roles/cases are modified externally and refreshUserCasesAndRoles wasn't called yet
+        // For simplicity, we'll rely on userCases being up-to-date from loadUserCasesAndRoles or refreshUserCasesAndRoles
+        // Or, ensure loadUserCasesAndRoles is called if caseIdToSelect is not in userCases
+        console.warn("selectCase called with a caseId not in the current userCases list. Roles might be based on a fresh fetch.");
       }
 
       selectCaseInternal(recordId, userCaseRolesDetails);
 
       // Convert string caseIdToSelect to RecordId for storage
       await dataService.merge(user.id, { last_login_case_id: recordId });
-      
+
       // Update user object in context with the new last_login_case_id
       setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
       // Also update localStorage for the user object
       if (user) {
-          const updatedUser = { ...user, last_login_case_id: recordId };
-          localStorage.setItem('cuckoox-user', serializeAppUser(updatedUser));
+        const updatedUser = { ...user, last_login_case_id: recordId };
+        localStorage.setItem('cuckoox-user', serializeAppUser(updatedUser));
       }
 
       // Update last selected case in DB
       if (user?.id) {
         await updateLastSelectedCaseInDB(user.id, recordId);
       }
-      
+
       // 同步用户个人数据到本地缓存
       try {
-        await userPersonalDataService.syncUserPersonalData(
+        // 确保Service Worker已就绪
+        await serviceWorkerComm.waitForReady();
+        await userPersonalDataService.syncUserPersonalDataToServiceWorker(
           user.id.toString(),
           recordId.toString()
         );
@@ -637,10 +655,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsCaseLoading(false);
     }
   };
-  
+
   const refreshUserCasesAndRoles = async () => {
-    if (user) {
+    if (user && isConnected) {
       await loadUserCasesAndRoles(user);
+    } else if (!isConnected) {
+      console.log('refreshUserCasesAndRoles: SurrealDB not connected, skipping...');
     }
   };
 
@@ -687,14 +707,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
-    // 只要用户存在就加载菜单
-    if (user) {
-      console.log('User ready, loading menus...');
+    // 只有当用户存在并且 SurrealDB 连接已建立时才加载菜单
+    if (user && isConnected) {
+      console.log('User ready and SurrealDB connected, loading menus...');
       fetchAndUpdateMenuPermissions();
-    } else {
+    } else if (!user) {
       setNavMenuItems([]); // Clear menu if no user
+    } else if (user && !isConnected) {
+      console.log('User ready but SurrealDB not connected yet, waiting...');
     }
-  }, [user, fetchAndUpdateMenuPermissions]);
+  }, [user, isConnected, fetchAndUpdateMenuPermissions]);
 
   // Effect for automatic navigation to creditor management
   useEffect(() => {
@@ -751,7 +773,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const __TEST_setUserCases = process.env.NODE_ENV === 'test' ? setUserCases : undefined;
 
   return (
-    <AuthContext.Provider value={{ 
+    <AuthContext.Provider value={{
       isLoggedIn,
       user,
       oidcUser,

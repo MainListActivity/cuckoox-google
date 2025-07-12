@@ -58,21 +58,21 @@ const eventHandlers = {
     try {
       stopReconnection();
       stopConnectionHealthCheck();
-      setConnectionState(ConnectionState.DISCONNECTED);
-      
+      notifyConnectionStateChange();
+
       // 关闭 TokenManager
       if (tokenManager) {
         await tokenManager.close();
         tokenManager = null;
       }
-      
-      
+
+
       // 关闭 DataCacheManager
       if (dataCacheManager) {
         await dataCacheManager.close();
         dataCacheManager = null;
       }
-      
+
       // 关闭本地数据库
       if (localDb) {
         await localDb.close();
@@ -277,7 +277,7 @@ const eventHandlers = {
 
         case 'get_connection_state': {
           respond({
-            state: currentConnectionState,
+            state: db?.status || ConnectionStatus.Disconnected,
             isConnected: isConnected,
             isReconnecting: isReconnecting,
             reconnectAttempts: reconnectAttempts,
@@ -317,7 +317,7 @@ const eventHandlers = {
         case 'sync_user_personal_data': {
           await ensureDataCacheManager();
           const { userId, caseId, personalData } = payload;
-          
+
           // 使用持久化缓存策略存储用户个人数据
           await dataCacheManager!.subscribePersistent(
             ['user_personal_data'],
@@ -330,10 +330,10 @@ const eventHandlers = {
               expirationMs: 24 * 60 * 60 * 1000 // 24小时
             }
           );
-          
+
           // 直接缓存个人数据
           await dataCacheManager!.cachePersonalData(userId, caseId, personalData);
-          
+
           respond({ success: true });
           break;
         }
@@ -341,7 +341,7 @@ const eventHandlers = {
         case 'get_user_personal_data': {
           await ensureDataCacheManager();
           const { userId, caseId } = payload;
-          
+
           const personalData = await dataCacheManager!.getPersonalData(userId, caseId);
           respond({ personalData });
           break;
@@ -350,7 +350,7 @@ const eventHandlers = {
         case 'clear_user_personal_data': {
           await ensureDataCacheManager();
           const { userId, caseId } = payload;
-          
+
           await dataCacheManager!.clearPersonalData(userId, caseId);
           respond({ success: true });
           break;
@@ -360,10 +360,10 @@ const eventHandlers = {
         case 'subscribe_page_data': {
           await ensureDataCacheManager();
           const { tables, userId, caseId, config } = payload;
-          
+
           // 使用临时缓存策略订阅页面数据
           await dataCacheManager!.subscribeTemporary(tables, userId, caseId, config);
-          
+
           respond({ success: true });
           break;
         }
@@ -371,10 +371,10 @@ const eventHandlers = {
         case 'unsubscribe_page_data': {
           await ensureDataCacheManager();
           const { tables, userId, caseId } = payload;
-          
+
           // 取消临时缓存订阅
           await dataCacheManager!.unsubscribe(tables, 'temporary', userId, caseId);
-          
+
           respond({ success: true });
           break;
         }
@@ -382,7 +382,7 @@ const eventHandlers = {
         case 'query_cached_data': {
           await ensureDataCacheManager();
           const { table, query, params, userId, caseId } = payload;
-          
+
           const data = await dataCacheManager!.queryCache(table, query, params, userId, caseId);
           respond({ data });
           break;
@@ -391,7 +391,7 @@ const eventHandlers = {
         case 'update_cached_data': {
           await ensureDataCacheManager();
           const { table, recordId, data, userId, caseId } = payload;
-          
+
           const result = await dataCacheManager!.updateData(table, recordId, data, userId, caseId);
           respond({ result });
           break;
@@ -400,7 +400,7 @@ const eventHandlers = {
         case 'clear_table_cache': {
           await ensureDataCacheManager();
           const { table, userId, caseId } = payload;
-          
+
           await dataCacheManager!.clearTableCache(table, userId, caseId);
           respond({ success: true });
           break;
@@ -416,10 +416,10 @@ const eventHandlers = {
         case 'cache_query_result': {
           await ensureDataCacheManager();
           const { table, query, params, result, userId, caseId } = payload;
-          
+
           // 直接缓存查询结果
           await dataCacheManager!.cacheData(table, result, 'temporary', userId, caseId);
-          
+
           respond({ success: true });
           break;
         }
@@ -428,10 +428,10 @@ const eventHandlers = {
         case 'process_incremental_update': {
           await ensureDataCacheManager();
           const { update, conflictResolution } = payload;
-          
+
           // 处理增量更新
           await processIncrementalUpdate(update, conflictResolution);
-          
+
           respond({ success: true });
           break;
         }
@@ -439,10 +439,10 @@ const eventHandlers = {
         case 'create_sync_record': {
           await ensureDataCacheManager();
           const { syncRecord } = payload;
-          
+
           // 创建同步记录
           await createSyncRecord(syncRecord);
-          
+
           respond({ success: true });
           break;
         }
@@ -450,10 +450,10 @@ const eventHandlers = {
         case 'get_sync_record': {
           await ensureDataCacheManager();
           const { table, userId, caseId } = payload;
-          
+
           // 获取同步记录
           const syncRecord = await getSyncRecord(table, userId, caseId);
-          
+
           respond({ syncRecord });
           break;
         }
@@ -461,10 +461,10 @@ const eventHandlers = {
         case 'update_sync_record': {
           await ensureDataCacheManager();
           const { syncRecordId, lastSyncTimestamp, lastSyncId, status } = payload;
-          
+
           // 更新同步记录
           await updateSyncRecord(syncRecordId, lastSyncTimestamp, lastSyncId, status);
-          
+
           respond({ success: true });
           break;
         }
@@ -472,10 +472,10 @@ const eventHandlers = {
         case 'update_sync_status': {
           await ensureDataCacheManager();
           const { syncRecordId, status, lastSyncTimestamp, errorMessage } = payload;
-          
+
           // 更新同步状态
           await updateSyncStatus(syncRecordId, status, lastSyncTimestamp, errorMessage);
-          
+
           respond({ success: true });
           break;
         }
@@ -483,10 +483,10 @@ const eventHandlers = {
         case 'clear_sync_records': {
           await ensureDataCacheManager();
           const { tables, userId, caseId } = payload;
-          
+
           // 清除同步记录
           await clearSyncRecords(tables, userId, caseId);
-          
+
           respond({ success: true });
           break;
         }
@@ -495,10 +495,10 @@ const eventHandlers = {
         case 'persist_offline_queue': {
           await ensureDataCacheManager();
           const { syncKey, queue } = payload;
-          
+
           // 持久化离线队列
           await persistOfflineQueue(syncKey, queue);
-          
+
           respond({ success: true });
           break;
         }
@@ -506,10 +506,10 @@ const eventHandlers = {
         case 'restore_offline_queue': {
           await ensureDataCacheManager();
           const { syncKey } = payload;
-          
+
           // 恢复离线队列
           const queue = await restoreOfflineQueue(syncKey);
-          
+
           respond({ queue });
           break;
         }
@@ -517,10 +517,10 @@ const eventHandlers = {
         case 'clear_offline_queue': {
           await ensureDataCacheManager();
           const { syncKey } = payload;
-          
+
           // 清除离线队列
           await clearOfflineQueue(syncKey);
-          
+
           respond({ success: true });
           break;
         }
@@ -544,7 +544,7 @@ self.addEventListener('message', eventHandlers.message);
 
 console.log("Service Worker event listeners registered");
 
-import { Surreal, RecordId } from 'surrealdb';
+import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
 import { TokenManager, TokenInfo } from './token-manager';
 import { DataCacheManager } from './data-cache-manager';
 
@@ -588,7 +588,7 @@ export type AnyAuth = {
 // 远程 SurrealDB 实例 (单例)
 let db: Surreal | null = null;
 // 本地 SurrealDB WASM 实例 (单例)
-let localDb: Surreal | null = null; 
+let localDb: Surreal | null = null;
 let tokenManager: TokenManager | null = null;
 let dataCacheManager: DataCacheManager | null = null;
 let isConnected = false;
@@ -619,34 +619,23 @@ const RECONNECT_DELAY_BASE = 100; // 基础重连延迟 100ms
 const RECONNECT_DELAY_MAX = 5000; // 最大重连延迟 5秒
 const CONNECTION_TIMEOUT = 10000; // 10秒连接超时
 
-// 连接状态枚举
-enum ConnectionState {
-  DISCONNECTED = 'disconnected',
-  CONNECTING = 'connecting',
-  CONNECTED = 'connected',
-  RECONNECTING = 'reconnecting',
-  ERROR = 'error'
-}
-
-let currentConnectionState = ConnectionState.DISCONNECTED;
+// 使用SurrealDB官方的ConnectionStatus枚举，无需自定义状态
 
 // --- Helper Functions for Event Handlers ---
 
 /**
- * 设置连接状态并通知客户端
+ * 通知客户端连接状态变化
  */
-function setConnectionState(newState: ConnectionState, error?: Error) {
-  const previousState = currentConnectionState;
-  currentConnectionState = newState;
+function notifyConnectionStateChange(error?: Error) {
+  const currentState = db?.status || ConnectionStatus.Disconnected;
 
-  console.log(`ServiceWorker: Connection state changed from ${previousState} to ${newState}`);
+  console.log(`ServiceWorker: Connection state is ${currentState}`);
 
   // 通知所有客户端连接状态变化
   broadcastToAllClients({
     type: 'connection_state_changed',
     payload: {
-      state: newState,
-      previousState,
+      state: currentState,
       error: error?.message,
       timestamp: Date.now()
     }
@@ -685,7 +674,7 @@ function triggerReconnection() {
   }
 
   isReconnecting = true;
-  setConnectionState(ConnectionState.RECONNECTING);
+  notifyConnectionStateChange();
 
   // 立即尝试重连（第一次重连延迟很小）
   const delay = reconnectAttempts === 0 ? RECONNECT_DELAY_BASE : calculateReconnectDelay();
@@ -704,7 +693,7 @@ async function performReconnection() {
   if (!connectionConfig) {
     console.error('ServiceWorker: Cannot reconnect - no connection config available');
     isReconnecting = false;
-    setConnectionState(ConnectionState.ERROR);
+    notifyConnectionStateChange();
     return;
   }
 
@@ -736,7 +725,7 @@ async function performReconnection() {
     reconnectAttempts = 0;
     isReconnecting = false;
 
-    setConnectionState(ConnectionState.CONNECTED);
+    notifyConnectionStateChange();
     console.log('ServiceWorker: Reconnection successful');
 
     // 重新订阅所有 Live Query
@@ -754,7 +743,7 @@ async function performReconnection() {
     } else {
       // 达到最大重连次数
       isReconnecting = false;
-      setConnectionState(ConnectionState.ERROR, error as Error);
+      notifyConnectionStateChange(error as Error);
       console.error('ServiceWorker: Max reconnection attempts reached');
     }
   }
@@ -786,7 +775,7 @@ async function connectWithTimeout(): Promise<void> {
         await ensureTokenManager();
         const token = await tokenManager!.getToken();
 
-        if (token&&token.access_token) {
+        if (token && token.access_token) {
           await db!.authenticate(token.access_token);
           console.log('ServiceWorker: Re-authenticated successfully during reconnection');
 
@@ -817,7 +806,7 @@ function setupConnectionEventListeners() {
   db.emitter.subscribe('disconnected', () => {
     console.warn('ServiceWorker: Database connection lost');
     isConnected = false;
-    setConnectionState(ConnectionState.ERROR);
+    notifyConnectionStateChange();
     stopConnectionHealthCheck();
 
     // 立即触发重连
@@ -827,7 +816,7 @@ function setupConnectionEventListeners() {
   db.emitter.subscribe('error', (error: Error) => {
     console.error('ServiceWorker: Database connection error:', error);
     isConnected = false;
-    setConnectionState(ConnectionState.ERROR, error);
+    notifyConnectionStateChange(error);
     stopConnectionHealthCheck();
 
     // 立即触发重连
@@ -878,7 +867,7 @@ async function cleanupOldCaches(): Promise<void> {
   try {
     console.log('ServiceWorker: Cleaning up old caches...');
     const cacheNames = await caches.keys();
-    const oldCacheNames = cacheNames.filter(name => 
+    const oldCacheNames = cacheNames.filter(name =>
       name.startsWith('cuckoox-sw-') && name !== SW_CACHE_NAME
     );
 
@@ -933,7 +922,7 @@ async function initializeLocalSurrealDB(): Promise<void> {
     localDb = new Surreal({
       engines: await getWasmEngines(),
     });
-    
+
     await localDb.connect('indxdb://cuckoox-storage');
     await localDb.use({ namespace: 'ck_go', database: 'local' });
 
@@ -958,7 +947,7 @@ async function initializeTokenManager(): Promise<void> {
 
     // 先初始化本地数据库
     await initializeLocalSurrealDB();
-    
+
     // 创建 TokenManager 并传入 localDb
     tokenManager = new TokenManager({
       apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8082',
@@ -994,7 +983,7 @@ async function initializeDataCacheManager(): Promise<void> {
 
     // 先初始化本地数据库
     await initializeLocalSurrealDB();
-    
+
     // 创建 DataCacheManager 实例
     dataCacheManager = new DataCacheManager({
       localDb: localDb!,
@@ -1084,9 +1073,9 @@ async function broadcastToClients(message: Record<string, unknown>, clientIds: S
  */
 async function checkTenantCode(): Promise<boolean> {
   await ensureTokenManager();
-  
+
   const hasTenantCode = await tokenManager!.hasTenantCode();
-  
+
   if (!hasTenantCode) {
     // 清除认证状态
     await tokenManager!.clearToken();
@@ -1132,127 +1121,133 @@ async function initializeSurreal(): Promise<void> {
   }
 }
 
+let connecting = false;
+
 async function ensureConnection(newConfig?: typeof connectionConfig): Promise<boolean> {
-  // Ensure SurrealDB is initialized first
-  await initializeSurreal();
-
-  // 停止重连如果有新的连接配置
-  if (newConfig) {
-    stopReconnection();
+  if (connecting) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    return true;
   }
+  connecting = true;
+  try {
+    // Ensure SurrealDB is initialized first
+    await initializeSurreal();
 
-  if (newConfig && connectionConfig) {
-    // 检查配置变化的具体部分
-    const endpointChanged = connectionConfig.endpoint !== newConfig.endpoint;
-    const namespaceChanged = connectionConfig.namespace !== newConfig.namespace;
-    const databaseChanged = connectionConfig.database !== newConfig.database;
-    const authChanged = JSON.stringify(connectionConfig.auth) !== JSON.stringify(newConfig.auth);
+    if (newConfig && connectionConfig) {
+      // 检查配置变化的具体部分
+      const endpointChanged = connectionConfig.endpoint !== newConfig.endpoint;
+      const namespaceChanged = connectionConfig.namespace !== newConfig.namespace;
+      const databaseChanged = connectionConfig.database !== newConfig.database;
+      const authChanged = JSON.stringify(connectionConfig.auth) !== JSON.stringify(newConfig.auth);
 
-    if (endpointChanged) {
-      // endpoint 变化需要重新建立连接
-      console.log("ServiceWorker: Endpoint changed, reconnecting...", connectionConfig.endpoint, '->', newConfig.endpoint);
-      stopConnectionHealthCheck();
+      if (endpointChanged) {
+        // endpoint 变化需要重新建立连接
+        console.log("ServiceWorker: Endpoint changed, reconnecting...", connectionConfig.endpoint, '->', newConfig.endpoint);
+        stopConnectionHealthCheck();
 
-      if (isConnected && db) {
-        try {
-          await db.close();
-          console.log("ServiceWorker: Closed existing connection for endpoint change");
-        } catch (e) {
-          console.warn("ServiceWorker: Error closing connection:", e);
-        }
-      }
-      isConnected = false;
-      setConnectionState(ConnectionState.DISCONNECTED);
-      connectionConfig = newConfig;
-    } else if (namespaceChanged || databaseChanged) {
-      // namespace 或 database 变化只需要重新执行 use 和 authenticate
-      console.log("ServiceWorker: Namespace/Database changed, switching...",
-        { namespace: connectionConfig.namespace, database: connectionConfig.database },
-        '->',
-        { namespace: newConfig.namespace, database: newConfig.database });
-
-      if (isConnected && db) {
-        try {
-          await db.use({ namespace: newConfig.namespace, database: newConfig.database });
-
-          // 重新认证
-          await ensureTokenManager();
-          const token = await tokenManager!.getToken();
-
-          if (token&&token.access_token) {
-            await db.authenticate(token.access_token);
-            console.log("ServiceWorker: Re-authenticated after namespace/database change.");
+        if (isConnected && db) {
+          try {
+            await db.close();
+            console.log("ServiceWorker: Closed existing connection for endpoint change");
+          } catch (e) {
+            console.warn("ServiceWorker: Error closing connection:", e);
           }
-        } catch (e) {
-          console.error("ServiceWorker: Failed to switch namespace/database:", e);
-          isConnected = false;
-          setConnectionState(ConnectionState.ERROR, e as Error);
-          triggerReconnection();
         }
-      }
-      connectionConfig = newConfig;
-    } else if (authChanged) {
-      // 只有认证信息变化，只需要重新认证
-      console.log("ServiceWorker: Auth changed, re-authenticating...");
+        isConnected = false;
+        notifyConnectionStateChange();
+        connectionConfig = newConfig;
+      } else if (namespaceChanged || databaseChanged) {
+        // namespace 或 database 变化只需要重新执行 use 和 authenticate
+        console.log("ServiceWorker: Namespace/Database changed, switching...",
+          { namespace: connectionConfig.namespace, database: connectionConfig.database },
+          '->',
+          { namespace: newConfig.namespace, database: newConfig.database });
 
-      if (isConnected && db) {
-        try {
-          await ensureTokenManager();
-          const token = await tokenManager!.getToken();
+        if (isConnected && db) {
+          try {
+            await db.use({ namespace: newConfig.namespace, database: newConfig.database });
 
-          if (token&&token.access_token) {
-            await db.authenticate(token.access_token);
-            console.log("ServiceWorker: Re-authenticated with new auth info.");
+            // 重新认证
+            await ensureTokenManager();
+            const token = await tokenManager!.getToken();
+
+            if (token && token.access_token) {
+              await db.authenticate(token.access_token);
+              console.log("ServiceWorker: Re-authenticated after namespace/database change.");
+            }
+          } catch (e) {
+            console.error("ServiceWorker: Failed to switch namespace/database:", e);
+            isConnected = false;
+            notifyConnectionStateChange(e as Error);
+            triggerReconnection();
           }
-        } catch (e) {
-          console.error("ServiceWorker: Re-authentication failed:", e);
-          setConnectionState(ConnectionState.ERROR, e as Error);
-          triggerReconnection();
         }
+        connectionConfig = newConfig;
+      } else if (authChanged) {
+        // 只有认证信息变化，只需要重新认证
+        console.log("ServiceWorker: Auth changed, re-authenticating...");
+
+        if (isConnected && db) {
+          try {
+            await ensureTokenManager();
+            const token = await tokenManager!.getToken();
+
+            if (token && token.access_token) {
+              await db.authenticate(token.access_token);
+              console.log("ServiceWorker: Re-authenticated with new auth info.");
+            }
+          } catch (e) {
+            console.error("ServiceWorker: Re-authentication failed:", e);
+            notifyConnectionStateChange(e as Error);
+            triggerReconnection();
+          }
+        }
+        connectionConfig = newConfig;
+      } else {
+        // 没有变化，直接更新配置引用
+        connectionConfig = newConfig;
       }
-      connectionConfig = newConfig;
-    } else {
-      // 没有变化，直接更新配置引用
+    } else if (newConfig) {
+      // 第一次设置配置
       connectionConfig = newConfig;
     }
-  } else if (newConfig) {
-    // 第一次设置配置
-    connectionConfig = newConfig;
-  }
 
-  if (!connectionConfig) {
-    console.error("ServiceWorker: Connection config not set.");
-    setConnectionState(ConnectionState.ERROR);
-    return false;
-  }
-
-  if (!isConnected) {
-    try {
-      setConnectionState(ConnectionState.CONNECTING);
-      console.log(`ServiceWorker: Connecting to ${connectionConfig.endpoint}...`);
-
-      // 使用带超时的连接
-      await connectWithTimeout();
-
-      isConnected = true;
-      setConnectionState(ConnectionState.CONNECTED);
-      console.log("ServiceWorker: Connection established.");
-
-      // 重置重连计数
-      reconnectAttempts = 0;
-
-      // Resubscribe to all live queries
-      await resubscribeAllLiveQueries();
-
-    } catch (e) {
-      console.error("ServiceWorker: Connection failed.", e);
-      isConnected = false;
-      setConnectionState(ConnectionState.ERROR, e as Error);
-
-      // 触发自动重连
-      triggerReconnection();
+    if (!connectionConfig) {
+      console.error("ServiceWorker: Connection config not set.");
+      notifyConnectionStateChange();
       return false;
     }
+
+    if (db && db.status === ConnectionStatus.Disconnected) {
+      try {
+        notifyConnectionStateChange();
+        console.log(`ServiceWorker: Connecting to ${connectionConfig.endpoint}...`);
+
+        // 使用带超时的连接
+        await connectWithTimeout();
+
+        isConnected = true;
+        notifyConnectionStateChange();
+        console.log("ServiceWorker: Connection established.");
+
+        // 重置重连计数
+        reconnectAttempts = 0;
+
+        // Resubscribe to all live queries
+        await resubscribeAllLiveQueries();
+
+      } catch (e) {
+        console.error("ServiceWorker: Connection failed.", e);
+        isConnected = false;
+        notifyConnectionStateChange(e as Error);
+
+        // 触发自动重连
+        triggerReconnection();
+        return false;
+      }
+    }
+  } finally {
+    connecting = false;
   }
   return true;
 }
@@ -1324,16 +1319,16 @@ async function processIncrementalUpdate(
 ): Promise<void> {
   try {
     console.log('ServiceWorker: Processing incremental update:', update);
-    
+
     // 获取本地数据
     const localData = await dataCacheManager!.queryCache(
       update.table_name,
       `SELECT * FROM ${update.table_name} WHERE id = $id`,
       { id: update.id }
     );
-    
+
     const hasLocalData = localData && localData.length > 0;
-    
+
     // 处理不同的操作类型
     switch (update.operation) {
       case 'insert':
@@ -1349,13 +1344,13 @@ async function processIncrementalUpdate(
           await handleConflict(update, localData[0], conflictResolution);
         }
         break;
-        
+
       case 'update':
         if (hasLocalData) {
           // 检查版本冲突
           const localVersion = localData[0].version || 0;
           const remoteVersion = update.version || 0;
-          
+
           if (remoteVersion > localVersion) {
             // 远程版本更新，直接更新
             await dataCacheManager!.updateData(
@@ -1377,7 +1372,7 @@ async function processIncrementalUpdate(
           );
         }
         break;
-        
+
       case 'delete':
         if (hasLocalData) {
           // 删除本地数据
@@ -1389,7 +1384,7 @@ async function processIncrementalUpdate(
         }
         break;
     }
-    
+
     // 广播更新事件
     await broadcastToAllClients({
       type: 'incremental_update_processed',
@@ -1400,7 +1395,7 @@ async function processIncrementalUpdate(
         timestamp: Date.now()
       }
     });
-    
+
   } catch (error) {
     console.error('ServiceWorker: Error processing incremental update:', error);
     throw error;
@@ -1416,13 +1411,13 @@ async function handleConflict(
   conflictResolution: 'local' | 'remote' | 'timestamp'
 ): Promise<void> {
   console.log('ServiceWorker: Handling conflict with strategy:', conflictResolution);
-  
+
   switch (conflictResolution) {
     case 'local':
       // 保留本地数据，忽略远程更新
       console.log('ServiceWorker: Keeping local data, ignoring remote update');
       break;
-      
+
     case 'remote':
       // 使用远程数据覆盖本地数据
       console.log('ServiceWorker: Using remote data, overwriting local');
@@ -1432,12 +1427,12 @@ async function handleConflict(
         remoteUpdate.data
       );
       break;
-      
+
     case 'timestamp':
       // 根据时间戳决定使用哪个版本
       const localTimestamp = new Date(localData.updated_at).getTime();
       const remoteTimestamp = new Date(remoteUpdate.updated_at).getTime();
-      
+
       if (remoteTimestamp > localTimestamp) {
         console.log('ServiceWorker: Remote data is newer, using remote');
         await dataCacheManager!.updateData(
@@ -1497,15 +1492,15 @@ async function updateSyncRecord(
       last_sync_timestamp: lastSyncTimestamp,
       updated_at: new Date()
     };
-    
+
     if (lastSyncId) {
       updateData.last_sync_id = lastSyncId;
     }
-    
+
     if (status) {
       updateData.sync_status = status;
     }
-    
+
     await localDb!.update(syncRecordId, updateData);
     console.log('ServiceWorker: Updated sync record:', syncRecordId);
   } catch (error) {
@@ -1528,21 +1523,21 @@ async function updateSyncStatus(
       sync_status: status,
       updated_at: new Date()
     };
-    
+
     if (lastSyncTimestamp) {
       updateData.last_sync_timestamp = lastSyncTimestamp;
     }
-    
+
     if (errorMessage) {
       updateData.error_message = errorMessage;
     }
-    
+
     // 如果状态是失败，增加重试次数
     if (status === 'failed') {
       const currentRecord = await localDb!.select(syncRecordId);
       updateData.retry_count = ((currentRecord as any)?.retry_count || 0) + 1;
     }
-    
+
     await localDb!.update(syncRecordId, updateData);
     console.log('ServiceWorker: Updated sync status:', syncRecordId, status);
   } catch (error) {
@@ -1585,7 +1580,7 @@ async function persistOfflineQueue(syncKey: string, queue: any[]): Promise<void>
       created_at: new Date(),
       updated_at: new Date()
     };
-    
+
     await localDb!.create('offline_queue', queueRecord);
     console.log('ServiceWorker: Persisted offline queue for sync key:', syncKey);
   } catch (error) {
@@ -1595,7 +1590,7 @@ async function persistOfflineQueue(syncKey: string, queue: any[]): Promise<void>
         queue_data: queue,
         updated_at: new Date()
       };
-      
+
       await localDb!.update(new RecordId('offline_queue', syncKey), queueRecord);
       console.log('ServiceWorker: Updated offline queue for sync key:', syncKey);
     } catch (updateError) {
@@ -1612,12 +1607,12 @@ async function restoreOfflineQueue(syncKey: string): Promise<any[]> {
   try {
     const recordId = new RecordId('offline_queue', syncKey);
     const result = await localDb!.select(recordId);
-    
+
     if (result && (result as any).queue_data) {
       console.log('ServiceWorker: Restored offline queue for sync key:', syncKey);
       return (result as any).queue_data;
     }
-    
+
     return [];
   } catch (error) {
     console.error('ServiceWorker: Error restoring offline queue:', error);

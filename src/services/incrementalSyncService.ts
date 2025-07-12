@@ -536,46 +536,21 @@ export class IncrementalSyncService {
    * 发送消息到Service Worker
    */
   private async sendMessageToServiceWorker(type: string, payload: any): Promise<any> {
-    if (typeof navigator === 'undefined' || !navigator.serviceWorker) {
+    // 使用统一的Service Worker客户端
+    const { surrealServiceWorkerClient } = await import('../lib/surrealServiceWorkerClient');
+    
+    if (!surrealServiceWorkerClient.isServiceWorkerAvailable()) {
       console.warn('IncrementalSyncService: Service Worker not available');
       return Promise.resolve({ success: true });
     }
     
-    return new Promise((resolve, reject) => {
-      if (!navigator.serviceWorker.controller) {
-        reject(new Error('Service Worker controller not available'));
-        return;
-      }
-      
-      const messageId = Date.now().toString();
-      
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data && event.data.messageId === messageId) {
-          navigator.serviceWorker.removeEventListener('message', handleMessage);
-          
-          if (event.data.type === `${type}_response`) {
-            resolve(event.data.payload);
-          } else if (event.data.type === `${type}_error`) {
-            reject(new Error(event.data.payload?.message || 'Unknown error'));
-          }
-        }
-      };
-
-      navigator.serviceWorker.addEventListener('message', handleMessage);
-      
-      // 发送消息
-      navigator.serviceWorker.controller.postMessage({
-        type,
-        payload,
-        messageId
-      });
-      
-      // 设置超时
-      setTimeout(() => {
-        navigator.serviceWorker.removeEventListener('message', handleMessage);
-        reject(new Error('Service Worker message timeout'));
-      }, 10000);
-    });
+    try {
+      await surrealServiceWorkerClient.waitForReady();
+      return await surrealServiceWorkerClient.sendGenericMessage(type, payload);
+    } catch (error) {
+      console.error('IncrementalSyncService: Service Worker communication error:', error);
+      throw error;
+    }
   }
 
   /**

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useServiceWorkerComm } from '../contexts/SurrealProvider';
 import { CacheConfig } from '../workers/data-cache-manager';
 
 export interface PageDataCacheConfig extends Partial<CacheConfig> {
@@ -44,6 +45,7 @@ export interface UsePageDataCacheResult {
  */
 export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataCacheResult {
   const { user, selectedCaseId } = useAuth();
+  const serviceWorkerComm = useServiceWorkerComm();
   const { tables, config = {}, enabled = true } = options;
   
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -72,46 +74,19 @@ export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataC
 
   // 发送消息到Service Worker
   const sendMessageToServiceWorker = useCallback(async (type: string, payload: any): Promise<any> => {
-    if (typeof navigator === 'undefined' || !navigator.serviceWorker) {
-      throw new Error('Service Worker not available');
+    if (!serviceWorkerComm.isAvailable()) {
+      console.warn('usePageDataCache: Service Worker not available');
+      return Promise.resolve({ success: true });
     }
     
-    return new Promise((resolve, reject) => {
-      if (!navigator.serviceWorker.controller) {
-        reject(new Error('Service Worker controller not available'));
-        return;
-      }
-      
-      const messageId = Date.now().toString();
-      
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data && event.data.messageId === messageId) {
-          navigator.serviceWorker.removeEventListener('message', handleMessage);
-          
-          if (event.data.type === `${type}_response`) {
-            resolve(event.data.payload);
-          } else if (event.data.type === `${type}_error`) {
-            reject(new Error(event.data.payload?.message || 'Unknown error'));
-          }
-        }
-      };
-
-      navigator.serviceWorker.addEventListener('message', handleMessage);
-      
-      // 发送消息
-      navigator.serviceWorker.controller.postMessage({
-        type,
-        payload,
-        messageId
-      });
-      
-      // 设置超时
-      setTimeout(() => {
-        navigator.serviceWorker.removeEventListener('message', handleMessage);
-        reject(new Error('Service Worker message timeout'));
-      }, 10000);
-    });
-  }, []);
+    try {
+      await serviceWorkerComm.waitForReady();
+      return await serviceWorkerComm.sendMessage(type, payload);
+    } catch (error) {
+      console.error('usePageDataCache: Service Worker communication error:', error);
+      throw error;
+    }
+  }, [serviceWorkerComm]);
 
   // 订阅页面数据
   const subscribe = useCallback(async () => {

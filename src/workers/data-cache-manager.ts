@@ -414,7 +414,7 @@ export class DataCacheManager {
       table_name: table,
       cache_type: cacheType,
       user_id: userId,
-      case_id: caseId,
+      case_id: caseId || undefined, // 确保 undefined 而不是 null
       last_sync_time: Date.now(),
       is_active: true,
       created_at: new Date()
@@ -423,9 +423,12 @@ export class DataCacheManager {
     this.activeSubscriptions.set(subscriptionId, subscription);
     
     try {
-      await this.localDb.create('subscription_management', subscription as unknown as FlexibleRecord);
+      // 使用指定的 RecordId 而不是让数据库自动生成
+      const recordId = new RecordId('subscription_management', subscriptionId);
+      await this.localDb.create(recordId, subscription as unknown as FlexibleRecord);
     } catch (error) {
       console.warn('DataCacheManager: Failed to record subscription:', error);
+      throw error; // 重新抛出错误以便上层处理
     }
   }
 
@@ -525,12 +528,12 @@ export class DataCacheManager {
       sync_timestamp: Date.now(),
       cache_type: cacheType,
       user_id: userId,
-      case_id: caseId,
+      case_id: caseId || undefined, // 确保 undefined 而不是 null
       expires_at: expiresAt
     };
     
     try {
-      await this.localDb.create('data_table_cache', cacheItem as unknown as FlexibleRecord);
+      await this.localDb.create(cacheItem.id, cacheItem as unknown as FlexibleRecord);
     } catch {
       // 如果创建失败，可能是因为记录已存在，尝试更新
       try {
@@ -937,12 +940,12 @@ export class DataCacheManager {
       sync_timestamp: Date.now(),
       cache_type: 'persistent',
       user_id: userId,
-      case_id: caseId,
+      case_id: caseId || undefined, // 确保 undefined 而不是 null
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24小时后过期
     };
     
     try {
-      await this.localDb.create('data_table_cache', cacheItem as unknown as FlexibleRecord);
+      await this.localDb.create(cacheItem.id, cacheItem as unknown as FlexibleRecord);
     } catch {
       // 如果创建失败，尝试更新
       try {

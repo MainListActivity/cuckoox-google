@@ -1,5 +1,5 @@
 import { RecordId } from 'surrealdb';
-import { SurrealWorkerAPI, surrealServiceWorkerClient } from '@/src/lib/surrealServiceWorkerClient';
+import { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 
 // Generic query result interface
 interface QueryResult<T = unknown> {
@@ -38,18 +38,15 @@ class DataService {
   }
 
   /**
-   * Ensure we have a usable Surreal client with a `query` method. Falls back to using
-   * the global service worker client if the injected client is
-   * missing or invalid.
+   * Ensure we have a usable Surreal client with a `query` method.
+   * Client must be injected via setClient() method.
    */
   private async ensureClient(): Promise<SurrealWorkerAPI> {
-    if (this.client && typeof (this.client as any).query === 'function') {
+    if (this.client && typeof this.client.query === 'function') {
       return this.client;
     }
 
-    // Use the global service worker client
-    this.client = surrealServiceWorkerClient;
-    return this.client;
+    throw new Error('SurrealDB client not available. Make sure SurrealProvider is properly initialized.');
   }
 
   /**

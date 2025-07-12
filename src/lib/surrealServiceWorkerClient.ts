@@ -54,7 +54,7 @@ function deserializeRecordIds(obj: any): any {
 export interface SurrealWorkerAPI {
   query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
   mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
-  create(thing: string, data: unknown): Promise<any>;
+  create(thing: string | RecordId, data: unknown): Promise<any>;
   select(thing: string | RecordId): Promise<any>;
   update(thing: string | RecordId, data: unknown): Promise<any>;
   merge(thing: string | RecordId, data: unknown): Promise<any>;
@@ -85,7 +85,7 @@ export interface SurrealWorkerAPI {
 
   // Token recovery
   recoverTokens(): Promise<void>;
-  
+
   // Connection management
   getConnectionState(): Promise<{
     state: string;
@@ -125,11 +125,11 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     registration.addEventListener('updatefound', () => {
       console.log('SurrealServiceWorkerClient: Service Worker 更新检测到');
       const newWorker = registration.installing;
-      
+
       if (newWorker) {
         newWorker.addEventListener('statechange', () => {
           console.log('SurrealServiceWorkerClient: Service Worker 状态变化:', newWorker.state);
-          
+
           if (newWorker.state === 'installed') {
             if (navigator.serviceWorker.controller) {
               // 有旧的 service worker 在运行，需要更新
@@ -158,7 +158,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
   private handleServiceWorkerUpdate(newWorker: ServiceWorker) {
     // 可以在这里显示通知给用户，或者自动更新
     console.log('SurrealServiceWorkerClient: 发现新版本的 Service Worker');
-    
+
     // 自动跳过等待并激活新的 service worker
     if (newWorker.state === 'installed') {
       newWorker.postMessage({ type: 'SKIP_WAITING' });
@@ -243,7 +243,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
 
   private handleConnectionStateChange(payload: any) {
     const { state, previousState, error, timestamp } = payload;
-    
+
     // 可以在这里添加自定义的连接状态处理逻辑
     if (state === 'connected' && previousState !== 'connected') {
       console.log('SurrealServiceWorkerClient: Connection established');
@@ -257,7 +257,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     const event = new CustomEvent('surreal-connection-state-changed', {
       detail: { state, previousState, error, timestamp }
     });
-    
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(event);
     }
@@ -301,7 +301,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     try {
 
       // Register the service worker with update checking
-      const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`, { 
+      const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`, {
         type: 'module',
         updateViaCache: 'none' // 强制跳过 HTTP 缓存检查更新
       });
@@ -382,7 +382,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     throw new Error('Failed to get service worker after multiple attempts');
   }
 
-  private async sendMessage(type: string, payload?: any): Promise<any> {
+  private async sendMessage(type: string | RecordId, payload?: any): Promise<any> {
     const sw = await this.ensureServiceWorker();
     const messageId = `msg_${++this.messageCounter}`;
 
@@ -450,7 +450,7 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
     return await this.sendMessage('mutate', { sql, vars });
   }
 
-  async create(thing: string, data: unknown): Promise<any> {
+  async create(thing: string | RecordId, data: unknown): Promise<any> {
     return await this.sendMessage('create', { thing, data });
   }
 
@@ -516,6 +516,35 @@ export class SurrealServiceWorkerClient implements SurrealWorkerAPI {
 
   async forceReconnect(): Promise<void> {
     await this.sendMessage('force_reconnect');
+  }
+
+  /**
+   * 通用的Service Worker消息发送方法
+   * 其他模块可以使用这个方法与Service Worker通信
+   */
+  async sendGenericMessage(type: string, payload?: any): Promise<any> {
+    return await this.sendMessage(type, payload);
+  }
+
+  /**
+   * 检查Service Worker是否可用
+   */
+  isServiceWorkerAvailable(): boolean {
+    return typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
+  }
+
+  /**
+   * 等待Service Worker就绪
+   */
+  async waitForReady(): Promise<void> {
+    if (!this.isServiceWorkerAvailable()) {
+      throw new Error('Service Worker not available');
+    }
+
+    // 如果已经有controller，直接返回
+    if (this.serviceWorker) {
+      return;
+    }
   }
 }
 

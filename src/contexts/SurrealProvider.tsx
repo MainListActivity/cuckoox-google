@@ -8,6 +8,8 @@ import React, {
 import { surrealServiceWorkerClient } from '@/src/lib/surrealServiceWorkerClient';
 import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 import { dataService } from '@/src/services/dataService';
+import { authService } from '@/src/services/authService';
+import { userPersonalDataService } from '@/src/services/userPersonalDataService';
 
 interface SurrealProviderProps {
   children: React.ReactNode;
@@ -37,6 +39,14 @@ export interface SurrealContextValue {
   
   // Connection management (internal use)
   reconnect: () => Promise<void>;
+  
+  // Service Worker communication interface
+  sendServiceWorkerMessage: (type: string, payload?: any) => Promise<any>;
+  isServiceWorkerAvailable: () => boolean;
+  waitForServiceWorkerReady: () => Promise<void>;
+  
+  // Authentication status from SurrealDB
+  getAuthStatus: () => Promise<boolean>;
 }
 
 const SurrealContext = createContext<SurrealContextValue | undefined>(undefined);
@@ -89,6 +99,18 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         // Inject client into dataService for dependency injection
         dataService.setClient(surrealServiceWorkerClient);
         
+        // Inject client into authService for dependency injection
+        authService.setSurrealClient(surrealServiceWorkerClient);
+        
+        // Setup Service Worker communication interfaces
+        const serviceWorkerComm = {
+          sendMessage: (type: string, payload?: any) => surrealServiceWorkerClient.sendGenericMessage(type, payload),
+          isAvailable: () => surrealServiceWorkerClient.isServiceWorkerAvailable(),
+          waitForReady: () => surrealServiceWorkerClient.waitForReady(),
+        };
+        
+        userPersonalDataService.setServiceWorkerComm(serviceWorkerComm);
+        
         // Setup session expired callback
         dataService.setSessionExpiredCallback(() => {
           setConnected(false);
@@ -110,6 +132,64 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     setConnected(false);
     setClient(null);
     await connect();
+  };
+
+  // Service Worker communication methods
+  const sendServiceWorkerMessage = async (type: string, payload?: any): Promise<any> => {
+    if (externalClient) {
+      // For test environments, return mock response
+      console.log('SurrealProvider: Mock Service Worker message:', type, payload);
+      return Promise.resolve({ success: true });
+    }
+
+    if (!client) {
+      throw new Error('SurrealDB client not available');
+    }
+
+    try {
+      return await surrealServiceWorkerClient.sendGenericMessage(type, payload);
+    } catch (error) {
+      console.error('SurrealProvider: Service Worker communication error:', error);
+      throw error;
+    }
+  };
+
+  const isServiceWorkerAvailable = (): boolean => {
+    if (externalClient) {
+      // Always return true for test environments
+      return true;
+    }
+    
+    return surrealServiceWorkerClient.isServiceWorkerAvailable();
+  };
+
+  const waitForServiceWorkerReady = async (): Promise<void> => {
+    if (externalClient) {
+      // No-op for test environments
+      return Promise.resolve();
+    }
+    
+    try {
+      await surrealServiceWorkerClient.waitForReady();
+    } catch (error) {
+      console.error('SurrealProvider: Failed to wait for Service Worker:', error);
+      throw error;
+    }
+  };
+
+  // 从SurrealDB获取认证状态
+  const getAuthStatus = async (): Promise<boolean> => {
+    if (externalClient) {
+      // 测试环境返回mock状态
+      return true;
+    }
+
+    try {
+      return await authService.getAuthStatusFromSurreal();
+    } catch (error) {
+      console.error('SurrealProvider: 获取认证状态失败:', error);
+      return false;
+    }
   };
 
   // Auto-connect on mount
@@ -142,8 +222,9 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
 
   const value = useMemo<SurrealContextValue>(() => ({
     dataService,
-    client: client ?? dummyClient,
-    surreal: client ?? dummyClient, // Backward compatibility alias
+    // 只有在测试环境中使用 externalClient 时才使用 dummyClient，否则使用真实的 client 或 null
+    client: externalClient ? (client ?? dummyClient) : client,
+    surreal: externalClient ? (client ?? dummyClient) : client, // Backward compatibility alias
     isConnected,
     isConnecting,
     error,
@@ -154,7 +235,13 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       setError(error);
     },
     reconnect,
-  }), [client, dummyClient, isConnected, isConnecting, error, reconnect]);
+    // Service Worker communication interface
+    sendServiceWorkerMessage,
+    isServiceWorkerAvailable,
+    waitForServiceWorkerReady,
+    // Authentication status
+    getAuthStatus,
+  }), [client, dummyClient, isConnected, isConnecting, error, reconnect, sendServiceWorkerMessage, getAuthStatus, externalClient]);
 
   return <SurrealContext.Provider value={value}>{children}</SurrealContext.Provider>;
 };
@@ -169,5 +256,15 @@ export const useSurreal = () => {
 export const useSurrealClient = () => useSurreal().client;
 export const useDataService = () => useSurreal().dataService;
 export const useSurrealContext = useSurreal; // Alias for backward compatibility
+
+// Service Worker communication hooks
+export const useServiceWorkerComm = () => {
+  const ctx = useSurreal();
+  return {
+    sendMessage: ctx.sendServiceWorkerMessage,
+    isAvailable: ctx.isServiceWorkerAvailable,
+    waitForReady: ctx.waitForServiceWorkerReady,
+  };
+};
 
 export { SurrealContext as Context };

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useServiceWorkerComm } from '../contexts/SurrealProvider';
 import { useUserPersonalData } from './useUserPersonalData';
 
 export interface PermissionCheckResult {
@@ -15,7 +16,7 @@ export interface PermissionCheckResult {
  */
 export function useOperationPermission(operationId: string): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { data: personalData, isLoading, error } = useUserPersonalData();
+  const { personalData, isLoading, error } = useUserPersonalData();
   const [hasPermission, setHasPermission] = useState(false);
   
   useEffect(() => {
@@ -54,7 +55,7 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
  */
 export function useMenuPermission(menuId: string): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { data: personalData, isLoading, error } = useUserPersonalData();
+  const { personalData, isLoading, error } = useUserPersonalData();
   const [hasPermission, setHasPermission] = useState(false);
   
   useEffect(() => {
@@ -71,7 +72,7 @@ export function useMenuPermission(menuId: string): PermissionCheckResult {
     
     if (personalData && personalData.permissions) {
       // 检查菜单权限
-      const menuPermissions = personalData.permissions.menus || [];
+      const menuPermissions = personalData.menus || [];
       const hasMenu = menuPermissions.some(menu => 
         menu.menu_id === menuId && 
         menu.can_access &&
@@ -97,7 +98,7 @@ export function useDataPermission(
   crudType: 'create' | 'read' | 'update' | 'delete'
 ): PermissionCheckResult {
   const { user, selectedCaseId } = useAuth();
-  const { data: personalData, isLoading, error } = useUserPersonalData();
+  const { personalData, isLoading, error } = useUserPersonalData();
   const [hasPermission, setHasPermission] = useState(false);
   
   useEffect(() => {
@@ -136,7 +137,7 @@ export function useDataPermission(
  */
 export function useUserRoles() {
   const { user, selectedCaseId } = useAuth();
-  const { data: personalData, isLoading, error } = useUserPersonalData();
+  const { personalData, isLoading, error } = useUserPersonalData();
   const [roles, setRoles] = useState<string[]>([]);
   
   useEffect(() => {
@@ -172,7 +173,7 @@ export function useUserRoles() {
  */
 export function useOperationPermissions(operationIds: string[]) {
   const { user, selectedCaseId } = useAuth();
-  const { data: personalData, isLoading, error } = useUserPersonalData();
+  const { personalData, isLoading, error } = useUserPersonalData();
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   
   useEffect(() => {
@@ -222,13 +223,14 @@ export function useOperationPermissions(operationIds: string[]) {
  */
 export function useClearPermissionCache() {
   const { user, selectedCaseId } = useAuth();
+  const serviceWorkerComm = useServiceWorkerComm();
 
   const clearUserPermissions = async (caseId?: string) => {
     if (!user) return;
 
     try {
       // 使用新的数据缓存管理器清除用户个人数据
-      await sendMessageToServiceWorker('clear_user_personal_data', {
+      await serviceWorkerComm.sendMessage('clear_user_personal_data', {
         userId: user.id,
         caseId: caseId || selectedCaseId || null
       });
@@ -240,7 +242,7 @@ export function useClearPermissionCache() {
   const clearAllPermissions = async () => {
     try {
       // 使用新的数据缓存管理器清除所有缓存
-      await sendMessageToServiceWorker('clear_all_cache', {});
+      await serviceWorkerComm.sendMessage('clear_all_cache', {});
     } catch (error) {
       console.error('Error clearing all permissions:', error);
     }
@@ -254,13 +256,14 @@ export function useClearPermissionCache() {
  */
 export function useSyncPermissions() {
   const { user, selectedCaseId } = useAuth();
+  const serviceWorkerComm = useServiceWorkerComm();
 
   const syncPermissions = async (personalData: unknown) => {
     if (!user) return;
 
     try {
       // 使用新的数据缓存管理器同步用户个人数据
-      await sendMessageToServiceWorker('sync_user_personal_data', {
+      await serviceWorkerComm.sendMessage('sync_user_personal_data', {
         userId: user.id,
         caseId: selectedCaseId || null,
         personalData
@@ -274,46 +277,3 @@ export function useSyncPermissions() {
   return { syncPermissions };
 }
 
-// Service Worker 消息工具函数
-async function sendMessageToServiceWorker(type: string, payload: unknown): Promise<unknown> {
-  // 在测试环境中提供回退
-  if (typeof navigator === 'undefined' || !navigator.serviceWorker) {
-    return Promise.resolve({ success: true });
-  }
-  
-  return new Promise((resolve, reject) => {
-    if (!navigator.serviceWorker.controller) {
-      reject(new Error('Service Worker controller not available'));
-      return;
-    }
-    
-    const messageId = Date.now().toString();
-    
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data && event.data.messageId === messageId) {
-        navigator.serviceWorker.removeEventListener('message', handleMessage);
-        
-        if (event.data.type === `${type}_response`) {
-          resolve(event.data.payload);
-        } else if (event.data.type === `${type}_error`) {
-          reject(new Error(event.data.payload?.message || 'Unknown error'));
-        }
-      }
-    };
-
-    navigator.serviceWorker.addEventListener('message', handleMessage);
-    
-    // 发送消息到 Service Worker
-    navigator.serviceWorker.controller.postMessage({
-      type,
-      payload,
-      messageId
-    });
-    
-    // 设置超时
-    setTimeout(() => {
-      navigator.serviceWorker.removeEventListener('message', handleMessage);
-      reject(new Error('Service Worker message timeout'));
-    }, 10000);
-  });
-}

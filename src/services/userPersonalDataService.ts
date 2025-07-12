@@ -1,4 +1,3 @@
-import { RecordId } from 'surrealdb';
 import { dataService } from './dataService';
 
 /**
@@ -8,8 +7,6 @@ export interface UserPersonalData {
   // 权限相关
   permissions: {
     operations: OperationPermission[];
-    menus: MenuPermission[];
-    dataAccess: DataPermission[];
   };
   
   // 角色相关
@@ -22,7 +19,7 @@ export interface UserPersonalData {
   menus: MenuMetadata[];
   
   // 用户设置
-  settings: {
+  settings?: {
     theme: string;
     language: string;
     notifications: boolean;
@@ -30,7 +27,7 @@ export interface UserPersonalData {
   };
   
   // 最近访问
-  recentAccess: {
+  recentAccess?: {
     cases: string[];
     documents: string[];
     contacts: string[];
@@ -102,20 +99,16 @@ export class UserPersonalDataService {
     
     try {
       // 并行获取所有个人数据
-      const [permissions, roles, menus, settings, recentAccess] = await Promise.all([
+      const [permissions, roles, menus] = await Promise.all([
         this.fetchUserPermissions(userId, caseId),
         this.fetchUserRoles(userId, caseId),
         this.fetchUserMenus(userId, caseId),
-        this.fetchUserSettings(userId),
-        this.fetchUserRecentAccess(userId)
       ]);
       
       const personalData: UserPersonalData = {
         permissions,
         roles,
         menus,
-        settings,
-        recentAccess,
         syncTimestamp: Date.now()
       };
       
@@ -138,16 +131,8 @@ export class UserPersonalDataService {
       // 获取操作权限
       const operationPermissions = await this.fetchOperationPermissions(userId, caseId);
       
-      // 获取菜单权限
-      const menuPermissions = await this.fetchMenuPermissions(userId, caseId);
-      
-      // 获取数据权限
-      const dataPermissions = await this.fetchDataPermissions(userId, caseId);
-      
       return {
         operations: operationPermissions,
-        menus: menuPermissions,
-        dataAccess: dataPermissions
       };
       
     } catch (error) {
@@ -166,20 +151,7 @@ export class UserPersonalDataService {
   private async fetchOperationPermissions(userId: string, caseId?: string): Promise<OperationPermission[]> {
     try {
       const query = `
-        LET $global_roles = (SELECT out FROM $user_id->has_role);
-        LET $case_roles = IF $case_id THEN 
-          (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-        ELSE [];
-        END;
-        LET $all_roles = array::concat($global_roles, $case_roles);
-        
-        SELECT 
-          out.operation_id as operation_id,
-          $case_id as case_id,
-          can_execute,
-          conditions
-        FROM $all_roles->can_execute_operation 
-        WHERE can_execute = true AND out.is_active = true;
+        select * from operation_metadata;
       `;
       
       const result = await dataService.query(query, {
@@ -196,92 +168,6 @@ export class UserPersonalDataService {
       
     } catch (error) {
       console.error('UserPersonalDataService: Error fetching operation permissions:', error);
-      return [];
-    }
-  }
-  
-  /**
-   * 获取菜单权限
-   */
-  private async fetchMenuPermissions(userId: string, caseId?: string): Promise<MenuPermission[]> {
-    try {
-      const query = `
-        LET $global_roles = (SELECT out FROM $user_id->has_role);
-        LET $case_roles = IF $case_id THEN 
-          (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-        ELSE [];
-        END;
-        LET $all_roles = array::concat($global_roles, $case_roles);
-        
-        SELECT 
-          out.menu_id as menu_id,
-          $case_id as case_id,
-          can_access,
-          visibility_level
-        FROM $all_roles->can_access_menu 
-        WHERE can_access = true AND out.is_active = true;
-      `;
-      
-      const result = await dataService.query(query, {
-        user_id: userId,
-        case_id: caseId || null
-      });
-      
-      return Array.isArray(result) ? result.map(item => ({
-        menu_id: item.menu_id,
-        case_id: item.case_id,
-        can_access: item.can_access,
-        visibility_level: item.visibility_level
-      })) : [];
-      
-    } catch (error) {
-      console.error('UserPersonalDataService: Error fetching menu permissions:', error);
-      return [];
-    }
-  }
-  
-  /**
-   * 获取数据权限
-   */
-  private async fetchDataPermissions(userId: string, caseId?: string): Promise<DataPermission[]> {
-    try {
-      const query = `
-        LET $global_roles = (SELECT out FROM $user_id->has_role);
-        LET $case_roles = IF $case_id THEN 
-          (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-        ELSE [];
-        END;
-        LET $all_roles = array::concat($global_roles, $case_roles);
-        
-        SELECT 
-          table_name,
-          $case_id as case_id,
-          {
-            create: can_create,
-            read: can_read,
-            update: can_update,
-            delete: can_delete
-          } as crud_permissions,
-          conditions
-        FROM $all_roles->has_data_permission 
-        WHERE is_active = true
-        GROUP BY table_name;
-      `;
-      
-      const result = await dataService.query(query, {
-        user_id: userId,
-        case_id: caseId || null
-      });
-      
-      return Array.isArray(result) ? result.map(item => ({
-        table_name: item.table_name,
-        case_id: item.case_id,
-        crud_permissions: item.crud_permissions,
-        conditions: item.conditions
-      })) : [];
-      
-    } catch (error) {
-      console.error('UserPersonalDataService: Error fetching data permissions:', error);
       return [];
     }
   }
@@ -350,28 +236,7 @@ export class UserPersonalDataService {
     try {
       // 使用现有的菜单服务获取用户可访问的菜单
       const query = `
-        LET $global_roles = (SELECT out FROM $user_id->has_role);
-        LET $case_roles = IF $case_id THEN 
-          (SELECT out FROM $user_id->has_case_role WHERE case_id = $case_id)
-        ELSE [];
-        END;
-        LET $all_roles = array::concat($global_roles, $case_roles);
-        
-        SELECT 
-          id,
-          path,
-          label_key as labelKey,
-          icon_name as iconName,
-          parent_id,
-          order_index,
-          is_active,
-          required_permissions
-        FROM (
-          SELECT DISTINCT out.* 
-          FROM $all_roles->can_access_menu 
-          WHERE can_access = true AND out.is_active = true
-        ) 
-        ORDER BY order_index ASC;
+        select * from menu_metadata;
       `;
       
       const result = await dataService.query(query, {
@@ -393,75 +258,6 @@ export class UserPersonalDataService {
     } catch (error) {
       console.error('UserPersonalDataService: Error fetching user menus:', error);
       return [];
-    }
-  }
-  
-  /**
-   * 获取用户设置
-   */
-  private async fetchUserSettings(userId: string) {
-    try {
-      const query = `
-        SELECT settings FROM user_settings 
-        WHERE user_id = $user_id;
-      `;
-      
-      const result = await dataService.query(query, {
-        user_id: userId
-      });
-      
-      const settings = result?.[0]?.settings || {};
-      
-      return {
-        theme: settings.theme || 'light',
-        language: settings.language || 'zh-CN',
-        notifications: settings.notifications !== false,
-        ...settings
-      };
-      
-    } catch (error) {
-      console.error('UserPersonalDataService: Error fetching user settings:', error);
-      return {
-        theme: 'light',
-        language: 'zh-CN',
-        notifications: true
-      };
-    }
-  }
-  
-  /**
-   * 获取用户最近访问
-   */
-  private async fetchUserRecentAccess(userId: string) {
-    try {
-      const query = `
-        SELECT 
-          recent_cases,
-          recent_documents,
-          recent_contacts
-        FROM user_recent_access 
-        WHERE user_id = $user_id;
-      `;
-      
-      const result = await dataService.query(query, {
-        user_id: userId
-      });
-      
-      const recentData = result?.[0] || {};
-      
-      return {
-        cases: recentData.recent_cases || [],
-        documents: recentData.recent_documents || [],
-        contacts: recentData.recent_contacts || []
-      };
-      
-    } catch (error) {
-      console.error('UserPersonalDataService: Error fetching user recent access:', error);
-      return {
-        cases: [],
-        documents: [],
-        contacts: []
-      };
     }
   }
   
@@ -570,51 +366,43 @@ export class UserPersonalDataService {
     }
   }
   
+  private serviceWorkerComm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  } | null = null;
+
+  /**
+   * 设置Service Worker通信接口（由SurrealProvider注入）
+   */
+  setServiceWorkerComm(comm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  }) {
+    this.serviceWorkerComm = comm;
+  }
+
   /**
    * 发送消息到Service Worker
    */
   private async sendMessageToServiceWorker(type: string, payload: unknown): Promise<unknown> {
-    if (typeof navigator === 'undefined' || !navigator.serviceWorker) {
+    if (!this.serviceWorkerComm) {
+      throw new Error('Service Worker communication not available. Make sure SurrealProvider is properly initialized.');
+    }
+    
+    if (!this.serviceWorkerComm.isAvailable()) {
       console.warn('UserPersonalDataService: Service Worker not available');
       return Promise.resolve({ success: true });
     }
     
-    return new Promise((resolve, reject) => {
-      if (!navigator.serviceWorker.controller) {
-        reject(new Error('Service Worker not available'));
-        return;
-      }
-      
-      const messageId = Date.now().toString();
-      
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data && event.data.messageId === messageId) {
-          navigator.serviceWorker.removeEventListener('message', handleMessage);
-          
-          if (event.data.type === `${type}_response`) {
-            resolve(event.data.payload);
-          } else if (event.data.type === `${type}_error`) {
-            reject(new Error(event.data.payload?.message || 'Unknown error'));
-          }
-        }
-      };
-
-      navigator.serviceWorker.addEventListener('message', handleMessage);
-      
-      // 发送消息
-      navigator.serviceWorker.controller.postMessage({
-        type,
-        payload,
-        messageId
-      });
-      
-      // 设置超时
-      setTimeout(() => {
-        navigator.serviceWorker.removeEventListener('message', handleMessage);
-        reject(new Error('Service Worker message timeout'));
-      }, 10000);
-    });
+    try {
+      await this.serviceWorkerComm.waitForReady();
+      return await this.serviceWorkerComm.sendMessage(type, payload);
+    } catch (error) {
+      console.error('UserPersonalDataService: Service Worker communication error:', error);
+      throw error;
+    }
   }
 }
-
 export const userPersonalDataService = new UserPersonalDataService();

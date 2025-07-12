@@ -46,6 +46,7 @@ vi.mock('../../../src/services/menuService', () => ({
     hasOperationPermission: vi.fn(),
     hasMenuPermission: vi.fn(),
     setClient: vi.fn(),
+    setDataService: vi.fn(),
   },
 }));
 
@@ -72,6 +73,21 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
     setTokens: vi.fn(),
     clearTokens: vi.fn(),
     getStoredAccessToken: vi.fn(),
+    getAuthStatus: vi.fn().mockResolvedValue(true), // 添加getAuthStatus mock
+  }),
+  useDataService: () => ({
+    getUser: vi.fn(),
+    updateUser: vi.fn(),
+    getCase: vi.fn(),
+    getCases: vi.fn(),
+    updateCase: vi.fn(),
+    createCase: vi.fn(),
+    deleteCase: vi.fn(),
+  }),
+  useServiceWorkerComm: () => ({
+    sendMessage: vi.fn(),
+    isAvailable: vi.fn().mockReturnValue(true),
+    waitForReady: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 
@@ -235,7 +251,6 @@ describe('AuthContext', () => {
         github_id: '--admin--',
         name: 'Admin User',
       }));
-      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
       
       renderWithAuthProvider();
       
@@ -254,7 +269,6 @@ describe('AuthContext', () => {
       };
       
       localStorageMock.setItem('cuckoox-user', JSON.stringify(storedUser));
-      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
       
       renderWithAuthProvider();
       
@@ -290,7 +304,7 @@ describe('AuthContext', () => {
       });
       
       await waitFor(() => {
-        expect(localStorageMock.getItem('cuckoox-isLoggedIn')).toBe('true');
+        // 登录状态现在通过SurrealDB的getAuthStatus获取，不再使用localStorage
         expect(JSON.parse(localStorageMock.getItem('cuckoox-user') || '{}')).toMatchObject({
           github_id: 'oidc123',
           name: 'OIDC User',
@@ -307,8 +321,7 @@ describe('AuthContext', () => {
           github_id: '--admin--',
           name: 'Admin User',
         }));
-        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
-        renderWithAuthProvider(mockAdminUser);
+          renderWithAuthProvider(mockAdminUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
       });
 
@@ -398,7 +411,6 @@ describe('AuthContext', () => {
         github_id: 'oidc123',
         name: 'OIDC User',
       }));
-      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
       
       (mockSurrealClient.query as Mock).mockResolvedValue([[{
         case_details: mockCase1,
@@ -445,8 +457,7 @@ describe('AuthContext', () => {
           github_id: '--admin--',
           name: 'Admin User',
         }));
-        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
-        renderWithAuthProvider(mockAdminUser);
+          renderWithAuthProvider(mockAdminUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
         (mockSurrealClient.signout as Mock).mockResolvedValue(undefined);
       });
@@ -462,7 +473,7 @@ describe('AuthContext', () => {
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
         expect(localStorageMock.getItem('cuckoox-user')).toBeNull();
-        expect(localStorageMock.getItem('cuckoox-isLoggedIn')).toBeNull();
+        // 登录状态现在通过SurrealDB的getAuthStatus获取，不再检查localStorage
         expect(localStorageMock.getItem('cuckoox-selectedCaseId')).toBeNull();
       });
 
@@ -494,8 +505,7 @@ describe('AuthContext', () => {
           github_id: 'oidc123',
           name: 'OIDC User',
         }));
-        localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
-
+  
         renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
         (authService.logoutRedirect as Mock).mockResolvedValue(undefined);
@@ -571,7 +581,6 @@ describe('AuthContext', () => {
         github_id: '--admin--',
         name: 'Admin User',
       }));
-      localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
       
       renderWithAuthProvider(mockAdminUser);
       
@@ -765,8 +774,7 @@ describe('AuthContext', () => {
          github_id: 'oidc123',
          name: 'OIDC User',
        }));
-       localStorageMock.setItem('cuckoox-isLoggedIn', 'true');
-       
+        
        renderWithAuthProvider(mockOidcUser);
        
        await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));

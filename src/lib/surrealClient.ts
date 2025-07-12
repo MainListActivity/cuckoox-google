@@ -20,7 +20,6 @@ export function checkTenantCodeAndRedirect(): boolean {
   
   if (!tenantCode) {
     // 清除认证状态
-    localStorage.removeItem('cuckoox-isLoggedIn');
     localStorage.removeItem('cuckoox-user');
     localStorage.removeItem('cuckoox-selectedCaseId');
     localStorage.removeItem('access_token');
