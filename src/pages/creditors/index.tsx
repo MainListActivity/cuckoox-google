@@ -23,6 +23,7 @@ import {
   CircularProgress, // Added for loading state
   Alert, // Added for error state
   TablePagination, // Added for pagination
+  Chip, // Added for search criteria display
 } from '@mui/material';
 import { 
   mdiAccountPlusOutline, 
@@ -31,6 +32,7 @@ import {
   mdiDeleteOutline, 
   mdiMagnify, // Added
   mdiFileImportOutline,
+  mdiFilterOutline, // Added for advanced search
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
@@ -38,6 +40,8 @@ import PrintWaybillsDialog from './PrintWaybillsDialog'; // MODIFIED PATH
 import AddCreditorDialog from './AddCreditorDialog'; // MODIFIED PATH
 import type { CreditorFormData, Creditor, RawCreditorData, CountResult, CsvRowData } from './types'; // MODIFIED PATH for type
 import BatchImportCreditorsDialog from './BatchImportCreditorsDialog'; // MODIFIED PATH
+import AdvancedSearchDialog, { type AdvancedSearchCriteria } from './AdvancedSearchDialog';
+import CreditorClaimsDialog from './CreditorClaimsDialog';
 import ConfirmDeleteDialog from '@/src/components/common/ConfirmDeleteDialog';
 import { useAuth } from '@/src/contexts/AuthContext'; // Added
 import { useSurreal } from '@/src/contexts/SurrealProvider'; // Added
@@ -91,8 +95,16 @@ const CreditorListPage: React.FC = () => {
   const [isBatchProcessing, setIsBatchProcessing] = useState<boolean>(false); // Added for batch import loading state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [creditorToDelete, setCreditorToDelete] = useState<Creditor | null>(null);
+  
+  // Advanced search states
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState<boolean>(false);
+  const [currentSearchCriteria, setCurrentSearchCriteria] = useState<AdvancedSearchCriteria | null>(null);
+  
+  // Creditor claims dialog states
+  const [claimsDialogOpen, setClaimsDialogOpen] = useState<boolean>(false);
+  const [selectedCreditorForClaims, setSelectedCreditorForClaims] = useState<Creditor | null>(null);
 
-  const fetchCreditors = React.useCallback(async (currentPage: number, currentRowsPerPage: number, currentSearchTerm: string) => {
+  const fetchCreditors = React.useCallback(async (currentPage: number, currentRowsPerPage: number, currentSearchTerm: string, searchCriteria?: AdvancedSearchCriteria | null) => {
     if (!selectedCaseId || !isDbConnected) {
       setCreditors([]);
       setTotalCreditors(0);
@@ -110,18 +122,83 @@ const CreditorListPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      let dataQuery = 'SELECT id, type, name, legal_id, contact_person_name, contact_phone, contact_address, created_at, case_id FROM creditor WHERE case_id = $caseId';
+      let dataQuery = `SELECT 
+        id, 
+        type, 
+        name, 
+        legal_id, 
+        contact_person_name, 
+        contact_phone, 
+        contact_address, 
+        created_at, 
+        case_id,
+        (SELECT math::sum(asserted_claim_details.total_asserted_amount) FROM claim WHERE creditor_id = \$parent.id AND case_id = \$parent.case_id GROUP ALL)[0] AS total_claim_amount,
+        (SELECT count() FROM claim WHERE creditor_id = \$parent.id AND case_id = \$parent.case_id GROUP ALL)[0] AS claim_count
+      FROM creditor WHERE case_id = $caseId`;
       let countQuery = 'SELECT count() AS total FROM creditor WHERE case_id = $caseId';
       const queryParams: Record<string, unknown> = {
         caseId: selectedCaseId,
       };
 
-      if (currentSearchTerm && currentSearchTerm.trim() !== '') {
-        const searchCondition = `AND (name CONTAINS $searchTerm OR legal_id CONTAINS $searchTerm OR contact_person_name CONTAINS $searchTerm OR contact_phone CONTAINS $searchTerm OR contact_address CONTAINS $searchTerm)`;
-        dataQuery += ` ${searchCondition}`;
-        countQuery += ` ${searchCondition}`;
+      // Build search conditions based on search criteria or simple search term
+      const searchConditions: string[] = [];
+      
+      if (searchCriteria) {
+        // Advanced search mode
+        if (searchCriteria.useFullTextSearch && searchCriteria.fullTextSearch.trim()) {
+          // Use full-text search with @@ operator across multiple fields
+          const fullTextQuery = searchCriteria.fullTextSearch.trim();
+          searchConditions.push(`AND (name @@ $fullTextQuery OR legal_id @@ $fullTextQuery OR contact_person_name @@ $fullTextQuery OR contact_phone @@ $fullTextQuery OR contact_address @@ $fullTextQuery)`);
+          queryParams.fullTextQuery = fullTextQuery;
+        } else {
+          // Field-specific search
+          if (searchCriteria.name.trim()) {
+            searchConditions.push(`AND name CONTAINS $nameQuery`);
+            queryParams.nameQuery = searchCriteria.name.trim();
+          }
+          if (searchCriteria.identifier.trim()) {
+            searchConditions.push(`AND legal_id CONTAINS $identifierQuery`);
+            queryParams.identifierQuery = searchCriteria.identifier.trim();
+          }
+          if (searchCriteria.contactPersonName.trim()) {
+            searchConditions.push(`AND contact_person_name CONTAINS $contactPersonQuery`);
+            queryParams.contactPersonQuery = searchCriteria.contactPersonName.trim();
+          }
+          if (searchCriteria.contactPhone.trim()) {
+            searchConditions.push(`AND contact_phone CONTAINS $contactPhoneQuery`);
+            queryParams.contactPhoneQuery = searchCriteria.contactPhone.trim();
+          }
+          if (searchCriteria.address.trim()) {
+            searchConditions.push(`AND contact_address CONTAINS $addressQuery`);
+            queryParams.addressQuery = searchCriteria.address.trim();
+          }
+        }
+        
+        // Type filter
+        if (searchCriteria.type !== 'all') {
+          searchConditions.push(`AND type = $typeFilter`);
+          queryParams.typeFilter = searchCriteria.type;
+        }
+        
+        // Date range filters
+        if (searchCriteria.createdAfter) {
+          searchConditions.push(`AND created_at >= $createdAfter`);
+          queryParams.createdAfter = searchCriteria.createdAfter.toISOString();
+        }
+        if (searchCriteria.createdBefore) {
+          searchConditions.push(`AND created_at <= $createdBefore`);
+          queryParams.createdBefore = searchCriteria.createdBefore.toISOString();
+        }
+      } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+        // Simple search mode (legacy)
+        searchConditions.push(`AND (name CONTAINS $searchTerm OR legal_id CONTAINS $searchTerm OR contact_person_name CONTAINS $searchTerm OR contact_phone CONTAINS $searchTerm OR contact_address CONTAINS $searchTerm)`);
         queryParams.searchTerm = currentSearchTerm;
       }
+      
+      // Apply search conditions
+      const searchConditionStr = searchConditions.join(' ');
+      dataQuery += searchConditionStr;
+      countQuery += searchConditionStr;
 
       dataQuery += ' ORDER BY created_at DESC LIMIT $limit START $start;';
       queryParams.limit = currentRowsPerPage;
@@ -143,13 +220,32 @@ const CreditorListPage: React.FC = () => {
         case_id: cred.case_id,
         created_at: cred.created_at,
         updated_at: cred.updated_at,
+        total_claim_amount: cred.total_claim_amount || 0,
+        claim_count: cred.claim_count || 0,
       }));
       setCreditors(formattedCreditors);
 
       // Fetch total count with authentication check
-      // Remove limit and start params for count query, only keep caseId and searchTerm (if applicable)
+      // Remove limit and start params for count query, keep all search-related params
       const countQueryParams: Record<string, unknown> = { caseId: selectedCaseId };
-      if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+      
+      // Copy search-related parameters for count query
+      if (searchCriteria) {
+        if (searchCriteria.useFullTextSearch && searchCriteria.fullTextSearch.trim()) {
+          countQueryParams.fullTextQuery = queryParams.fullTextQuery;
+        } else {
+          // Copy field-specific search params
+          if (queryParams.nameQuery) countQueryParams.nameQuery = queryParams.nameQuery;
+          if (queryParams.identifierQuery) countQueryParams.identifierQuery = queryParams.identifierQuery;
+          if (queryParams.contactPersonQuery) countQueryParams.contactPersonQuery = queryParams.contactPersonQuery;
+          if (queryParams.contactPhoneQuery) countQueryParams.contactPhoneQuery = queryParams.contactPhoneQuery;
+          if (queryParams.addressQuery) countQueryParams.addressQuery = queryParams.addressQuery;
+        }
+        // Copy filter params
+        if (queryParams.typeFilter) countQueryParams.typeFilter = queryParams.typeFilter;
+        if (queryParams.createdAfter) countQueryParams.createdAfter = queryParams.createdAfter;
+        if (queryParams.createdBefore) countQueryParams.createdBefore = queryParams.createdBefore;
+      } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
         countQueryParams.searchTerm = currentSearchTerm;
       }
       const countResult: unknown = await dataService.queryWithAuth(countQuery, countQueryParams);
@@ -188,8 +284,8 @@ const CreditorListPage: React.FC = () => {
   }, [debouncedSearchTerm]);
 
   useEffect(() => {
-    fetchCreditors(page, rowsPerPage, debouncedSearchTerm);
-  }, [fetchCreditors, page, rowsPerPage, debouncedSearchTerm]);
+    fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria);
+  }, [fetchCreditors, page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria]);
 
   const handleChangePage = (_event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
     setPage(newPage);
@@ -279,7 +375,7 @@ const CreditorListPage: React.FC = () => {
         });
 
         showSuccess(t('creditor_updated_success', '债权人已成功更新'));
-        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the list with current debounced search term
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the list with current search criteria
         handleCloseAddCreditorDialog();
       } catch (err) {
         console.error("Error updating creditor:", err);
@@ -320,7 +416,7 @@ const CreditorListPage: React.FC = () => {
         const result = await dataService.queryWithAuth('CREATE creditor CONTENT $data', { data: newCreditorData });
         console.log("Creditor created successfully:", result);
         showSuccess(t('creditor_added_success', '债权人已成功添加'));
-        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the creditor list with current debounced search term
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the creditor list with current search criteria
         handleCloseAddCreditorDialog();
       } catch (err) { // ADDED opening brace
         console.error("Error creating creditor:", err);
@@ -415,7 +511,7 @@ const CreditorListPage: React.FC = () => {
 
         setIsBatchProcessing(false);
         setBatchImportOpen(false); // Close dialog
-        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the main list with current debounced search term
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the main list with current search criteria
 
         if (failedImports > 0) {
           showError(t('batch_import_summary_with_errors',
@@ -471,7 +567,7 @@ const CreditorListPage: React.FC = () => {
       await dataService.mutateWithAuth('DELETE $id;', { id: creditorToDelete.id });
 
       showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
-      fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the list with current debounced search term
+      fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the list with current search criteria
     } catch (err) {
       console.error("Error deleting creditor:", err);
       
@@ -487,27 +583,159 @@ const CreditorListPage: React.FC = () => {
     }
   };
 
+  // Advanced search handlers
+  const handleOpenAdvancedSearch = () => {
+    setAdvancedSearchOpen(true);
+  };
+
+  const handleCloseAdvancedSearch = () => {
+    setAdvancedSearchOpen(false);
+  };
+
+  const handleAdvancedSearch = (criteria: AdvancedSearchCriteria) => {
+    setCurrentSearchCriteria(criteria);
+    setSearchTerm(''); // Clear simple search when using advanced search
+    setPage(0); // Reset to first page for new search
+  };
+
+  const handleClearAdvancedSearch = () => {
+    setCurrentSearchCriteria(null);
+    setSearchTerm('');
+    setPage(0);
+  };
+
+  // Check if advanced search is active
+  const isAdvancedSearchActive = currentSearchCriteria !== null;
+
+  // Creditor claims dialog handlers
+  const handleOpenCreditorClaims = (creditor: Creditor) => {
+    setSelectedCreditorForClaims(creditor);
+    setClaimsDialogOpen(true);
+  };
+
+  const handleCloseCreditorClaims = () => {
+    setClaimsDialogOpen(false);
+    setSelectedCreditorForClaims(null);
+  };
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h4" component="h1" gutterBottom>{t('creditor_list_page_title', '债权人管理')}</Typography>
       
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <TextField
-          label={t('search_creditors_label', '搜索债权人')}
-          variant="outlined"
-          size="small"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SvgIcon fontSize="small"><path d={mdiMagnify} /></SvgIcon>
-              </InputAdornment>
-            ),
-          }}
-          sx={{ minWidth: '300px', flexGrow: { xs:1, sm: 0.5, md:0.3 } }} // Responsive grow
-        />
+      {/* 搜索区域 */}
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: isAdvancedSearchActive ? 2 : 0, flexWrap: 'wrap' }}>
+          <TextField
+            label={t('search_creditors_label', '搜索债权人')}
+            variant="outlined"
+            size="small"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={isAdvancedSearchActive}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SvgIcon fontSize="small"><path d={mdiMagnify} /></SvgIcon>
+                </InputAdornment>
+              ),
+            }}
+            sx={{ minWidth: '300px', flexGrow: { xs:1, sm: 0.5, md:0.3 } }}
+          />
+          <Button
+            variant={isAdvancedSearchActive ? "contained" : "outlined"}
+            color={isAdvancedSearchActive ? "primary" : "inherit"}
+            startIcon={<SvgIcon><path d={mdiFilterOutline} /></SvgIcon>}
+            onClick={handleOpenAdvancedSearch}
+            size="small"
+          >
+            {t('advanced_search_button', '高级搜索')}
+          </Button>
+          {isAdvancedSearchActive && (
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={handleClearAdvancedSearch}
+              size="small"
+            >
+              {t('clear_search_button', '清除搜索')}
+            </Button>
+          )}
+        </Box>
+        
+        {/* 当前搜索条件显示 */}
+        {isAdvancedSearchActive && currentSearchCriteria && (
+          <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              {t('current_search_conditions', '当前搜索条件')}:
+            </Typography>
+            <Box sx={{ mt: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {/* 全文搜索 */}
+                {currentSearchCriteria.useFullTextSearch && currentSearchCriteria.fullTextSearch && (
+                  <Chip
+                    label={`全文搜索: "${currentSearchCriteria.fullTextSearch}"`}
+                    size="small"
+                    color="primary"
+                    variant="filled"
+                  />
+                )}
+                
+                {/* 字段搜索 */}
+                {!currentSearchCriteria.useFullTextSearch && (
+                  <>
+                    {currentSearchCriteria.name && (
+                      <Chip label={`姓名: "${currentSearchCriteria.name}"`} size="small" variant="outlined" />
+                    )}
+                    {currentSearchCriteria.identifier && (
+                      <Chip label={`证件号: "${currentSearchCriteria.identifier}"`} size="small" variant="outlined" />
+                    )}
+                    {currentSearchCriteria.contactPersonName && (
+                      <Chip label={`联系人: "${currentSearchCriteria.contactPersonName}"`} size="small" variant="outlined" />
+                    )}
+                    {currentSearchCriteria.contactPhone && (
+                      <Chip label={`电话: "${currentSearchCriteria.contactPhone}"`} size="small" variant="outlined" />
+                    )}
+                    {currentSearchCriteria.address && (
+                      <Chip label={`地址: "${currentSearchCriteria.address}"`} size="small" variant="outlined" />
+                    )}
+                  </>
+                )}
+                
+                {/* 筛选条件 */}
+                {currentSearchCriteria.type !== 'all' && (
+                  <Chip 
+                    label={`类型: ${currentSearchCriteria.type === 'organization' ? '组织' : '个人'}`} 
+                    size="small" 
+                    color="secondary" 
+                    variant="outlined" 
+                  />
+                )}
+                
+                {(currentSearchCriteria.minClaimAmount || currentSearchCriteria.maxClaimAmount) && (
+                  <Chip 
+                    label={`债权金额: ${currentSearchCriteria.minClaimAmount ? `≥${currentSearchCriteria.minClaimAmount}元` : ''}${currentSearchCriteria.minClaimAmount && currentSearchCriteria.maxClaimAmount ? ' 且 ' : ''}${currentSearchCriteria.maxClaimAmount ? `≤${currentSearchCriteria.maxClaimAmount}元` : ''}`}
+                    size="small" 
+                    color="info" 
+                    variant="outlined" 
+                  />
+                )}
+                
+                {(currentSearchCriteria.createdAfter || currentSearchCriteria.createdBefore) && (
+                  <Chip 
+                    label={`创建时间: ${currentSearchCriteria.createdAfter ? currentSearchCriteria.createdAfter.toLocaleDateString() : ''}${currentSearchCriteria.createdAfter && currentSearchCriteria.createdBefore ? ' 至 ' : ''}${currentSearchCriteria.createdBefore ? currentSearchCriteria.createdBefore.toLocaleDateString() : ''}`}
+                    size="small" 
+                    color="warning" 
+                    variant="outlined" 
+                  />
+                )}
+              </Stack>
+            </Box>
+          </Box>
+        )}
+      </Box>
+
+      {/* 操作按钮区域 */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Stack direction="row" spacing={1} sx={{flexWrap: 'wrap', gap:1}}> {/* Allow buttons to wrap and add gap */}
           {canCreate && (
             <Button variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiAccountPlusOutline} /></SvgIcon>} onClick={handleOpenAddCreditorDialog}>
@@ -554,25 +782,27 @@ const CreditorListPage: React.FC = () => {
                 <TableCell sx={{whiteSpace: 'nowrap'}}>{t('table_header_contact_person', '联系人')}</TableCell>
                 <TableCell sx={{whiteSpace: 'nowrap'}}>{t('table_header_contact_phone', '联系方式')}</TableCell>
                 <TableCell sx={{whiteSpace: 'nowrap'}}>{t('table_header_address', '地址')}</TableCell>
+                <TableCell align="right" sx={{whiteSpace: 'nowrap'}}>{t('table_header_claim_amount', '债权金额')}</TableCell>
+                <TableCell align="center" sx={{whiteSpace: 'nowrap'}}>{t('table_header_claim_count', '债权数量')}</TableCell>
                 <TableCell align="center" sx={{whiteSpace: 'nowrap'}}>{t('table_header_actions', '操作')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={11} align="center" sx={{ py: 3 }}>
                     <CircularProgress />
                     <Typography sx={{ mt: 1 }}>{t('loading_creditors', '正在加载债权人数据...')}</Typography>
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={11} align="center" sx={{ py: 3 }}>
                     <Alert severity="error" sx={{ justifyContent: 'center' }}>{error}</Alert>
                   </TableCell>
                 </TableRow>
               ) : creditors.length === 0 ? ( // Use creditors instead of filteredCreditors
-                <TableRow><TableCell colSpan={9} align="center"><Typography sx={{p:2}}>{debouncedSearchTerm ? t('no_matching_creditors_found', '没有找到匹配的债权人') : t('no_creditors_found', '暂无债权人数据')}</Typography></TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} align="center"><Typography sx={{p:2}}>{debouncedSearchTerm ? t('no_matching_creditors_found', '没有找到匹配的债权人') : t('no_creditors_found', '暂无债权人数据')}</Typography></TableCell></TableRow>
               ) : (
                 creditors.map((creditor, index) => { // Use creditors instead of filteredCreditors
                   const isItemSelected = isSelected(creditor.id);
@@ -602,6 +832,30 @@ const CreditorListPage: React.FC = () => {
                     <TableCell>{creditor.contact_person_name}</TableCell>
                     <TableCell>{creditor.contact_person_phone}</TableCell>
                     <TableCell>{creditor.address}</TableCell>
+                    <TableCell align="right">
+                      {creditor.total_claim_amount ? 
+                        `¥${creditor.total_claim_amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 
+                        '¥0.00'
+                      }
+                    </TableCell>
+                    <TableCell 
+                      align="center" 
+                      sx={{ 
+                        cursor: creditor.claim_count && creditor.claim_count > 0 ? 'pointer' : 'default',
+                        color: creditor.claim_count && creditor.claim_count > 0 ? 'primary.main' : 'text.primary',
+                        textDecoration: creditor.claim_count && creditor.claim_count > 0 ? 'underline' : 'none',
+                        '&:hover': creditor.claim_count && creditor.claim_count > 0 ? { 
+                          backgroundColor: 'action.hover' 
+                        } : {}
+                      }}
+                      onClick={creditor.claim_count && creditor.claim_count > 0 ? (e) => {
+                        e.stopPropagation();
+                        handleOpenCreditorClaims(creditor);
+                      } : undefined}
+                      title={creditor.claim_count && creditor.claim_count > 0 ? t('click_to_view_claims', '点击查看债权详情') : undefined}
+                    >
+                      {creditor.claim_count || 0}
+                    </TableCell>
                     <TableCell align="center">
                       <Stack direction="row" spacing={0} justifyContent="center">
                         {canEdit && (
@@ -694,6 +948,18 @@ const CreditorListPage: React.FC = () => {
             ? t('delete_creditor_dialog_content', `您确定要删除债权人 "${creditorToDelete.name}" 吗？此操作不可撤销。`)
             : ''
         }
+      />
+      <AdvancedSearchDialog
+        open={advancedSearchOpen}
+        onClose={handleCloseAdvancedSearch}
+        onSearch={handleAdvancedSearch}
+        onClear={handleClearAdvancedSearch}
+        initialCriteria={currentSearchCriteria || undefined}
+      />
+      <CreditorClaimsDialog
+        open={claimsDialogOpen}
+        onClose={handleCloseCreditorClaims}
+        creditor={selectedCreditorForClaims}
       />
     </Box>
   );

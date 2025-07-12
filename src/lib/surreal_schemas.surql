@@ -119,6 +119,10 @@ DEFINE INDEX claim_case_creditor_idx ON claim FIELDS case_id, creditor_id;
 DEFINE INDEX claim_case_number_idx ON claim FIELDS case_id, claim_number UNIQUE;
 DEFINE INDEX claim_case_status_idx ON claim FIELDS case_id, review_status_id;
 
+-- 债权金额聚合查询优化索引
+DEFINE INDEX claim_creditor_amount_idx ON claim FIELDS creditor_id, status, asserted_claim_details.total_asserted_amount;
+DEFINE INDEX claim_case_creditor_amount_idx ON claim FIELDS case_id, creditor_id, asserted_claim_details.total_asserted_amount;
+
 
 -- ------------------------------
 -- TABLE: claim_nature_definition
@@ -175,6 +179,21 @@ DEFINE FIELD type ON creditor TYPE string ASSERT $value INSIDE ['organization', 
 DEFINE FIELD updated_at ON creditor TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
 
 DEFINE INDEX creditor_case_legal_id_idx ON creditor FIELDS case_id, legal_id UNIQUE;
+
+-- 全文搜索分析器 - 支持债权人高级搜索功能  
+DEFINE ANALYZER creditor_search_analyzer TOKENIZERS blank,punct,camel,class FILTERS lowercase,ascii;
+
+-- 债权人全文搜索索引
+DEFINE INDEX creditor_fulltext_name_idx ON creditor FIELDS name SEARCH ANALYZER creditor_search_analyzer BM25 HIGHLIGHTS;
+DEFINE INDEX creditor_fulltext_legal_id_idx ON creditor FIELDS legal_id SEARCH ANALYZER creditor_search_analyzer BM25 HIGHLIGHTS;
+DEFINE INDEX creditor_fulltext_contact_person_idx ON creditor FIELDS contact_person_name SEARCH ANALYZER creditor_search_analyzer BM25 HIGHLIGHTS;
+DEFINE INDEX creditor_fulltext_contact_phone_idx ON creditor FIELDS contact_phone SEARCH ANALYZER creditor_search_analyzer BM25 HIGHLIGHTS;
+DEFINE INDEX creditor_fulltext_address_idx ON creditor FIELDS contact_address SEARCH ANALYZER creditor_search_analyzer BM25 HIGHLIGHTS;
+
+-- 优化债权人搜索性能的复合索引
+DEFINE INDEX creditor_search_optimized_idx ON creditor FIELDS case_id, type, created_at DESC;
+DEFINE INDEX creditor_name_search_idx ON creditor FIELDS case_id, name;
+DEFINE INDEX creditor_contact_search_idx ON creditor FIELDS case_id, contact_person_name, contact_phone;
 
 
 -- ------------------------------

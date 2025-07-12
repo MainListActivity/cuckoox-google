@@ -12,6 +12,8 @@ export interface Creditor {
   case_id?: RecordId | string; // Added
   created_at?: string; // Added
   updated_at?: string; // Added
+  total_claim_amount?: number; // 债权人在当前案件中的总债权金额
+  claim_count?: number; // 债权人在当前案件中的债权数量
 }
 
 // Form data type with camelCase property names for form handling
@@ -37,6 +39,8 @@ export interface RawCreditorData {
   case_id: RecordId | string;
   created_at?: string;
   updated_at?: string;
+  total_claim_amount?: number; // 总债权金额
+  claim_count?: number; // 债权数量
 }
 
 // Count query result type

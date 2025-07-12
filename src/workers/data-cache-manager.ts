@@ -96,10 +96,34 @@ export class DataCacheManager {
     // 创建缓存相关表
     await this.createCacheTables();
     
+    // 清理无效的订阅记录
+    await this.cleanupInvalidSubscriptions();
+    
     // 恢复活跃订阅
     await this.restoreActiveSubscriptions();
     
     console.log('DataCacheManager: Initialized successfully');
+  }
+
+  /**
+   * 清理无效的订阅记录
+   */
+  private async cleanupInvalidSubscriptions(): Promise<void> {
+    try {
+      console.log('DataCacheManager: Cleaning up invalid subscription records...');
+      
+      // 删除缺少 cache_type 字段的记录
+      const deleteQuery = `
+        DELETE FROM subscription_management 
+        WHERE cache_type IS NULL OR cache_type = NONE
+      `;
+      
+      await this.localDb.query(deleteQuery);
+      
+      console.log('DataCacheManager: Invalid subscription records cleaned up');
+    } catch (error) {
+      console.warn('DataCacheManager: Failed to cleanup invalid subscriptions:', error);
+    }
   }
 
   /**
@@ -306,12 +330,12 @@ export class DataCacheManager {
     try {
       // 构建缓存查询
       const cacheQuery = `
-        SELECT data FROM data_table_cache 
+        SELECT data, created_at FROM data_table_cache 
         WHERE table_name = $table_name 
           AND (user_id = $user_id OR user_id IS NULL)
           AND (case_id = $case_id OR case_id IS NULL)
           AND (expires_at IS NULL OR expires_at > time::now())
-        ORDER BY created_at DESC
+        ORDER BY data_table_cache.created_at DESC
       `;
       
       const cacheResult = await this.localDb.query(cacheQuery, {
@@ -425,7 +449,26 @@ export class DataCacheManager {
     try {
       // 使用指定的 RecordId 而不是让数据库自动生成
       const recordId = new RecordId('subscription_management', subscriptionId);
-      await this.localDb.create(recordId, subscription as unknown as FlexibleRecord);
+      
+      // 准备订阅数据，确保所有必需字段都存在
+      const subscriptionData = {
+        table_name: table,
+        cache_type: cacheType, // 确保 cache_type 字段始终存在
+        user_id: userId,
+        case_id: caseId || null, // 使用 null 而不是 undefined，因为 SurrealDB 可以正确处理 null
+        last_sync_time: Date.now(),
+        is_active: true,
+        created_at: new Date()
+      };
+      
+      // 尝试先删除旧记录，然后创建新记录
+      try {
+        await this.localDb.delete(recordId);
+      } catch {
+        // 删除失败说明记录不存在，这是正常的
+      }
+      
+      await this.localDb.create(recordId, subscriptionData as unknown as FlexibleRecord);
     } catch (error) {
       console.warn('DataCacheManager: Failed to record subscription:', error);
       throw error; // 重新抛出错误以便上层处理
@@ -482,7 +525,7 @@ export class DataCacheManager {
       const query = `
         SELECT * FROM ${table} 
         WHERE updated_at > $last_sync_time 
-        ORDER BY updated_at ASC
+        ORDER BY ${table}.updated_at ASC
       `;
       
       const changedData = await this.remoteDb.query(query, {
@@ -533,11 +576,20 @@ export class DataCacheManager {
     };
     
     try {
-      await this.localDb.create(cacheItem.id, cacheItem as unknown as FlexibleRecord);
+      // 过滤掉 undefined 值，避免在 SurrealDB 中变成 NONE
+      const cacheData = Object.fromEntries(
+        Object.entries(cacheItem).filter(([_, value]) => value !== undefined)
+      );
+      
+      await this.localDb.create(cacheItem.id, cacheData as unknown as FlexibleRecord);
     } catch {
       // 如果创建失败，可能是因为记录已存在，尝试更新
       try {
-        await this.localDb.update(cacheItem.id, cacheItem as unknown as FlexibleRecord);
+        const cacheData = Object.fromEntries(
+          Object.entries(cacheItem).filter(([_, value]) => value !== undefined)
+        );
+        
+        await this.localDb.update(cacheItem.id, cacheData as unknown as FlexibleRecord);
       } catch (updateError) {
         console.warn('DataCacheManager: Failed to cache data:', updateError);
       }
@@ -561,7 +613,7 @@ export class DataCacheManager {
         WHERE table_name = $table_name 
           AND (user_id = $user_id OR user_id IS NULL)
           AND (case_id = $case_id OR case_id IS NULL)
-        ORDER BY sync_timestamp DESC 
+        ORDER BY sync_log.sync_timestamp DESC 
         LIMIT 1
       `;
       
@@ -724,12 +776,12 @@ export class DataCacheManager {
   private async getCachedData(table: string, userId?: string, caseId?: string): Promise<QueryResultItem[]> {
     try {
       const query = `
-        SELECT data FROM data_table_cache 
+        SELECT data, created_at FROM data_table_cache 
         WHERE table_name = $table_name 
           AND (user_id = $user_id OR user_id IS NULL)
           AND (case_id = $case_id OR case_id IS NULL)
           AND (expires_at IS NULL OR expires_at > time::now())
-        ORDER BY created_at DESC
+        ORDER BY data_table_cache.created_at DESC
         LIMIT 1
       `;
       
@@ -945,11 +997,20 @@ export class DataCacheManager {
     };
     
     try {
-      await this.localDb.create(cacheItem.id, cacheItem as unknown as FlexibleRecord);
+      // 过滤掉 undefined 值，避免在 SurrealDB 中变成 NONE
+      const cacheData = Object.fromEntries(
+        Object.entries(cacheItem).filter(([_, value]) => value !== undefined)
+      );
+      
+      await this.localDb.create(cacheItem.id, cacheData as unknown as FlexibleRecord);
     } catch {
       // 如果创建失败，尝试更新
       try {
-        await this.localDb.update(cacheItem.id, cacheItem as unknown as FlexibleRecord);
+        const cacheData = Object.fromEntries(
+          Object.entries(cacheItem).filter(([_, value]) => value !== undefined)
+        );
+        
+        await this.localDb.update(cacheItem.id, cacheData as unknown as FlexibleRecord);
       } catch (updateError) {
         console.warn('DataCacheManager: Failed to cache personal data:', updateError);
       }
@@ -962,12 +1023,12 @@ export class DataCacheManager {
   async getPersonalData(userId: string, caseId: string | undefined): Promise<UnknownData | null> {
     try {
       const query = `
-        SELECT data FROM data_table_cache 
+        SELECT data, created_at FROM data_table_cache 
         WHERE table_name = 'user_personal_data'
           AND user_id = $user_id 
           AND (case_id = $case_id OR case_id IS NULL)
           AND (expires_at IS NULL OR expires_at > time::now())
-        ORDER BY created_at DESC
+        ORDER BY data_table_cache.created_at DESC
         LIMIT 1
       `;
       

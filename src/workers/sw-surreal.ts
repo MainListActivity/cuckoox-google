@@ -697,6 +697,10 @@ async function performReconnection() {
     return;
   }
 
+  if (db?.status !== ConnectionStatus.Disconnected && db?.status !== ConnectionStatus.Error) {
+    return;
+  }
+
   reconnectAttempts++;
   console.log(`ServiceWorker: Attempting reconnection #${reconnectAttempts} to ${connectionConfig.endpoint}`);
 
@@ -764,8 +768,8 @@ async function connectWithTimeout(): Promise<void> {
 
     const doConnect = async () => {
       try {
-        await db!.connect(connectionConfig!.endpoint);
-
+        const conn = await db!.connect(connectionConfig!.endpoint);
+        console.log('ServiceWorker: connect resp:', conn)
         // 设置连接事件监听器
         setupConnectionEventListeners();
 
