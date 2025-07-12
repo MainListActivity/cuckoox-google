@@ -66,7 +66,7 @@ const mockCases: Case[] = [
     id: 'case:case1' as unknown as RecordId,
     name: 'Case Alpha',
     case_number: 'C-001',
-    // @ts-ignore - Adding test properties
+    // @ts-expect-error - Adding test properties
     case_procedure: '破产清算',
     procedure_phase: '立案',
     acceptance_date: '2023-01-01',
@@ -76,7 +76,7 @@ const mockCases: Case[] = [
     id: 'case:case2' as unknown as RecordId,
     name: 'Case Beta',
     case_number: 'C-002',
-    // @ts-ignore - Adding test properties
+    // @ts-expect-error - Adding test properties
     case_procedure: '破产重整',
     procedure_phase: '债权申报',
     acceptance_date: '2023-02-01',

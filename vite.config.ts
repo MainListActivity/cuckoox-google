@@ -80,7 +80,7 @@ export default defineConfig(({ mode }) => {
       fs: {
         strict: false
       },
-      allowedHosts: ['dev.cuckoox.cn']
+      allowedHosts: ['dev.cuckoox.cn', 'dc.cuckoox.cn']
     },
     test: { // Vitest configuration
       globals: true,

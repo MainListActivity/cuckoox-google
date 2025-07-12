@@ -157,8 +157,8 @@ const eventHandlers = {
         case 'mutate': {
           await ensureConnection();
           if (!db) throw new Error("Database not initialized");
-          const [result] = await db.query(payload.sql, payload.vars);
-          respond(result);
+          const results = await db.query(payload.sql, payload.vars);
+          respond(results);
           break;
         }
 

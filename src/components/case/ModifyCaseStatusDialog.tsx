@@ -14,7 +14,6 @@ import {
   FormControl,
   InputLabel,
   Box,
-  Grid,
   Chip,
 } from '@mui/material';
 import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor'; // Assuming path
@@ -136,7 +135,11 @@ const ModifyCaseStatusDialog: React.FC<ModifyCaseStatusDialogProps> = ({
   const handleSubmit = () => {
     if (!currentCase || !selectedNextStatus) return;
 
-    const submissionData: any = {
+    const submissionData: {
+      caseId: string;
+      newStatus: CaseStatus;
+      explanation?: QuillDelta;
+    } = {
       caseId: currentCase.id,
       newStatus: selectedNextStatus,
       currentStatus: currentCase.current_status,

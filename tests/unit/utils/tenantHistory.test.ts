@@ -9,7 +9,7 @@ const localStorageMock = {
   clear: vi.fn(),
 };
 
-// @ts-ignore
+// @ts-expect-error - Mock localStorage for testing
 global.localStorage = localStorageMock;
 
 describe('TenantHistoryManager', () => {

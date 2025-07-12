@@ -402,14 +402,6 @@ class AuthService {
       msg.includes('401');
   }
 
-  async handleSessionError(error: any): Promise<boolean> {
-    if (this.isSessionExpiredError(error)) {
-      await this.clearAuthTokens();
-      return true;
-    }
-    return false;
-  }
-
   // Aliases for backward compatibility
   async getUser(): Promise<OidcUser | null> {
     return this.getOidcUser();

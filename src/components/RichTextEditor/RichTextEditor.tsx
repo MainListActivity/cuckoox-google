@@ -21,7 +21,7 @@ import OutlinePanel from './OutlinePanel';
 import ContextPanel from './ContextPanel';
 import ExtensionArea from './ExtensionArea';
 import EditorCore, { EditorCoreRef } from './EditorCore';
-import CollaborationManager from './CollaborationManager';
+// import CollaborationManager from './CollaborationManager';
 
 import type {
   RichTextEditorProps,
@@ -39,13 +39,13 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
     {
       defaultValue,
       onTextChange,
-      onSelectionChange,
+      onSelectionChange: _onSelectionChange,
       placeholder,
       readOnly = false,
       className,
       documentId,
-      userId,
-      userName,
+      userId: _userId,
+      userName: _userName,
       contextInfo,
       viewMode: _viewMode = 'standard',
       initialContentForDocumentView,
@@ -82,7 +82,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
     const [isOutlineOpen, setIsOutlineOpen] = useState(true);
     const [outline, setOutline] = useState<OutlineItem[]>([]);
     const [activeHeaderIndex, setActiveHeaderIndex] = useState<number>(-1);
-    const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
+    const [remoteCursors, _setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
     
     // 扩展区域状态
     const [isExtensionAreaOpen, setIsExtensionAreaOpen] = useState(showExtensionArea);
@@ -141,7 +141,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       } finally {
         setIsSaving(false);
       }
-    }, [onSave, surreal, documentId, isSaving]);
+    }, [onSave, surreal, documentId, isSaving, isConnected]);
 
     // 自动保存功能
     const scheduleAutoSave = useCallback(() => {
@@ -195,7 +195,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
         return;
       }
 
-      const scrollTop = window.scrollY;
+      const _scrollTop = window.scrollY;
       let activeIndex = -1;
 
       // 遍历所有标题，找到最接近当前滚动位置的标题
@@ -603,6 +603,7 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
               imageHandler={imageHandler}
               attachmentHandler={attachmentHandler}
               onReady={handleEditorReady}
+              onTextChange={handleTextChange}
             />
           </Box>
 

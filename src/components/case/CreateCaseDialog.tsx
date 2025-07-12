@@ -25,6 +25,22 @@ import {
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 
+interface CaseData {
+  name: string;
+  case_number: string;
+  case_type: string;
+  court: string;
+  case_value: number;
+  created_by: RecordId | string;
+  bankruptcy_type: string;
+  case_description: string;
+}
+
+interface CreatedCaseResult {
+  id: RecordId | string;
+  [key: string]: unknown;
+}
+
 interface CreateCaseDialogProps {
   open: boolean;
   onClose: () => void;
@@ -152,7 +168,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
     const generatedCaseNumber = `BK-${new Date().getFullYear()}-${timestamp.toString().slice(-6)}`;
     console.log('typeof user?.id===typeof RecordId',user?.id instanceof RecordId)
     // Convert date strings to Date objects for SurrealDB
-    const caseData: any = {
+    const caseData: CaseData = {
       name: caseName.trim(),
       case_number: generatedCaseNumber,
       case_manager_name: caseLead.trim() || user?.name || t('unassigned', '未分配'),
@@ -188,10 +204,11 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
         newCaseIdString = typeof createdCase[0].id === 'string'
           ? createdCase[0].id 
           : createdCase[0].id.toString();
-      } else if (createdCase && (createdCase as any).id) {
-        newCaseIdString = typeof (createdCase as any).id === 'string'
-          ? (createdCase as any).id 
-          : (createdCase as any).id.toString();
+      } else if (createdCase && (createdCase as CreatedCaseResult).id) {
+        const result = createdCase as CreatedCaseResult;
+        newCaseIdString = typeof result.id === 'string'
+          ? result.id 
+          : result.id.toString();
       }
 
       if (newCaseIdString && user && user.id) {

@@ -47,16 +47,16 @@ const pathMatches = (path: string, patterns: string[]): boolean => {
 };
 
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole: _requiredRole }) => {
   const { 
     isLoggedIn, 
-    user, // Need user object for role in autoNavigateConfig
-    hasRole, 
+    user: _user, // Need user object for role in autoNavigateConfig
+    hasRole: _hasRole, 
     selectedCaseId, 
     isLoading: isAuthLoading, 
     isCaseLoading 
   } = useAuth();
-  const { caseStatus } = useCaseStatus();
+  const { caseStatus: _caseStatus } = useCaseStatus();
   const location = useLocation();
   const { t } = useTranslation();
 

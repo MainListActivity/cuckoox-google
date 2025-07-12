@@ -93,14 +93,14 @@ const CaseMemberManagementPage: React.FC = () => {
           WHERE id = $caseId
         `;
         
-        const caseResult = await client.query<Array<Array<{
+        const caseResult = await client!.query<[{
           case_number?: string;
           name?: string;
           case_procedure?: string;
-        }>>>(caseQuery, { caseId: selectedCaseId });
+        }]>(caseQuery, { caseId: selectedCaseId });
         
-        if (caseResult && caseResult[0] && caseResult[0][0]) {
-          const caseData = caseResult[0][0];
+        if (caseResult && caseResult[0]) {
+          const caseData = caseResult[0];
           setCaseInfo({
             case_number: caseData.case_number || `BK-${selectedCaseId.toString().slice(-6)}`,
             name: caseData.name,
@@ -120,15 +120,15 @@ const CaseMemberManagementPage: React.FC = () => {
           GROUP ALL
         `;
         
-        const statsResult = await client.query<Array<Array<{
+        const statsResult = await client!.query<[{
           total_members?: number;
           owner_count?: number;
           member_count?: number;
           active_members?: number;
-        }>>>(statsQuery, { caseId: selectedCaseId });
+        }]>(statsQuery, { caseId: selectedCaseId });
         
-        if (statsResult && statsResult[0] && statsResult[0][0]) {
-          const statsData = statsResult[0][0];
+        if (statsResult && statsResult[0]) {
+          const statsData = statsResult[0];
           setStats({
             totalMembers: statsData.total_members || 0,
             ownerCount: statsData.owner_count || 0,

@@ -12,7 +12,7 @@ export interface LogoProps {
 const Logo: React.FC<LogoProps> = ({
   size = 'auto',
   variant = 'full',
-  color = 'primary',
+  color: _color = 'primary',
   href,
   onClick,
 }) => {

@@ -35,7 +35,6 @@ export interface SurrealContextValue {
   
   // Additional compatibility properties
   isSuccess?: boolean;
-  handleSessionError?: (error: any) => void;
   
   // Connection management (internal use)
   reconnect: () => Promise<void>;
@@ -229,11 +228,6 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     isConnecting,
     error,
     isSuccess: isConnected, // Backward compatibility
-    handleSessionError: (error: any) => {
-      console.error('Session error:', error);
-      setConnected(false);
-      setError(error);
-    },
     reconnect,
     // Service Worker communication interface
     sendServiceWorkerMessage,

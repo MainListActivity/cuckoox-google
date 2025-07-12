@@ -35,6 +35,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
   imageHandler,
   attachmentHandler,
   onReady,
+  onTextChange,
 }, ref) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -237,6 +238,11 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
       quillRef.current = editor;
       isInitializingRef.current = false;
 
+      // 设置文本变化事件监听器
+      if (onTextChange) {
+        editor.on('text-change', onTextChange);
+      }
+
       // 通知父组件编辑器已准备好
       if (onReady) {
         onReady(editor);
@@ -265,6 +271,7 @@ const EditorCore = forwardRef<EditorCoreRef, EditorCoreProps>(({
     imageHandler,
     attachmentHandler,
     onReady,
+    onTextChange,
     t,
     initialContentForDocumentView,
   ]);

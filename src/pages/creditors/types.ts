@@ -2,14 +2,14 @@ import { RecordId } from 'surrealdb';
 
 // Define Creditor type for clarity
 export interface Creditor {
-  id: RecordId; // RecordId as string e.g. "creditor:xxxx"
+  id: RecordId | string; // RecordId or string e.g. "creditor:xxxx"
   type: '组织' | '个人';
   name: string;
   identifier: string;
   contact_person_name: string;
   contact_person_phone: string;
   address: string;
-  case_id?: RecordId; // Added
+  case_id?: RecordId | string; // Added
   created_at?: string; // Added
   updated_at?: string; // Added
 }
@@ -24,3 +24,33 @@ export type CreditorFormData = {
   contactInfo: string; // Maps to Creditor.contact_person_phone
   address: string;
 };
+
+// Raw creditor data from database
+export interface RawCreditorData {
+  id: RecordId | string;
+  type: 'organization' | 'individual';
+  name: string;
+  legal_id: string;
+  contact_person_name: string;
+  contact_phone: string;
+  contact_address: string;
+  case_id: RecordId | string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Count query result type
+export interface CountResult {
+  total: number;
+}
+
+// CSV import row type
+export interface CsvRowData {
+  '类别': string;
+  '名称': string;
+  'ID/统一码': string;
+  '联系人姓名': string;
+  '联系方式': string;
+  '地址': string;
+  [key: string]: string | undefined;
+}

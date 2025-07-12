@@ -99,6 +99,7 @@ This is a legal case management system with the following key architectural comp
 - 支持增量数据同步，基于更新时间获取变更数据
 - 支持双向数据同步，本地和远程数据库同时修改时自动同步
 - 权限检查现在基于本地缓存的用户个人数据，提供更快的响应速度
+- 系统中有一部分页面需要用户登录之后才能访问，否则会跳转到登录页面的，针对这种查询需要在查询的sql之前添加 当前认证状态的查询 例如查询案件： `return $auth;select * from case;`，返回的数据从返回数组中的索引位置1开始获取，先获取0位置的认证状态，如果没有认证则直接跳转登录页面
 
 
 # CuckooX Rust 项目结构指南

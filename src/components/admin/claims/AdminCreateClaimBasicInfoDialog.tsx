@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     Dialog,
+    SelectChangeEvent,
     DialogTitle,
     DialogContent,
     DialogActions,
@@ -67,7 +68,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
             setFormData(initialFormData);
             setErrors({});
         }
-    }, [open]);
+    }, [open, initialFormData]);
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>) => {
         const { name, value } = event.target;
@@ -77,7 +78,7 @@ const AdminCreateClaimBasicInfoDialog: React.FC<AdminCreateClaimBasicInfoDialogP
         }
     };
 
-    const handleSelectChange = (event: any) => { // Using 'any' for SelectChangeEvent for simplicity here
+    const handleSelectChange = (event: SelectChangeEvent<string>) => {
         const { name, value } = event.target;
         setFormData(prev => ({ ...prev, [name as string]: value as string }));
         if (errors[name as keyof AdminBasicClaimData]) {

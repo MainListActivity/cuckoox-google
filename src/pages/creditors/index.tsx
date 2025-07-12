@@ -36,8 +36,7 @@ import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import PrintWaybillsDialog from './PrintWaybillsDialog'; // MODIFIED PATH
 import AddCreditorDialog from './AddCreditorDialog'; // MODIFIED PATH
-import type { CreditorFormData } from './types'; // MODIFIED PATH for type
-import type { Creditor } from './types'; // MODIFIED PATH for type
+import type { CreditorFormData, Creditor, RawCreditorData, CountResult, CsvRowData } from './types'; // MODIFIED PATH for type
 import BatchImportCreditorsDialog from './BatchImportCreditorsDialog'; // MODIFIED PATH
 import ConfirmDeleteDialog from '@/src/components/common/ConfirmDeleteDialog';
 import { useAuth } from '@/src/contexts/AuthContext'; // Added
@@ -45,6 +44,8 @@ import { useSurreal } from '@/src/contexts/SurrealProvider'; // Added
 import { RecordId } from 'surrealdb'; // Added
 import { useDebounce } from '@/src/hooks/useDebounce'; // ADDED
 import { useOperationPermission } from '@/src/hooks/usePermission';
+import { AuthenticationRequiredError } from '@/src/services/dataService'; // Added for new auth check
+import { useNavigate } from 'react-router-dom'; // Added for navigation
 
 // Creditor interface moved to ./types.ts
 
@@ -54,7 +55,8 @@ const CreditorListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError, showInfo } = useSnackbar(); // Added showError and showInfo
   const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
-  const { surreal: client, isSuccess: isDbConnected, handleSessionError } = useSurreal(); // Added
+  const { dataService, isSuccess: isDbConnected } = useSurreal(); // Updated to use dataService
+  const navigate = useNavigate(); // Added for navigation
 
   // Determine if the user has management permissions
   // For now, system admin (user?.github_id === '--admin--') or users with 'case_manager' role for the selected case.
@@ -71,7 +73,7 @@ const CreditorListPage: React.FC = () => {
   const [creditors, setCreditors] = useState<Creditor[]>([]); // Initialize with empty array
   const [isLoading, setIsLoading] = useState<boolean>(true); // Added
   const [error, setError] = useState<string | null>(null); // Added
-  const [selectedCreditorIds, setSelectedCreditorIds] = useState<RecordId[]>([]);
+  const [selectedCreditorIds, setSelectedCreditorIds] = useState<(RecordId | string)[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const debouncedSearchTerm = useDebounce(searchTerm, 500); // ADDED
 
@@ -91,20 +93,16 @@ const CreditorListPage: React.FC = () => {
   const [creditorToDelete, setCreditorToDelete] = useState<Creditor | null>(null);
 
   const fetchCreditors = React.useCallback(async (currentPage: number, currentRowsPerPage: number, currentSearchTerm: string) => {
-    if (!selectedCaseId || !client || !isDbConnected) {
+    if (!selectedCaseId || !isDbConnected) {
       setCreditors([]);
       setTotalCreditors(0);
       setIsLoading(false);
-      if (!selectedCaseId && client && isDbConnected) {
+      if (!selectedCaseId && isDbConnected) {
         setError(t('error_no_case_selected', '请先选择一个案件。'));
-      } else if (selectedCaseId && (!client || !isDbConnected)) {
+      } else if (selectedCaseId && !isDbConnected) {
         setError(t('error_db_not_connected', '数据库未连接。'));
-      } else if (!selectedCaseId && !client && !isDbConnected) {
+      } else if (!selectedCaseId && !isDbConnected) {
         setError(t('error_no_case_selected_or_db_issues', '请选择案件或检查数据库连接。'));
-      } else {
-        // Avoid setting error if selectedCaseId is present but client/db connection is temporarily unavailable during setup
-        // This can happen if the component renders before SurrealProvider is fully ready.
-        // setError(null); // Or a more generic "waiting for connection"
       }
       return;
     }
@@ -131,43 +129,48 @@ const CreditorListPage: React.FC = () => {
 
       countQuery += ' GROUP ALL;';
 
-      // Fetch paginated data
-      const dataResult: unknown = await client.query(dataQuery, queryParams);
-      const fetchedData = Array.isArray(dataResult) ? dataResult as any[] : [];
-      const formattedCreditors: Creditor[] = fetchedData.map((cred: any) => ({
-        ...cred,
-        id: typeof cred.id === 'string' ? cred.id : (cred.id as RecordId).toString(),
-        // Map database fields to frontend interface
+      // Fetch paginated data with authentication check
+      const dataResult: unknown = await dataService.queryWithAuth(dataQuery, queryParams);
+      const fetchedData = Array.isArray(dataResult) ? dataResult as RawCreditorData[] : [];
+      const formattedCreditors: Creditor[] = fetchedData.map((cred: RawCreditorData) => ({
+        id: cred.id,
+        name: cred.name,
         identifier: cred.legal_id,
+        contact_person_name: cred.contact_person_name,
         contact_person_phone: cred.contact_phone,
         address: cred.contact_address,
-        // Map database type values to frontend values
         type: cred.type === 'organization' ? '组织' : '个人',
+        case_id: cred.case_id,
+        created_at: cred.created_at,
+        updated_at: cred.updated_at,
       }));
       setCreditors(formattedCreditors);
 
-      // Fetch total count
+      // Fetch total count with authentication check
       // Remove limit and start params for count query, only keep caseId and searchTerm (if applicable)
       const countQueryParams: Record<string, unknown> = { caseId: selectedCaseId };
       if (currentSearchTerm && currentSearchTerm.trim() !== '') {
         countQueryParams.searchTerm = currentSearchTerm;
       }
-      const countResult: unknown = await client.query(countQuery, countQueryParams);
+      const countResult: unknown = await dataService.queryWithAuth(countQuery, countQueryParams);
 
       // SurrealDB's count() GROUP ALL returns an array with an object, e.g., [{ total: 50 }]
       // If no records, it might return an empty array or an array with an object where total is 0 or undefined.
-      const total = Array.isArray(countResult) && countResult.length > 0 && countResult[0] && typeof (countResult[0] as any).total === 'number'
-                    ? (countResult[0] as any).total
+      const total = Array.isArray(countResult) && countResult.length > 0 && countResult[0] && typeof (countResult[0] as CountResult).total === 'number'
+                    ? (countResult[0] as CountResult).total
                     : 0;
       setTotalCreditors(total);
 
     } catch (err) {
       console.error("Error fetching creditors:", err);
       
-      // 检查是否为认证错误(session/token过期)并处理
-      const isSessionError = await handleSessionError(err);
-      if (!isSessionError) {
-        // 如果不是认证错误，显示一般错误信息
+      // Check if it's an authentication error
+      if (err instanceof AuthenticationRequiredError) {
+        // Redirect to login page
+        navigate('/login');
+        showError(err.message);
+      } else {
+        // Show general error message
         const errorMessage = t('error_fetching_creditors', '获取债权人列表失败。');
         setError(errorMessage);
         showError(errorMessage);
@@ -177,7 +180,7 @@ const CreditorListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, client, isDbConnected, t, handleSessionError]); // Removed showError from deps to prevent infinite loops
+  }, [selectedCaseId, isDbConnected, t, dataService, navigate, showError]); // Updated dependencies
 
   useEffect(() => {
     // Reset page to 0 when debouncedSearchTerm changes
@@ -188,7 +191,7 @@ const CreditorListPage: React.FC = () => {
     fetchCreditors(page, rowsPerPage, debouncedSearchTerm);
   }, [fetchCreditors, page, rowsPerPage, debouncedSearchTerm]);
 
-  const handleChangePage = (event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
+  const handleChangePage = (_event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
     setPage(newPage);
   };
 
@@ -206,9 +209,9 @@ const CreditorListPage: React.FC = () => {
     setSelectedCreditorIds([]);
   };
 
-  const handleClick = (event: React.MouseEvent<unknown>, id: RecordId) => {
+  const handleClick = (_event: React.MouseEvent<unknown>, id: RecordId | string) => {
     const selectedIndex = selectedCreditorIds.indexOf(id);
-    let newSelected: RecordId[] = [];
+    let newSelected: (RecordId | string)[] = [];
 
     if (selectedIndex === -1) {
       newSelected = newSelected.concat(selectedCreditorIds, id);
@@ -225,7 +228,7 @@ const CreditorListPage: React.FC = () => {
     setSelectedCreditorIds(newSelected);
   };
 
-  const isSelected = (id: RecordId) => selectedCreditorIds.indexOf(id) !== -1;
+  const isSelected = (id: RecordId | string) => selectedCreditorIds.indexOf(id) !== -1;
 
   // filteredCreditors is removed, use 'creditors' directly from state which is now backend-filtered
 
@@ -255,7 +258,7 @@ const CreditorListPage: React.FC = () => {
 
   const handleSaveCreditor = async (dataToSave: CreditorFormData) => {
     if (dataToSave.id) { // Editing existing creditor
-      if (!client || !isDbConnected) {
+      if (!isDbConnected) {
         showError(t('database_not_connected', '数据库未连接'));
         return;
       }
@@ -270,7 +273,7 @@ const CreditorListPage: React.FC = () => {
         };
 
         // dataToSave.id is the full record ID string like 'creditor:uuid'
-        await client.query('UPDATE $id MERGE $data;', {
+        await dataService.mutateWithAuth('UPDATE $id MERGE $data;', {
           id: dataToSave.id,
           data: dataForUpdate
         });
@@ -281,9 +284,11 @@ const CreditorListPage: React.FC = () => {
       } catch (err) {
         console.error("Error updating creditor:", err);
         
-        // 检查是否为认证错误(session/token过期)并处理
-        const isSessionError = await handleSessionError(err);
-        if (!isSessionError) {
+        // Check if it's an authentication error
+        if (err instanceof AuthenticationRequiredError) {
+          navigate('/login');
+          showError(err.message);
+        } else {
           showError(t('creditor_update_failed', '更新债权人失败'));
         }
       }
@@ -293,7 +298,7 @@ const CreditorListPage: React.FC = () => {
         showError(t('error_no_case_selected_for_creditor_add', '没有选择案件，无法添加债权人。'));
         return;
       }
-      if (!client || !isDbConnected) {
+      if (!isDbConnected) {
         console.error("Database not connected. Cannot create creditor.");
         showError(t('error_db_not_connected_for_creditor_add', '数据库未连接，无法添加债权人。'));
         return;
@@ -311,9 +316,8 @@ const CreditorListPage: React.FC = () => {
       };
 
       try {
-        // Using client.create as preferred. The table name is 'creditor'.
-        const result = await client.create('creditor', newCreditorData);
-        // client.create typically returns an array with the created record(s)
+        // Use dataService.create with authentication check
+        const result = await dataService.queryWithAuth('CREATE creditor CONTENT $data', { data: newCreditorData });
         console.log("Creditor created successfully:", result);
         showSuccess(t('creditor_added_success', '债权人已成功添加'));
         fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the creditor list with current debounced search term
@@ -321,9 +325,11 @@ const CreditorListPage: React.FC = () => {
       } catch (err) { // ADDED opening brace
         console.error("Error creating creditor:", err);
         
-        // 检查是否为认证错误(session/token过期)并处理
-        const isSessionError = await handleSessionError(err);
-        if (!isSessionError) {
+        // Check if it's an authentication error
+        if (err instanceof AuthenticationRequiredError) {
+          navigate('/login');
+          showError(err.message);
+        } else {
           showError(t('creditor_add_failed', '添加债权人失败'));
         }
       } // ADDED closing brace
@@ -336,7 +342,7 @@ const CreditorListPage: React.FC = () => {
   };
 
   const handleImportCreditors = (file: File) => {
-    if (!selectedCaseId || !client || !isDbConnected) {
+    if (!selectedCaseId || !isDbConnected) {
       showError(t('import_error_no_case_or_db', '无法导入：未选择案件或数据库未连接。'));
       setBatchImportOpen(false);
       return;
@@ -363,7 +369,7 @@ const CreditorListPage: React.FC = () => {
           address: '地址',
         };
 
-        for (const row of results.data as any[]) {
+        for (const row of results.data as CsvRowData[]) {
           if (!row[expectedHeaders.name] || !row[expectedHeaders.identifier] || !row[expectedHeaders.type]) {
             failedImports++;
             errors.push(t('import_error_missing_fields_row', '无效行数据 (缺少必填字段: 名称, ID/统一码, 类别): {{rowJson}}', {rowJson: JSON.stringify(row)}));
@@ -389,19 +395,21 @@ const CreditorListPage: React.FC = () => {
           };
 
           try {
-            await client.create('creditor', creditorDataToCreate);
+            await dataService.queryWithAuth('CREATE creditor CONTENT $data', { data: creditorDataToCreate });
             successfulImports++;
-          } catch (err:any) {
-            // 检查是否为认证错误(session/token过期)
-            const isSessionError = await handleSessionError(err);
-            if (isSessionError) {
-              // 认证失败时停止导入
+          } catch (err: unknown) {
+            const error = err as Error;
+            // Check if it's an authentication error
+            if (err instanceof AuthenticationRequiredError) {
+              // Authentication failed, stop import and redirect to login
+              navigate('/login');
+              showError(error.message);
               break;
             }
             
             failedImports++;
             console.error('Failed to import creditor row:', row, err);
-            errors.push(t('import_error_db_error_row', '导入失败 (数据库错误) 行: {{rowJson}} - {{errorMessage}}', { rowJson: JSON.stringify(row), errorMessage: err.message }));
+            errors.push(t('import_error_db_error_row', '导入失败 (数据库错误) 行: {{rowJson}} - {{errorMessage}}', { rowJson: JSON.stringify(row), errorMessage: error.message }));
           }
         }
 
@@ -424,7 +432,7 @@ const CreditorListPage: React.FC = () => {
           showInfo(t('batch_import_summary_no_valid_rows', '批量导入：未找到有效数据行进行导入。'));
         }
       },
-      error: (error: any) => {
+      error: (error: Error) => {
         console.error("CSV parsing error:", error);
         showError(t('csv_parse_error', 'CSV文件解析失败。'));
         setIsBatchProcessing(false);
@@ -452,7 +460,7 @@ const CreditorListPage: React.FC = () => {
       return;
     }
 
-    if (!client || !isDbConnected) {
+    if (!isDbConnected) {
       showError(t('database_not_connected', '数据库未连接'));
       handleCloseDeleteDialog(); // Close dialog as action cannot be performed
       return;
@@ -460,19 +468,20 @@ const CreditorListPage: React.FC = () => {
 
     try {
       // creditorToDelete.id is the full record ID, e.g., 'creditor:xyz'
-      // Prefer client.delete if available and it's the standard method for the SurrealDB JS library version in use.
-      // Otherwise, client.query is a reliable fallback.
-      if (typeof client.delete === 'function') {
-        await client.delete(creditorToDelete.id);
-      } else {
-        await client.query('DELETE $id;', { id: creditorToDelete.id });
-      }
+      await dataService.mutateWithAuth('DELETE $id;', { id: creditorToDelete.id });
 
       showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
       fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the list with current debounced search term
     } catch (err) {
       console.error("Error deleting creditor:", err);
-      showError(t('creditor_delete_failed', '删除债权人失败'));
+      
+      // Check if it's an authentication error
+      if (err instanceof AuthenticationRequiredError) {
+        navigate('/login');
+        showError(err.message);
+      } else {
+        showError(t('creditor_delete_failed', '删除债权人失败'));
+      }
     } finally {
       handleCloseDeleteDialog(); // Close dialog regardless of success or failure
     }

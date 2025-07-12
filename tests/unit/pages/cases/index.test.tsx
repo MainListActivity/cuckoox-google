@@ -21,7 +21,6 @@ interface SurrealContextType {
   setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => void;
   clearTokens: () => void;
   getStoredAccessToken: () => string | null;
-  handleSessionError: (error: any) => Promise<boolean>;
   setTenantCode: (tenantCode: string) => Promise<void>;
   getTenantCode: () => Promise<string | null>;
 }
@@ -274,7 +273,6 @@ describe('CaseListPage', () => {
       setTokens: vi.fn(),
       clearTokens: vi.fn(),
       getStoredAccessToken: vi.fn().mockReturnValue(null),
-      handleSessionError: vi.fn().mockResolvedValue(false),
       setTenantCode: vi.fn().mockResolvedValue(undefined),
       getTenantCode: vi.fn().mockResolvedValue(null),
     };

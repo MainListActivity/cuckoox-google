@@ -174,6 +174,7 @@ export interface EditorCoreProps {
   imageHandler: () => void;
   attachmentHandler: () => void;
   onReady?: (quill: Quill) => void;
+  onTextChange?: (currentContentsDelta: QuillDelta, changeDelta: QuillDelta, source: string) => void;
 }
 
 // 协作管理器Props

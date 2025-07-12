@@ -1,6 +1,14 @@
 import { RecordId } from 'surrealdb';
 import { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 
+// Custom error for authentication required
+export class AuthenticationRequiredError extends Error {
+  constructor(message: string = '用户未登录，请先登录') {
+    super(message);
+    this.name = 'AuthenticationRequiredError';
+  }
+}
+
 // Generic query result interface
 interface QueryResult<T = unknown> {
   result?: T;
@@ -58,7 +66,17 @@ class DataService {
     try {
       const raw = await client.query<T>(sql, vars);
       
-      // Handle different result formats
+      // Since service worker now returns complete results array, we need to handle accordingly
+      // For single queries, extract the first result
+      if (Array.isArray(raw) && raw.length > 0) {
+        const firstResult = raw[0];
+        if (firstResult && typeof firstResult === 'object' && 'result' in firstResult) {
+          return firstResult.result as T;
+        }
+        return firstResult as T;
+      }
+      
+      // Handle legacy result formats (for non-service worker clients)
       if (raw && typeof raw === 'object' && 'result' in raw) {
         return (raw as QueryResult<T>).result as T;
       }
@@ -81,7 +99,17 @@ class DataService {
     try {
       const raw = await client.mutate<T>(sql, vars);
       
-      // Handle different result formats
+      // Since service worker now returns complete results array, we need to handle accordingly
+      // For single mutations, extract the first result
+      if (Array.isArray(raw) && raw.length > 0) {
+        const firstResult = raw[0];
+        if (firstResult && typeof firstResult === 'object' && 'result' in firstResult) {
+          return firstResult.result as T;
+        }
+        return firstResult as T;
+      }
+      
+      // Handle legacy result formats (for non-service worker clients)
       if (raw && typeof raw === 'object' && 'result' in raw) {
         return (raw as QueryResult<T>).result as T;
       }
@@ -330,6 +358,115 @@ class DataService {
       
       return await Promise.all(promises);
     } catch (error) {
+      if (isSessionExpiredError(error)) {
+        this.onSessionExpired?.();
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a query with authentication check
+   * Automatically prepends 'return $auth;' to the SQL query
+   * Returns the query result (starting from index 1) if authenticated
+   * Throws AuthenticationRequiredError if not authenticated
+   */
+  async queryWithAuth<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
+    const authQuery = `return $auth;${sql}`;
+    const client = await this.ensureClient();
+    
+    try {
+      const raw = await client.query(authQuery, vars);
+      
+      // The service worker now returns the complete results array from SurrealDB
+      let results: any[];
+      if (Array.isArray(raw)) {
+        results = raw;
+      } else {
+        throw new Error('Unexpected query result format: expected array from service worker');
+      }
+      
+      // Check if we have at least 2 results (auth + actual data)
+      if (results.length < 2) {
+        throw new Error('Authentication check failed: insufficient results');
+      }
+      
+      // Check authentication status from first result
+      const authResult = results[0];
+      const isAuthenticated = authResult && 
+        typeof authResult === 'object' && 
+        'result' in authResult && 
+        authResult.result !== null && 
+        authResult.result !== undefined;
+      
+      if (!isAuthenticated) {
+        throw new AuthenticationRequiredError('用户未登录，请先登录');
+      }
+      
+      // Return the actual query result (from index 1)
+      const actualResult = results[1];
+      if (actualResult && typeof actualResult === 'object' && 'result' in actualResult) {
+        return actualResult.result as T;
+      }
+      
+      return actualResult as T;
+    } catch (error) {
+      if (error instanceof AuthenticationRequiredError) {
+        throw error; // Re-throw authentication errors as-is
+      }
+      if (isSessionExpiredError(error)) {
+        this.onSessionExpired?.();
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a mutation with authentication check
+   */
+  async mutateWithAuth<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
+    const authQuery = `return $auth;${sql}`;
+    const client = await this.ensureClient();
+    
+    try {
+      const raw = await client.mutate(authQuery, vars);
+      
+      // The service worker now returns the complete results array from SurrealDB
+      let results: any[];
+      if (Array.isArray(raw)) {
+        results = raw;
+      } else {
+        throw new Error('Unexpected mutation result format: expected array from service worker');
+      }
+      
+      // Check if we have at least 2 results (auth + actual data)
+      if (results.length < 2) {
+        throw new Error('Authentication check failed: insufficient results');
+      }
+      
+      // Check authentication status from first result
+      const authResult = results[0];
+      const isAuthenticated = authResult && 
+        typeof authResult === 'object' && 
+        'result' in authResult && 
+        authResult.result !== null && 
+        authResult.result !== undefined;
+      
+      if (!isAuthenticated) {
+        throw new AuthenticationRequiredError('用户未登录，请先登录');
+      }
+      
+      // Return the actual mutation result (from index 1)
+      const actualResult = results[1];
+      if (actualResult && typeof actualResult === 'object' && 'result' in actualResult) {
+        return actualResult.result as T;
+      }
+      
+      return actualResult as T;
+    } catch (error) {
+      if (error instanceof AuthenticationRequiredError) {
+        throw error; // Re-throw authentication errors as-is
+      }
       if (isSessionExpiredError(error)) {
         this.onSessionExpired?.();
       }
