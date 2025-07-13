@@ -4,7 +4,6 @@ import { useDataService, useServiceWorkerComm, useSurreal } from '@/src/contexts
 import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb';
 import { menuService } from '@/src/services/menuService';
-import { checkTenantCodeAndRedirect } from '@/src/lib/surrealClient';
 import { userPersonalDataService } from '@/src/services/userPersonalDataService';
 
 
@@ -155,101 +154,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const clearNavigateTo = () => setNavigateTo(null);
 
-  // Token refresh functionality
-  const refreshAccessToken = async (): Promise<boolean> => {
-    try {
-      const refreshToken = localStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        console.error('No refresh token available');
-        return false;
-      }
-
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      });
-
-      const data = await response.json();
-
-      // Handle the current backend response which returns 501 Not Implemented
-      if (response.status === 501) {
-        console.warn('Token refresh not yet implemented on backend:', data.message);
-        await clearAuthState();//Token过期且无法刷新的情况下，直接重新登录
-        return false;
-      }
-
-      if (!response.ok) {
-        throw new Error('Failed to refresh token');
-      }
-
-      if (data.access_token) {
-        // Store the new tokens
-        await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
-
-        console.log('Access token refreshed successfully');
-        return true;
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Error refreshing access token:', error);
-      return false;
-    }
-  };
-
-  // Set up automatic token refresh
-  const setupTokenRefresh = () => {
-    // Clear existing timer
-    if (refreshTimerRef.current) {
-      clearInterval(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-
-    const checkAndRefreshToken = async () => {
-      // 首先检查租户代码是否存在
-      if (!checkTenantCodeAndRedirect()) {
-        // 租户代码丢失，用户已被重定向到登录页面
-        console.log('Tenant code missing, user redirected to login');
-        await clearAuthState();
-        return;
-      }
-
-      const expiresAtStr = localStorage.getItem('token_expires_at');
-      if (!expiresAtStr) return;
-
-      const expiresAt = parseInt(expiresAtStr, 10);
-      const now = Date.now();
-      const timeUntilExpiry = expiresAt - now;
-
-      // Refresh token if it expires within 10 minutes (600000 ms)
-      if (timeUntilExpiry <= 600000 && timeUntilExpiry > 0) {
-        console.log('Token expiring soon, attempting refresh...');
-        const success = await refreshAccessToken();
-        if (!success) {
-          console.error('Failed to refresh token, logging out user');
-          // Don't call logout here to avoid potential infinite loops
-          await clearAuthState();
-        }
-      }
-    };
-
-    // Check every 5 minutes instead of every minute to reduce frequency
-    refreshTimerRef.current = setInterval(checkAndRefreshToken, 300000);
-
-    // Also check immediately, but with a delay to avoid blocking
-    setTimeout(checkAndRefreshToken, 1000);
-  };
-
-  // Clear token refresh timer
-  const clearTokenRefresh = () => {
-    if (refreshTimerRef.current) {
-      clearInterval(refreshTimerRef.current);
-      refreshTimerRef.current = null;
-    }
-  };
 
   useEffect(() => {
     let isMounted = true; // Flag to prevent state updates after unmount
@@ -271,10 +175,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // 对于非管理员用户，检查租户代码
           if (appUser.github_id !== '--admin--' && !appUser.github_id.startsWith('root_admin_')) {
-            if (!checkTenantCodeAndRedirect()) {
-              // 租户代码丢失，清除状态并退出
+            const tenantCode = localStorage.getItem('tenant_code');
+            if (!tenantCode) {
+              // 租户代码丢失，但不立即清除状态，而是重定向到登录页面
+              console.log('Tenant code missing during page refresh, redirecting to login');
+              if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+              }
               if (isMounted) {
-                await clearAuthState();
                 setIsLoading(false);
               }
               return;
@@ -352,16 +260,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }
             } else {
               console.warn(`User ${githubId} found in OIDC but not in DB. Logging out.`);
-              if (isMounted) await clearAuthState();
+              if (isMounted) await clearAuthState(false);
             }
           } else {
             // 没有有效的会话
-            if (isMounted) await clearAuthState();
+            if (isMounted) await clearAuthState(false);
           }
         }
       } catch (error) {
         console.error("Error checking current user session:", error);
-        if (isMounted) await clearAuthState();
+        if (isMounted) await clearAuthState(false);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -374,7 +282,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [isConnected]); // 依赖 isConnected 状态，当连接状态变化时重新执行
 
-  const clearAuthState = async () => {
+  const clearAuthState = async (shouldInvalidate: boolean = true) => {
     const currentUser = user;
     setUser(null);
     setOidcUser(null);
@@ -383,8 +291,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserCases([]);
     setCurrentUserCaseRoles([]);
     setNavMenuItems([]);
-    clearTokenRefresh(); // Clear token refresh timer
-    authService.clearTokens(); // Clear tokens from localStorage
+    
+    // 只有在明确需要时才调用 invalidate
+    if (shouldInvalidate) {
+      authService.clearTokens(); // Clear tokens from localStorage
+    }
+    
     localStorage.removeItem('cuckoox-user');
     localStorage.removeItem('cuckoox-selectedCaseId');
     // 清理租户代码
@@ -405,9 +317,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setOidcUser(oidcUserInstance || null);
     setIsLoggedIn(true);
     localStorage.setItem('cuckoox-user', serializeAppUser(appUser));
-
-    // Set up automatic token refresh for authenticated users
-    setupTokenRefresh();
 
     await loadUserCasesAndRoles(appUser);
   };
@@ -759,13 +668,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 检查用户在当前案件中是否拥有指定角色
     return currentUserCaseRoles.some(role => role.name === roleName);
   };
-
-  // Cleanup effect for token refresh timer
-  useEffect(() => {
-    return () => {
-      clearTokenRefresh();
-    };
-  }, []);
 
   // Test-only methods
   const __TEST_setCurrentUserCaseRoles = process.env.NODE_ENV === 'test' ? setCurrentUserCaseRoles : undefined;

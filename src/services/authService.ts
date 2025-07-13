@@ -259,7 +259,7 @@ class AuthService {
       const result = await client.query('RETURN $auth;');
       
       // 如果 $auth 存在且不为null/undefined，则表示已认证
-      return result && Array.isArray(result) && result[0] && (result[0] as any).result !== null && (result[0] as any).result !== undefined;
+      return result && Array.isArray(result) && result[0] && result[0]!== null && result[0] !== undefined;
     } catch (error) {
       // 如果错误信息包含 "not ready"，说明客户端尚未准备好，这是正常情况
       if (error instanceof Error && error.message.includes('not ready')) {
