@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useServiceWorkerComm } from '../contexts/SurrealProvider';
 import { useUserPersonalData } from './useUserPersonalData';
@@ -20,27 +20,32 @@ export function useOperationPermission(operationId: string): PermissionCheckResu
   const [hasPermission, setHasPermission] = useState(false);
   
   useEffect(() => {
-    if (!user || !operationId) {
-      setHasPermission(false);
-      return;
-    }
-    
-    // 管理员拥有所有权限
-    if (user.github_id === '--admin--') {
-      setHasPermission(true);
-      return;
-    }
-    
-    if (personalData && personalData.permissions) {
-      // 检查操作权限
-      const operationPermissions = personalData.permissions.operations || [];
-      const hasOp = operationPermissions.some(op => 
-        op.operation_id === operationId && 
-        op.can_execute &&
-        (!selectedCaseId || op.case_id === selectedCaseId || !op.case_id)
-      );
-      setHasPermission(hasOp);
-    } else {
+    try {
+      if (!user || !operationId) {
+        setHasPermission(false);
+        return;
+      }
+      
+      // 管理员拥有所有权限
+      if (user.github_id === '--admin--') {
+        setHasPermission(true);
+        return;
+      }
+      
+      if (personalData && personalData.permissions) {
+        // 检查操作权限
+        const operationPermissions = personalData.permissions.operations || [];
+        const hasOp = operationPermissions.some(op => 
+          op.operation_id === operationId && 
+          op.can_execute &&
+          (!selectedCaseId || op.case_id === selectedCaseId?.toString() || !op.case_id)
+        );
+        setHasPermission(hasOp);
+      } else {
+        setHasPermission(false);
+      }
+    } catch (error) {
+      console.error('useOperationPermission error:', error);
       setHasPermission(false);
     }
   }, [user, operationId, selectedCaseId, personalData]);
@@ -59,27 +64,30 @@ export function useMenuPermission(menuId: string): PermissionCheckResult {
   const [hasPermission, setHasPermission] = useState(false);
   
   useEffect(() => {
-    if (!user || !menuId) {
-      setHasPermission(false);
-      return;
-    }
-    
-    // 管理员拥有所有权限
-    if (user.github_id === '--admin--') {
-      setHasPermission(true);
-      return;
-    }
-    
-    if (personalData && personalData.permissions) {
-      // 检查菜单权限
-      const menuPermissions = personalData.menus || [];
-      const hasMenu = menuPermissions.some(menu => 
-        menu.menu_id === menuId && 
-        menu.can_access &&
-        (!selectedCaseId || menu.case_id === selectedCaseId || !menu.case_id)
-      );
-      setHasPermission(hasMenu);
-    } else {
+    try {
+      if (!user || !menuId) {
+        setHasPermission(false);
+        return;
+      }
+      
+      // 管理员拥有所有权限
+      if (user.github_id === '--admin--') {
+        setHasPermission(true);
+        return;
+      }
+      
+      if (personalData && personalData.menus) {
+        // 检查菜单权限 - 修复数据结构
+        const menuPermissions = personalData.menus || [];
+        const hasMenu = menuPermissions.some(menu => 
+          menu.id === menuId
+        );
+        setHasPermission(hasMenu);
+      } else {
+        setHasPermission(false);
+      }
+    } catch (error) {
+      console.error('useMenuPermission error:', error);
       setHasPermission(false);
     }
   }, [user, menuId, selectedCaseId, personalData]);
@@ -114,15 +122,8 @@ export function useDataPermission(
     }
     
     if (personalData && personalData.permissions) {
-      // 检查数据权限
-      const dataPermissions = personalData.permissions.data || [];
-      const hasData = dataPermissions.some(data => 
-        data.table_name === tableName && 
-        data.crud_type === crudType &&
-        data.can_access &&
-        (!selectedCaseId || data.case_id === selectedCaseId || !data.case_id)
-      );
-      setHasPermission(hasData);
+      // 检查数据权限 - 暂时返回false，因为当前数据结构中没有data权限
+      setHasPermission(false);
     } else {
       setHasPermission(false);
     }
@@ -153,11 +154,16 @@ export function useUserRoles() {
     }
     
     if (personalData && personalData.roles) {
-      // 获取用户角色
-      const userRoles = personalData.roles.filter(role => 
-        !selectedCaseId || role.case_id === selectedCaseId || !role.case_id
-      ).map(role => role.role_name);
-      setRoles(userRoles);
+      // 获取用户角色 - 修复数据结构
+      const allRoles = [...personalData.roles.global];
+      
+      // 添加当前案件的角色
+      if (selectedCaseId) {
+        const caseRoles = personalData.roles.case[selectedCaseId.toString()] || [];
+        allRoles.push(...caseRoles);
+      }
+      
+      setRoles([...new Set(allRoles)]);
     } else {
       setRoles([]);
     }
@@ -176,44 +182,73 @@ export function useOperationPermissions(operationIds: string[]) {
   const { personalData, isLoading, error } = useUserPersonalData();
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   
+  // 使用useMemo来稳定operationIds数组引用
+  const stableOperationIds = useMemo(() => {
+    if (!operationIds || operationIds.length === 0) return [];
+    return [...operationIds].sort(); // 创建副本并排序以确保稳定的比较
+  }, [operationIds.join(',')]); // 使用join来创建稳定的依赖
+  
   useEffect(() => {
-    if (!user || !operationIds.length) {
+    try {
+      if (!user || !stableOperationIds.length) {
+        setPermissions({});
+        return;
+      }
+      
+      // 管理员拥有所有权限
+      if (user.github_id === '--admin--') {
+        const adminPermissions: Record<string, boolean> = {};
+        stableOperationIds.forEach(id => {
+          adminPermissions[id] = true;
+        });
+        setPermissions(prevPermissions => {
+          // 只有当权限真的变化时才更新状态
+          if (JSON.stringify(prevPermissions) !== JSON.stringify(adminPermissions)) {
+            return adminPermissions;
+          }
+          return prevPermissions;
+        });
+        return;
+      }
+      
+      if (personalData && personalData.permissions) {
+        const operationPermissions = personalData.permissions.operations || [];
+        const permissionMap: Record<string, boolean> = {};
+        
+        stableOperationIds.forEach(opId => {
+          const hasOp = operationPermissions.some(op => 
+            op.operation_id === opId && 
+            op.can_execute &&
+            (!selectedCaseId || op.case_id === selectedCaseId?.toString() || !op.case_id)
+          );
+          permissionMap[opId] = hasOp;
+        });
+        
+        setPermissions(prevPermissions => {
+          // 只有当权限真的变化时才更新状态
+          if (JSON.stringify(prevPermissions) !== JSON.stringify(permissionMap)) {
+            return permissionMap;
+          }
+          return prevPermissions;
+        });
+      } else {
+        const emptyPermissions: Record<string, boolean> = {};
+        stableOperationIds.forEach(id => {
+          emptyPermissions[id] = false;
+        });
+        setPermissions(prevPermissions => {
+          // 只有当权限真的变化时才更新状态
+          if (JSON.stringify(prevPermissions) !== JSON.stringify(emptyPermissions)) {
+            return emptyPermissions;
+          }
+          return prevPermissions;
+        });
+      }
+    } catch (error) {
+      console.error('useOperationPermissions error:', error);
       setPermissions({});
-      return;
     }
-    
-    // 管理员拥有所有权限
-    if (user.github_id === '--admin--') {
-      const adminPermissions: Record<string, boolean> = {};
-      operationIds.forEach(id => {
-        adminPermissions[id] = true;
-      });
-      setPermissions(adminPermissions);
-      return;
-    }
-    
-    if (personalData && personalData.permissions) {
-      const operationPermissions = personalData.permissions.operations || [];
-      const permissionMap: Record<string, boolean> = {};
-      
-      operationIds.forEach(opId => {
-        const hasOp = operationPermissions.some(op => 
-          op.operation_id === opId && 
-          op.can_execute &&
-          (!selectedCaseId || op.case_id === selectedCaseId || !op.case_id)
-        );
-        permissionMap[opId] = hasOp;
-      });
-      
-      setPermissions(permissionMap);
-    } else {
-      const emptyPermissions: Record<string, boolean> = {};
-      operationIds.forEach(id => {
-        emptyPermissions[id] = false;
-      });
-      setPermissions(emptyPermissions);
-    }
-  }, [user, operationIds, selectedCaseId, personalData]);
+  }, [user, stableOperationIds, selectedCaseId, personalData]);
   
   return { permissions, isLoading, error };
 }

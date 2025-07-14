@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useServiceWorkerComm } from '../contexts/SurrealProvider';
 import { userPersonalDataService, UserPersonalData } from '../services/userPersonalDataService';
@@ -33,15 +33,18 @@ export function useUserPersonalData(): UseUserPersonalDataResult {
   const [personalData, setPersonalData] = useState<UserPersonalData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // 使用 useRef 来存储稳定的引用，避免循环依赖
+  const loadingRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
+  const lastCaseIdRef = useRef<string | null>(null);
 
   // 从Service Worker获取个人数据
-  const fetchPersonalDataFromServiceWorker = useCallback(async () => {
-    if (!user) return null;
-    
+  const fetchPersonalDataFromServiceWorker = useCallback(async (userId: string, caseId?: string) => {
     try {
       const result = await serviceWorkerComm.sendMessage('get_user_personal_data', {
-        userId: user.id.toString(),
-        caseId: selectedCaseId?.toString() || null
+        userId,
+        caseId: caseId || null
       });
       
       return result.personalData as UserPersonalData;
@@ -49,80 +52,101 @@ export function useUserPersonalData(): UseUserPersonalDataResult {
       console.error('useUserPersonalData: Error fetching from Service Worker:', error);
       return null;
     }
-  }, [user, selectedCaseId, serviceWorkerComm]);
+  }, [serviceWorkerComm]);
 
   // 从远程服务器获取个人数据
-  const fetchPersonalDataFromRemote = useCallback(async () => {
-    if (!user) return null;
-    
+  const fetchPersonalDataFromRemote = useCallback(async (userId: string, caseId?: string) => {
     try {
-      setIsLoading(true);
       setError(null);
       
-      userPersonalDataService.setUserContext(user.id.toString(), selectedCaseId?.toString());
+      userPersonalDataService.setUserContext(userId, caseId);
       
-      const data = await userPersonalDataService.fetchUserPersonalData(
-        user.id.toString(),
-        selectedCaseId?.toString()
-      );
+      const data = await userPersonalDataService.fetchUserPersonalData(userId, caseId);
       
       // 同步到Service Worker
-      await userPersonalDataService.syncUserPersonalDataToServiceWorker(
-        user.id.toString(),
-        selectedCaseId?.toString()
-      );
+      await userPersonalDataService.syncUserPersonalDataToServiceWorker(userId, caseId);
       
       return data;
     } catch (err) {
       console.error('useUserPersonalData: Error fetching from remote:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
       return null;
-    } finally {
-      setIsLoading(false);
     }
-  }, [user, selectedCaseId]);
+  }, []);
 
   // 加载个人数据
-  const loadPersonalData = useCallback(async () => {
-    if (!user) {
-      setPersonalData(null);
-      setIsLoading(false);
+  const loadPersonalData = useCallback(async (userId: string, caseId?: string) => {
+    // 防止并发请求
+    if (loadingRef.current) {
       return;
     }
-
-    // 首先尝试从Service Worker获取缓存数据
-    const cachedData = await fetchPersonalDataFromServiceWorker();
     
-    if (cachedData) {
-      setPersonalData(cachedData);
-      setIsLoading(false);
+    loadingRef.current = true;
+    setIsLoading(true);
+
+    try {
+      // 首先尝试从Service Worker获取缓存数据
+      const cachedData = await fetchPersonalDataFromServiceWorker(userId, caseId);
       
-      // 在后台检查是否需要更新
-      const now = Date.now();
-      const cacheAge = now - cachedData.syncTimestamp;
-      const maxAge = 5 * 60 * 1000; // 5分钟
-      
-      if (cacheAge > maxAge) {
-        // 缓存过期，在后台刷新
-        fetchPersonalDataFromRemote().then(freshData => {
+      if (cachedData) {
+        setPersonalData(cachedData);
+        setIsLoading(false);
+        
+        // 在后台检查是否需要更新
+        const now = Date.now();
+        const cacheAge = now - cachedData.syncTimestamp;
+        const maxAge = 5 * 60 * 1000; // 5分钟
+        
+        if (cacheAge > maxAge) {
+          // 缓存过期，在后台刷新
+          const freshData = await fetchPersonalDataFromRemote(userId, caseId);
           if (freshData) {
             setPersonalData(freshData);
           }
-        });
+        }
+      } else {
+        // 没有缓存，从远程获取
+        const freshData = await fetchPersonalDataFromRemote(userId, caseId);
+        if (freshData) {
+          setPersonalData(freshData);
+        }
+        setIsLoading(false);
       }
-    } else {
-      // 没有缓存，从远程获取
-      const freshData = await fetchPersonalDataFromRemote();
-      if (freshData) {
-        setPersonalData(freshData);
-      }
+    } catch (error) {
+      console.error('useUserPersonalData: Error loading personal data:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error');
+      setIsLoading(false);
+    } finally {
+      loadingRef.current = false;
     }
-  }, [user, fetchPersonalDataFromServiceWorker, fetchPersonalDataFromRemote]);
+  }, [fetchPersonalDataFromServiceWorker, fetchPersonalDataFromRemote]);
 
   // 当用户或选中案件变化时重新加载数据
   useEffect(() => {
-    loadPersonalData();
-  }, [loadPersonalData]);
+    if (!user) {
+      setPersonalData(null);
+      setIsLoading(false);
+      setError(null);
+      lastUserIdRef.current = null;
+      lastCaseIdRef.current = null;
+      return;
+    }
+
+    const userId = user.id.toString();
+    const caseId = selectedCaseId?.toString();
+    
+    // 检查是否真的需要重新加载
+    if (lastUserIdRef.current === userId && lastCaseIdRef.current === caseId) {
+      return;
+    }
+
+    // 更新引用
+    lastUserIdRef.current = userId;
+    lastCaseIdRef.current = caseId;
+
+    // 重新加载数据
+    loadPersonalData(userId, caseId);
+  }, [user, selectedCaseId, loadPersonalData]);
 
   // 权限检查函数
   const hasOperationPermission = useCallback((operationId: string): boolean => {
@@ -143,7 +167,7 @@ export function useUserPersonalData(): UseUserPersonalDataResult {
     return personalData.menus.some(permission => 
       permission.id === menuId
     );
-  }, [personalData, selectedCaseId]);
+  }, [personalData]);
 
 
   const getUserRoles = useCallback((): string[] => {
@@ -162,11 +186,16 @@ export function useUserPersonalData(): UseUserPersonalDataResult {
 
   // 刷新个人数据
   const refreshPersonalData = useCallback(async () => {
-    const freshData = await fetchPersonalDataFromRemote();
+    if (!user) return;
+    
+    const userId = user.id.toString();
+    const caseId = selectedCaseId?.toString();
+    
+    const freshData = await fetchPersonalDataFromRemote(userId, caseId);
     if (freshData) {
       setPersonalData(freshData);
     }
-  }, [fetchPersonalDataFromRemote]);
+  }, [user, selectedCaseId, fetchPersonalDataFromRemote]);
 
   // 清除缓存
   const clearCache = useCallback(async () => {
@@ -179,13 +208,13 @@ export function useUserPersonalData(): UseUserPersonalDataResult {
       );
       
       // 重新加载数据
-      await refreshPersonalData();
+      await loadPersonalData(user.id.toString(), selectedCaseId?.toString());
       
     } catch (error) {
       console.error('useUserPersonalData: Error clearing cache:', error);
       throw error;
     }
-  }, [user, selectedCaseId, refreshPersonalData]);
+  }, [user, selectedCaseId, loadPersonalData]);
 
   return {
     personalData,

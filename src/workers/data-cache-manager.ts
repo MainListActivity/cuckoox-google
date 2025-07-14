@@ -2,8 +2,62 @@ import { RecordId } from 'surrealdb';
 import type Surreal from 'surrealdb';
 import type { DatabaseQueryResult, DatabaseSubscriptionItem, FlexibleRecord, UnknownData, QueryParams, UpdateData, CacheData, QueryResultItem } from '../types/surreal';
 
+// 自动同步表配置
+export const AUTO_SYNC_TABLES = [
+  'user',
+  'role', 
+  'has_case_role',
+  'has_role',
+  'menu_metadata',
+  'operation_button',
+  'user_personal_data'
+] as const;
+
+export type AutoSyncTable = typeof AUTO_SYNC_TABLES[number];
+
+// 缓存配置类型
+export type CacheModeType = 'auto_sync' | 'manual_cache';
+
+// 表缓存配置
+export interface TableCacheConfig {
+  table: string;
+  mode: CacheModeType;
+  enableLiveQuery: boolean;
+  enableIncrementalSync: boolean;
+  syncInterval?: number;
+  expirationMs?: number;
+}
+
+// 检查是否为自动同步表
+export function isAutoSyncTable(table: string): table is AutoSyncTable {
+  return AUTO_SYNC_TABLES.includes(table as AutoSyncTable);
+}
+
+// 获取表的缓存配置
+export function getTableCacheConfig(table: string): TableCacheConfig {
+  if (isAutoSyncTable(table)) {
+    return {
+      table,
+      mode: 'auto_sync',
+      enableLiveQuery: true,
+      enableIncrementalSync: true,
+      syncInterval: 5 * 60 * 1000, // 5分钟
+      expirationMs: 24 * 60 * 60 * 1000 // 24小时
+    };
+  } else {
+    return {
+      table,
+      mode: 'manual_cache',
+      enableLiveQuery: true,
+      enableIncrementalSync: false,
+      syncInterval: 30 * 1000, // 30秒
+      expirationMs: 60 * 60 * 1000 // 1小时
+    };
+  }
+}
+
 // 缓存策略类型
-export type CacheStrategyType = 'persistent' | 'temporary';
+export type CacheStrategyType = 'persistent' | 'temporary' | 'auto_sync';
 
 // 缓存配置
 export interface CacheConfig {
@@ -88,6 +142,34 @@ export class DataCacheManager {
   }
 
   /**
+   * 检查表是否为自动同步表
+   */
+  static isAutoSyncTable(table: string): boolean {
+    return AUTO_SYNC_TABLES.includes(table as AutoSyncTable);
+  }
+
+  /**
+   * 获取表的缓存配置
+   */
+  static getTableCacheConfig(table: string): Partial<CacheConfig> {
+    if (isAutoSyncTable(table)) {
+      return {
+        type: 'auto_sync',
+        enableLiveQuery: true,
+        enableIncrementalSync: false, // 自动同步表使用全表同步
+        expirationMs: 24 * 60 * 60 * 1000, // 24小时
+      };
+    }
+    
+    return {
+      type: 'temporary',
+      enableLiveQuery: false,
+      enableIncrementalSync: true,
+      expirationMs: 60 * 60 * 1000, // 1小时
+    };
+  }
+
+  /**
    * 初始化数据缓存管理器
    */
   async initialize(): Promise<void> {
@@ -103,6 +185,122 @@ export class DataCacheManager {
     await this.restoreActiveSubscriptions();
     
     console.log('DataCacheManager: Initialized successfully');
+  }
+
+
+  /**
+   * 同步单个表
+   */
+  private async syncSingleTable(table: string, userId: string, caseId?: string): Promise<void> {
+    console.log(`DataCacheManager: Syncing table: ${table}`);
+    
+    try {
+      // 从远程获取全表数据
+      const remoteData = await this.remoteDb!.select(table);
+      
+      // 缓存到本地
+      await this.cacheData(table, remoteData, 'auto_sync', userId, caseId);
+      
+      // 设置Live Query订阅
+      const subscriptionId = this.generateSubscriptionId(table, 'auto_sync', userId, caseId);
+      await this.recordSubscription(subscriptionId, table, 'auto_sync', userId, caseId);
+      await this.setupLiveQuery(subscriptionId, table, userId, caseId);
+      
+      console.log(`DataCacheManager: Successfully synced table: ${table}`);
+    } catch (error) {
+      console.error(`DataCacheManager: Failed to sync table ${table}:`, error);
+      throw error;
+    }
+  }
+
+
+  /**
+   * 自动同步指定表（登录时调用）
+   * 为自动同步表执行全表同步并设置live query
+   */
+  async autoSyncTables(userId: string, caseId?: string): Promise<void> {
+    console.log('DataCacheManager: Starting auto sync for user:', userId);
+    
+    for (const table of AUTO_SYNC_TABLES) {
+      try {
+        const config = getTableCacheConfig(table);
+        
+        // 为自动同步表订阅持久化缓存
+        await this.subscribePersistent([table], userId, caseId, {
+          type: 'persistent',
+          tables: [table],
+          enableLiveQuery: config.enableLiveQuery,
+          enableIncrementalSync: config.enableIncrementalSync,
+          syncInterval: config.syncInterval,
+          expirationMs: config.expirationMs
+        });
+        
+        console.log(`DataCacheManager: Auto sync setup completed for table: ${table}`);
+      } catch (error) {
+        console.error(`DataCacheManager: Failed to setup auto sync for table: ${table}`, error);
+      }
+    }
+    
+    console.log('DataCacheManager: Auto sync setup completed for all tables');
+  }
+
+  /**
+   * 检查并自动处理表查询
+   * 如果是自动同步表且未缓存，则自动从远程同步
+   */
+  async checkAndAutoCache(table: string, userId?: string, caseId?: string): Promise<boolean> {
+    if (!isAutoSyncTable(table)) {
+      return false; // 不是自动同步表，不处理
+    }
+    
+    // 检查是否已有缓存
+    const hasCache = await this.hasCachedData(table, userId, caseId);
+    if (hasCache) {
+      return true; // 已有缓存，直接返回
+    }
+    
+    // 没有缓存，需要自动同步
+    console.log(`DataCacheManager: Auto syncing table: ${table} for user: ${userId}`);
+    
+    try {
+      if (userId) {
+        await this.autoSyncTables(userId, caseId);
+      } else {
+        // 如果没有用户ID，执行匿名全表同步
+        await this.performFullSync(table, 'anonymous', caseId, 'temporary');
+      }
+      return true;
+    } catch (error) {
+      console.error(`DataCacheManager: Failed to auto sync table: ${table}`, error);
+      return false;
+    }
+  }
+
+  /**
+   * 检查是否有缓存数据
+   */
+  private async hasCachedData(table: string, userId?: string, caseId?: string): Promise<boolean> {
+    try {
+      const query = `
+        SELECT COUNT() as count FROM data_table_cache 
+        WHERE table_name = $table_name 
+          AND (user_id = $user_id OR user_id IS NULL)
+          AND (case_id = $case_id OR case_id IS NULL)
+          AND (expires_at IS NULL OR expires_at > time::now())
+      `;
+      
+      const result = await this.localDb.query(query, {
+        table_name: table,
+        user_id: userId || null,
+        case_id: caseId || null
+      });
+      
+      const count = (result as any[])?.[0]?.count || 0;
+      return count > 0;
+    } catch (error) {
+      console.warn('DataCacheManager: Failed to check cached data:', error);
+      return false;
+    }
   }
 
   /**
@@ -139,7 +337,7 @@ export class DataCacheManager {
        DEFINE FIELD created_at ON data_table_cache TYPE datetime DEFAULT time::now();
        DEFINE FIELD updated_at ON data_table_cache TYPE datetime DEFAULT time::now();
        DEFINE FIELD sync_timestamp ON data_table_cache TYPE number;
-       DEFINE FIELD cache_type ON data_table_cache TYPE string ASSERT $value IN ['persistent', 'temporary'];
+       DEFINE FIELD cache_type ON data_table_cache TYPE string ASSERT $value IN ['persistent', 'temporary', 'auto_sync'];
        DEFINE FIELD user_id ON data_table_cache TYPE option<string>;
        DEFINE FIELD case_id ON data_table_cache TYPE option<string>;
        DEFINE FIELD expires_at ON data_table_cache TYPE option<datetime>;
@@ -149,7 +347,7 @@ export class DataCacheManager {
       // 订阅管理
       `DEFINE TABLE subscription_management SCHEMAFULL;
        DEFINE FIELD table_name ON subscription_management TYPE string;
-       DEFINE FIELD cache_type ON subscription_management TYPE string ASSERT $value IN ['persistent', 'temporary'];
+       DEFINE FIELD cache_type ON subscription_management TYPE string ASSERT $value IN ['persistent', 'temporary', 'auto_sync'];
        DEFINE FIELD user_id ON subscription_management TYPE option<string>;
        DEFINE FIELD case_id ON subscription_management TYPE option<string>;
        DEFINE FIELD live_query_uuid ON subscription_management TYPE option<string>;
@@ -335,7 +533,7 @@ export class DataCacheManager {
           AND (user_id = $user_id OR user_id IS NULL)
           AND (case_id = $case_id OR case_id IS NULL)
           AND (expires_at IS NULL OR expires_at > time::now())
-        ORDER BY data_table_cache.created_at DESC
+        ORDER BY created_at DESC
       `;
       
       const cacheResult = await this.localDb.query(cacheQuery, {
@@ -438,7 +636,7 @@ export class DataCacheManager {
       table_name: table,
       cache_type: cacheType,
       user_id: userId,
-      case_id: caseId || undefined, // 确保 undefined 而不是 null
+      case_id: caseId, // 直接使用caseId，让undefined自然处理
       last_sync_time: Date.now(),
       is_active: true,
       created_at: new Date()
@@ -451,15 +649,19 @@ export class DataCacheManager {
       const recordId = new RecordId('subscription_management', subscriptionId);
       
       // 准备订阅数据，确保所有必需字段都存在
-      const subscriptionData = {
+      const subscriptionData: any = {
         table_name: table,
         cache_type: cacheType, // 确保 cache_type 字段始终存在
         user_id: userId,
-        case_id: caseId || null, // 使用 null 而不是 undefined，因为 SurrealDB 可以正确处理 null
         last_sync_time: Date.now(),
         is_active: true,
         created_at: new Date()
       };
+      
+      // 只有当caseId存在时才设置case_id字段
+      if (caseId) {
+        subscriptionData.case_id = caseId;
+      }
       
       // 尝试先删除旧记录，然后创建新记录
       try {
@@ -525,7 +727,7 @@ export class DataCacheManager {
       const query = `
         SELECT * FROM ${table} 
         WHERE updated_at > $last_sync_time 
-        ORDER BY ${table}.updated_at ASC
+        ORDER BY updated_at ASC
       `;
       
       const changedData = await this.remoteDb.query(query, {
@@ -556,10 +758,22 @@ export class DataCacheManager {
     userId?: string,
     caseId?: string
   ): Promise<void> {
-    const cacheKey = this.generateCacheKey(table, userId, caseId);
-    const expiresAt = cacheType === 'temporary' 
-      ? new Date(Date.now() + this.defaultExpirationMs)
-      : undefined;
+    const cacheKey = this.generateDataCacheKey(table, userId, caseId);
+    let expiresAt: Date | undefined;
+    
+    // 根据缓存类型设置过期时间
+    switch (cacheType) {
+      case 'temporary':
+        expiresAt = new Date(Date.now() + this.defaultExpirationMs);
+        break;
+      case 'auto_sync':
+        expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24小时
+        break;
+      case 'persistent':
+      default:
+        expiresAt = undefined; // 不过期
+        break;
+    }
     
     const cacheItem: DataTableCache = {
       id: new RecordId('data_table_cache', cacheKey),
@@ -571,7 +785,7 @@ export class DataCacheManager {
       sync_timestamp: Date.now(),
       cache_type: cacheType,
       user_id: userId,
-      case_id: caseId || undefined, // 确保 undefined 而不是 null
+      case_id: caseId, // 直接使用caseId，让undefined自然处理
       expires_at: expiresAt
     };
     
@@ -597,9 +811,9 @@ export class DataCacheManager {
   }
 
   /**
-   * 生成缓存键
+   * 生成数据缓存键（用于数据表缓存）
    */
-  private generateCacheKey(table: string, userId?: string, caseId?: string): string {
+  private generateDataCacheKey(table: string, userId?: string, caseId?: string): string {
     return `${table}_${userId || 'global'}_${caseId || 'all'}_${Date.now()}`;
   }
 
@@ -613,7 +827,7 @@ export class DataCacheManager {
         WHERE table_name = $table_name 
           AND (user_id = $user_id OR user_id IS NULL)
           AND (case_id = $case_id OR case_id IS NULL)
-        ORDER BY sync_log.sync_timestamp DESC 
+        ORDER BY sync_timestamp DESC 
         LIMIT 1
       `;
       
@@ -781,7 +995,7 @@ export class DataCacheManager {
           AND (user_id = $user_id OR user_id IS NULL)
           AND (case_id = $case_id OR case_id IS NULL)
           AND (expires_at IS NULL OR expires_at > time::now())
-        ORDER BY data_table_cache.created_at DESC
+        ORDER BY created_at DESC
         LIMIT 1
       `;
       
@@ -980,7 +1194,7 @@ export class DataCacheManager {
    * 缓存用户个人数据
    */
   async cachePersonalData(userId: string, caseId: string | undefined, personalData: UnknownData): Promise<void> {
-    const cacheKey = this.generateCacheKey('user_personal_data', userId, caseId);
+    const cacheKey = this.generateDataCacheKey('user_personal_data', userId, caseId);
     
     const cacheItem: DataTableCache = {
       id: new RecordId('data_table_cache', cacheKey),
@@ -992,7 +1206,7 @@ export class DataCacheManager {
       sync_timestamp: Date.now(),
       cache_type: 'persistent',
       user_id: userId,
-      case_id: caseId || undefined, // 确保 undefined 而不是 null
+      case_id: caseId, // 直接使用caseId，让undefined自然处理
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24小时后过期
     };
     
@@ -1028,7 +1242,7 @@ export class DataCacheManager {
           AND user_id = $user_id 
           AND (case_id = $case_id OR case_id IS NULL)
           AND (expires_at IS NULL OR expires_at > time::now())
-        ORDER BY data_table_cache.created_at DESC
+        ORDER BY created_at DESC
         LIMIT 1
       `;
       
@@ -1087,6 +1301,130 @@ export class DataCacheManager {
     }
   }
 
+
+  /**
+   * 缓存单个记录（通用方法）
+   */
+  async cacheRecord(
+    table: string,
+    recordId: string | RecordId,
+    record: QueryResultItem,
+    cacheType: CacheStrategyType = 'persistent',
+    userId?: string,
+    caseId?: string
+  ): Promise<void> {
+    try {
+      const cacheKey = this.generateRecordCacheKey(table, recordId.toString(), userId, caseId);
+      const expiresAt = cacheType === 'persistent' 
+        ? new Date(Date.now() + 24 * 60 * 60 * 1000) // 24小时
+        : new Date(Date.now() + this.defaultExpirationMs);
+
+      const cacheData = {
+        id: new RecordId('data_table_cache', cacheKey),
+        table_name: table,
+        cache_key: cacheKey,
+        data: [record], // 单个记录也存储为数组，保持一致性
+        created_at: new Date(),
+        updated_at: new Date(),
+        sync_timestamp: Date.now(),
+        cache_type: cacheType,
+        user_id: userId,
+        case_id: caseId,
+        expires_at: expiresAt
+      };
+
+      // 尝试创建或更新缓存项
+      const existingCacheItems = await this.localDb.query(
+        `SELECT * FROM data_table_cache WHERE cache_key = $cache_key LIMIT 1`,
+        { cache_key: cacheKey }
+      );
+
+      if (existingCacheItems && existingCacheItems.length > 0) {
+        // 更新现有缓存
+        const existingItem = existingCacheItems[0] as DataTableCache;
+        await this.localDb.update(existingItem.id, {
+          data: [record],
+          updated_at: new Date(),
+          sync_timestamp: Date.now()
+        });
+      } else {
+        // 创建新缓存
+        await this.localDb.create(cacheData.id, cacheData as unknown as FlexibleRecord);
+      }
+
+      console.log(`DataCacheManager: Cached record ${recordId} for table: ${table}`);
+    } catch (error) {
+      console.error('DataCacheManager: Failed to cache record:', error);
+    }
+  }
+
+  /**
+   * 获取单个缓存记录（通用方法）
+   */
+  async getCachedRecord(
+    table: string,
+    recordId: string | RecordId,
+    userId?: string,
+    caseId?: string
+  ): Promise<QueryResultItem | null> {
+    try {
+      const cacheKey = this.generateRecordCacheKey(table, recordId.toString(), userId, caseId);
+      
+      const query = `
+        SELECT data FROM data_table_cache 
+        WHERE cache_key = $cache_key 
+          AND (expires_at IS NULL OR expires_at > time::now())
+        LIMIT 1
+      `;
+      
+      const result = await this.localDb.query(query, { cache_key: cacheKey });
+      
+      if (result && result.length > 0) {
+        const cacheData = (result[0] as any)?.data;
+        if (Array.isArray(cacheData) && cacheData.length > 0) {
+          console.log(`DataCacheManager: Found cached record ${recordId} for table: ${table}`);
+          return cacheData[0];
+        }
+      }
+      
+      console.log(`DataCacheManager: No cached record found for ${recordId} in table: ${table}`);
+      return null;
+    } catch (error) {
+      console.error('DataCacheManager: Failed to get cached record:', error);
+      return null;
+    }
+  }
+
+  /**
+   * 生成记录缓存键（用于单个记录缓存）
+   */
+  private generateRecordCacheKey(table: string, recordId: string, userId?: string, caseId?: string): string {
+    const parts = [table, recordId];
+    if (userId) parts.push(`user:${userId}`);
+    if (caseId) parts.push(`case:${caseId}`);
+    return parts.join('::');
+  }
+
+  /**
+   * 清除单个记录缓存
+   */
+  async clearCachedRecord(
+    table: string,
+    recordId: string | RecordId,
+    userId?: string,
+    caseId?: string
+  ): Promise<void> {
+    try {
+      const cacheKey = this.generateRecordCacheKey(table, recordId.toString(), userId, caseId);
+      
+      const query = `DELETE FROM data_table_cache WHERE cache_key = $cache_key`;
+      await this.localDb.query(query, { cache_key: cacheKey });
+      
+      console.log(`DataCacheManager: Cleared cached record ${recordId} for table: ${table}`);
+    } catch (error) {
+      console.error('DataCacheManager: Failed to clear cached record:', error);
+    }
+  }
 
   /**
    * 关闭数据缓存管理器

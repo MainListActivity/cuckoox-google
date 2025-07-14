@@ -83,6 +83,13 @@ export class UserPersonalDataService {
   private userId?: string;
   private currentCaseId?: string;
   
+  // 内存缓存
+  private memoryCache = new Map<string, { data: UserPersonalData; timestamp: number }>();
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+  
+  // 防止并发请求
+  private pendingRequests = new Map<string, Promise<UserPersonalData>>();
+  
   /**
    * 设置当前用户上下文
    */
@@ -95,8 +102,61 @@ export class UserPersonalDataService {
    * 获取用户完整的个人数据
    */
   async fetchUserPersonalData(userId: string, caseId?: string): Promise<UserPersonalData> {
+    const cacheKey = `${userId}_${caseId || 'global'}`;
+    
+    // 检查内存缓存
+    const cached = this.memoryCache.get(cacheKey);
+    if (cached) {
+      const now = Date.now();
+      const cacheAge = now - cached.timestamp;
+      
+      if (cacheAge < this.CACHE_DURATION) {
+        console.log('UserPersonalDataService: Returning cached data for:', userId);
+        return cached.data;
+      } else {
+        // 缓存过期，删除
+        this.memoryCache.delete(cacheKey);
+      }
+    }
+    
+    // 检查是否有正在进行的请求
+    const pendingRequest = this.pendingRequests.get(cacheKey);
+    if (pendingRequest) {
+      console.log('UserPersonalDataService: Waiting for pending request for:', userId);
+      return pendingRequest;
+    }
+    
     console.log('UserPersonalDataService: Fetching user personal data for:', userId);
     
+    // 创建新的请求
+    const fetchPromise = this.performFetch(userId, caseId);
+    this.pendingRequests.set(cacheKey, fetchPromise);
+    
+    try {
+      const result = await fetchPromise;
+      
+      // 存储到内存缓存
+      this.memoryCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      });
+      
+      console.log('UserPersonalDataService: Successfully fetched and cached user personal data');
+      return result;
+      
+    } catch (error) {
+      console.error('UserPersonalDataService: Error fetching user personal data:', error);
+      throw error;
+    } finally {
+      // 清理pending请求
+      this.pendingRequests.delete(cacheKey);
+    }
+  }
+  
+  /**
+   * 实际执行数据获取的方法
+   */
+  private async performFetch(userId: string, caseId?: string): Promise<UserPersonalData> {
     try {
       // 并行获取所有个人数据
       const [permissions, roles, menus] = await Promise.all([
@@ -112,11 +172,10 @@ export class UserPersonalDataService {
         syncTimestamp: Date.now()
       };
       
-      console.log('UserPersonalDataService: Successfully fetched user personal data');
       return personalData;
       
     } catch (error) {
-      console.error('UserPersonalDataService: Error fetching user personal data:', error);
+      console.error('UserPersonalDataService: Error in performFetch:', error);
       throw error;
     }
   }
@@ -175,7 +234,7 @@ export class UserPersonalDataService {
   /**
    * 获取用户角色
    */
-  private async fetchUserRoles(userId: string, caseId?: string) {
+  private async fetchUserRoles(userId: string, _caseId?: string) {
     try {
       // 获取全局角色
       const globalRolesQuery = `
@@ -353,6 +412,14 @@ export class UserPersonalDataService {
    */
   async clearUserPersonalDataCache(userId: string, caseId?: string): Promise<void> {
     try {
+      // 清理内存缓存
+      const cacheKey = `${userId}_${caseId || 'global'}`;
+      this.memoryCache.delete(cacheKey);
+      
+      // 清理pending请求
+      this.pendingRequests.delete(cacheKey);
+      
+      // 清理Service Worker缓存
       await this.sendMessageToServiceWorker('clear_user_personal_data', {
         userId,
         caseId: caseId || null
@@ -364,6 +431,15 @@ export class UserPersonalDataService {
       console.error('UserPersonalDataService: Error clearing user personal data cache:', error);
       throw error;
     }
+  }
+  
+  /**
+   * 清除所有内存缓存
+   */
+  clearAllMemoryCache(): void {
+    this.memoryCache.clear();
+    this.pendingRequests.clear();
+    console.log('UserPersonalDataService: Cleared all memory cache');
   }
   
   private serviceWorkerComm: {

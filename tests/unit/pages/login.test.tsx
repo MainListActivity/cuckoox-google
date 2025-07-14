@@ -4,8 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import LoginPage from '@/src/pages/login';
 import { AppUser } from '@/src/contexts/AuthContext';
 import { RecordId } from 'surrealdb';
-import { Context as SurrealContext } from '@/src/contexts/SurrealProvider';
-import Surreal from 'surrealdb';
 
 // Mock dependencies
 const mockNavigate = vi.fn();
@@ -24,9 +22,7 @@ let turnstileSuccessCallback: ((token: string) => void) | null = null;
 vi.mock('../../../src/components/Turnstile', () => ({
   default: ({ onSuccess }: { onSuccess: (token: string) => void }) => {
     // Store the callback for manual triggering
-    React.useEffect(() => {
-      turnstileSuccessCallback = onSuccess;
-    }, [onSuccess]);
+    turnstileSuccessCallback = onSuccess;
     return <div data-testid="turnstile-widget">Turnstile Mock</div>;
   }
 }));

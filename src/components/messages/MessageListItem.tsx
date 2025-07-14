@@ -11,12 +11,11 @@ import {
   alpha,
   IconButton, // Added
   Tooltip,    
-  ListItemSecondaryAction,
   SvgIcon,
 } from '@mui/material';
 // Import DisplayListItem and related types from where MessageCenterPage imports them
 // Assuming DisplayListItem is now part of types/message.ts or passed correctly
-import { DisplayListItem, ConversationSummary, Message, IMMessage, CaseRobotReminderMessage, BusinessNotificationMessage } from '@/src/types/message'; 
+import { DisplayListItem, ConversationSummary, Message, IMMessage, BusinessNotificationMessage } from '@/src/types/message'; 
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import SmartToyIcon from '@mui/icons-material/SmartToy';

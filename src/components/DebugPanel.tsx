@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Box, Typography, Button, Paper, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import { mdiChevronDown, mdiRefresh, mdiConsole } from '@mdi/js';
 import Icon from '@mdi/react';
@@ -48,27 +48,34 @@ const DebugPanel: React.FC = () => {
   // 监控 localStorage 变化
   const [localStorageItems, setLocalStorageItems] = useState<{[key: string]: string}>({});
   
-  useEffect(() => {
-    const updateLocalStorage = () => {
-      const items: {[key: string]: string} = {};
-      const relevantKeys = [
-        'access_token',
-        'refresh_token', 
-        'token_expires_at',
-        'cuckoox-user',
-        'cuckoox-selectedCaseId'
-      ];
-      
-      relevantKeys.forEach(key => {
-        const value = localStorage.getItem(key);
-        if (value) {
-          items[key] = value.length > 50 ? value.substring(0, 50) + '...' : value;
-        }
-      });
-      
-      setLocalStorageItems(items);
-    };
+  // 使用useCallback来稳定updateLocalStorage函数
+  const updateLocalStorage = useCallback(() => {
+    const items: {[key: string]: string} = {};
+    const relevantKeys = [
+      'access_token',
+      'refresh_token', 
+      'token_expires_at',
+      'cuckoox-user',
+      'cuckoox-selectedCaseId'
+    ];
     
+    relevantKeys.forEach(key => {
+      const value = localStorage.getItem(key);
+      if (value) {
+        items[key] = value.length > 50 ? value.substring(0, 50) + '...' : value;
+      }
+    });
+    
+    setLocalStorageItems(prevItems => {
+      // 只有当items真的变化时才更新状态
+      if (JSON.stringify(prevItems) !== JSON.stringify(items)) {
+        return items;
+      }
+      return prevItems;
+    });
+  }, []);
+
+  useEffect(() => {
     updateLocalStorage();
     
     // 监听 localStorage 变化
@@ -82,7 +89,7 @@ const DebugPanel: React.FC = () => {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };
-  }, []);
+  }, [updateLocalStorage]);
   
   // 清理函数
   const clearAllData = () => {

@@ -8,7 +8,6 @@ import {
   Chip,
   Button,
   Avatar,
-  IconButton, // For potential icon in header
   Divider,
   Box,
   useTheme,

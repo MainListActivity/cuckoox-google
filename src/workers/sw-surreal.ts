@@ -3,7 +3,7 @@
 declare const self: ServiceWorkerGlobalScope;
 
 // Service Worker 版本号
-const SW_VERSION = 'v1.0.0';
+const SW_VERSION = 'v1.0.1';
 const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
 
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
@@ -137,6 +137,20 @@ const eventHandlers = {
           await ensureConnection();
           if (isConnected) {
             await db!.authenticate(payload.token);
+            
+            // 登录成功后，自动同步所有自动同步表
+            try {
+              await ensureDataCacheManager();
+              const userId = await getCurrentUserId();
+              if (userId) {
+                console.log('ServiceWorker: Starting auto sync after authentication');
+                await dataCacheManager!.autoSyncTables(userId, payload.case_id);
+                console.log('ServiceWorker: Auto sync completed after authentication');
+              }
+            } catch (syncError) {
+              console.warn('ServiceWorker: Auto sync failed after authentication:', syncError);
+            }
+            
             // Token refresh is now handled automatically by TokenManager
             respond({ success: true });
           } else {
@@ -157,7 +171,66 @@ const eventHandlers = {
         case 'mutate': {
           await ensureConnection();
           if (!db) throw new Error("Database not initialized");
+          
+          // 提取查询中的表名
+          const tableNames = extractTableNamesFromQuery(payload.sql);
+          const userId = await getCurrentUserId();
+          
+          // 对于SELECT查询，检查是否可以从缓存返回
+          if (type === 'query' && tableNames.length === 1) {
+            const table = tableNames[0];
+            
+            // 检查是否为自动同步表
+            if (isAutoSyncTable(table)) {
+              await ensureDataCacheManager();
+              
+              // 检查是否为简单的全表查询
+              if (isSimpleSelectAllQuery(payload.sql, table)) {
+                console.log(`ServiceWorker: Checking cache for auto-sync table: ${table}`);
+                
+                // 尝试从缓存获取数据
+                const cachedData = await dataCacheManager!.queryCache(table, payload.sql, payload.vars, userId);
+                
+                if (cachedData && cachedData.length > 0) {
+                  console.log(`ServiceWorker: Returning cached data for table: ${table}`);
+                  respond(cachedData);
+                  break;
+                }
+                
+                // 缓存中没有数据，检查并自动同步
+                const synced = await dataCacheManager!.checkAndAutoCache(table, userId);
+                if (synced) {
+                  // 重新尝试从缓存获取
+                  const syncedData = await dataCacheManager!.queryCache(table, payload.sql, payload.vars, userId);
+                  if (syncedData && syncedData.length > 0) {
+                    console.log(`ServiceWorker: Returning auto-synced data for table: ${table}`);
+                    respond(syncedData);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          // 执行远程查询
           const results = await db.query(payload.sql, payload.vars);
+          
+          // 对于自动同步表的查询结果，自动缓存
+          if (type === 'query' && tableNames.length === 1) {
+            const table = tableNames[0];
+            if (isAutoSyncTable(table) && results && results.length > 0) {
+              await ensureDataCacheManager();
+              
+              try {
+                // 缓存查询结果
+                await dataCacheManager!.cacheData(table, results, 'persistent', userId);
+                console.log(`ServiceWorker: Cached query results for auto-sync table: ${table}`);
+              } catch (cacheError) {
+                console.warn(`ServiceWorker: Failed to cache results for table: ${table}`, cacheError);
+              }
+            }
+          }
+          
           respond(results);
           break;
         }
@@ -313,28 +386,53 @@ const eventHandlers = {
         }
 
 
+        // 自动同步相关消息
+        case 'trigger_auto_sync': {
+          await ensureDataCacheManager();
+          const { userId, caseId } = payload;
+          
+          try {
+            console.log('ServiceWorker: Manual auto sync triggered for user:', userId);
+            await dataCacheManager!.autoSyncTables(userId, caseId);
+            respond({ success: true, message: 'Auto sync completed successfully' });
+          } catch (error) {
+            console.error('ServiceWorker: Manual auto sync failed:', error);
+            respond({ success: false, message: (error as Error).message });
+          }
+          break;
+        }
+
         // 用户个人数据管理相关消息
         case 'sync_user_personal_data': {
-          await ensureDataCacheManager();
-          const { userId, caseId, personalData } = payload;
+          try {
+            await ensureDataCacheManager();
+            const { userId, caseId, personalData } = payload;
 
-          // 使用持久化缓存策略存储用户个人数据
-          await dataCacheManager!.subscribePersistent(
-            ['user_personal_data'],
-            userId,
-            caseId,
-            {
-              enableLiveQuery: true,
-              enableIncrementalSync: true,
-              syncInterval: 5 * 60 * 1000, // 5分钟
-              expirationMs: 24 * 60 * 60 * 1000 // 24小时
+            // 先直接缓存个人数据
+            await dataCacheManager!.cachePersonalData(userId, caseId, personalData);
+
+            // 然后尝试设置订阅（如果失败也不影响核心功能）
+            try {
+              await dataCacheManager!.subscribePersistent(
+                ['user_personal_data'],
+                userId,
+                caseId,
+                {
+                  enableLiveQuery: true,
+                  enableIncrementalSync: true,
+                  syncInterval: 5 * 60 * 1000, // 5分钟
+                  expirationMs: 24 * 60 * 60 * 1000 // 24小时
+                }
+              );
+            } catch (subscriptionError) {
+              console.warn('ServiceWorker: Failed to setup subscription for user personal data, but data was cached successfully:', subscriptionError);
             }
-          );
 
-          // 直接缓存个人数据
-          await dataCacheManager!.cachePersonalData(userId, caseId, personalData);
-
-          respond({ success: true });
+            respond({ success: true });
+          } catch (error) {
+            console.error('ServiceWorker: Error in sync_user_personal_data:', error);
+            respond({ success: false, error: (error as Error).message });
+          }
           break;
         }
 
@@ -415,11 +513,36 @@ const eventHandlers = {
 
         case 'cache_query_result': {
           await ensureDataCacheManager();
-          const { table, query, params, result, userId, caseId } = payload;
+          const { table, result, userId, caseId } = payload;
 
           // 直接缓存查询结果
           await dataCacheManager!.cacheData(table, result, 'temporary', userId, caseId);
 
+          respond({ success: true });
+          break;
+        }
+
+        // 单个记录缓存相关消息（通用方法）
+        case 'cache_record': {
+          await ensureDataCacheManager();
+          const { table, recordId, record, cacheType, userId, caseId } = payload;
+          await dataCacheManager!.cacheRecord(table, recordId, record, cacheType || 'persistent', userId, caseId);
+          respond({ success: true });
+          break;
+        }
+
+        case 'get_cached_record': {
+          await ensureDataCacheManager();
+          const { table, recordId, userId, caseId } = payload;
+          const record = await dataCacheManager!.getCachedRecord(table, recordId, userId, caseId);
+          respond({ record });
+          break;
+        }
+
+        case 'clear_cached_record': {
+          await ensureDataCacheManager();
+          const { table, recordId, userId, caseId } = payload;
+          await dataCacheManager!.clearCachedRecord(table, recordId, userId, caseId);
           respond({ success: true });
           break;
         }
@@ -546,7 +669,7 @@ console.log("Service Worker event listeners registered");
 
 import { Surreal, RecordId, ConnectionStatus } from 'surrealdb';
 import { TokenManager, TokenInfo } from './token-manager';
-import { DataCacheManager } from './data-cache-manager';
+import { DataCacheManager, isAutoSyncTable } from './data-cache-manager';
 
 // 获取WASM引擎的函数
 async function getWasmEngines() {
@@ -1019,6 +1142,82 @@ async function ensureDataCacheManager(): Promise<void> {
 // --- Helper Functions ---
 
 /**
+ * 从SQL查询中提取表名
+ * 支持基本的SELECT、INSERT、UPDATE、DELETE语句
+ */
+function extractTableNamesFromQuery(sql: string): string[] {
+  const tables: string[] = [];
+  
+  // 移除多余的空格和换行符
+  const cleanSql = sql.replace(/\s+/g, ' ').trim().toLowerCase();
+  
+  // SELECT 语句：SELECT ... FROM table
+  const selectMatches = cleanSql.matchAll(/from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+  for (const match of selectMatches) {
+    tables.push(match[1]);
+  }
+  
+  // INSERT 语句：INSERT INTO table
+  const insertMatches = cleanSql.matchAll(/insert\s+into\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+  for (const match of insertMatches) {
+    tables.push(match[1]);
+  }
+  
+  // UPDATE 语句：UPDATE table
+  const updateMatches = cleanSql.matchAll(/update\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+  for (const match of updateMatches) {
+    tables.push(match[1]);
+  }
+  
+  // DELETE 语句：DELETE FROM table
+  const deleteMatches = cleanSql.matchAll(/delete\s+from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+  for (const match of deleteMatches) {
+    tables.push(match[1]);
+  }
+  
+  // 去重并返回
+  return [...new Set(tables)];
+}
+
+/**
+ * 检查查询是否为简单的全表查询
+ * 例如：SELECT * FROM table
+ */
+function isSimpleSelectAllQuery(sql: string, table: string): boolean {
+  const cleanSql = sql.replace(/\s+/g, ' ').trim().toLowerCase();
+  const pattern = new RegExp(`^select\\s+\\*\\s+from\\s+${table.toLowerCase()}\\s*;?$`);
+  return pattern.test(cleanSql);
+}
+
+/**
+ * 获取当前用户ID（从认证状态中提取）
+ */
+async function getCurrentUserId(): Promise<string | undefined> {
+  try {
+    await ensureConnection();
+    if (!db) return undefined;
+    
+    // 查询当前认证状态
+    const authResult = await db.query('RETURN $auth;');
+    
+    if (authResult && authResult.length > 0 && authResult[0]) {
+      const auth = authResult[0] as any;
+      // 从认证信息中提取用户ID
+      if (auth.id) {
+        const userId = String(auth.id);
+        console.log('ServiceWorker: Current user ID:', userId);
+        return userId;
+      }
+    }
+    
+    return undefined;
+  } catch (error) {
+    console.warn('ServiceWorker: Failed to get current user ID:', error);
+    return undefined;
+  }
+}
+
+/**
  * 递归检查并重构被序列化的RecordId对象
  * 当RecordId对象通过ServiceWorker传递时，会丢失其原型，变成普通对象
  * 这个函数会检测这种情况并重新构造RecordId
@@ -1029,7 +1228,7 @@ function deserializeRecordIds(obj: any): any {
   }
 
   // 检查是否是被序列化的RecordId对象（具有id和tb属性）
-  if (typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, 'id') && Object.prototype.hasOwnProperty.call(obj, 'tb')) {
+  if (typeof obj === 'object' && 'id' in obj && 'tb' in obj) {
     // 这很可能是一个被序列化的RecordId，重新构造它
     return new RecordId(obj.tb, obj.id);
   }
