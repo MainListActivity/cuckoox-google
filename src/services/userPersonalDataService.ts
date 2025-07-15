@@ -75,6 +75,7 @@ export interface MenuMetadata {
   children?: MenuMetadata[];
 }
 
+
 /**
  * 用户个人数据缓存服务
  * 负责管理用户个人信息的缓存，包括权限、菜单、设置等
@@ -215,7 +216,7 @@ export class UserPersonalDataService {
       
       const result = await dataService.query(query, {
         user_id: userId,
-        case_id: caseId || null
+        case_id: caseId
       });
       
       return Array.isArray(result) ? result.map(item => ({
@@ -300,7 +301,7 @@ export class UserPersonalDataService {
       
       const result = await dataService.query(query, {
         user_id: userId,
-        case_id: caseId || null
+        case_id: caseId
       });
       
       return Array.isArray(result) ? result.map(item => ({
@@ -327,15 +328,37 @@ export class UserPersonalDataService {
     try {
       console.log('UserPersonalDataService: Syncing user personal data to Service Worker');
       
-      // 获取完整的个人数据
-      const personalData = await this.fetchUserPersonalData(userId, caseId);
-      
-      // 发送消息到Service Worker
-      await this.sendMessageToServiceWorker('sync_user_personal_data', {
-        userId,
-        caseId: caseId || null,
-        personalData
-      });
+      // 使用 dataService.queryWithAuth 执行需要认证的个人数据查询
+      // Service Worker 会自动识别并缓存个人数据相关的查询
+      const queries = [
+        // 操作权限查询
+        dataService.queryWithAuth('select * from operation_metadata;', {
+          user_id: userId,
+          case_id: caseId
+        }),
+        // 全局角色查询  
+        dataService.queryWithAuth(`
+          SELECT out.name as role_name 
+          FROM $user_id->has_role;`, {
+          user_id: userId
+        }),
+        // 案件角色查询
+        dataService.queryWithAuth(`
+          SELECT 
+            case_id,
+            out.name as role_name 
+          FROM $user_id->has_case_role;`, {
+          user_id: userId
+        }),
+        // 菜单权限查询
+        dataService.queryWithAuth('select * from menu_metadata;', {
+          user_id: userId,
+          case_id: caseId
+        })
+      ];
+
+      // 并行执行所有查询，Service Worker 会自动缓存个人数据
+      await Promise.all(queries);
       
       console.log('UserPersonalDataService: Successfully synced user personal data to Service Worker');
       
@@ -422,7 +445,7 @@ export class UserPersonalDataService {
       // 清理Service Worker缓存
       await this.sendMessageToServiceWorker('clear_user_personal_data', {
         userId,
-        caseId: caseId || null
+        caseId: caseId
       });
       
       console.log('UserPersonalDataService: Cleared user personal data cache');

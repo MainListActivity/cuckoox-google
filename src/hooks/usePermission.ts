@@ -183,10 +183,11 @@ export function useOperationPermissions(operationIds: string[]) {
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   
   // 使用useMemo来稳定operationIds数组引用
+  const operationIdsKey = operationIds.join(',');
   const stableOperationIds = useMemo(() => {
     if (!operationIds || operationIds.length === 0) return [];
     return [...operationIds].sort(); // 创建副本并排序以确保稳定的比较
-  }, [operationIds.join(',')]); // 使用join来创建稳定的依赖
+  }, [operationIdsKey, operationIds]); // 包含operationIds来满足lint要求
   
   useEffect(() => {
     try {

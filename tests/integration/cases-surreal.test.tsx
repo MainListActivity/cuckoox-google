@@ -58,13 +58,9 @@ describe('Case Creation with SurrealDB Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Setup localStorage to simulate logged in user
-    mockLocalStorage.getItem.mockImplementation((key) => {
-      if (key === 'cuckoox-user') {
-        return JSON.stringify(mockUser);
-      }
-      return null;
-    });
+    // Setup authentication state through SurrealDB instead of localStorage
+    // Mock SurrealDB to return authenticated user state
+    mockSurreal.query.mockResolvedValue([[mockUser]]);
     
     // Mock document creation
     mockSurreal.create.mockImplementation((table, data) => {
@@ -91,7 +87,7 @@ describe('Case Creation with SurrealDB Integration', () => {
     mockSurreal.query.mockResolvedValue([{ result: 'lq:testlivequeryid' }]);
   });
 
-  it('should create a case with proper date formatting for SurrealDB', async () => {
+  it('should create a case with proper date formatting for SurrealDB using authenticated state', async () => {
     const { container } = render(
       <BrowserRouter>
         <SurrealProvider 

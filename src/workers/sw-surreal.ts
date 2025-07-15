@@ -137,7 +137,7 @@ const eventHandlers = {
           await ensureConnection();
           if (isConnected) {
             await db!.authenticate(payload.token);
-            
+
             // 登录成功后，自动同步所有自动同步表
             try {
               await ensureDataCacheManager();
@@ -150,7 +150,7 @@ const eventHandlers = {
             } catch (syncError) {
               console.warn('ServiceWorker: Auto sync failed after authentication:', syncError);
             }
-            
+
             // Token refresh is now handled automatically by TokenManager
             respond({ success: true });
           } else {
@@ -171,32 +171,32 @@ const eventHandlers = {
         case 'mutate': {
           await ensureConnection();
           if (!db) throw new Error("Database not initialized");
-          
+
           // 提取查询中的表名
           const tableNames = extractTableNamesFromQuery(payload.sql);
           const userId = await getCurrentUserId();
-          
+
           // 对于SELECT查询，检查是否可以从缓存返回
           if (type === 'query' && tableNames.length === 1) {
             const table = tableNames[0];
-            
+
             // 检查是否为自动同步表
             if (isAutoSyncTable(table)) {
               await ensureDataCacheManager();
-              
+
               // 检查是否为简单的全表查询
               if (isSimpleSelectAllQuery(payload.sql, table)) {
                 console.log(`ServiceWorker: Checking cache for auto-sync table: ${table}`);
-                
+
                 // 尝试从缓存获取数据
                 const cachedData = await dataCacheManager!.queryCache(table, payload.sql, payload.vars, userId);
-                
+
                 if (cachedData && cachedData.length > 0) {
                   console.log(`ServiceWorker: Returning cached data for table: ${table}`);
                   respond(cachedData);
                   break;
                 }
-                
+
                 // 缓存中没有数据，检查并自动同步
                 const synced = await dataCacheManager!.checkAndAutoCache(table, userId);
                 if (synced) {
@@ -211,16 +211,88 @@ const eventHandlers = {
               }
             }
           }
-          
+
           // 执行远程查询
           const results = await db.query(payload.sql, payload.vars);
-          
+
+          // 检查是否为个人数据查询，如果是则自动缓存
+          if (type === 'query' && isPersonalDataQuery(payload.sql, tableNames)) {
+            console.log('ServiceWorker: Detected personal data query, attempting to cache');
+
+            try {
+              await ensureDataCacheManager();
+
+              // 提取个人数据组件
+              const personalDataComponent = extractPersonalDataComponent(payload.sql, results);
+
+              if (personalDataComponent && userId) {
+                console.log(`ServiceWorker: Caching personal data component: ${personalDataComponent.type}`);
+
+                // 获取或创建用户个人数据缓存
+                const cacheKey = `${userId}_${payload.vars?.case_id || 'global'}`;
+                let existingPersonalData = await dataCacheManager!.getPersonalData(userId, payload.vars?.case_id);
+
+                if (!existingPersonalData) {
+                  existingPersonalData = {
+                    permissions: { operations: [] },
+                    roles: { global: [], case: {} },
+                    menus: [],
+                    syncTimestamp: Date.now()
+                  };
+                }
+
+                // 更新对应的数据组件
+                if (personalDataComponent.type === 'operations') {
+                  existingPersonalData.permissions.operations = personalDataComponent.data.map((item: any) => ({
+                    operation_id: item.operation_id,
+                    case_id: item.case_id,
+                    can_execute: item.can_execute,
+                    conditions: item.conditions
+                  }));
+                } else if (personalDataComponent.type === 'menus') {
+                  existingPersonalData.menus = personalDataComponent.data.map((item: any) => ({
+                    id: item.id,
+                    path: item.path,
+                    labelKey: item.labelKey,
+                    iconName: item.iconName,
+                    parent_id: item.parent_id,
+                    order_index: item.order_index,
+                    is_active: item.is_active,
+                    required_permissions: item.required_permissions
+                  }));
+                } else if (personalDataComponent.type === 'globalRoles') {
+                  existingPersonalData.roles.global = personalDataComponent.data.map((item: any) => item.role_name);
+                } else if (personalDataComponent.type === 'caseRoles') {
+                  const caseRoleMap: Record<string, string[]> = {};
+                  personalDataComponent.data.forEach((item: any) => {
+                    const caseId = String(item.case_id);
+                    if (!caseRoleMap[caseId]) {
+                      caseRoleMap[caseId] = [];
+                    }
+                    caseRoleMap[caseId].push(item.role_name);
+                  });
+                  existingPersonalData.roles.case = { ...existingPersonalData.roles.case, ...caseRoleMap };
+                }
+
+                // 更新同步时间戳
+                existingPersonalData.syncTimestamp = Date.now();
+
+                // 缓存更新后的个人数据
+                await dataCacheManager!.cachePersonalData(userId, payload.vars?.case_id, existingPersonalData);
+
+                console.log('ServiceWorker: Successfully cached personal data component');
+              }
+            } catch (cacheError) {
+              console.warn('ServiceWorker: Failed to cache personal data, but query succeeded:', cacheError);
+            }
+          }
+
           // 对于自动同步表的查询结果，自动缓存
           if (type === 'query' && tableNames.length === 1) {
             const table = tableNames[0];
             if (isAutoSyncTable(table) && results && results.length > 0) {
               await ensureDataCacheManager();
-              
+
               try {
                 // 缓存查询结果
                 await dataCacheManager!.cacheData(table, results, 'persistent', userId);
@@ -230,7 +302,7 @@ const eventHandlers = {
               }
             }
           }
-          
+
           respond(results);
           break;
         }
@@ -390,7 +462,7 @@ const eventHandlers = {
         case 'trigger_auto_sync': {
           await ensureDataCacheManager();
           const { userId, caseId } = payload;
-          
+
           try {
             console.log('ServiceWorker: Manual auto sync triggered for user:', userId);
             await dataCacheManager!.autoSyncTables(userId, caseId);
@@ -435,6 +507,7 @@ const eventHandlers = {
           }
           break;
         }
+
 
         case 'get_user_personal_data': {
           await ensureDataCacheManager();
@@ -745,6 +818,78 @@ const CONNECTION_TIMEOUT = 10000; // 10秒连接超时
 // 使用SurrealDB官方的ConnectionStatus枚举，无需自定义状态
 
 // --- Helper Functions for Event Handlers ---
+
+/**
+ * 检查是否为用户个人数据查询
+ */
+function isPersonalDataQuery(sql: string, tableNames: string[]): boolean {
+  // 检查是否包含认证检查
+  const hasAuthCheck = sql.includes('return $auth');
+  if (!hasAuthCheck) return false;
+
+  // 检查是否涉及个人数据相关的表或关系
+  const personalDataPatterns = [
+    'operation_metadata',  // 操作权限
+    'menu_metadata',       // 菜单权限
+    'has_role',           // 用户角色关系
+    'has_case_role'       // 用户案件角色关系
+  ];
+
+  // 检查SQL中是否包含个人数据相关的表名或关系
+  const sqlLower = sql.toLowerCase();
+  return personalDataPatterns.some(pattern =>
+    sqlLower.includes(pattern) || tableNames.includes(pattern)
+  );
+}
+
+/**
+ * 从查询结果中提取个人数据组件
+ */
+function extractPersonalDataComponent(sql: string, result: any): { type: string; data: any } | null {
+  const sqlLower = sql.toLowerCase();
+
+  // 检查认证状态（第一个结果应该是认证检查）
+  if (!Array.isArray(result) || result.length === 0) {
+    return null;
+  }
+
+  const authResult = result[0];
+  if (!authResult || authResult.length === 0) {
+    console.warn('ServiceWorker: Authentication failed for personal data query');
+    return null;
+  }
+
+  // 获取实际查询结果（从索引1开始）
+  const actualResult = result.slice(1);
+  if (!actualResult || actualResult.length === 0) {
+    return null;
+  }
+
+  // 根据查询类型识别数据组件
+  if (sqlLower.includes('operation_metadata')) {
+    return {
+      type: 'operations',
+      data: actualResult[0] || []
+    };
+  } else if (sqlLower.includes('menu_metadata')) {
+    return {
+      type: 'menus',
+      data: actualResult[0] || []
+    };
+  } else if (sqlLower.includes('has_role') && !sqlLower.includes('has_case_role')) {
+    return {
+      type: 'globalRoles',
+      data: actualResult[0] || []
+    };
+  } else if (sqlLower.includes('has_case_role')) {
+    return {
+      type: 'caseRoles',
+      data: actualResult[0] || []
+    };
+  }
+
+  return null;
+}
 
 /**
  * 通知客户端连接状态变化
@@ -1147,34 +1292,34 @@ async function ensureDataCacheManager(): Promise<void> {
  */
 function extractTableNamesFromQuery(sql: string): string[] {
   const tables: string[] = [];
-  
+
   // 移除多余的空格和换行符
   const cleanSql = sql.replace(/\s+/g, ' ').trim().toLowerCase();
-  
+
   // SELECT 语句：SELECT ... FROM table
   const selectMatches = cleanSql.matchAll(/from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
   for (const match of selectMatches) {
     tables.push(match[1]);
   }
-  
+
   // INSERT 语句：INSERT INTO table
   const insertMatches = cleanSql.matchAll(/insert\s+into\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
   for (const match of insertMatches) {
     tables.push(match[1]);
   }
-  
+
   // UPDATE 语句：UPDATE table
   const updateMatches = cleanSql.matchAll(/update\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
   for (const match of updateMatches) {
     tables.push(match[1]);
   }
-  
+
   // DELETE 语句：DELETE FROM table
   const deleteMatches = cleanSql.matchAll(/delete\s+from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
   for (const match of deleteMatches) {
     tables.push(match[1]);
   }
-  
+
   // 去重并返回
   return [...new Set(tables)];
 }
@@ -1196,10 +1341,10 @@ async function getCurrentUserId(): Promise<string | undefined> {
   try {
     await ensureConnection();
     if (!db) return undefined;
-    
+
     // 查询当前认证状态
     const authResult = await db.query('RETURN $auth;');
-    
+
     if (authResult && authResult.length > 0 && authResult[0]) {
       const auth = authResult[0] as any;
       // 从认证信息中提取用户ID
@@ -1209,7 +1354,7 @@ async function getCurrentUserId(): Promise<string | undefined> {
         return userId;
       }
     }
-    
+
     return undefined;
   } catch (error) {
     console.warn('ServiceWorker: Failed to get current user ID:', error);
@@ -1390,20 +1535,24 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
         // 只有认证信息变化，只需要重新认证
         console.log("ServiceWorker: Auth changed, re-authenticating...");
 
-        if (isConnected && db) {
-          try {
-            await ensureTokenManager();
-            const token = await tokenManager!.getToken();
+        if (!db) {
+          return false;
+        }
+        if (db.status === ConnectionStatus.Disconnected || db.status === ConnectionStatus.Error) {
+          await connectWithTimeout();
+        }
+        try {
+          await ensureTokenManager();
+          const token = await tokenManager!.getToken();
 
-            if (token && token.access_token) {
-              await db.authenticate(token.access_token);
-              console.log("ServiceWorker: Re-authenticated with new auth info.");
-            }
-          } catch (e) {
-            console.error("ServiceWorker: Re-authentication failed:", e);
-            notifyConnectionStateChange(e as Error);
-            triggerReconnection();
+          if (token && token.access_token) {
+            await db.authenticate(token.access_token);
+            console.log("ServiceWorker: Re-authenticated with new auth info.");
           }
+        } catch (e) {
+          console.error("ServiceWorker: Re-authentication failed:", e);
+          notifyConnectionStateChange(e as Error);
+          triggerReconnection();
         }
         connectionConfig = newConfig;
       } else {
@@ -1631,7 +1780,7 @@ async function handleConflict(
       );
       break;
 
-    case 'timestamp':
+    case 'timestamp': {
       // 根据时间戳决定使用哪个版本
       const localTimestamp = new Date(localData.updated_at).getTime();
       const remoteTimestamp = new Date(remoteUpdate.updated_at).getTime();
@@ -1647,6 +1796,7 @@ async function handleConflict(
         console.log('ServiceWorker: Local data is newer, keeping local');
       }
       break;
+    }
   }
 }
 
@@ -1786,7 +1936,7 @@ async function persistOfflineQueue(syncKey: string, queue: any[]): Promise<void>
 
     await localDb!.create('offline_queue', queueRecord);
     console.log('ServiceWorker: Persisted offline queue for sync key:', syncKey);
-  } catch (error) {
+  } catch (_error) {
     // 如果创建失败，尝试更新
     try {
       const queueRecord = {

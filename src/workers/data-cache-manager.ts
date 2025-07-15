@@ -291,8 +291,8 @@ export class DataCacheManager {
       
       const result = await this.localDb.query(query, {
         table_name: table,
-        user_id: userId || null,
-        case_id: caseId || null
+        user_id: userId,
+        case_id: caseId
       });
       
       const count = (result as any[])?.[0]?.count || 0;
@@ -538,8 +538,8 @@ export class DataCacheManager {
       
       const cacheResult = await this.localDb.query(cacheQuery, {
         table_name: table,
-        user_id: userId || null,
-        case_id: caseId || null
+        user_id: userId,
+        case_id: caseId
       });
       
       if (cacheResult && cacheResult.length > 0) {
@@ -653,15 +653,11 @@ export class DataCacheManager {
         table_name: table,
         cache_type: cacheType, // 确保 cache_type 字段始终存在
         user_id: userId,
+        case_id: caseId, // 显式设置为null，符合option<string>类型要求
         last_sync_time: Date.now(),
         is_active: true,
         created_at: new Date()
       };
-      
-      // 只有当caseId存在时才设置case_id字段
-      if (caseId) {
-        subscriptionData.case_id = caseId;
-      }
       
       // 尝试先删除旧记录，然后创建新记录
       try {
@@ -785,7 +781,7 @@ export class DataCacheManager {
       sync_timestamp: Date.now(),
       cache_type: cacheType,
       user_id: userId,
-      case_id: caseId, // 直接使用caseId，让undefined自然处理
+      case_id: caseId,
       expires_at: expiresAt
     };
     
@@ -833,8 +829,8 @@ export class DataCacheManager {
       
       const result = await this.localDb.query(query, {
         table_name: table,
-        user_id: userId || null,
-        case_id: caseId || null
+        user_id: userId,
+        case_id: caseId
       });
       
       return (result as DatabaseQueryResult[])?.[0]?.sync_timestamp || 0;
@@ -1001,8 +997,8 @@ export class DataCacheManager {
       
       const result = await this.localDb.query(query, {
         table_name: table,
-        user_id: userId || null,
-        case_id: caseId || null
+        user_id: userId,
+        case_id: caseId
       });
       
       return (result as DatabaseQueryResult[])?.[0]?.data || [];
@@ -1206,7 +1202,7 @@ export class DataCacheManager {
       sync_timestamp: Date.now(),
       cache_type: 'persistent',
       user_id: userId,
-      case_id: caseId, // 直接使用caseId，让undefined自然处理
+      case_id: caseId,
       expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24小时后过期
     };
     
@@ -1248,10 +1244,10 @@ export class DataCacheManager {
       
       const result = await this.localDb.query(query, {
         user_id: userId,
-        case_id: caseId || null
+        case_id: caseId
       });
       
-      return (result as DatabaseQueryResult[])?.[0]?.data || null;
+      return (result as DatabaseQueryResult[])?.[0]?.data;
     } catch (error) {
       console.warn('DataCacheManager: Failed to get personal data:', error);
       return null;
@@ -1272,7 +1268,7 @@ export class DataCacheManager {
       
       await this.localDb.query(query, {
         user_id: userId,
-        case_id: caseId || null
+        case_id: caseId
       });
     } catch (error) {
       console.warn('DataCacheManager: Failed to clear personal data:', error);
@@ -1293,8 +1289,8 @@ export class DataCacheManager {
       
       await this.localDb.query(query, {
         table_name: table,
-        user_id: userId || null,
-        case_id: caseId || null
+        user_id: userId,
+        case_id: caseId
       });
     } catch (error) {
       console.warn('DataCacheManager: Failed to clear table cache:', error);

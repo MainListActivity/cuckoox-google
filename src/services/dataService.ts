@@ -70,15 +70,10 @@ class DataService {
       // For single queries, extract the first result
       if (Array.isArray(raw) && raw.length > 0) {
         const firstResult = raw[0];
-        if (firstResult && typeof firstResult === 'object' && 'result' in firstResult) {
-          return firstResult.result as T;
+        if (firstResult && typeof firstResult === 'object') {
+          return firstResult as T;
         }
         return firstResult as T;
-      }
-      
-      // Handle legacy result formats (for non-service worker clients)
-      if (raw && typeof raw === 'object' && 'result' in raw) {
-        return (raw as QueryResult<T>).result as T;
       }
       
       return raw;
@@ -394,10 +389,7 @@ class DataService {
       // Check authentication status from first result
       const authResult = results[0];
       const isAuthenticated = authResult && 
-        typeof authResult === 'object' && 
-        'result' in authResult && 
-        authResult.result !== null && 
-        authResult.result !== undefined;
+        typeof authResult === 'object';
       
       if (!isAuthenticated) {
         throw new AuthenticationRequiredError('用户未登录，请先登录');
@@ -405,8 +397,8 @@ class DataService {
       
       // Return the actual query result (from index 1)
       const actualResult = results[1];
-      if (actualResult && typeof actualResult === 'object' && 'result' in actualResult) {
-        return actualResult.result as T;
+      if (actualResult && typeof actualResult === 'object') {
+        return actualResult as T;
       }
       
       return actualResult as T;

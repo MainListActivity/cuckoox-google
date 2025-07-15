@@ -93,13 +93,11 @@ This is a legal case management system with the following key architectural comp
 - 不要尝试运行 bun run dev 判断代码是否可运行，lint检查通过并且单元测试通过就可完成任务
 - 使用service worker在后台保持与surrealdb的连接状态，所有页面与service worker通信获取数据
 - 数据库的权限全部由surrealdb数据库控制，这意味着当我们需要查询数据时，只需要加上用户输入的条件，比如查询案件时： `select * from case`，当用户输入关键字搜索： `select * form case where 'fox' IN name`;
-- 已实现完整的数据缓存架构，包含两种缓存策略：
-  - 持久化缓存：用户个人信息（权限、菜单、操作按钮等），登录时缓存，退出时清除
-  - 临时缓存：页面数据，进入页面时订阅，离开页面时取消订阅
+- 已实现完整的数据缓存架构，通过service worker作为数据库代理，所有查询（query方法）都经过service worker并在`service worker`中判断是否走缓存
 - 支持增量数据同步，基于更新时间获取变更数据
 - 支持双向数据同步，本地和远程数据库同时修改时自动同步
 - 权限检查现在基于本地缓存的用户个人数据，提供更快的响应速度
-- 系统中有一部分页面需要用户登录之后才能访问，否则会跳转到登录页面的，针对这种查询需要在查询的sql之前添加 当前认证状态的查询 例如查询案件： `return $auth;select * from case;`，返回的数据从返回数组中的索引位置1开始获取，先获取0位置的认证状态，如果没有认证则直接跳转登录页面
+- 系统中有一部分页面需要用户登录之后才能访问，否则会跳转到登录页面的，针对这种查询需要在查询的sql之前添加 当前认证状态的查询 例如查询案件： `return $auth;select * from case;`，返回的数据从返回数组中的索引位置1开始获取，先获取0位置的认证状态，如果没有认证则直接跳转登录页面（项目已封装该功能，在 `dataService.ts的queryWithAuth`中）， 在service worker中判断如果命中缓存，则在远程执行`return $auth;`，后面的语句在本地执行
 - **Grid组件使用语法**:
 ```typescript
 import { Grid } from '@mui/material';

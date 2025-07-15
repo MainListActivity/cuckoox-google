@@ -33,7 +33,6 @@ const queryClient = new QueryClient(); // ADDED
 const handleSessionExpired = () => {
   console.warn('Authentication error (session/token expired), clearing storage and redirecting to login...');
   // Clear all auth-related localStorage items
-  localStorage.removeItem('cuckoox-user');
   localStorage.removeItem('cuckoox-selectedCaseId');
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');

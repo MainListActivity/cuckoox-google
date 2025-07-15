@@ -55,7 +55,6 @@ const DebugPanel: React.FC = () => {
       'access_token',
       'refresh_token', 
       'token_expires_at',
-      'cuckoox-user',
       'cuckoox-selectedCaseId'
     ];
     

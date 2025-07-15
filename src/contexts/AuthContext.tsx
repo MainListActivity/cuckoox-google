@@ -5,7 +5,7 @@ import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb';
 import { menuService } from '@/src/services/menuService';
 import { userPersonalDataService } from '@/src/services/userPersonalDataService';
-import { userCacheService } from '@/src/services/userCacheService';
+import { userDataService } from '@/src/services/userCacheService';
 
 
 // Matches AppUser in authService and user table in SurrealDB
@@ -118,11 +118,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const isCheckingUser = useRef<boolean>(false); // 追踪是否正在检查用户状态
   authService.setSurrealClient(surreal);
   dataService.setClient(surreal);
-  
-  // 设置UserCacheService的Service Worker通信
-  useEffect(() => {
-    userCacheService.setServiceWorkerComm(serviceWorkerComm);
-  }, [serviceWorkerComm]);
+
+  // 注意：现在直接使用dataService.query，不需要设置Service Worker通信
   const [selectedCaseId, setSelectedCaseId] = useState<RecordId | null>(deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null'));
   const [userCases, setUserCases] = useState<Case[]>([]);
   const selectedCase = useMemo(() => {
@@ -232,13 +229,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const clearAuthState = useCallback(async (shouldInvalidate: boolean = true) => {
     const currentUser = user;
-    
+
     // 如果已经是清空状态，避免重复清除
     if (!currentUser && !isLoggedIn) {
       console.log('AuthContext: Already in cleared state, skipping clearAuthState');
       return;
     }
-    
+
     setUser(null);
     setOidcUser(null);
     setIsLoggedIn(false);
@@ -246,24 +243,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUserCases([]);
     setCurrentUserCaseRoles([]);
     setNavMenuItems([]);
-    
+
     // 只有在明确需要时才调用 invalidate
     if (shouldInvalidate) {
       authService.clearTokens(); // Clear tokens from localStorage
     }
-    
-    // 只有当有用户信息时才清除用户数据
+
+    // 清除用户个人数据缓存
     if (currentUser?.id) {
-      await userCacheService.clearUserData(currentUser.id.toString());
-      
-      // 清除用户个人数据缓存
       try {
         await userPersonalDataService.clearUserPersonalDataCache(currentUser.id.toString());
       } catch (error) {
         console.warn('Failed to clear user personal data cache:', error);
       }
     }
-    
+
     localStorage.removeItem('cuckoox-selectedCaseId');
     // 清理租户代码
     localStorage.removeItem('tenant_code');
@@ -272,204 +266,84 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(appUser);
     setOidcUser(oidcUserInstance || null);
     setIsLoggedIn(true);
-    
-    // 使用UserCacheService保存用户数据
-    await userCacheService.saveUserData(appUser);
+
+    // 注意：现在不需要手动保存用户数据，dataService.query会自动缓存
 
     await loadUserCasesAndRoles(appUser);
   }, [loadUserCasesAndRoles]);
   // 检查当前用户的函数
   const checkCurrentUser = useCallback(async (isMounted: () => boolean) => {
-      if (!isMounted()) return;
-      
-      // 防止重复检查
-      if (isCheckingUser.current) {
-        console.log('AuthContext: Already checking user, skipping duplicate call');
-        return;
-      }
-      
-      // 使用函数内部的状态检查而不是依赖闭包
-      const currentUser = user;
-      const currentIsLoggedIn = isLoggedIn;
-      
-      // 如果已经有用户且已登录，避免重复检查
-      if (currentUser && currentIsLoggedIn) {
-        console.log('AuthContext: User already authenticated, skipping checkCurrentUser');
-        return;
-      }
-      
-      isCheckingUser.current = true;
-      setIsLoading(true);
+    if (!isMounted()) return;
 
-      try {
-        // 等待Service Worker就绪并执行数据迁移
-        await serviceWorkerComm.waitForReady();
-        await userCacheService.migrateFromLocalStorage();
-        
-        // 从SurrealDB获取登录状态
-        const isLoggedInFromSurreal = await getAuthStatus();
-        
-        // 尝试获取用户数据
-        let storedUser: AppUser | null = null;
-        
-        // 首先检查localStorage中是否有用户ID（向后兼容）
-        const legacyUserData = localStorage.getItem('cuckoox-user');
-        if (legacyUserData) {
-          try {
-            const legacyUser = JSON.parse(legacyUserData);
-            const userId = legacyUser.id || (typeof legacyUser.id === 'string' ? legacyUser.id : null);
-            
-            if (userId) {
-              // 使用UserCacheService获取用户数据
-              storedUser = await userCacheService.getUserData(userId);
-            }
-          } catch (parseError) {
-            console.warn('Failed to parse legacy user data:', parseError);
-          }
-        }
+    // 防止重复检查
+    if (isCheckingUser.current) {
+      console.log('AuthContext: Already checking user, skipping duplicate call');
+      return;
+    }
 
-        if (storedUser && isLoggedInFromSurreal) {
-          // 如果有缓存的用户信息，先使用它来初始化会话
-          const appUser = storedUser;
+    // 使用函数内部的状态检查而不是依赖闭包
+    const currentUser = user;
+    const currentIsLoggedIn = isLoggedIn;
 
-          // 对于非管理员用户，检查租户代码
-          if (appUser.github_id !== '--admin--' && !appUser.github_id.startsWith('root_admin_')) {
-            const tenantCode = localStorage.getItem('tenant_code');
-            if (!tenantCode) {
-              // 租户代码丢失，但不立即清除状态，而是重定向到登录页面
-              console.log('Tenant code missing during page refresh, redirecting to login');
-              if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
-              }
-              if (isMounted()) {
-                setIsLoading(false);
-              }
-              return;
-            }
-          }
+    // 如果已经有用户且已登录，避免重复检查
+    if (currentUser && currentIsLoggedIn) {
+      console.log('AuthContext: User already authenticated, skipping checkCurrentUser');
+      return;
+    }
 
-          // 等待 SurrealDB 连接完成后再初始化用户会话
-          if (!isConnected) {
-            console.log('SurrealDB not connected yet, waiting...');
-            setIsLoading(false);
-            return;
-          }
+    isCheckingUser.current = true;
+    setIsLoading(true);
 
-          // 对于管理员用户，不需要检查 OIDC
-          if (appUser.github_id === '--admin--') {
-            if (isMounted()) {
-              await initializeUserSession(appUser, null);
-            }
-            return;
-          }
+    try {
+      // 等待Service Worker就绪
+      await serviceWorkerComm.waitForReady();
 
-          // 对于普通用户，先恢复会话，然后异步检查 OIDC 状态
-          if (isMounted()) {
-            await initializeUserSession(appUser, null);
-          }
-
-          // 异步检查 OIDC 状态（不阻塞用户使用）
-          authService.getUser().then(async (currentOidcUser) => {
-            if (!isMounted()) return;
-
-            if (currentOidcUser && !currentOidcUser.expired) {
-              // OIDC 会话有效，更新 oidcUser
-              setOidcUser(currentOidcUser);
-
-              // 可选：同步更新数据库中的用户信息
-              const githubId = currentOidcUser.profile.sub;
-              if (githubId && githubId === appUser.github_id && isConnected) {
-                const userRecordId = `user:${githubId}`;
-                try {
-                  const result = await dataService.select(userRecordId);
-                  if (result && isMounted()) {
-                    const appUserFromDb = result as unknown as AppUser;
-                    setUser(appUserFromDb);
-                    await userCacheService.saveUserData(appUserFromDb);
-                  }
-                } catch (error) {
-                  console.log("DB not ready yet or error syncing user data:", error);
-                }
-              }
-            } else {
-              // OIDC 会话已过期，但保持用户登录状态
-              console.log("OIDC session expired, but keeping user logged in with stored credentials");
-              if (isMounted()) setOidcUser(null);
-            }
-          }).catch((error) => {
-            console.error("Error checking OIDC session:", error);
-            // 即使 OIDC 检查失败，也保持用户登录状态
-            if (isMounted()) setOidcUser(null);
-          });
-        } else if (!isConnected) {
-          // SurrealDB 未连接时不要清除状态，等待连接
-          console.log('SurrealDB not connected, skipping auth state clear');
+      const result = await dataService.query<AppUser[]>('select * from user where id=$auth;');
+      // 从SurrealDB获取登录状态
+      if (result && result.length > 0) {
+        await initializeUserSession(result[0], null);
+        if (isMounted()) {
           setIsLoading(false);
-          return;
-        } else if (!storedUser && !isLoggedInFromSurreal) {
-          // 确实没有任何会话信息时才清除状态
-          console.log('No stored user and not logged in from Surreal, clearing auth state');
-          if (isMounted()) await clearAuthState(false);
-        } else {
-          // 没有本地存储的用户信息，但有SurrealDB登录状态，检查 OIDC
-          const currentOidcUser = await authService.getUser();
-          if (currentOidcUser && !currentOidcUser.expired && isConnected) {
-            const githubId = currentOidcUser.profile.sub;
-            if (!githubId) {
-              throw new Error("No github_id (sub) found in OIDC user profile during session check.");
-            }
-            const userRecordId = `user:${githubId}`;
-            const result = await dataService.select(userRecordId);
-
-            if (result) {
-              const appUserFromDb = result as unknown as AppUser;
-              if (isMounted()) {
-                await initializeUserSession(appUserFromDb, currentOidcUser);
-              }
-            } else {
-              console.warn(`User ${githubId} found in OIDC but not in DB. Logging out.`);
-              if (isMounted()) await clearAuthState(false);
-            }
-          } else if (isConnected && !storedUser && !isLoggedInFromSurreal) {
-            // 只有在SurrealDB已连接且确实没有任何会话时才清除
-            console.log('Connected to SurrealDB but no valid session found, clearing auth state');
-            if (isMounted()) await clearAuthState(false);
-          }
         }
-      } catch (error) {
-        console.error("Error checking current user session:", error);
-        // 只有在关键错误时才清除状态，而不是每次都清除
-        if (isMounted() && isConnected) {
-          await clearAuthState(false);
-        }
-      } finally {
-        isCheckingUser.current = false;
-        if (isMounted()) setIsLoading(false);
+        return;
       }
-    }, [serviceWorkerComm, getAuthStatus, isConnected, dataService, initializeUserSession, clearAuthState]);
+      if (isMounted()) {
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error("Error checking current user session:", error);
+      // 只有在关键错误时才清除状态，而不是每次都清除
+      if (isMounted() && isConnected) {
+        await clearAuthState(false);
+      }
+    } finally {
+      isCheckingUser.current = false;
+      if (isMounted()) setIsLoading(false);
+    }
+  }, [serviceWorkerComm, getAuthStatus, isConnected, dataService, initializeUserSession, clearAuthState]);
 
   useEffect(() => {
     let isMounted = true;
-    
+
     // 创建一个稳定的检查函数，避免依赖checkCurrentUser本身
     const performUserCheck = async () => {
       if (!isMounted) return;
-      
+
       // 防止重复检查
       if (isCheckingUser.current) {
         console.log('AuthContext: Already checking user, skipping duplicate call');
         return;
       }
-      
+
       // 如果已经有用户且已登录，避免重复检查
       if (user && isLoggedIn) {
         console.log('AuthContext: User already authenticated, skipping checkCurrentUser');
         return;
       }
-      
+
       await checkCurrentUser(() => isMounted);
     };
-    
+
     // 只有在有意义的状态变化时才检查用户
     if (isConnected) {
       performUserCheck();
@@ -515,7 +389,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return dbMenuItems;
       });
-      
+
       console.log('Menu items loaded:', {
         userId: user.id.toString(),
         caseId: selectedCaseId?.toString() || null,
@@ -615,11 +489,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Update user object in context with the new last_login_case_id
       setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
-      // Update user data using UserCacheService
-      if (user) {
-        const updatedUser = { ...user, last_login_case_id: recordId };
-        await userCacheService.saveUserData(updatedUser);
-      }
+      // 更新用户对象在context中的新last_login_case_id
+      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
+      // 注意：不需要手动保存，merge操作已经更新了数据库
 
       // Update last selected case in DB
       if (user?.id) {

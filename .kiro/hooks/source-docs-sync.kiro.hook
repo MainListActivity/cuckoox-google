@@ -1,0 +1,28 @@
+{
+  "enabled": true,
+  "name": "Source to Docs Sync",
+  "description": "Monitors TypeScript source files, configuration files, and other relevant project files for changes and automatically updates documentation in README.md and the /doc folder",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "*.ts",
+      "*.tsx",
+      "*.js",
+      "*.jsx",
+      "package.json",
+      "tsconfig.json",
+      "vite.config.ts",
+      "tailwind.config.js",
+      "playwright.config.ts",
+      ".eslintrc.json",
+      "*.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Source files have been modified. Please analyze the changes and update the documentation accordingly. Focus on:\n\n1. Update README.md with any new features, API changes, or setup instructions\n2. Update relevant documentation in the /doc folder, especially:\n   - Architecture documentation for code structure changes\n   - API documentation for service/hook changes\n   - Component documentation for UI changes\n   - Setup/configuration docs for config file changes\n\nPlease ensure the documentation accurately reflects the current state of the codebase and maintains consistency with the existing documentation style."
+  }
+}

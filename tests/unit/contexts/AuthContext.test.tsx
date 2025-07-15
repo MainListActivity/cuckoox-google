@@ -28,6 +28,7 @@ vi.mock('../../../src/services/authService', () => ({
     loginRedirect: vi.fn(),
     logoutRedirect: vi.fn(),
     handleLoginRedirect: vi.fn(),
+    setSurrealClient: vi.fn(),
   }
 }));
 
@@ -50,6 +51,21 @@ vi.mock('../../../src/services/menuService', () => ({
   },
 }));
 
+// Create a global mock dataService that tests can configure
+const mockDataService = {
+  setClient: vi.fn(),
+  query: vi.fn(),
+  select: vi.fn(),
+  merge: vi.fn(),
+  getUser: vi.fn(),
+  updateUser: vi.fn(),
+  getCase: vi.fn(),
+  getCases: vi.fn(),
+  updateCase: vi.fn(),
+  createCase: vi.fn(),
+  deleteCase: vi.fn(),
+};
+
 // Mock SurrealProvider
 const mockSurrealClient = {
   select: vi.fn(),
@@ -60,6 +76,8 @@ const mockSurrealClient = {
   create: vi.fn(),
   delete: vi.fn(),
 };
+
+const mockGetAuthStatus = vi.fn();
 
 vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurreal: () => ({
@@ -73,17 +91,9 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
     setTokens: vi.fn(),
     clearTokens: vi.fn(),
     getStoredAccessToken: vi.fn(),
-    getAuthStatus: vi.fn().mockResolvedValue(true), // 添加getAuthStatus mock
+    getAuthStatus: mockGetAuthStatus, // 添加getAuthStatus mock
   }),
-  useDataService: () => ({
-    getUser: vi.fn(),
-    updateUser: vi.fn(),
-    getCase: vi.fn(),
-    getCases: vi.fn(),
-    updateCase: vi.fn(),
-    createCase: vi.fn(),
-    deleteCase: vi.fn(),
-  }),
+  useDataService: () => mockDataService,
   useServiceWorkerComm: () => ({
     sendMessage: vi.fn(),
     isAvailable: vi.fn().mockReturnValue(true),
@@ -178,20 +188,24 @@ const renderWithAuthProvider = (initialUser: AppUser | null = null, initialOidcU
   // Setup mocks based on initial user
   if (initialUser && initialUser.github_id !== '--admin--' && initialOidcUser) {
     (authService.getUser as Mock).mockResolvedValue(initialOidcUser);
-    (mockSurrealClient.select as Mock).mockImplementation((recordId: string) => {
+    mockDataService.select.mockImplementation((recordId: string) => {
       if (recordId === initialUser.id.toString()) {
-        return Promise.resolve([initialUser]);
+        return Promise.resolve(initialUser);
       }
-      return Promise.resolve([]);
+      return Promise.resolve(null);
     });
+    mockGetAuthStatus.mockResolvedValue(true);
   } else if (initialUser && initialUser.github_id === '--admin--') {
     (authService.getUser as Mock).mockResolvedValue(null);
+    // For admin users, mock query to return admin user during authentication check
+    mockDataService.query.mockResolvedValue([initialUser]);
+    mockGetAuthStatus.mockResolvedValue(true);
   } else {
     (authService.getUser as Mock).mockResolvedValue(null);
-    (mockSurrealClient.select as Mock).mockResolvedValue([]);
+    mockDataService.select.mockResolvedValue(null);
+    mockDataService.query.mockResolvedValue([[]]);
+    mockGetAuthStatus.mockResolvedValue(false);
   }
-  
-  (mockSurrealClient.query as Mock).mockResolvedValue([[]]);
 
   const renderResult = render(
     <AuthProvider>
@@ -217,6 +231,15 @@ describe('AuthContext', () => {
     (mockSurrealClient.signout as Mock).mockResolvedValue(undefined);
     (mockSurrealClient.merge as Mock).mockResolvedValue(undefined);
     (authService.logoutRedirect as Mock).mockResolvedValue(undefined);
+    
+    // Reset dataService mocks
+    mockDataService.setClient.mockClear();
+    mockDataService.query.mockResolvedValue([[]]);
+    mockDataService.select.mockResolvedValue(null);
+    mockDataService.merge.mockResolvedValue(undefined);
+    
+    // Reset getAuthStatus mock
+    mockGetAuthStatus.mockResolvedValue(false);
     
     // Mock menuService default behavior
     (menuService.loadUserMenus as Mock).mockResolvedValue([]);
@@ -245,14 +268,11 @@ describe('AuthContext', () => {
       });
     });
 
-    it('应该从localStorage恢复管理员用户会话', async () => {
-      localStorageMock.setItem('cuckoox-user', JSON.stringify({
-        id: 'user:admin',
-        github_id: '--admin--',
-        name: 'Admin User',
-      }));
+    it('应该通过SurrealDB认证状态检查管理员用户会话', async () => {
+      // 模拟SurrealDB返回管理员用户认证状态
+      (mockSurrealClient.query as Mock).mockResolvedValue([[mockAdminUser]]);
       
-      renderWithAuthProvider();
+      renderWithAuthProvider(mockAdminUser);
       
       await waitFor(() => {
         expect(capturedAuthContext.isLoggedIn).toBe(true);
@@ -260,17 +280,12 @@ describe('AuthContext', () => {
       });
     });
 
-    it('应该从localStorage恢复普通用户会话', async () => {
-      const storedUser = {
-        id: 'user:oidc123',
-        github_id: 'oidc123',
-        name: 'OIDC User',
-        email: 'oidc@example.com',
-      };
+    it('应该通过SurrealDB认证状态检查普通用户会话', async () => {
+      // 模拟SurrealDB返回普通用户认证状态
+      (authService.getUser as Mock).mockResolvedValue(mockOidcClientUser);
+      (mockSurrealClient.select as Mock).mockResolvedValue([mockOidcUser]);
       
-      localStorageMock.setItem('cuckoox-user', JSON.stringify(storedUser));
-      
-      renderWithAuthProvider();
+      renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
       
       await waitFor(() => {
         expect(capturedAuthContext.isLoggedIn).toBe(true);
@@ -296,7 +311,7 @@ describe('AuthContext', () => {
       });
     });
 
-    it('应该在设置认证状态时保存到localStorage', async () => {
+    it('应该在设置认证状态时更新SurrealDB认证状态', async () => {
       renderWithAuthProvider();
       
       act(() => {
@@ -304,11 +319,10 @@ describe('AuthContext', () => {
       });
       
       await waitFor(() => {
-        // 登录状态现在通过SurrealDB的getAuthStatus获取，不再使用localStorage
-        expect(JSON.parse(localStorageMock.getItem('cuckoox-user') || '{}')).toMatchObject({
-          github_id: 'oidc123',
-          name: 'OIDC User',
-        });
+        // 登录状态现在通过SurrealDB的getAuthStatus获取，验证状态已更新
+        expect(capturedAuthContext.isLoggedIn).toBe(true);
+        expect(capturedAuthContext.user?.github_id).toBe('oidc123');
+        expect(capturedAuthContext.oidcUser).toBe(mockOidcClientUser);
       });
     });
   });
@@ -316,12 +330,9 @@ describe('AuthContext', () => {
   describe('hasRole', () => {
     describe('管理员用户', () => {
       beforeEach(async () => {
-        localStorageMock.setItem('cuckoox-user', JSON.stringify({
-          id: 'user:admin',
-          github_id: '--admin--',
-          name: 'Admin User',
-        }));
-          renderWithAuthProvider(mockAdminUser);
+        // 模拟SurrealDB返回管理员用户认证状态
+        (mockSurrealClient.query as Mock).mockResolvedValue([[mockAdminUser]]);
+        renderWithAuthProvider(mockAdminUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
       });
 
@@ -406,18 +417,15 @@ describe('AuthContext', () => {
 
   describe('selectCase', () => {
     beforeEach(async () => {
-      localStorageMock.setItem('cuckoox-user', JSON.stringify({
-        id: 'user:oidc123',
-        github_id: 'oidc123',
-        name: 'OIDC User',
-      }));
-      
+      // 模拟SurrealDB返回普通用户认证状态和案件角色数据
+      (authService.getUser as Mock).mockResolvedValue(mockOidcClientUser);
+      (mockSurrealClient.select as Mock).mockResolvedValue([mockOidcUser]);
       (mockSurrealClient.query as Mock).mockResolvedValue([[{
         case_details: mockCase1,
         role_details: mockCaseManagerRole,
       }]]);
       
-      renderWithAuthProvider(mockOidcUser);
+      renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
       await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
     });
 
@@ -452,12 +460,9 @@ describe('AuthContext', () => {
   describe('logout', () => {
     describe('管理员登出', () => {
       beforeEach(async () => {
-        localStorageMock.setItem('cuckoox-user', JSON.stringify({
-          id: 'user:admin',
-          github_id: '--admin--',
-          name: 'Admin User',
-        }));
-          renderWithAuthProvider(mockAdminUser);
+        // 模拟SurrealDB返回管理员用户认证状态
+        (mockSurrealClient.query as Mock).mockResolvedValue([[mockAdminUser]]);
+        renderWithAuthProvider(mockAdminUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
         (mockSurrealClient.signout as Mock).mockResolvedValue(undefined);
       });
@@ -472,8 +477,7 @@ describe('AuthContext', () => {
         
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
-        expect(localStorageMock.getItem('cuckoox-user')).toBeNull();
-        // 登录状态现在通过SurrealDB的getAuthStatus获取，不再检查localStorage
+        // 验证案件选择状态也被清除
         expect(localStorageMock.getItem('cuckoox-selectedCaseId')).toBeNull();
       });
 
@@ -490,7 +494,6 @@ describe('AuthContext', () => {
         
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
-        expect(localStorageMock.getItem('cuckoox-user')).toBeNull();
       });
     });
 
@@ -500,11 +503,6 @@ describe('AuthContext', () => {
         (mockSurrealClient.select as Mock).mockImplementation((recordId: string) =>
           recordId === mockOidcUser.id.toString() ? Promise.resolve([mockOidcUser]) : Promise.resolve([])
         );
-        localStorageMock.setItem('cuckoox-user', JSON.stringify({
-          id: 'user:oidc123',
-          github_id: 'oidc123',
-          name: 'OIDC User',
-        }));
   
         renderWithAuthProvider(mockOidcUser, mockOidcClientUser);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(true));
@@ -521,7 +519,6 @@ describe('AuthContext', () => {
 
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
-        expect(localStorageMock.getItem('cuckoox-user')).toBeNull();
       });
 
       it('应该在authService.logoutRedirect失败时仍然清理客户端状态', async () => {
@@ -537,7 +534,6 @@ describe('AuthContext', () => {
         
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
-        expect(localStorageMock.getItem('cuckoox-user')).toBeNull();
       });
     });
 
@@ -545,7 +541,6 @@ describe('AuthContext', () => {
       beforeEach(async () => {
         (authService.getUser as Mock).mockResolvedValue(null);
         (mockSurrealClient.select as Mock).mockResolvedValue([]);
-        localStorageMock.clear();
         renderWithAuthProvider(null);
         await waitFor(() => expect(capturedAuthContext.isLoggedIn).toBe(false));
       });
@@ -561,7 +556,6 @@ describe('AuthContext', () => {
 
         expect(capturedAuthContext.user).toBeNull();
         expect(capturedAuthContext.isLoggedIn).toBe(false);
-        expect(localStorageMock.getItem('cuckoox-user')).toBeNull();
       });
     });
   });
@@ -576,11 +570,8 @@ describe('AuthContext', () => {
       ];
       (menuService.loadUserMenus as Mock).mockResolvedValue(adminMenus);
       
-      localStorageMock.setItem('cuckoox-user', JSON.stringify({
-        id: 'user:admin',
-        github_id: '--admin--',
-        name: 'Admin User',
-      }));
+      // 模拟SurrealDB返回管理员用户认证状态
+      (mockSurrealClient.query as Mock).mockResolvedValue([[mockAdminUser]]);
       
       renderWithAuthProvider(mockAdminUser);
       
@@ -718,7 +709,7 @@ describe('AuthContext', () => {
 
      describe('错误处理', () => {
      it('应该处理初始化时的错误', async () => {
-       // 清除localStorage以确保没有缓存的用户数据
+       // 清除mock状态以确保没有缓存数据
        localStorageMock.clear();
        
        // 确保没有预设的mock
@@ -769,11 +760,8 @@ describe('AuthContext', () => {
 
      it('应该处理案件选择时的错误', async () => {
        // 先设置用户登录状态
-       localStorageMock.setItem('cuckoox-user', JSON.stringify({
-         id: 'user:oidc123',
-         github_id: 'oidc123',
-         name: 'OIDC User',
-       }));
+       (authService.getUser as Mock).mockResolvedValue(mockOidcClientUser);
+       (mockSurrealClient.select as Mock).mockResolvedValue([mockOidcUser]);
         
        renderWithAuthProvider(mockOidcUser);
        
