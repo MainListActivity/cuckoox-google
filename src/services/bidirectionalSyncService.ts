@@ -1,6 +1,14 @@
 import { RecordId } from 'surrealdb';
-import { dataService } from './dataService';
 import { incrementalSyncService } from './incrementalSyncService';
+
+// Data service interface for dependency injection
+interface DataServiceInterface {
+  query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
+  mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
+  create<T = unknown>(thing: string, data: unknown): Promise<T>;
+  update<T = unknown>(thing: string | RecordId, data: unknown): Promise<T>;
+  delete<T = unknown>(thing: string | RecordId): Promise<T>;
+}
 
 /**
  * 双向同步配置
@@ -71,6 +79,7 @@ export interface SyncStatus {
  * - 批处理优化
  */
 export class BidirectionalSyncService {
+  private dataService: DataServiceInterface | null = null;
   private syncQueues = new Map<string, SyncOperation[]>();
   private activeSync = new Set<string>();
   private syncTimers = new Map<string, NodeJS.Timeout>();
@@ -98,6 +107,24 @@ export class BidirectionalSyncService {
   constructor() {
     this.setupNetworkMonitoring();
     this.setupOfflineQueuePersistence();
+  }
+
+  /**
+   * Set DataService for dependency injection
+   * @param dataService DataService instance 
+   */
+  setDataService(dataService: DataServiceInterface) {
+    this.dataService = dataService;
+  }
+
+  /**
+   * Ensure dataService is available
+   */
+  private ensureDataService(): DataServiceInterface {
+    if (!this.dataService) {
+      throw new Error('DataService not initialized. Call setDataService() first.');
+    }
+    return this.dataService;
   }
 
   /**
@@ -346,7 +373,7 @@ export class BidirectionalSyncService {
       
       // 执行批量查询
       const batchQuery = batchQueries.join('; ');
-      const results = await dataService.query(batchQuery, batchParams);
+      const results = await this.ensureDataService().query(batchQuery, batchParams);
       
       // 更新操作状态
       for (const operation of operations) {
@@ -413,15 +440,15 @@ export class BidirectionalSyncService {
     try {
       switch (operation.operation) {
         case 'create':
-          await dataService.create(operation.table, operation.data);
+          await this.ensureDataService().create(operation.table, operation.data);
           break;
           
         case 'update':
-          await dataService.update(operation.recordId, operation.data);
+          await this.ensureDataService().update(operation.recordId, operation.data);
           break;
           
         case 'delete':
-          await dataService.delete(operation.recordId);
+          await this.ensureDataService().delete(operation.recordId);
           break;
       }
       

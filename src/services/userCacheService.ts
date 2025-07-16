@@ -1,24 +1,25 @@
 import type { AppUser } from '@/src/contexts/AuthContext';
-import { dataService } from './dataService';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
+import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
 
 /**
- * 用户数据服务
- * 直接使用dataService.query查询用户信息，依赖service worker的统一缓存机制
+ * 直接从数据库查询用户数据（会自动使用service worker缓存）
  */
-export class UserDataService {
-  /**
-   * 直接从数据库查询用户数据（会自动使用service worker缓存）
-   */
-  async getUserData(userId: string): Promise<AppUser | null> {
+export async function getUserData(client: SurrealWorkerAPI, userId: string): Promise<AppUser | null> {
     try {
-      const result = await dataService.query<AppUser[]>('SELECT * FROM user WHERE id = $userId', { userId });
+      const result = await queryWithAuth<AppUser[]>(client, 'SELECT * FROM user WHERE id = $userId', { userId });
       return result && result.length > 0 ? result[0] : null;
     } catch (error) {
       console.error('UserDataService: Error getting user data:', error);
       return null;
     }
-  }
 }
 
-// 导出单例实例
-export const userDataService = new UserDataService();
+// Backward compatibility: create a service object with methods that require client to be passed
+export const userDataService = {
+  getUserData,
+  // Legacy methods for compatibility - will be removed later
+  setDataService: () => {
+    console.warn('userDataService.setDataService is deprecated. Use direct function calls instead.');
+  }
+};

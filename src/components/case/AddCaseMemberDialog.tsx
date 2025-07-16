@@ -212,8 +212,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         roleId: formData.role, // 直接使用角色RecordId
       };
 
-      const client = await surrealClient();
-      const newMember = await createUserAndAddToCase(client, caseId, params);
+      const newMember = await createUserAndAddToCase(caseId, params);
       onMemberAdded(newMember);
       onClose();
     } catch (err) {

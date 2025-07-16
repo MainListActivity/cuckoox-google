@@ -48,7 +48,7 @@ import { useSurreal } from '@/src/contexts/SurrealProvider'; // Added
 import { RecordId } from 'surrealdb'; // Added
 import { useDebounce } from '@/src/hooks/useDebounce'; // ADDED
 import { useOperationPermission } from '@/src/hooks/usePermission';
-import { AuthenticationRequiredError } from '@/src/services/dataService'; // Added for new auth check
+import { AuthenticationRequiredError } from '@/src/contexts/SurrealProvider'; // Added for new auth check
 import { useNavigate } from 'react-router-dom'; // Added for navigation
 
 // Creditor interface moved to ./types.ts

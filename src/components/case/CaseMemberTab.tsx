@@ -39,7 +39,6 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useState as ReactUseState } from 'react'; // ReactUseState to avoid conflict with component's useState
 import { useTranslation } from 'react-i18next'; // For i18n
 import { useSnackbar } from '@/src/contexts/SnackbarContext'; // For notifications
-import { surrealClient } from '@/src/lib/surrealClient';
 import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
 import { RecordId } from 'surrealdb';
 
@@ -90,10 +89,9 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const client = await surrealClient();
       const [fetchedMembers, fetchedCaseInfo] = await Promise.all([
-        fetchCaseMembers(client, caseId),
-        fetchCaseInfo(client, caseId)
+        fetchCaseMembers(caseId),
+        fetchCaseInfo(caseId)
       ]);
       setMembers(fetchedMembers);
       setCaseInfo(fetchedCaseInfo);
@@ -135,8 +133,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsRemovingMember(true);
     setError(null);
     try {
-      const client = await surrealClient();
-      await removeCaseMember(client, caseId, memberToRemove.id);
+      await removeCaseMember(caseId, memberToRemove.id);
       loadMembers();
       showSuccess(t('case_members_success_removed', `${memberToRemove.userName} has been removed.`));
     } catch (err) {
@@ -174,8 +171,7 @@ const CaseMemberTab: React.FC<CaseMemberTabProps> = ({ caseId }) => {
     setIsChangingOwner(true);
     setError(null);
     try {
-      const client = await surrealClient();
-      await changeCaseOwner(client, caseId, selectedMemberForMenu.id);
+      await changeCaseOwner(caseId, selectedMemberForMenu.id);
       loadMembers();
       showSuccess(t('case_members_success_owner_changed', `Case lead transferred to ${selectedMemberForMenu.userName}.`));
     } catch (err) {

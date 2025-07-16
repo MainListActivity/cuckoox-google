@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useDataService } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { RecordId } from 'surrealdb';
 import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
 import {
@@ -100,7 +101,7 @@ const CaseListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError } = useSnackbar();
   const theme = useTheme();
-  const dataService = useDataService();
+  const client = useSurrealClient();
 
   // Check operation permissions
   const { permissions, isLoading: isPermissionsLoading } = useOperationPermissions([
@@ -138,7 +139,7 @@ const CaseListPage: React.FC = () => {
   // Fetch cases from database
   useEffect(() => {
     const fetchCases = async () => {
-      if (!dataService) return;
+      if (!client) return;
       
       setIsLoading(true);
       setError(null);
@@ -164,7 +165,7 @@ const CaseListPage: React.FC = () => {
           ORDER BY created_at DESC
         `;
         
-        const result = await dataService.query<RawCaseData[]>(query);
+        const result = await queryWithAuth<RawCaseData[]>(client, query);
         
         if (Array.isArray(result)) {
           const casesData = result as RawCaseData[];
@@ -328,7 +329,7 @@ const CaseListPage: React.FC = () => {
     
     // Refresh cases list to show the new case
     const fetchCases = async () => {
-      if (!dataService) return;
+      if (!client) return;
       
       setIsLoading(true);
       setError(null);
@@ -354,7 +355,7 @@ const CaseListPage: React.FC = () => {
           ORDER BY created_at DESC
         `;
         
-        const result = await dataService.query<RawCaseData[]>(query);
+        const result = await queryWithAuth<RawCaseData[]>(client, query);
         
         if (Array.isArray(result)) {
           const casesData = result as RawCaseData[];

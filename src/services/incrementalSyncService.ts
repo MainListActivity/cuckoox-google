@@ -1,5 +1,9 @@
 import { RecordId } from 'surrealdb';
-import { dataService } from './dataService';
+
+// Data service interface for dependency injection
+interface DataServiceInterface {
+  query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
+}
 
 /**
  * 增量同步配置
@@ -70,6 +74,7 @@ export interface SyncResult {
  * - 错误处理和重试机制
  */
 export class IncrementalSyncService {
+  private dataService: DataServiceInterface | null = null;
   private syncTimers = new Map<string, NodeJS.Timeout>();
   private activeSyncs = new Set<string>();
   private defaultConfig: IncrementalSyncConfig = {
@@ -299,7 +304,7 @@ export class IncrementalSyncService {
         LIMIT $batch_size
       `;
       
-      const result = await dataService.query(query, params);
+      const result = await this.ensureDataService().query(query, params);
       
       return Array.isArray(result) ? result.map(item => ({
         id: item.id,
@@ -530,6 +535,24 @@ export class IncrementalSyncService {
       console.error('IncrementalSyncService: Error clearing sync data:', error);
       throw error;
     }
+  }
+
+  /**
+   * Set DataService for dependency injection
+   * @param dataService DataService instance 
+   */
+  setDataService(dataService: DataServiceInterface) {
+    this.dataService = dataService;
+  }
+
+  /**
+   * Ensure dataService is available
+   */
+  private ensureDataService(): DataServiceInterface {
+    if (!this.dataService) {
+      throw new Error('DataService not initialized. Call setDataService() first.');
+    }
+    return this.dataService;
   }
 
   /**

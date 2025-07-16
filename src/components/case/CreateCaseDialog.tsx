@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDataService } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
@@ -53,7 +53,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
   onCaseCreated 
 }) => {
   const { t } = useTranslation();
-  const dataService = useDataService();
+  const client = useSurrealClient();
   const { user } = useAuth();
   const { showSuccess } = useSnackbar();
 
@@ -150,7 +150,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
   }, [open]);
 
   const handleSave = async () => {
-    if (!dataService) {
+    if (!client) {
       setError(t('create_case_error_no_connection', '数据库连接失败'));
       return;
     }
@@ -196,7 +196,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
 
     setIsSaving(true);
     try {
-      const createdCase = await dataService.create('case', caseData);
+      const createdCase = await client.create('case', caseData);
       console.log('Case created:', createdCase);
       
       let newCaseIdString: string | null = null;
@@ -215,7 +215,7 @@ const CreateCaseDialog: React.FC<CreateCaseDialogProps> = ({
         try {
           // Add current user as owner to this new case
           await addCaseMember(
-            dataService,
+            client,
             new RecordId('case', newCaseIdString),
             user.id, // user.id已经是RecordId类型
             user.name,

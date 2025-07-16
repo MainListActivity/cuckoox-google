@@ -7,9 +7,16 @@ import React, {
 } from 'react';
 import { surrealServiceWorkerClient } from '@/src/lib/surrealServiceWorkerClient';
 import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
-import { dataService } from '@/src/services/dataService';
 import { authService } from '@/src/services/authService';
 import { userPersonalDataService } from '@/src/services/userPersonalDataService';
+
+// Custom error for authentication required
+export class AuthenticationRequiredError extends Error {
+  constructor(message: string = '用户未登录，请先登录') {
+    super(message);
+    this.name = 'AuthenticationRequiredError';
+  }
+}
 
 interface SurrealProviderProps {
   children: React.ReactNode;
@@ -19,9 +26,6 @@ interface SurrealProviderProps {
 }
 
 export interface SurrealContextValue {
-  // Data operations (via DataService)
-  dataService: typeof dataService;
-  
   // Direct service worker client access for raw operations
   client: SurrealWorkerAPI | null;
   
@@ -95,9 +99,6 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         setClient(surrealServiceWorkerClient);
         setConnected(true);
         
-        // Inject client into dataService for dependency injection
-        dataService.setClient(surrealServiceWorkerClient);
-        
         // Inject client into authService for dependency injection
         authService.setSurrealClient(surrealServiceWorkerClient);
         
@@ -109,12 +110,6 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         };
         
         userPersonalDataService.setServiceWorkerComm(serviceWorkerComm);
-        
-        // Setup session expired callback
-        dataService.setSessionExpiredCallback(() => {
-          setConnected(false);
-          setError(new Error('Session expired'));
-        });
       } else {
         throw new Error('Failed to connect to database');
       }
@@ -220,7 +215,6 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   }, []);
 
   const value = useMemo<SurrealContextValue>(() => ({
-    dataService,
     // 只有在测试环境中使用 externalClient 时才使用 dummyClient，否则使用真实的 client 或 null
     client: externalClient ? (client ?? dummyClient) : client,
     surreal: externalClient ? (client ?? dummyClient) : client, // Backward compatibility alias
@@ -235,7 +229,10 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     waitForServiceWorkerReady,
     // Authentication status
     getAuthStatus,
-  }), [client, dummyClient, isConnected, isConnecting, error, reconnect, sendServiceWorkerMessage, getAuthStatus, externalClient]);
+  }), [
+    client, dummyClient, isConnected, isConnecting, error, reconnect, sendServiceWorkerMessage, 
+    getAuthStatus, externalClient
+  ]);
 
   return <SurrealContext.Provider value={value}>{children}</SurrealContext.Provider>;
 };
@@ -248,7 +245,6 @@ export const useSurreal = () => {
 };
 
 export const useSurrealClient = () => useSurreal().client;
-export const useDataService = () => useSurreal().dataService;
 export const useSurrealContext = useSurreal; // Alias for backward compatibility
 
 // Service Worker communication hooks

@@ -50,7 +50,6 @@ This is a legal case management system with the following key architectural comp
 - `src/contexts/` - React Context providers (Auth, Theme, Layout, etc.)
 - `src/services/` - API service layers
   - `userPersonalDataService.ts` - User personal data management service
-  - `pageDataCacheService.ts` - Page data caching service
   - `incrementalSyncService.ts` - Incremental data synchronization service
   - `bidirectionalSyncService.ts` - Bidirectional data synchronization service
 - `src/workers/` - service worker代码
@@ -89,6 +88,7 @@ This is a legal case management system with the following key architectural comp
 - E2E tests require Playwright browser installation
 - Uses CSS custom properties for theming integration MUI
 - ts的类型错误尽量不要使用 `as any`来修复，应当在`typs.d.ts` 或 `index.d.ts` 中定义类型
+- 永远不要在代码里添加`@ts-nocheck`来规避ts检查
 - 在涉及到surreal的方法、存储代码中尽可能使用`RecordId`而不是`string`
 - 不要尝试运行 bun run dev 判断代码是否可运行，lint检查通过并且单元测试通过就可完成任务
 - 使用service worker在后台保持与surrealdb的连接状态，所有页面与service worker通信获取数据

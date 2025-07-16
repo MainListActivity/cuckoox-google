@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { SurrealLike } from '@/src/types/db';
 import { RecordId } from 'surrealdb';
 

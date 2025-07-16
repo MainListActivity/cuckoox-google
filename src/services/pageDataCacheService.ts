@@ -1,5 +1,9 @@
 import { RecordId } from 'surrealdb';
-import { dataService } from './dataService';
+
+// Data service interface for dependency injection
+interface DataServiceInterface {
+  query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
+}
 
 /**
  * 页面数据缓存配置
@@ -44,9 +48,28 @@ export interface PageCacheStatus {
  * - 缓存依赖管理
  */
 export class PageDataCacheService {
+  private dataService: DataServiceInterface | null = null;
   private activeCaches = new Map<string, PageCacheStatus>();
   private cacheConfigs = new Map<string, PageCacheConfig>();
   private subscriptionCallbacks = new Map<string, () => void>();
+
+  /**
+   * Set DataService for dependency injection
+   * @param dataService DataService instance 
+   */
+  setDataService(dataService: DataServiceInterface) {
+    this.dataService = dataService;
+  }
+
+  /**
+   * Ensure dataService is available
+   */
+  private ensureDataService(): DataServiceInterface {
+    if (!this.dataService) {
+      throw new Error('DataService not initialized. Call setDataService() first.');
+    }
+    return this.dataService;
+  }
   
   /**
    * 注册页面缓存配置
@@ -369,7 +392,7 @@ export class PageDataCacheService {
         };
         
         // 直接执行查询并缓存结果
-        const result = await dataService.query(queryConfig.query, params);
+        const result = await this.ensureDataService().query(queryConfig.query, params);
         
         // 通知Service Worker缓存数据
         await this.sendMessageToServiceWorker('cache_query_result', {

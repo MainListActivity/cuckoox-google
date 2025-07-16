@@ -1,4 +1,7 @@
-import { dataService } from './dataService';
+// Data service interface for dependency injection
+interface DataServiceInterface {
+  queryWithAuth<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T>;
+}
 
 /**
  * 用户个人信息数据结构
@@ -81,6 +84,7 @@ export interface MenuMetadata {
  * 负责管理用户个人信息的缓存，包括权限、菜单、设置等
  */
 export class UserPersonalDataService {
+  private dataService: DataServiceInterface | null = null;
   private userId?: string;
   private currentCaseId?: string;
   
@@ -91,6 +95,24 @@ export class UserPersonalDataService {
   // 防止并发请求
   private pendingRequests = new Map<string, Promise<UserPersonalData>>();
   
+  /**
+   * Set DataService for dependency injection
+   * @param dataService DataService instance 
+   */
+  setDataService(dataService: DataServiceInterface) {
+    this.dataService = dataService;
+  }
+
+  /**
+   * Ensure dataService is available
+   */
+  private ensureDataService(): DataServiceInterface {
+    if (!this.dataService) {
+      throw new Error('DataService not initialized. Call setDataService() first.');
+    }
+    return this.dataService;
+  }
+
   /**
    * 设置当前用户上下文
    */
@@ -214,7 +236,7 @@ export class UserPersonalDataService {
         select * from operation_metadata;
       `;
       
-      const result = await dataService.query(query, {
+      const result = await this.ensureDataService().queryWithAuth(query, {
         user_id: userId,
         case_id: caseId
       });
@@ -243,7 +265,7 @@ export class UserPersonalDataService {
         FROM $user_id->has_role;
       `;
       
-      const globalRoles = await dataService.query(globalRolesQuery, {
+      const globalRoles = await this.ensureDataService().queryWithAuth(globalRolesQuery, {
         user_id: userId
       });
       
@@ -255,7 +277,7 @@ export class UserPersonalDataService {
         FROM $user_id->has_case_role;
       `;
       
-      const caseRoles = await dataService.query(caseRolesQuery, {
+      const caseRoles = await this.ensureDataService().queryWithAuth(caseRolesQuery, {
         user_id: userId
       });
       
@@ -299,7 +321,7 @@ export class UserPersonalDataService {
         select * from menu_metadata;
       `;
       
-      const result = await dataService.query(query, {
+      const result = await this.ensureDataService().queryWithAuth(query, {
         user_id: userId,
         case_id: caseId
       });
@@ -328,22 +350,22 @@ export class UserPersonalDataService {
     try {
       console.log('UserPersonalDataService: Syncing user personal data to Service Worker');
       
-      // 使用 dataService.queryWithAuth 执行需要认证的个人数据查询
+      // 使用 this.ensureDataService().queryWithAuth 执行需要认证的个人数据查询
       // Service Worker 会自动识别并缓存个人数据相关的查询
       const queries = [
         // 操作权限查询
-        dataService.queryWithAuth('select * from operation_metadata;', {
+        this.ensureDataService().queryWithAuth('select * from operation_metadata;', {
           user_id: userId,
           case_id: caseId
         }),
         // 全局角色查询  
-        dataService.queryWithAuth(`
+        this.ensureDataService().queryWithAuth(`
           SELECT out.name as role_name 
           FROM $user_id->has_role;`, {
           user_id: userId
         }),
         // 案件角色查询
-        dataService.queryWithAuth(`
+        this.ensureDataService().queryWithAuth(`
           SELECT 
             case_id,
             out.name as role_name 
@@ -351,7 +373,7 @@ export class UserPersonalDataService {
           user_id: userId
         }),
         // 菜单权限查询
-        dataService.queryWithAuth('select * from menu_metadata;', {
+        this.ensureDataService().queryWithAuth('select * from menu_metadata;', {
           user_id: userId,
           case_id: caseId
         })
@@ -379,7 +401,7 @@ export class UserPersonalDataService {
         WHERE user_id = $user_id;
       `;
       
-      await dataService.query(query, {
+      await this.ensureDataService().queryWithAuth(query, {
         user_id: userId,
         settings
       });
@@ -416,7 +438,7 @@ export class UserPersonalDataService {
         WHERE user_id = $user_id;
       `;
       
-      await dataService.query(query, {
+      await this.ensureDataService().queryWithAuth(query, {
         user_id: userId,
         item_id: itemId
       });

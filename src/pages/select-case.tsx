@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { Case } from '@/src/contexts/AuthContext'; // Import Case interface
 import { useTranslation } from 'react-i18next';
-import { useDataService } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { RecordId } from 'surrealdb';
 import GlobalLoader from '@/src/components/GlobalLoader';
 import PageContainer from '@/src/components/PageContainer';
@@ -57,7 +58,7 @@ const CaseSelectionPage: React.FC = () => {
   } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const dataService = useDataService();
+  const client = useSurrealClient();
 
   // Local state for cases with extended information
   const [cases, setCases] = useState<ExtendedCase[]>([]);
@@ -91,8 +92,8 @@ const CaseSelectionPage: React.FC = () => {
           FROM case;
         `;
 
-        // Execute query using DataService
-        const rows = await dataService.query<ExtendedCase[]>(query);
+        // Execute query using SurrealClient
+        const rows = await queryWithAuth<ExtendedCase[]>(client, query);
 
         if (Array.isArray(rows)) {
           // Ensure name has fallback and deduplicate by id
@@ -116,7 +117,7 @@ const CaseSelectionPage: React.FC = () => {
     };
 
     fetchUserCases();
-  }, [dataService, user]);
+  }, [client, user]);
 
   // Handle case selection
   const handleCaseSelect = async (caseToSelect: ExtendedCase) => {

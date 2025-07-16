@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
 import authService from '@/src/services/authService';
-import { useDataService, useServiceWorkerComm, useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient, useServiceWorkerComm, useSurreal } from '@/src/contexts/SurrealProvider';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb';
 import { menuService } from '@/src/services/menuService';
 import { userPersonalDataService } from '@/src/services/userPersonalDataService';
-import { userDataService } from '@/src/services/userCacheService';
 
 
 // Matches AppUser in authService and user table in SurrealDB
@@ -108,7 +108,7 @@ const deserializeRecordId = (recordIdJson: string): RecordId | null => {
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const dataService = useDataService(); // Use new dataService
+  const client = useSurrealClient(); // Use SurrealClient directly
   const serviceWorkerComm = useServiceWorkerComm();
   const { isConnected, getAuthStatus, surreal } = useSurreal(); // 获取连接状态
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -117,9 +117,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const isCheckingUser = useRef<boolean>(false); // 追踪是否正在检查用户状态
   authService.setSurrealClient(surreal);
-  dataService.setClient(surreal);
 
-  // 注意：现在直接使用dataService.query，不需要设置Service Worker通信
+  // 注意：现在直接使用queryWithAuth，通过service worker进行数据库查询
   const [selectedCaseId, setSelectedCaseId] = useState<RecordId | null>(deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null'));
   const [userCases, setUserCases] = useState<Case[]>([]);
   const selectedCase = useMemo(() => {
@@ -131,11 +130,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isMenuLoading, setIsMenuLoading] = useState<boolean>(false);
   const [navigateTo, setNavigateTo] = useState<string | null>(null); // Navigation state
 
-  // Initialize menuService with DataService
-  useEffect(() => {
-    console.log('Setting menuService with dataService:', dataService);
-    menuService.setDataService(dataService);
-  }, [dataService]);
+  // Services are now automatically initialized in SurrealProvider
 
   const clearNavigateTo = () => setNavigateTo(null);
 
@@ -163,7 +158,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         WHERE user_id = $userId
         FETCH case_id, role_id;
       `;
-      const results: UserCaseRoleDetails[] = await dataService.query(query, { userId: currentAppUser.id });
+      const results: UserCaseRoleDetails[] = await queryWithAuth(client, query, { userId: currentAppUser.id });
 
       const casesMap = new Map<RecordId, Case>();
       let actualResults: UserCaseRoleDetails[] = [];
@@ -225,7 +220,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setIsCaseLoading(false);
     }
-  }, [isConnected, dataService, serviceWorkerComm]); // 移除userPersonalDataService依赖
+  }, [isConnected, serviceWorkerComm]); // 移除userPersonalDataService依赖
 
   const clearAuthState = useCallback(async (shouldInvalidate: boolean = true) => {
     const currentUser = user;
@@ -267,7 +262,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setOidcUser(oidcUserInstance || null);
     setIsLoggedIn(true);
 
-    // 注意：现在不需要手动保存用户数据，dataService.query会自动缓存
+    // 注意：现在不需要手动保存用户数据，queryWithAuth会自动缓存
 
     await loadUserCasesAndRoles(appUser);
   }, [loadUserCasesAndRoles]);
@@ -298,7 +293,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 等待Service Worker就绪
       await serviceWorkerComm.waitForReady();
 
-      const result = await dataService.query<AppUser[]>('select * from user where id=$auth;');
+      const result = await queryWithAuth<AppUser[]>(client, 'select * from user where id=$auth;');
       // 从SurrealDB获取登录状态
       if (result && result.length > 0) {
         await initializeUserSession(result[0], null);
@@ -320,7 +315,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isCheckingUser.current = false;
       if (isMounted()) setIsLoading(false);
     }
-  }, [serviceWorkerComm, getAuthStatus, isConnected, dataService, initializeUserSession, clearAuthState]);
+  }, [serviceWorkerComm, getAuthStatus, isConnected, initializeUserSession, clearAuthState]);
 
   useEffect(() => {
     let isMounted = true;
@@ -377,6 +372,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 直接使用图查询函数加载用户可访问的菜单
       console.log('Loading menus using fn::get_user_menus...');
       const dbMenuItems = await menuService.loadUserMenus(
+        client,
         selectedCaseId || null
       );
       console.log('Database menu items:', dbMenuItems);
@@ -412,7 +408,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     try {
-      await dataService.query('UPDATE user SET last_selected_case_id = $caseId WHERE id = $userId;', {
+      await queryWithAuth(client, 'UPDATE user SET last_selected_case_id = $caseId WHERE id = $userId;', {
         userId,
         caseId,
       });
@@ -465,7 +461,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const query = `
         SELECT id, user_id, case_id.* AS case_details, role_id.* AS role_details 
         FROM user_case_role WHERE user_id = $userId FETCH case_id, role_id;`;
-      const results: UserCaseRoleDetails[] = await dataService.query(query, { userId: user.id });
+      const results: UserCaseRoleDetails[] = await queryWithAuth(client, query, { userId: user.id });
 
       let userCaseRolesDetails: UserCaseRoleDetails[] = [];
       if (results && results.length > 0 && Array.isArray(results)) {
@@ -485,7 +481,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       selectCaseInternal(recordId, userCaseRolesDetails);
 
       // Convert string caseIdToSelect to RecordId for storage
-      await dataService.merge(user.id, { last_login_case_id: recordId });
+      await client.merge(user.id, { last_login_case_id: recordId });
 
       // Update user object in context with the new last_login_case_id
       setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
