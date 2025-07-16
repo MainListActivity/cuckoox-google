@@ -983,7 +983,7 @@ function triggerReconnection() {
   console.log(`ServiceWorker: Scheduling reconnection attempt ${reconnectAttempts + 1} in ${delay}ms`);
 
   reconnectTimer = setTimeout(async () => {
-    await performReconnection();
+    await performReconnection().finally(() => isReconnecting = false)
   }, delay);
 }
 
