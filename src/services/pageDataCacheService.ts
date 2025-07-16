@@ -48,6 +48,22 @@ export interface PageCacheStatus {
  * - 缓存依赖管理
  */
 export class PageDataCacheService {
+  private serviceWorkerComm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  } | null = null;
+
+  /**
+   * 设置 Service Worker 通信接口 - 由 SurrealProvider 调用
+   */
+  setServiceWorkerComm(comm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  }) {
+    this.serviceWorkerComm = comm;
+  }
   private dataService: DataServiceInterface | null = null;
   private activeCaches = new Map<string, PageCacheStatus>();
   private cacheConfigs = new Map<string, PageCacheConfig>();
@@ -472,17 +488,19 @@ export class PageDataCacheService {
    * 发送消息到Service Worker
    */
   private async sendMessageToServiceWorker(type: string, payload: any): Promise<any> {
-    // 使用统一的Service Worker客户端
-    const { surrealServiceWorkerClient } = await import('../lib/surrealServiceWorkerClient');
+    if (!this.serviceWorkerComm) {
+      console.warn('PageDataCacheService: Service Worker communication not available. Ensure service is properly initialized.');
+      return Promise.resolve({ success: true });
+    }
     
-    if (!surrealServiceWorkerClient.isServiceWorkerAvailable()) {
+    if (!this.serviceWorkerComm.isAvailable()) {
       console.warn('PageDataCacheService: Service Worker not available');
       return Promise.resolve({ success: true });
     }
     
     try {
-      await surrealServiceWorkerClient.waitForReady();
-      return await surrealServiceWorkerClient.sendGenericMessage(type, payload);
+      await this.serviceWorkerComm.waitForReady();
+      return await this.serviceWorkerComm.sendMessage(type, payload);
     } catch (error) {
       console.error('PageDataCacheService: Service Worker communication error:', error);
       throw error;

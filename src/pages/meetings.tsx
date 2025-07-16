@@ -45,7 +45,7 @@ import { Delta } from 'quill/core';
 import { useSnackbar, SnackbarContextType } from '@/src/contexts/SnackbarContext';
 import type { AlertColor } from '@mui/material/Alert';
 
-import { surrealClient } from '@/src/lib/surrealClient';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants'; 
 import type { SurrealLike } from '@/src/types/db';
@@ -88,10 +88,14 @@ const OnlineMeetingPage: React.FC = () => {
   const { caseStatus, isLoading: isCaseStatusLoading } = useCaseStatus();
   const [client, setClient] = useState<SurrealLike | null>(null);
 
-  // Initialize Surreal client once
+  // Get Surreal client from context
+  const contextClient = useSurrealClient();
+  
   useEffect(() => {
-    surrealClient().then(setClient);
-  }, []);
+    if (contextClient) {
+      setClient(contextClient);
+    }
+  }, [contextClient]);
   const { enqueueSnackbar } = useSnackbar();
   
   const liveMeetings = useLiveMeetings(selectedCaseId); 

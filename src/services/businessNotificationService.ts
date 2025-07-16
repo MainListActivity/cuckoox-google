@@ -1,5 +1,6 @@
 import { RecordId } from 'surrealdb';
-import { surrealClient } from '../lib/surrealClient';
+import { useSurrealClientSingleton } from '../contexts/SurrealProvider';
+import type { SurrealWorkerAPI } from '../contexts/SurrealProvider';
 import { messageService } from './messageService';
 
 interface ClaimData {
@@ -27,6 +28,31 @@ interface CaseData {
 }
 
 class BusinessNotificationService {
+  private clientGetter: () => Promise<SurrealWorkerAPI> | null = null;
+  
+  /**
+   * 设置客户端获取函数 - 在应用启动时由 SurrealProvider 调用
+   */
+  setClientGetter(getter: () => Promise<SurrealWorkerAPI>) {
+    this.clientGetter = getter;
+  }
+  
+  /**
+   * 获取 SurrealDB 客户端
+   */
+  private async getClient(): Promise<SurrealWorkerAPI> {
+    if (!this.clientGetter) {
+      // 如果没有设置客户端获取函数，尝试使用 hook 方式（仅用于向后兼容）
+      try {
+        const { surrealClient } = useSurrealClientSingleton();
+        return await surrealClient();
+      } catch (error) {
+        throw new Error('SurrealDB client not available. Ensure BusinessNotificationService is properly initialized with setClientGetter.');
+      }
+    }
+    
+    return await this.clientGetter();
+  }
   /**
    * Send notification when claim is reviewed
    */
@@ -37,7 +63,7 @@ class BusinessNotificationService {
     reviewerId?: RecordId | string
   ) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       // Get claim details
       const [claim] = await client.query<ClaimData[]>(
@@ -111,7 +137,7 @@ class BusinessNotificationService {
     changedBy: RecordId | string
   ) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       // Get meeting details
       const [meeting] = await client.query<MeetingData[]>(
@@ -221,7 +247,7 @@ class BusinessNotificationService {
     changedBy: RecordId | string
   ) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       // Get case details
       const [caseData] = await client.query<CaseData[]>(
@@ -279,7 +305,7 @@ class BusinessNotificationService {
     priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' = 'NORMAL'
   ) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       if (targetUserIds && targetUserIds.length > 0) {
         // Send to specific users
@@ -331,7 +357,7 @@ class BusinessNotificationService {
     addedBy: RecordId | string
   ) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       // Get creditor details
       const [creditor] = await client.query(

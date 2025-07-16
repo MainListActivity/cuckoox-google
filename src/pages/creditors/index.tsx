@@ -44,7 +44,7 @@ import AdvancedSearchDialog, { type AdvancedSearchCriteria } from './AdvancedSea
 import CreditorClaimsDialog from './CreditorClaimsDialog';
 import ConfirmDeleteDialog from '@/src/components/common/ConfirmDeleteDialog';
 import { useAuth } from '@/src/contexts/AuthContext'; // Added
-import { useSurreal } from '@/src/contexts/SurrealProvider'; // Added
+import { useSurrealClient } from '@/src/contexts/SurrealProvider'; // Added
 import { RecordId } from 'surrealdb'; // Added
 import { useDebounce } from '@/src/hooks/useDebounce'; // ADDED
 import { useOperationPermission } from '@/src/hooks/usePermission';
@@ -59,7 +59,7 @@ const CreditorListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError, showInfo } = useSnackbar(); // Added showError and showInfo
   const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
-  const { dataService, isSuccess: isDbConnected } = useSurreal(); // Updated to use dataService
+  const client = useSurrealClient(); // Updated to use client
   const navigate = useNavigate(); // Added for navigation
 
   // Determine if the user has management permissions
@@ -105,15 +105,15 @@ const CreditorListPage: React.FC = () => {
   const [selectedCreditorForClaims, setSelectedCreditorForClaims] = useState<Creditor | null>(null);
 
   const fetchCreditors = React.useCallback(async (currentPage: number, currentRowsPerPage: number, currentSearchTerm: string, searchCriteria?: AdvancedSearchCriteria | null) => {
-    if (!selectedCaseId || !isDbConnected) {
+    if (!selectedCaseId || !client) {
       setCreditors([]);
       setTotalCreditors(0);
       setIsLoading(false);
-      if (!selectedCaseId && isDbConnected) {
+      if (!selectedCaseId && client) {
         setError(t('error_no_case_selected', '请先选择一个案件。'));
-      } else if (selectedCaseId && !isDbConnected) {
+      } else if (selectedCaseId && !client) {
         setError(t('error_db_not_connected', '数据库未连接。'));
-      } else if (!selectedCaseId && !isDbConnected) {
+      } else if (!selectedCaseId && !client) {
         setError(t('error_no_case_selected_or_db_issues', '请选择案件或检查数据库连接。'));
       }
       return;
@@ -207,7 +207,7 @@ const CreditorListPage: React.FC = () => {
       countQuery += ' GROUP ALL;';
 
       // Fetch paginated data with authentication check
-      const dataResult: unknown = await dataService.queryWithAuth(dataQuery, queryParams);
+      const dataResult: unknown = await client.query(dataQuery, queryParams);
       const fetchedData = Array.isArray(dataResult) ? dataResult as RawCreditorData[] : [];
       const formattedCreditors: Creditor[] = fetchedData.map((cred: RawCreditorData) => ({
         id: cred.id,
@@ -248,7 +248,7 @@ const CreditorListPage: React.FC = () => {
       } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
         countQueryParams.searchTerm = currentSearchTerm;
       }
-      const countResult: unknown = await dataService.queryWithAuth(countQuery, countQueryParams);
+      const countResult: unknown = await client.query(countQuery, countQueryParams);
 
       // SurrealDB's count() GROUP ALL returns an array with an object, e.g., [{ total: 50 }]
       // If no records, it might return an empty array or an array with an object where total is 0 or undefined.
@@ -276,7 +276,7 @@ const CreditorListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, isDbConnected, t, dataService, navigate, showError]); // Updated dependencies
+  }, [selectedCaseId, client, t, navigate, showError]); // Updated dependencies
 
   useEffect(() => {
     // Reset page to 0 when debouncedSearchTerm changes
@@ -354,7 +354,7 @@ const CreditorListPage: React.FC = () => {
 
   const handleSaveCreditor = async (dataToSave: CreditorFormData) => {
     if (dataToSave.id) { // Editing existing creditor
-      if (!isDbConnected) {
+      if (!client) {
         showError(t('database_not_connected', '数据库未连接'));
         return;
       }
@@ -369,7 +369,7 @@ const CreditorListPage: React.FC = () => {
         };
 
         // dataToSave.id is the full record ID string like 'creditor:uuid'
-        await dataService.mutateWithAuth('UPDATE $id MERGE $data;', {
+        await client.mutate('UPDATE $id MERGE $data;', {
           id: dataToSave.id,
           data: dataForUpdate
         });
@@ -394,7 +394,7 @@ const CreditorListPage: React.FC = () => {
         showError(t('error_no_case_selected_for_creditor_add', '没有选择案件，无法添加债权人。'));
         return;
       }
-      if (!isDbConnected) {
+      if (!client) {
         console.error("Database not connected. Cannot create creditor.");
         showError(t('error_db_not_connected_for_creditor_add', '数据库未连接，无法添加债权人。'));
         return;
@@ -412,8 +412,8 @@ const CreditorListPage: React.FC = () => {
       };
 
       try {
-        // Use dataService.create with authentication check
-        const result = await dataService.queryWithAuth('CREATE creditor CONTENT $data', { data: newCreditorData });
+        // Use client.create with authentication check
+        const result = await client.query('CREATE creditor CONTENT $data', { data: newCreditorData });
         console.log("Creditor created successfully:", result);
         showSuccess(t('creditor_added_success', '债权人已成功添加'));
         fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the creditor list with current search criteria
@@ -438,7 +438,7 @@ const CreditorListPage: React.FC = () => {
   };
 
   const handleImportCreditors = (file: File) => {
-    if (!selectedCaseId || !isDbConnected) {
+    if (!selectedCaseId || !client) {
       showError(t('import_error_no_case_or_db', '无法导入：未选择案件或数据库未连接。'));
       setBatchImportOpen(false);
       return;
@@ -491,7 +491,7 @@ const CreditorListPage: React.FC = () => {
           };
 
           try {
-            await dataService.queryWithAuth('CREATE creditor CONTENT $data', { data: creditorDataToCreate });
+            await client.query('CREATE creditor CONTENT $data', { data: creditorDataToCreate });
             successfulImports++;
           } catch (err: unknown) {
             const error = err as Error;
@@ -556,7 +556,7 @@ const CreditorListPage: React.FC = () => {
       return;
     }
 
-    if (!isDbConnected) {
+    if (!client) {
       showError(t('database_not_connected', '数据库未连接'));
       handleCloseDeleteDialog(); // Close dialog as action cannot be performed
       return;
@@ -564,7 +564,7 @@ const CreditorListPage: React.FC = () => {
 
     try {
       // creditorToDelete.id is the full record ID, e.g., 'creditor:xyz'
-      await dataService.mutateWithAuth('DELETE $id;', { id: creditorToDelete.id });
+      await client.mutate('DELETE $id;', { id: creditorToDelete.id });
 
       showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
       fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the list with current search criteria

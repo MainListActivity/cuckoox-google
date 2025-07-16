@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useTheme } from '@/src/contexts/ThemeContext';
-import { surrealClient } from '@/src/lib/surrealClient';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { useTranslation } from 'react-i18next';
 
 const AdminThemePage: React.FC = () => {
   const { t } = useTranslation();
   const { selectedCaseId, selectedCase, refreshUserCasesAndRoles } = useAuth(); // Ensure refreshUserCasesAndRoles is destructured
   const { availableThemes, currentTheme, setCurrentThemeByName } = useTheme();
-  // Surreal client obtained lazily when needed
+  const client = useSurrealClient(); // Get Surreal client from context
 
   const [chosenThemeName, setChosenThemeName] = useState<string>(currentTheme.name);
 
@@ -24,7 +24,9 @@ const AdminThemePage: React.FC = () => {
       return;
     }
     try {
-      const client = await surrealClient();
+      if (!client) {
+        throw new Error('SurrealDB client not available');
+      }
       await client.merge(selectedCaseId, { selected_theme_name: chosenThemeName });
       setCurrentThemeByName(chosenThemeName); // Update ThemeContext
       if (refreshUserCasesAndRoles) { // Check if the function exists

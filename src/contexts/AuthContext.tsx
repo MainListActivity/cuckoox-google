@@ -5,7 +5,6 @@ import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { User as OidcUser } from 'oidc-client-ts';
 import { jsonify, RecordId } from 'surrealdb';
 import { menuService } from '@/src/services/menuService';
-import { userPersonalDataService } from '@/src/services/userPersonalDataService';
 
 
 // Matches AppUser in authService and user table in SurrealDB
@@ -55,6 +54,13 @@ interface UserCaseRoleDetails {
   role_details: Role;  // Populated by SurrealDB FETCH
 }
 
+// 权限检查结果接口
+export interface PermissionCheckResult {
+  hasPermission: boolean;
+  isLoading: boolean;
+  error: string | null;
+}
+
 export interface AuthContextType {
   isLoggedIn: boolean;
   user: AppUser | null;
@@ -80,6 +86,15 @@ export interface AuthContextType {
   // Navigation state
   navigateTo: string | null;
   clearNavigateTo: () => void;
+
+  // Permission related methods (compatible with usePermission hooks)
+  useOperationPermission: (operationId: string) => PermissionCheckResult;
+  useOperationPermissions: (operationIds: string[]) => { permissions: Record<string, boolean>; isLoading: boolean; error: string | null };
+  useMenuPermission: (menuId: string) => PermissionCheckResult;
+  useDataPermission: (tableName: string, crudType: 'create' | 'read' | 'update' | 'delete') => PermissionCheckResult;
+  useUserRoles: () => { roles: string[]; isLoading: boolean; error: string | null };
+  useClearPermissionCache: () => { clearUserPermissions: (caseId?: string) => Promise<void>; clearAllPermissions: () => Promise<void> };
+  useSyncPermissions: () => { syncPermissions: (userData: unknown) => Promise<void> };
 
   // Test-only methods (only available in test environment)
   __TEST_setCurrentUserCaseRoles?: (roles: Role[]) => void;
@@ -129,10 +144,255 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [navMenuItems, setNavMenuItems] = useState<NavItemType[] | null>(null);
   const [isMenuLoading, setIsMenuLoading] = useState<boolean>(false);
   const [navigateTo, setNavigateTo] = useState<string | null>(null); // Navigation state
+  
+  // 权限缓存状态
+  const [operationPermissionsCache, setOperationPermissionsCache] = useState<Record<string, boolean>>({});
+  const [menuPermissionsCache, setMenuPermissionsCache] = useState<Record<string, boolean>>({});
+  const [dataPermissionsCache, setDataPermissionsCache] = useState<Record<string, boolean>>({});
+  const [permissionsLoading, setPermissionsLoading] = useState<Record<string, boolean>>({});
 
   // Services are now automatically initialized in SurrealProvider
 
   const clearNavigateTo = () => setNavigateTo(null);
+
+  // 权限缓存管理
+  const clearPermissionCache = useCallback(() => {
+    setOperationPermissionsCache({});
+    setMenuPermissionsCache({});
+    setDataPermissionsCache({});
+    setPermissionsLoading({});
+  }, []);
+
+  // 异步加载权限并更新缓存
+  const loadOperationPermission = useCallback(async (operationId: string): Promise<boolean> => {
+    if (!user || !client) return false;
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      setOperationPermissionsCache(prev => ({ ...prev, [operationId]: true }));
+      return true;
+    }
+    
+    try {
+      setPermissionsLoading(prev => ({ ...prev, [operationId]: true }));
+      const result = await menuService.hasOperation(client, operationId, selectedCaseId);
+      setOperationPermissionsCache(prev => ({ ...prev, [operationId]: result }));
+      return result;
+    } catch (error) {
+      console.error('Error checking operation permission:', error);
+      setOperationPermissionsCache(prev => ({ ...prev, [operationId]: false }));
+      return false;
+    } finally {
+      setPermissionsLoading(prev => ({ ...prev, [operationId]: false }));
+    }
+  }, [user, client, selectedCaseId]);
+
+  const loadOperationPermissions = useCallback(async (operationIds: string[]): Promise<Record<string, boolean>> => {
+    if (!user || !client) {
+      const result: Record<string, boolean> = {};
+      operationIds.forEach(id => {
+        result[id] = false;
+      });
+      return result;
+    }
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      const result: Record<string, boolean> = {};
+      operationIds.forEach(id => {
+        result[id] = true;
+      });
+      setOperationPermissionsCache(prev => ({ ...prev, ...result }));
+      return result;
+    }
+    
+    try {
+      operationIds.forEach(id => {
+        setPermissionsLoading(prev => ({ ...prev, [id]: true }));
+      });
+      const result = await menuService.hasOperations(client, operationIds, selectedCaseId);
+      setOperationPermissionsCache(prev => ({ ...prev, ...result }));
+      return result;
+    } catch (error) {
+      console.error('Error checking operation permissions:', error);
+      const result: Record<string, boolean> = {};
+      operationIds.forEach(id => {
+        result[id] = false;
+      });
+      setOperationPermissionsCache(prev => ({ ...prev, ...result }));
+      return result;
+    } finally {
+      operationIds.forEach(id => {
+        setPermissionsLoading(prev => ({ ...prev, [id]: false }));
+      });
+    }
+  }, [user, client, selectedCaseId]);
+
+  // 权限 hooks 实现
+  const useOperationPermission = useCallback((operationId: string): PermissionCheckResult => {
+    if (!user || !client) {
+      return { hasPermission: false, isLoading: false, error: null };
+    }
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      return { hasPermission: true, isLoading: false, error: null };
+    }
+    
+    const hasPermission = operationPermissionsCache[operationId] !== undefined 
+      ? operationPermissionsCache[operationId] 
+      : false;
+    const isLoading = permissionsLoading[operationId] || false;
+    
+    // 如果权限不在缓存中且不在加载状态，则异步加载
+    if (operationPermissionsCache[operationId] === undefined && !isLoading) {
+      loadOperationPermission(operationId);
+    }
+    
+    return {
+      hasPermission,
+      isLoading,
+      error: null
+    };
+  }, [operationPermissionsCache, permissionsLoading, user, client, loadOperationPermission]);
+
+  const useOperationPermissions = useCallback((operationIds: string[]) => {
+    if (!user || !client) {
+      const permissions: Record<string, boolean> = {};
+      operationIds.forEach(id => {
+        permissions[id] = false;
+      });
+      return { permissions, isLoading: false, error: null };
+    }
+    
+    // 管理员拥有所有权限
+    if (user.github_id === '--admin--') {
+      const permissions: Record<string, boolean> = {};
+      operationIds.forEach(id => {
+        permissions[id] = true;
+      });
+      return { permissions, isLoading: false, error: null };
+    }
+    
+    const permissions: Record<string, boolean> = {};
+    let isLoading = false;
+    
+    operationIds.forEach(id => {
+      permissions[id] = operationPermissionsCache[id] !== undefined 
+        ? operationPermissionsCache[id] 
+        : false;
+      if (permissionsLoading[id]) {
+        isLoading = true;
+      }
+    });
+    
+    // 检查是否有未缓存的权限需要加载
+    const uncachedIds = operationIds.filter(id => 
+      operationPermissionsCache[id] === undefined && !permissionsLoading[id]
+    );
+    if (uncachedIds.length > 0) {
+      loadOperationPermissions(uncachedIds);
+    }
+    
+    return {
+      permissions,
+      isLoading,
+      error: null
+    };
+  }, [operationPermissionsCache, permissionsLoading, user, client, loadOperationPermissions]);
+
+  const useMenuPermission = useCallback((menuId: string): PermissionCheckResult => {
+    // 先检查当前已加载的菜单项中是否包含该菜单
+    if (navMenuItems) {
+      const hasMenu = navMenuItems.some(menu => menu.id === menuId);
+      if (hasMenu) {
+        return { hasPermission: true, isLoading: false, error: null };
+      }
+    }
+    
+    const hasPermission = menuPermissionsCache[menuId] || false;
+    const isLoading = permissionsLoading[menuId] || false;
+    
+    return {
+      hasPermission,
+      isLoading,
+      error: null
+    };
+  }, [navMenuItems, menuPermissionsCache, permissionsLoading]);
+
+  const useDataPermission = useCallback((tableName: string, crudType: 'create' | 'read' | 'update' | 'delete'): PermissionCheckResult => {
+    const cacheKey = `${tableName}:${crudType}`;
+    const hasPermission = dataPermissionsCache[cacheKey] || false;
+    const isLoading = permissionsLoading[cacheKey] || false;
+    
+    return {
+      hasPermission,
+      isLoading,
+      error: null
+    };
+  }, [dataPermissionsCache, permissionsLoading]);
+
+  const useUserRoles = useCallback(() => {
+    const roles = currentUserCaseRoles.map(role => role.name);
+    return {
+      roles,
+      isLoading: false,
+      error: null
+    };
+  }, [currentUserCaseRoles]);
+
+  const useClearPermissionCache = useCallback(() => {
+    const clearUserPermissions = async (caseId?: string) => {
+      if (!user) return;
+      
+      try {
+        // 清除用户缓存数据
+        await serviceWorkerComm.sendMessage('clear_user_cache', {
+          userId: user.id,
+          caseId: caseId || null
+        });
+        clearPermissionCache();
+      } catch (error) {
+        console.error('Error clearing user permissions:', error);
+      }
+    };
+
+    const clearAllPermissions = async () => {
+      try {
+        // 清除所有缓存
+        await serviceWorkerComm.sendMessage('clear_all_cache', {});
+        clearPermissionCache();
+      } catch (error) {
+        console.error('Error clearing all permissions:', error);
+      }
+    };
+
+    return { clearUserPermissions, clearAllPermissions };
+  }, [user, serviceWorkerComm, clearPermissionCache]);
+
+  const useSyncPermissions = useCallback(() => {
+    const syncPermissions = async (userData: unknown) => {
+      if (!user) return;
+
+      try {
+        // 同步用户数据
+        await serviceWorkerComm.sendMessage('sync_user_data', {
+          userId: user.id,
+          userData
+        });
+      } catch (error) {
+        console.error('Error syncing permissions:', error);
+        throw error;
+      }
+    };
+
+    return { syncPermissions };
+  }, [user, serviceWorkerComm]);
+
+  // 当用户或案件改变时清除权限缓存
+  useEffect(() => {
+    clearPermissionCache();
+  }, [user, selectedCaseId, clearPermissionCache]);
 
   const loadUserCasesAndRoles = useCallback(async (currentAppUser: AppUser | null) => {
     if (!currentAppUser || !currentAppUser.id || !isConnected) {
@@ -198,17 +458,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setNavMenuItems([]); // Clear menu if no case is selected after loading
       }
 
-      // 同步用户个人数据到本地缓存
-      try {
-        // 确保Service Worker已就绪
-        await serviceWorkerComm.waitForReady();
-        await userPersonalDataService.syncUserPersonalDataToServiceWorker(
-          currentAppUser.id.toString(),
-          caseToSelect?.toString()
-        );
-      } catch (error) {
-        console.warn('Failed to sync user personal data to Service Worker:', error);
-      }
 
     } catch (error) {
       console.error("Error loading user cases and roles:", error);
@@ -220,7 +469,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setIsCaseLoading(false);
     }
-  }, [isConnected, serviceWorkerComm]); // 移除userPersonalDataService依赖
+  }, [isConnected, serviceWorkerComm, client]); // 添加client依赖
 
   const clearAuthState = useCallback(async (shouldInvalidate: boolean = true) => {
     const currentUser = user;
@@ -244,14 +493,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       authService.clearTokens(); // Clear tokens from localStorage
     }
 
-    // 清除用户个人数据缓存
-    if (currentUser?.id) {
-      try {
-        await userPersonalDataService.clearUserPersonalDataCache(currentUser.id.toString());
-      } catch (error) {
-        console.warn('Failed to clear user personal data cache:', error);
-      }
-    }
 
     localStorage.removeItem('cuckoox-selectedCaseId');
     // 清理租户代码
@@ -349,7 +590,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [isConnected]); // 移除checkCurrentUser依赖
 
+  // 监听认证状态变化事件
+  useEffect(() => {
+    const handleAuthStateChange = (event: CustomEvent) => {
+      const { isAuthenticated, reason, timestamp } = event.detail;
+      console.log('AuthContext: Received auth state change event:', { isAuthenticated, reason, timestamp });
+      
+      // 如果用户未认证，清除认证状态并重定向到登录页面
+      if (!isAuthenticated) {
+        console.log('AuthContext: User not authenticated, clearing auth state');
+        
+        // 异步清除认证状态，避免阻塞事件处理
+        setTimeout(async () => {
+          try {
+            await clearAuthState(true);
+            
+            // 重定向到登录页面
+            if (window.location.pathname !== '/login') {
+              console.log('AuthContext: Redirecting to login page');
+              window.location.href = '/login';
+            }
+          } catch (error) {
+            console.error('AuthContext: Error clearing auth state:', error);
+          }
+        }, 0);
+      }
+    };
 
+    // 添加事件监听器
+    window.addEventListener('auth-state-changed', handleAuthStateChange as EventListener);
+    
+    // 清理事件监听器
+    return () => {
+      window.removeEventListener('auth-state-changed', handleAuthStateChange as EventListener);
+    };
+  }, [clearAuthState]);
 
   const setAuthState = (appUser: AppUser, oidcUserInstance?: OidcUser | null) => {
     initializeUserSession(appUser, oidcUserInstance);
@@ -494,17 +769,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await updateLastSelectedCaseInDB(user.id, recordId);
       }
 
-      // 同步用户个人数据到本地缓存
-      try {
-        // 确保Service Worker已就绪
-        await serviceWorkerComm.waitForReady();
-        await userPersonalDataService.syncUserPersonalDataToServiceWorker(
-          user.id.toString(),
-          recordId.toString()
-        );
-      } catch (error) {
-        console.warn('Failed to sync user personal data to Service Worker:', error);
-      }
 
     } catch (error) {
       console.error(`Error selecting case ${recordId}:`, error);
@@ -642,6 +906,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       isMenuLoading, // Expose new menu state
       navigateTo,
       clearNavigateTo, // Expose navigation state and clear function
+      // Permission related methods (compatible with usePermission hooks)
+      useOperationPermission,
+      useOperationPermissions,
+      useMenuPermission,
+      useDataPermission,
+      useUserRoles,
+      useClearPermissionCache,
+      useSyncPermissions,
       __TEST_setCurrentUserCaseRoles,
       __TEST_setSelectedCaseId,
       __TEST_setUserCases // Expose test-only methods

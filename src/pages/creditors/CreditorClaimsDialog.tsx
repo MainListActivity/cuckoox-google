@@ -33,7 +33,7 @@ import {
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { RecordId } from 'surrealdb';
 import type { Creditor } from './types';
@@ -81,7 +81,7 @@ const CreditorClaimsDialog: React.FC<CreditorClaimsDialogProps> = ({
 }) => {
   const { t } = useTranslation();
   const { showError } = useSnackbar();
-  const { dataService } = useSurreal();
+  const client = useSurrealClient();
   const { selectedCaseId } = useAuth();
   
   const [claims, setClaims] = useState<ClaimInfo[]>([]);
@@ -148,7 +148,7 @@ const CreditorClaimsDialog: React.FC<CreditorClaimsDialogProps> = ({
         ORDER BY created_at DESC
       `;
 
-      const result = await dataService.queryWithAuth(query, {
+      const result = await client.query(query, {
         creditorId: creditor.id,
         caseId: selectedCaseId,
       });
@@ -163,7 +163,7 @@ const CreditorClaimsDialog: React.FC<CreditorClaimsDialogProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [creditor, selectedCaseId, dataService, showError]);
+  }, [creditor, selectedCaseId, client, showError]);
 
   // 当对话框打开时获取数据
   useEffect(() => {

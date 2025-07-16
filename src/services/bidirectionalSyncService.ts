@@ -80,6 +80,22 @@ export interface SyncStatus {
  */
 export class BidirectionalSyncService {
   private dataService: DataServiceInterface | null = null;
+  private serviceWorkerComm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  } | null = null;
+
+  /**
+   * 设置 Service Worker 通信接口 - 由 SurrealProvider 调用
+   */
+  setServiceWorkerComm(comm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  }) {
+    this.serviceWorkerComm = comm;
+  }
   private syncQueues = new Map<string, SyncOperation[]>();
   private activeSync = new Set<string>();
   private syncTimers = new Map<string, NodeJS.Timeout>();
@@ -651,17 +667,19 @@ export class BidirectionalSyncService {
    * 发送消息到Service Worker
    */
   private async sendMessageToServiceWorker(type: string, payload: any): Promise<any> {
-    // 使用统一的Service Worker客户端
-    const { surrealServiceWorkerClient } = await import('@/src/lib/surrealServiceWorkerClient');
+    if (!this.serviceWorkerComm) {
+      console.warn('BidirectionalSyncService: Service Worker communication not available. Ensure service is properly initialized.');
+      return Promise.resolve({ success: true });
+    }
     
-    if (!surrealServiceWorkerClient.isServiceWorkerAvailable()) {
+    if (!this.serviceWorkerComm.isAvailable()) {
       console.warn('BidirectionalSyncService: Service Worker not available');
       return Promise.resolve({ success: true });
     }
     
     try {
-      await surrealServiceWorkerClient.waitForReady();
-      return await surrealServiceWorkerClient.sendGenericMessage(type, payload);
+      await this.serviceWorkerComm.waitForReady();
+      return await this.serviceWorkerComm.sendMessage(type, payload);
     } catch (error) {
       console.error('BidirectionalSyncService: Service Worker communication error:', error);
       throw error;

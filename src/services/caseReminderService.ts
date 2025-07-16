@@ -1,5 +1,6 @@
 import { RecordId } from 'surrealdb';
-import { surrealClient } from '@/src/lib/surrealClient';
+import { useSurrealClientSingleton } from '@/src/contexts/SurrealProvider';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 import { messageService } from './messageService';
 
 interface NotificationRule {
@@ -33,12 +34,37 @@ interface CaseBotSubscriber {
 }
 
 class CaseReminderService {
+  private clientGetter: () => Promise<SurrealWorkerAPI> | null = null;
+  
+  /**
+   * 设置客户端获取函数 - 在应用启动时由 SurrealProvider 调用
+   */
+  setClientGetter(getter: () => Promise<SurrealWorkerAPI>) {
+    this.clientGetter = getter;
+  }
+  
+  /**
+   * 获取 SurrealDB 客户端
+   */
+  private async getClient(): Promise<SurrealWorkerAPI> {
+    if (!this.clientGetter) {
+      // 如果没有设置客户端获取函数，尝试使用 hook 方式（仅用于向后兼容）
+      try {
+        const { surrealClient } = useSurrealClientSingleton();
+        return await surrealClient();
+      } catch (error) {
+        throw new Error('SurrealDB client not available. Ensure CaseReminderService is properly initialized with setClientGetter.');
+      }
+    }
+    
+    return await this.clientGetter();
+  }
   /**
    * Check and send reminders for all active cases
    */
   async checkAndSendReminders() {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       // Get all active notification rules
       const rules = await client.query<NotificationRule[]>(
@@ -177,7 +203,7 @@ class CaseReminderService {
    */
   private async sendReminder(caseData: CaseData, rule: NotificationRule) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       // Get case bot
       const caseBotResult = await client.query(

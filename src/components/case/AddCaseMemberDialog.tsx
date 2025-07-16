@@ -32,7 +32,7 @@ import { CaseMember } from '@/src/types/caseMember';
 import { createUserAndAddToCase, CreateUserAndAddToCaseParams } from '@/src/services/caseMemberService';
 import { getCaseMemberRoles, Role } from '@/src/services/roleService';
 import { useTranslation } from 'react-i18next';
-import { surrealClient } from '@/src/lib/surrealClient';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 
 interface AddCaseMemberDialogProps {
@@ -78,14 +78,16 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoadingRoles, setIsLoadingRoles] = useState(false);
   
-  // Client will be fetched lazily using surrealClient()
   const { t } = useTranslation();
+  const client = useSurrealClient();
 
   // Load roles from database
   const loadRoles = React.useCallback(async () => {
     setIsLoadingRoles(true);
     try {
-      const client = await surrealClient();
+      if (!client) {
+        throw new Error('SurrealDB client not available');
+      }
       const roleList = await getCaseMemberRoles(client);
       setRoles(roleList);
       
@@ -106,7 +108,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
     } finally {
       setIsLoadingRoles(false);
     }
-  }, []);
+  }, [client]);
 
   useEffect(() => {
     if (!open) {
@@ -204,6 +206,10 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
     setApiError(null);
 
     try {
+      if (!client) {
+        throw new Error('Database client not available');
+      }
+      
       const params: CreateUserAndAddToCaseParams = {
         username: formData.username.trim(),
         password_hash: formData.password,
@@ -212,7 +218,7 @@ const AddCaseMemberDialog: React.FC<AddCaseMemberDialogProps> = ({
         roleId: formData.role, // 直接使用角色RecordId
       };
 
-      const newMember = await createUserAndAddToCase(caseId, params);
+      const newMember = await createUserAndAddToCase(client, caseId, params);
       onMemberAdded(newMember);
       onClose();
     } catch (err) {

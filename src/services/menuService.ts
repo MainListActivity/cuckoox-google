@@ -1,7 +1,7 @@
 import { RecordId } from 'surrealdb';
 import { NavItemType } from '../contexts/AuthContext';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
-import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 
 // 菜单元数据接口，对应数据库中的 menu_metadata 表
 interface MenuMetadata {

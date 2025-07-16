@@ -1,6 +1,6 @@
 import type { Delta as QuillDeltaType, Range as QuillRange } from 'quill/core';
 import Quill from 'quill';
-import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 
 // 导出Delta类型
 export type QuillDelta = QuillDeltaType;

@@ -1,5 +1,6 @@
 import { RecordId, Uuid } from 'surrealdb';
-import { surrealClient } from '@/src/lib/surrealClient';
+import { useSurrealClientSingleton, TenantCodeMissingError } from '@/src/contexts/SurrealProvider';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 
 // Types
 export interface CreateConversationData {
@@ -40,6 +41,31 @@ export interface MarkAsReadData {
 }
 
 class MessageService {
+  private clientGetter: () => Promise<SurrealWorkerAPI> | null = null;
+  
+  /**
+   * 设置客户端获取函数 - 在应用启动时由 SurrealProvider 调用
+   */
+  setClientGetter(getter: () => Promise<SurrealWorkerAPI>) {
+    this.clientGetter = getter;
+  }
+  
+  /**
+   * 获取 SurrealDB 客户端
+   */
+  private async getClient(): Promise<SurrealWorkerAPI> {
+    if (!this.clientGetter) {
+      // 如果没有设置客户端获取函数，尝试使用 hook 方式（仅用于向后兼容）
+      try {
+        const { surrealClient } = useSurrealClientSingleton();
+        return await surrealClient();
+      } catch (error) {
+        throw new Error('SurrealDB client not available. Ensure MessageService is properly initialized with setClientGetter.');
+      }
+    }
+    
+    return await this.clientGetter();
+  }
   /**
    * Create a new conversation
    */
@@ -60,7 +86,7 @@ class MessageService {
         updated_at: new Date().toISOString()
       };
 
-      const client = await surrealClient();
+      const client = await this.getClient();
       const [conversation] = await client.create('conversation', conversationData);
 
       // Create conversation_participant records for each participant
@@ -91,7 +117,7 @@ class MessageService {
    */
   async sendMessage(data: SendMessageData) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       const messageData = {
         type: 'IM',
@@ -146,7 +172,7 @@ class MessageService {
    */
   async sendNotification(data: SendNotificationData) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       // Get or create bot user for case robot reminders
       let senderId: RecordId | string = 'user:system';
@@ -191,7 +217,7 @@ class MessageService {
    */
   async markAsRead(data: MarkAsReadData) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       const promises = data.message_ids.map(async (messageId) => {
         const id = typeof messageId === 'string' ? messageId : String(messageId);
@@ -233,7 +259,7 @@ class MessageService {
    */
   async archiveMessages(messageIds: (RecordId | string)[]) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       const promises = messageIds.map(async (messageId) => {
         const id = typeof messageId === 'string' ? messageId : String(messageId);
@@ -258,7 +284,7 @@ class MessageService {
    */
   async deleteMessages(messageIds: (RecordId | string)[]) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       const promises = messageIds.map(async (messageId) => {
         const id = typeof messageId === 'string' ? messageId : String(messageId);
@@ -285,7 +311,7 @@ class MessageService {
    */
   private async getOrCreateCaseBot(caseId: RecordId | string) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       const caseIdRecord = typeof caseId === 'string' ? 
         new RecordId('case', caseId.split(':')[1]) : caseId;
       
@@ -337,7 +363,7 @@ class MessageService {
    */
   async subscribeToCaseBot(caseId: RecordId | string) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       const caseBot = await this.getOrCreateCaseBot(caseId);
       
       const subscriptionData = {
@@ -359,7 +385,7 @@ class MessageService {
    */
   async unsubscribeFromCaseBot(caseBotId: RecordId | string) {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       const query = `
         DELETE case_bot_subscription 
@@ -387,7 +413,7 @@ class MessageService {
     callback: (action: string, result: any) => void
   ): Promise<Uuid | null> {
     try {
-      const client = await surrealClient();
+      const client = await this.getClient();
       
       let query: string;
       const params: any = {};

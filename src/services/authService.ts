@@ -1,6 +1,6 @@
 import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSettings } from 'oidc-client-ts';
 import { RecordId } from 'surrealdb';
-import { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
+import { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 
 // JWT Token Management
 interface JwtLoginRequest {

@@ -74,6 +74,22 @@ export interface SyncResult {
  * - 错误处理和重试机制
  */
 export class IncrementalSyncService {
+  private serviceWorkerComm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  } | null = null;
+
+  /**
+   * 设置 Service Worker 通信接口 - 由 SurrealProvider 调用
+   */
+  setServiceWorkerComm(comm: {
+    sendMessage: (type: string, payload?: any) => Promise<any>;
+    isAvailable: () => boolean;
+    waitForReady: () => Promise<void>;
+  }) {
+    this.serviceWorkerComm = comm;
+  }
   private dataService: DataServiceInterface | null = null;
   private syncTimers = new Map<string, NodeJS.Timeout>();
   private activeSyncs = new Set<string>();
@@ -559,17 +575,19 @@ export class IncrementalSyncService {
    * 发送消息到Service Worker
    */
   private async sendMessageToServiceWorker(type: string, payload: any): Promise<any> {
-    // 使用统一的Service Worker客户端
-    const { surrealServiceWorkerClient } = await import('../lib/surrealServiceWorkerClient');
+    if (!this.serviceWorkerComm) {
+      console.warn('IncrementalSyncService: Service Worker communication not available. Ensure service is properly initialized.');
+      return Promise.resolve({ success: true });
+    }
     
-    if (!surrealServiceWorkerClient.isServiceWorkerAvailable()) {
+    if (!this.serviceWorkerComm.isAvailable()) {
       console.warn('IncrementalSyncService: Service Worker not available');
       return Promise.resolve({ success: true });
     }
     
     try {
-      await surrealServiceWorkerClient.waitForReady();
-      return await surrealServiceWorkerClient.sendGenericMessage(type, payload);
+      await this.serviceWorkerComm.waitForReady();
+      return await this.serviceWorkerComm.sendMessage(type, payload);
     } catch (error) {
       console.error('IncrementalSyncService: Service Worker communication error:', error);
       throw error;

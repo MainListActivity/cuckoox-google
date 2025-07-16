@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import { Person, Group } from '@mui/icons-material';
 import { useAuth } from '@/src/contexts/AuthContext';
-import { surrealClient } from '@/src/lib/surrealClient';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { messageService } from '@/src/services/messageService';
 import { RecordId } from 'surrealdb';
 
@@ -41,6 +41,7 @@ interface UserOption {
 const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props) => {
   const { open, onClose, onCreated } = props;
   const { user, selectedCaseId } = useAuth();
+  const client = useSurrealClient();
   
   const [conversationType, setConversationType] = useState<'DIRECT' | 'GROUP'>('DIRECT');
   const [conversationName, setConversationName] = useState('');
@@ -72,7 +73,9 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
         AND out != $current_user
       `;
       
-      const client = await surrealClient();
+      if (!client) {
+        throw new Error('SurrealDB client not available');
+      }
       const queryVars: Record<string, unknown> = { current_user: user.id };
       if (selectedCaseId) queryVars.case_id = selectedCaseId;
 

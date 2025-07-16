@@ -49,7 +49,6 @@ This is a legal case management system with the following key architectural comp
 - `src/pages/` - Route-based page components following file-based routing
 - `src/contexts/` - React Context providers (Auth, Theme, Layout, etc.)
 - `src/services/` - API service layers
-  - `userPersonalDataService.ts` - User personal data management service
   - `incrementalSyncService.ts` - Incremental data synchronization service
   - `bidirectionalSyncService.ts` - Bidirectional data synchronization service
 - `src/workers/` - service worker代码
@@ -57,7 +56,6 @@ This is a legal case management system with the following key architectural comp
   - `data-cache-manager.ts` - Universal data cache manager
   - `token-manager.ts` - Token management
 - `src/hooks/` - Custom React hooks
-  - `useUserPersonalData.ts` - User personal data hooks
   - `usePageDataCache.ts` - Page data caching hooks
   - `usePageCacheManager.ts` - Page cache manager hooks
   - `usePermission.ts` - Permission checking hooks (based on new cache architecture)

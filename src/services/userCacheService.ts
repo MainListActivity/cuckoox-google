@@ -1,6 +1,6 @@
 import type { AppUser } from '@/src/contexts/AuthContext';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
-import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 
 /**
  * 直接从数据库查询用户数据（会自动使用service worker缓存）

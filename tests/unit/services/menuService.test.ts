@@ -40,7 +40,7 @@ describe('MenuService', () => {
         'select * from menu_metadata',
         {}
       );
-      expect(dataService.query).not.toHaveBeenCalled();
+      expect(mockDataService.query).not.toHaveBeenCalled();
       expect(result).toEqual([
         {
           id: 'dashboard',

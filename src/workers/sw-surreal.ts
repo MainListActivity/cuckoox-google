@@ -421,9 +421,12 @@ const eventHandlers = {
         }
 
         case 'get_connection_state': {
+          // 实时检查连接状态，不仅仅依赖内部变量
+          const actualConnectionState = await checkActualConnectionState();
           respond({
-            state: db?.status || ConnectionStatus.Disconnected,
-            isConnected: isConnected,
+            state: actualConnectionState.state,
+            isConnected: actualConnectionState.isConnected,
+            isAuthenticated: actualConnectionState.isAuthenticated,
             isReconnecting: isReconnecting,
             reconnectAttempts: reconnectAttempts,
             endpoint: connectionConfig?.endpoint
@@ -922,6 +925,36 @@ function stopConnectionHealthCheck() {
 }
 
 /**
+ * 开始连接健康检查
+ */
+function startConnectionHealthCheck() {
+  stopConnectionHealthCheck(); // 先停止现有的检查
+  
+  connectionHealthCheck = setInterval(async () => {
+    try {
+      // 检查实际连接状态
+      const actualState = await checkActualConnectionState();
+      
+      // 如果检测到连接已断开，但我们的状态还是连接中，更新状态
+      if (!actualState.isConnected && isConnected) {
+        console.warn('ServiceWorker: Health check detected disconnection');
+        isConnected = false;
+        notifyConnectionStateChange();
+        
+        // 触发重连
+        if (!isReconnecting) {
+          triggerReconnection();
+        }
+      }
+    } catch (error) {
+      console.error('ServiceWorker: Health check error:', error);
+    }
+  }, 30000); // 每30秒检查一次
+  
+  console.log('ServiceWorker: Connection health check started');
+}
+
+/**
  * 计算重连延迟（指数退避，但有最大值限制）
  */
 function calculateReconnectDelay(): number {
@@ -998,6 +1031,7 @@ async function performReconnection() {
     isReconnecting = false;
 
     notifyConnectionStateChange();
+    startConnectionHealthCheck();
     console.log('ServiceWorker: Reconnection successful');
 
     // 重新订阅所有 Live Query
@@ -1095,6 +1129,23 @@ function setupConnectionEventListeners() {
     triggerReconnection();
   });
 
+  // 监听连接成功事件
+  db.emitter.subscribe('connected', () => {
+    console.log('ServiceWorker: Database connection established');
+    isConnected = true;
+    isReconnecting = false;
+    reconnectAttempts = 0;
+    notifyConnectionStateChange();
+    startConnectionHealthCheck();
+  });
+
+  // 监听重连事件
+  db.emitter.subscribe('reconnecting', () => {
+    console.log('ServiceWorker: Database reconnecting...');
+    isReconnecting = true;
+    notifyConnectionStateChange();
+  });
+
   console.log('ServiceWorker: Connection event listeners set up');
 }
 
@@ -1109,6 +1160,125 @@ function stopReconnection() {
   isReconnecting = false;
   reconnectAttempts = 0;
   console.log('ServiceWorker: Reconnection stopped');
+}
+
+/**
+ * 检查实际的连接状态
+ * 通过执行一个简单的查询来确定连接是否真的可用
+ * 同时检查用户登录状态
+ */
+async function checkActualConnectionState(): Promise<{
+  state: string;
+  isConnected: boolean;
+  isAuthenticated?: boolean;
+}> {
+  try {
+    // 如果数据库实例不存在，直接返回未连接状态
+    if (!db) {
+      console.log('ServiceWorker: checkActualConnectionState - no db instance');
+      return {
+        state: 'disconnected',
+        isConnected: false,
+        isAuthenticated: false
+      };
+    }
+
+    // 检查数据库的内部状态
+    const dbStatus = db.status;
+    console.log('ServiceWorker: db.status =', dbStatus);
+    
+    // 如果数据库状态显示未连接，更新我们的状态
+    if (dbStatus === ConnectionStatus.Disconnected || dbStatus === ConnectionStatus.Reconnecting) {
+      isConnected = false;
+      return {
+        state: dbStatus.toLowerCase(),
+        isConnected: false,
+        isAuthenticated: false
+      };
+    }
+
+    // 尝试执行一个简单的查询来测试连接和认证状态
+    try {
+      // 使用一个非常简单的查询来测试连接可用性和认证状态
+      const result = await Promise.race([
+        db.query('return $auth;'),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection test timeout')), 3000)
+        )
+      ]);
+      
+      if (result) {
+        // 查询成功，连接正常
+        if (!isConnected) {
+          isConnected = true;
+          console.log('ServiceWorker: Connection state corrected to connected');
+        }
+        
+        // 检查认证状态
+        let authResult = null;
+        if (Array.isArray(result) && result.length > 0) {
+          authResult = result[0];
+        } else {
+          authResult = result;
+        }
+        
+        const isAuthenticated = authResult && 
+          typeof authResult === 'object' && 
+          authResult !== null;
+        
+        console.log('ServiceWorker: Authentication status:', isAuthenticated ? 'authenticated' : 'not authenticated');
+        
+        // 如果未认证，广播认证状态变化
+        if (!isAuthenticated) {
+          console.log('ServiceWorker: User not authenticated, broadcasting auth state change');
+          broadcastToAllClients({
+            type: 'auth_state_changed',
+            payload: {
+              isAuthenticated: false,
+              reason: 'connection_check',
+              timestamp: Date.now()
+            }
+          });
+        }
+        
+        return {
+          state: 'connected',
+          isConnected: true,
+          isAuthenticated: isAuthenticated
+        };
+      }
+    } catch (queryError) {
+      // 查询失败，连接有问题
+      console.warn('ServiceWorker: Connection test query failed:', queryError);
+      isConnected = false;
+      
+      // 如果查询失败，触发重连
+      if (!isReconnecting) {
+        triggerReconnection();
+      }
+      
+      return {
+        state: 'disconnected',
+        isConnected: false,
+        isAuthenticated: false
+      };
+    }
+
+    // 默认情况下，如果无法确定状态，返回未连接
+    return {
+      state: 'disconnected',
+      isConnected: false,
+      isAuthenticated: false
+    };
+  } catch (error) {
+    console.error('ServiceWorker: Error checking connection state:', error);
+    isConnected = false;
+    return {
+      state: 'error',
+      isConnected: false,
+      isAuthenticated: false
+    };
+  }
 }
 
 /**
@@ -1580,6 +1750,7 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
 
         isConnected = true;
         notifyConnectionStateChange();
+        startConnectionHealthCheck();
         console.log("ServiceWorker: Connection established.");
 
         // 重置重连计数

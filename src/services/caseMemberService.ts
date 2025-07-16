@@ -1,7 +1,7 @@
 import { CaseMember, Role } from '@/src/types/caseMember';
 import { RecordId } from 'surrealdb';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
-import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 
 // 案件信息接口
 export interface CaseInfo {

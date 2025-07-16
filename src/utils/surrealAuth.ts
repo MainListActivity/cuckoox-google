@@ -1,5 +1,5 @@
 import { AuthenticationRequiredError } from '@/src/contexts/SurrealProvider';
-import type { SurrealWorkerAPI } from '@/src/lib/surrealServiceWorkerClient';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 
 /**
  * Execute a query with authentication check

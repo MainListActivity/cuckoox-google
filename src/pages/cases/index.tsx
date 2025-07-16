@@ -195,7 +195,7 @@ const CaseListPage: React.FC = () => {
     };
 
     fetchCases();
-  }, [dataService, t, showError]);
+  }, [client, t, showError]);
 
   // Statistics
   const stats = [

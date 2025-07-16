@@ -1,9 +1,18 @@
 // tests/unit/pages/select-case.test.tsx
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mock SurrealProvider first, before other imports
+import { 
+  surrealProviderMock,
+  setupSurrealProviderMocks
+} from '../mocks/surrealProviderMocks';
+
+vi.mock('@/src/contexts/SurrealProvider', () => surrealProviderMock);
+
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CaseSelectionPage from '@/src/pages/select-case';
 import { AuthContext, AuthContextType, AppUser, Case } from '@/src/contexts/AuthContext';
@@ -38,11 +47,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-// Mock SurrealProvider
-const mockUseSurreal = vi.fn();
-vi.mock('@/src/contexts/SurrealProvider', () => ({
-  useSurreal: () => mockUseSurreal(),
-}));
 
 // Mock react-router-dom
 const mockNavigate = vi.fn();
@@ -133,37 +137,13 @@ describe('CaseSelectionPage', () => {
       currentUserCaseRoles: [],
     } as unknown as AuthContextType;
 
-    mockSurrealContextValue = {
-      surreal: {
-        query: vi.fn().mockResolvedValue([mockCases]), // 默认返回mockCases
-        select: vi.fn(),
-        create: vi.fn(),
-        update: vi.fn(),
-        merge: vi.fn(),
-        delete: vi.fn(),
-        live: vi.fn(),
-        kill: vi.fn(),
-        let: vi.fn(),
-        unset: vi.fn(),
-        signup: vi.fn(),
-        signin: vi.fn(),
-        invalidate: vi.fn(),
-        authenticate: vi.fn(),
-        sync: vi.fn(),
-        close: vi.fn(),
-      },
-      isConnecting: false,
-      isSuccess: true, // 确保连接成功
-      isError: false,
-      error: null,
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      signin: vi.fn(),
-      signout: vi.fn(),
-    } as unknown as SurrealContextValue;
-
-    // 设置mockUseSurreal返回mockSurrealContextValue
-    mockUseSurreal.mockReturnValue(mockSurrealContextValue);
+    // Setup SurrealProvider mocks with default query returning mockCases in queryWithAuth format
+    mockSurrealContextValue = setupSurrealProviderMocks({
+      client: {
+        ...setupSurrealProviderMocks().client,
+        query: vi.fn().mockResolvedValue([{ success: true }, mockCases]),  // queryWithAuth format
+      }
+    });
   });
 
   it('renders loading state initially when AuthContext isLoading is true', () => {
@@ -186,8 +166,14 @@ describe('CaseSelectionPage', () => {
   });
 
   it('renders no cases available message when user has no cases', async () => {
-    // 重新设置mock以返回空数组
-    mockSurrealContextValue.surreal.query = vi.fn().mockResolvedValue([[]]);
+    // Setup mock to return empty cases list
+    setupSurrealProviderMocks({
+      client: {
+        ...setupSurrealProviderMocks().client,
+        query: vi.fn().mockResolvedValue([{ success: true }, []]),  // Empty cases
+      }
+    });
+    
     renderWithProviders(<CaseSelectionPage />);
     
     await waitFor(() => {
@@ -197,15 +183,13 @@ describe('CaseSelectionPage', () => {
   });
 
   it('handles error when fetching cases from database', async () => {
-    // 重新设置mock以抛出错误
-    const errorMockSurrealContextValue = {
-      ...mockSurrealContextValue,
-      surreal: {
-        ...mockSurrealContextValue.surreal,
+    // Setup mock to throw error
+    setupSurrealProviderMocks({
+      client: {
+        ...setupSurrealProviderMocks().client,
         query: vi.fn().mockRejectedValue(new Error('DB Error fetching cases'))
       }
-    };
-    mockUseSurreal.mockReturnValue(errorMockSurrealContextValue);
+    });
     
     renderWithProviders(<CaseSelectionPage />);
     
@@ -318,15 +302,13 @@ describe('CaseSelectionPage', () => {
   });
 
   it('shows retry button when there is an error', async () => {
-    // 重新设置mock以抛出错误
-    const errorMockSurrealContextValue = {
-      ...mockSurrealContextValue,
-      surreal: {
-        ...mockSurrealContextValue.surreal,
+    // Setup mock to throw error
+    setupSurrealProviderMocks({
+      client: {
+        ...setupSurrealProviderMocks().client,
         query: vi.fn().mockRejectedValue(new Error('DB Error'))
       }
-    };
-    mockUseSurreal.mockReturnValue(errorMockSurrealContextValue);
+    });
     
     // Mock window.location.reload
     const mockReload = vi.fn();
@@ -381,15 +363,13 @@ describe('CaseSelectionPage', () => {
       }
     ];
     
-    // 重新设置mock以返回不完整的案件数据
-    const incompleteMockSurrealContextValue = {
-      ...mockSurrealContextValue,
-      surreal: {
-        ...mockSurrealContextValue.surreal,
-        query: vi.fn().mockResolvedValue([incompleteCases])
+    // Setup mock to return incomplete case data
+    setupSurrealProviderMocks({
+      client: {
+        ...setupSurrealProviderMocks().client,
+        query: vi.fn().mockResolvedValue([{ success: true }, incompleteCases])
       }
-    };
-    mockUseSurreal.mockReturnValue(incompleteMockSurrealContextValue);
+    });
     
     renderWithProviders(<CaseSelectionPage />);
 
