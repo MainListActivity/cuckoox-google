@@ -250,12 +250,12 @@ const ClaimSubmissionPage: React.FC = () => {
     setEditingClaim(claim);
     setFormData({
       case_id: claim.case_id,
-      nature: claim.asserted_claim_details.nature,
-      principal: String(claim.asserted_claim_details.principal),
-      interest: String(claim.asserted_claim_details.interest),
-      otherFees: String(claim.asserted_claim_details.other_amount),
-      currency: claim.asserted_claim_details.currency,
-      description: claim.asserted_claim_details.brief_description || '',
+      nature: claim.asserted_claim_details?.nature || '',
+      principal: String(claim.asserted_claim_details?.principal || 0),
+      interest: String(claim.asserted_claim_details?.interest || 0),
+      otherFees: String(claim.asserted_claim_details?.other_amount || 0),
+      currency: claim.asserted_claim_details?.currency || 'CNY',
+      description: claim.asserted_claim_details?.brief_description || '',
       has_guarantee: false, // This field doesn't exist in ClaimData, so default to false
     });
     setIsListView(false);
@@ -314,8 +314,8 @@ const ClaimSubmissionPage: React.FC = () => {
                   <TableRow key={claim.id}>
                     <TableCell>{claim.claim_number}</TableCell>
                     <TableCell>{claim.created_at ? new Date(claim.created_at).toLocaleString('zh-CN') : '-'}</TableCell>
-                    <TableCell>{getNatureText(claim.asserted_claim_details.nature)}</TableCell>
-                    <TableCell>¥{claim.asserted_claim_details.total_asserted_amount.toLocaleString()}</TableCell>
+                    <TableCell>{claim.asserted_claim_details ? getNatureText(claim.asserted_claim_details.nature) : '-'}</TableCell>
+                    <TableCell>¥{claim.asserted_claim_details ? claim.asserted_claim_details.total_asserted_amount.toLocaleString() : '0'}</TableCell>
                     <TableCell>
                       <Chip
                         label={getStatusText(claim.review_status)}

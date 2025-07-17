@@ -14,13 +14,12 @@ import {
   Skeleton, // Import Skeleton
 } from '@mui/material';
 import { 
-  teal, cyan, green, yellow, purple, grey, blue, orange, red
+  grey, orange, red
 } from '@mui/material/colors';
 import { alpha, useTheme } from '@mui/material/styles';
 import { PieChart, BarChart, LineChart } from '@mui/x-charts';
 import { 
   FileCopyOutlined as FileCopyIcon, 
-  UpdateOutlined as UpdateIcon,
   CheckCircleOutline as CheckCircleIcon,
   CancelOutlined as CancelIcon,
   InfoOutlined as InfoIcon,
@@ -146,18 +145,18 @@ const ClaimDataDashboardPage: React.FC = () => {
 
 
   // Mock data for placeholders (gradually replace these with live data or remove)
-  const mockData = { // Keep only what's truly mock or not yet live
-    usersLoggedIn: { admin: 2, manager: 5, creditor_user: 50 }, // Remains mock for now
-    claimsRejected: 15, // Placeholder - No live hook for this specific metric yet
-
-    // The following are now driven by live data hooks:
-    // claimsByStatus: [...] 
-    // usersOnlineByRole: [...] // This hook returns mock data but is called
-    // dailyClaimsTrend: [...]
-    // claimsByNature: [...]
-    // recentSubmissions: [...]
-    // recentReviewActions: [...]
-  };
+  // const mockData = { // Keep only what's truly mock or not yet live
+  //   usersLoggedIn: { admin: 2, manager: 5, creditor_user: 50 }, // Remains mock for now
+  //   claimsRejected: 15, // Placeholder - No live hook for this specific metric yet
+  //
+  //   // The following are now driven by live data hooks:
+  //   // claimsByStatus: [...] 
+  //   // usersOnlineByRole: [...] // This hook returns mock data but is called
+  //   // dailyClaimsTrend: [...]
+  //   // claimsByNature: [...]
+  //   // recentSubmissions: [...]
+  //   // recentReviewActions: [...]
+  // };
   // Assume AppBar height is 64px for minHeight calculation
   const appBarHeight = '64px';
   // The `theme` variable obtained from `useTheme()` will now be the global theme.
@@ -192,7 +191,7 @@ const ClaimDataDashboardPage: React.FC = () => {
         <Typography variant="h1" gutterBottom textAlign="center" mb={1} sx={{ color: theme.palette.primary.main }}>债权申报数据大屏</Typography>
         <Typography variant="subtitle1" textAlign="center" sx={{ mb: 5, color: theme.palette.text.secondary }}>
           {selectedCaseId 
-            ? `实时监控案件ID: ${selectedCaseId.replace(/^case:/, '')} 的债权申报与审核动态` 
+            ? `实时监控案件ID: ${String(selectedCaseId).replace(/^case:/, '')} 的债权申报与审核动态` 
             : user 
               ? "请从案件列表选择一个案件进行监控" 
               : "请先登录并选择案件"}
@@ -205,7 +204,7 @@ const ClaimDataDashboardPage: React.FC = () => {
             <Card sx={{
               ...metricCardStyle(theme, 'statOrange'), 
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
-              borderColor: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || theme.palette.orange[400], // Fallback if statOrange not in theme
+              borderColor: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || orange[400], // Fallback if statOrange not in theme
               transform: isTodaysSubmissionsUpdating ? 'scale(1.02)' : 'scale(1)',
             }}>
               <CardContent sx={metricCardContentStyle}>
@@ -217,10 +216,10 @@ const ClaimDataDashboardPage: React.FC = () => {
                       ...metricValueStyle(theme, 'statOrange'),
                       transition: 'transform 0.3s ease-in-out, color 0.3s linear',
                       transform: isTodaysSubmissionsUpdating ? 'scale(1.1)' : 'scale(1)',
-                      color: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || theme.palette.orange[400],
+                      color: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || orange[400],
                       textShadow: isTodaysSubmissionsUpdating 
                         ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` 
-                        : `0 0 6px ${alpha(theme.palette.statOrange?.main || theme.palette.orange[400], 0.5)}`,
+                        : `0 0 6px ${alpha(theme.palette.statOrange?.main || orange[400], 0.5)}`,
                     }}
                   >
                     {liveTodaysSubmissionsCount}
@@ -235,7 +234,7 @@ const ClaimDataDashboardPage: React.FC = () => {
             <Card sx={{
               ...metricCardStyle(theme, 'statRed'), 
               transition: theme.transitions.create(['transform', 'box-shadow', 'background-color', 'border-color'], { duration: theme.transitions.duration.short }),
-              borderColor: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || theme.palette.red[400], // Fallback if statRed not in theme
+              borderColor: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || red[400], // Fallback if statRed not in theme
               transform: isTodaysReviewedUpdating ? 'scale(1.02)' : 'scale(1)',
             }}>
               <CardContent sx={metricCardContentStyle}>
@@ -245,8 +244,8 @@ const ClaimDataDashboardPage: React.FC = () => {
                     ...metricValueStyle(theme, 'statRed'),
                     transition: 'transform 0.3s ease-in-out, color 0.3s linear',
                     transform: isTodaysReviewedUpdating ? 'scale(1.1)' : 'scale(1)',
-                    color: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || theme.palette.red[400],
-                    textShadow: isTodaysReviewedUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statRed?.main || theme.palette.red[400], 0.5)}`,
+                    color: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || red[400],
+                    textShadow: isTodaysReviewedUpdating ? `0 0 10px ${alpha(theme.palette.warning.light, 0.7)}` : `0 0 6px ${alpha(theme.palette.statRed?.main || red[400], 0.5)}`,
                   }}>
                     {liveTodaysReviewedClaimsCount}
                   </Typography>
@@ -612,7 +611,7 @@ const ClaimDataDashboardPage: React.FC = () => {
                             secondaryTypographyProps={{ fontSize: '0.85rem' }}
                           />
                         </ListItem>
-                        {index < liveRecentSubmissions.length - 1 && <Divider variant="inset" component="li" sx={{borderColor: alpha(theme.palette.grey[700], 0.5)}} />}
+                        {index < liveRecentSubmissions.length - 1 && <Divider variant="inset" component="li" sx={{borderColor: alpha(grey[700], 0.5)}} />}
                       </React.Fragment>
                     ))}
                   </List>
@@ -664,7 +663,7 @@ const ClaimDataDashboardPage: React.FC = () => {
                             secondaryTypographyProps={{ fontSize: '0.85rem' }}
                           />
                         </ListItem>
-                        {index < liveRecentReviewActions.length - 1 && <Divider variant="inset" component="li" sx={{borderColor: alpha(theme.palette.grey[700], 0.5)}} />}
+                        {index < liveRecentReviewActions.length - 1 && <Divider variant="inset" component="li" sx={{borderColor: alpha(grey[700], 0.5)}} />}
                       </React.Fragment>
                     ))}
                   </List>

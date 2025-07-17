@@ -82,12 +82,14 @@ const CreateConversationDialog: React.FC<CreateConversationDialogProps> = (props
       const queryResult: unknown = await client.query(query, queryVars);
       const firstSet: any[] = Array.isArray(queryResult) ? queryResult : [];
       if (firstSet.length > 0) {
-        const users = firstSet.map((item: any) => ({
-          id: item.user.id,
-          name: item.user.name || 'Unknown User',
-          email: item.user.email,
-          avatar_url: item.user.avatar_url
-        }));
+        const users = firstSet
+          .filter((item: any) => item.user && item.user.id)
+          .map((item: any) => ({
+            id: item.user.id,
+            name: item.user.name || 'Unknown User',
+            email: item.user.email,
+            avatar_url: item.user.avatar_url
+          }));
         setAvailableUsers(users);
       } else {
         setAvailableUsers([]);
