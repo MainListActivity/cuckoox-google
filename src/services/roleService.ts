@@ -1,4 +1,4 @@
-import type { SurrealLike } from '@/src/types/db';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 
 export interface Role {
@@ -12,11 +12,11 @@ export interface Role {
 /**
  * 获取所有可用角色
  */
-export const getAllRoles = async (client: SurrealLike): Promise<Role[]> => {
+export const getAllRoles = async (client: SurrealWorkerAPI): Promise<Role[]> => {
   console.log('[RoleService] Fetching all roles from database');
   
   try {
-    const result = await (client as any).query<Role[]>('SELECT * FROM role ORDER BY name');
+    const result = await client.query<Role[]>('SELECT * FROM role ORDER BY name');
     
     if (!Array.isArray(result) || result.length === 0) {
       console.warn('[RoleService] No roles found in database');
@@ -36,11 +36,11 @@ export const getAllRoles = async (client: SurrealLike): Promise<Role[]> => {
 /**
  * 根据ID获取单个角色
  */
-export const getRoleById = async (client: SurrealLike, roleId: RecordId): Promise<Role | null> => {
+export const getRoleById = async (client: SurrealWorkerAPI, roleId: RecordId): Promise<Role | null> => {
   console.log(`[RoleService] Fetching role by ID: ${roleId}`);
   
   try {
-    const result = await (client as any).select(roleId);
+    const result = await client.select(roleId);
     
     if (!result) {
       console.warn(`[RoleService] Role not found: ${roleId}`);
@@ -58,11 +58,11 @@ export const getRoleById = async (client: SurrealLike, roleId: RecordId): Promis
 /**
  * 根据名称获取角色
  */
-export const getRoleByName = async (client: SurrealLike, roleName: string): Promise<Role | null> => {
+export const getRoleByName = async (client: SurrealWorkerAPI, roleName: string): Promise<Role | null> => {
   console.log(`[RoleService] Fetching role by name: ${roleName}`);
   
   try {
-    const result = await (client as any).query<Role[]>('SELECT * FROM role WHERE name = $roleName LIMIT 1', {
+    const result = await client.query<Role[]>('SELECT * FROM role WHERE name = $roleName LIMIT 1', {
       roleName
     });
     
@@ -84,12 +84,12 @@ export const getRoleByName = async (client: SurrealLike, roleName: string): Prom
  * 获取适合案件成员的角色列表
  * 过滤掉一些不适合作为案件成员的角色（如admin）
  */
-export const getCaseMemberRoles = async (client: SurrealLike): Promise<Role[]> => {
+export const getCaseMemberRoles = async (client: SurrealWorkerAPI): Promise<Role[]> => {
   console.log('[RoleService] Fetching case member roles from database');
   
   try {
     // 获取适合案件成员的角色，排除系统管理员角色
-    const result = await (client as any).query<Role[]>(
+    const result = await client.query<Role[]>(
       `
       SELECT * FROM role 
       WHERE name != 'admin' 

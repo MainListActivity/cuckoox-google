@@ -334,7 +334,7 @@ const CreditorListPage: React.FC = () => {
     }
   };
   
-  const creditorsToPrint: Creditor[] = creditors.filter(c => selectedCreditorIds.includes(c.id)); // Use state variable 'creditors'
+  const creditorsToPrint: Creditor[] = creditors.filter(c => c.id && selectedCreditorIds.includes(c.id)); // Use state variable 'creditors'
 
   // Handlers for AddCreditorDialog
   const handleOpenAddCreditorDialog = () => {
@@ -805,16 +805,16 @@ const CreditorListPage: React.FC = () => {
                 <TableRow><TableCell colSpan={11} align="center"><Typography sx={{p:2}}>{debouncedSearchTerm ? t('no_matching_creditors_found', '没有找到匹配的债权人') : t('no_creditors_found', '暂无债权人数据')}</Typography></TableCell></TableRow>
               ) : (
                 creditors.map((creditor, index) => { // Use creditors instead of filteredCreditors
-                  const isItemSelected = isSelected(creditor.id);
+                  const isItemSelected = creditor.id ? isSelected(creditor.id) : false;
                 const labelId = `creditor-table-checkbox-${index}`;
                 return (
                   <TableRow 
                     hover 
-                    onClick={(event) => handleClick(event, creditor.id)}
+                    onClick={(event) => creditor.id && handleClick(event, creditor.id)}
                     role="checkbox"
                     aria-checked={isItemSelected}
                     tabIndex={-1}
-                    key={creditor.id.toString()}
+                    key={creditor.id?.toString() || `creditor-${index}`}
                     selected={isItemSelected}
                     sx={{ cursor: 'pointer' }}
                   >

@@ -371,6 +371,84 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   }, []);
 
   /**
+   * 处理 Service Worker 更新
+   */
+  const handleServiceWorkerUpdate = useCallback((newWorker: ServiceWorker) => {
+    // 可以在这里显示通知给用户，或者自动更新
+    console.log('SurrealProvider: 发现新版本的 Service Worker');
+
+    // 在 Service Worker 更新前，记录当前的连接配置
+    const currentConnectionConfig = {
+      endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
+      namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
+      database: localStorage.getItem('tenant_code') || 'test',
+      sync_tokens: {
+        access_token: localStorage.getItem('access_token'),
+        refresh_token: localStorage.getItem('refresh_token'),
+        token_expires_at: localStorage.getItem('token_expires_at'),
+        tenant_code: localStorage.getItem('tenant_code'),
+      }
+    };
+
+    // 设置一个超时刷新机制，防止controllerchange事件未触发
+    const forceRefreshTimeout = setTimeout(() => {
+      console.log('SurrealProvider: Service Worker更新超时，强制刷新页面');
+      window.location.reload();
+    }, 5000); // 5秒超时
+
+    // 监听新worker的状态变化，确保在正确的时机发送SKIP_WAITING
+    const handleStateChange = () => {
+      console.log('SurrealProvider: 新Service Worker状态:', newWorker.state);
+      if (newWorker.state === 'installed') {
+        console.log('SurrealProvider: 发送SKIP_WAITING消息给新Service Worker');
+        newWorker.postMessage({ type: 'SKIP_WAITING' });
+        newWorker.removeEventListener('statechange', handleStateChange);
+      } else if (newWorker.state === 'activated') {
+        console.log('SurrealProvider: 新Service Worker已激活');
+        // 清除超时计时器，因为controllerchange事件应该会处理刷新
+        clearTimeout(forceRefreshTimeout);
+        
+        // 新的 Service Worker 激活后，发送连接配置以便重连
+        console.log('SurrealProvider: 向新Service Worker发送连接配置');
+        newWorker.postMessage({
+          type: 'connect',
+          payload: currentConnectionConfig
+        });
+        
+        // 延迟一点时间后刷新页面，让新的 Service Worker 有时间处理连接
+        setTimeout(() => {
+          if (navigator.serviceWorker.controller) {
+            console.log('SurrealProvider: Service Worker激活完成，刷新页面');
+            window.location.reload();
+          }
+        }, 1000);
+        newWorker.removeEventListener('statechange', handleStateChange);
+      }
+    };
+
+    // 如果已经是installed状态，直接发送消息
+    if (newWorker.state === 'installed') {
+      console.log('SurrealProvider: 新Service Worker已安装，发送SKIP_WAITING消息');
+      newWorker.postMessage({ type: 'SKIP_WAITING' });
+    } else {
+      // 否则监听状态变化
+      newWorker.addEventListener('statechange', handleStateChange);
+    }
+
+    // 额外的激活监听器，用于清理超时
+    const handleActivation = () => {
+      console.log('SurrealProvider: Service Worker activated事件触发');
+      clearTimeout(forceRefreshTimeout);
+      newWorker.removeEventListener('activate', handleActivation);
+    };
+    
+    if (newWorker.state === 'activating' || newWorker.state === 'activated') {
+      clearTimeout(forceRefreshTimeout);
+    } else {
+      newWorker.addEventListener('activate', handleActivation);
+    }
+  }, []);
+  /**
    * 设置 Service Worker 更新处理
    */
   const setupServiceWorkerUpdateHandling = useCallback((registration: ServiceWorkerRegistration) => {
@@ -392,34 +470,49 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
               // 第一次安装
               console.log('SurrealProvider: Service Worker 首次安装完成');
             }
+          } else if (newWorker.state === 'activated') {
+            console.log('SurrealProvider: 新的 Service Worker 已激活');
           }
         });
       }
     });
 
     // 监听 service worker 控制器变化
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
+    const handleControllerChange = () => {
       console.log('SurrealProvider: Service Worker 控制器已变化，页面将重新加载');
-      // 重新加载页面以使用新的 service worker
-      window.location.reload();
-    });
+      
+      // 使用 requestAnimationFrame 来确保在下一帧执行刷新，避免竞态条件
+      requestAnimationFrame(() => {
+        // 确保我们正在使用新的 service worker
+        if (navigator.serviceWorker.controller) {
+          console.log('SurrealProvider: 新的 Service Worker 控制器已生效，重新加载页面');
+          // 强制刷新页面，忽略缓存
+          window.location.reload();
+        } else {
+          console.warn('SurrealProvider: 控制器变化但没有新控制器，延迟重试');
+          // 如果没有控制器，稍后重试
+          setTimeout(() => {
+            if (navigator.serviceWorker.controller) {
+              console.log('SurrealProvider: 延迟检测到新控制器，重新加载页面');
+              window.location.reload();
+            }
+          }, 500);
+        }
+      });
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+
+    // 检查是否有等待中的 Service Worker
+    if (registration.waiting) {
+      console.log('SurrealProvider: 发现等待中的 Service Worker，准备更新');
+      handleServiceWorkerUpdate(registration.waiting);
+    }
 
     // 定期检查更新
     scheduleUpdateCheck(registration);
-  }, []);
+  }, [handleServiceWorkerUpdate]);
 
-  /**
-   * 处理 Service Worker 更新
-   */
-  const handleServiceWorkerUpdate = useCallback((newWorker: ServiceWorker) => {
-    // 可以在这里显示通知给用户，或者自动更新
-    console.log('SurrealProvider: 发现新版本的 Service Worker');
-
-    // 自动跳过等待并激活新的 service worker
-    if (newWorker.state === 'installed') {
-      newWorker.postMessage({ type: 'SKIP_WAITING' });
-    }
-  }, []);
 
   /**
    * 定期更新检查

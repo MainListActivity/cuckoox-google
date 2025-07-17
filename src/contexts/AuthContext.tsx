@@ -46,13 +46,6 @@ export interface Role {
   // Add other role properties
 }
 
-// From user_case_role table, joining with case and role details
-interface UserCaseRoleDetails {
-  id: RecordId; // ID of the user_case_role record itself
-  user_id: RecordId;
-  case_details: Case; // Populated by SurrealDB FETCH
-  role_details: Role;  // Populated by SurrealDB FETCH
-}
 
 // 权限检查结果接口
 export interface PermissionCheckResult {
@@ -144,7 +137,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [navMenuItems, setNavMenuItems] = useState<NavItemType[] | null>(null);
   const [isMenuLoading, setIsMenuLoading] = useState<boolean>(false);
   const [navigateTo, setNavigateTo] = useState<string | null>(null); // Navigation state
-  
+
   // 权限缓存状态
   const [operationPermissionsCache, setOperationPermissionsCache] = useState<Record<string, boolean>>({});
   const [menuPermissionsCache, setMenuPermissionsCache] = useState<Record<string, boolean>>({});
@@ -166,13 +159,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // 异步加载权限并更新缓存
   const loadOperationPermission = useCallback(async (operationId: string): Promise<boolean> => {
     if (!user || !client) return false;
-    
+
     // 管理员拥有所有权限
     if (user.github_id === '--admin--') {
       setOperationPermissionsCache(prev => ({ ...prev, [operationId]: true }));
       return true;
     }
-    
+
     try {
       setPermissionsLoading(prev => ({ ...prev, [operationId]: true }));
       const result = await menuService.hasOperation(client, operationId, selectedCaseId);
@@ -195,7 +188,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       return result;
     }
-    
+
     // 管理员拥有所有权限
     if (user.github_id === '--admin--') {
       const result: Record<string, boolean> = {};
@@ -205,7 +198,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setOperationPermissionsCache(prev => ({ ...prev, ...result }));
       return result;
     }
-    
+
     try {
       operationIds.forEach(id => {
         setPermissionsLoading(prev => ({ ...prev, [id]: true }));
@@ -233,22 +226,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user || !client) {
       return { hasPermission: false, isLoading: false, error: null };
     }
-    
+
     // 管理员拥有所有权限
     if (user.github_id === '--admin--') {
       return { hasPermission: true, isLoading: false, error: null };
     }
-    
-    const hasPermission = operationPermissionsCache[operationId] !== undefined 
-      ? operationPermissionsCache[operationId] 
+
+    const hasPermission = operationPermissionsCache[operationId] !== undefined
+      ? operationPermissionsCache[operationId]
       : false;
     const isLoading = permissionsLoading[operationId] || false;
-    
+
     // 如果权限不在缓存中且不在加载状态，则异步加载
     if (operationPermissionsCache[operationId] === undefined && !isLoading) {
       loadOperationPermission(operationId);
     }
-    
+
     return {
       hasPermission,
       isLoading,
@@ -264,7 +257,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       return { permissions, isLoading: false, error: null };
     }
-    
+
     // 管理员拥有所有权限
     if (user.github_id === '--admin--') {
       const permissions: Record<string, boolean> = {};
@@ -273,27 +266,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       });
       return { permissions, isLoading: false, error: null };
     }
-    
+
     const permissions: Record<string, boolean> = {};
     let isLoading = false;
-    
+
     operationIds.forEach(id => {
-      permissions[id] = operationPermissionsCache[id] !== undefined 
-        ? operationPermissionsCache[id] 
+      permissions[id] = operationPermissionsCache[id] !== undefined
+        ? operationPermissionsCache[id]
         : false;
       if (permissionsLoading[id]) {
         isLoading = true;
       }
     });
-    
+
     // 检查是否有未缓存的权限需要加载
-    const uncachedIds = operationIds.filter(id => 
+    const uncachedIds = operationIds.filter(id =>
       operationPermissionsCache[id] === undefined && !permissionsLoading[id]
     );
     if (uncachedIds.length > 0) {
       loadOperationPermissions(uncachedIds);
     }
-    
+
     return {
       permissions,
       isLoading,
@@ -309,10 +302,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { hasPermission: true, isLoading: false, error: null };
       }
     }
-    
+
     const hasPermission = menuPermissionsCache[menuId] || false;
     const isLoading = permissionsLoading[menuId] || false;
-    
+
     return {
       hasPermission,
       isLoading,
@@ -324,7 +317,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const cacheKey = `${tableName}:${crudType}`;
     const hasPermission = dataPermissionsCache[cacheKey] || false;
     const isLoading = permissionsLoading[cacheKey] || false;
-    
+
     return {
       hasPermission,
       isLoading,
@@ -344,7 +337,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const useClearPermissionCache = useCallback(() => {
     const clearUserPermissions = async (caseId?: string) => {
       if (!user) return;
-      
+
       try {
         // 清除用户缓存数据
         await serviceWorkerComm.sendMessage('clear_user_cache', {
@@ -408,56 +401,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     setIsCaseLoading(true);
     try {
-      const query = `
-        SELECT 
-            id, 
-            user_id, 
-            case_id.* AS case_details, 
-            role_id.* AS role_details 
-        FROM user_case_role 
-        WHERE user_id = $userId
-        FETCH case_id, role_id;
-      `;
-      const results: UserCaseRoleDetails[] = await queryWithAuth(client, query, { userId: currentAppUser.id });
+      // 直接查询用户可访问的案件列表
+      const casesQuery = `SELECT * FROM case;`;
+      const fetchedCases: Case[] = await queryWithAuth(client, casesQuery);
+      
+      setUserCases(fetchedCases || []);
 
-      const casesMap = new Map<RecordId, Case>();
-      let actualResults: UserCaseRoleDetails[] = [];
-
-      if (results && results.length > 0 && Array.isArray(results)) {
-        actualResults = results; // Direct array access
-        actualResults.forEach(ucr => {
-          if (ucr.case_details && ucr.case_details.id) {
-            casesMap.set(ucr.case_details.id, ucr.case_details);
-          }
-        });
-      }
-
-      const fetchedCases = Array.from(casesMap.values());
-      setUserCases(fetchedCases);
-
+      // 确定要选择的案件
       const lastCaseId = currentAppUser.last_login_case_id;
       const previouslySelectedCaseId = deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null');
 
       let caseToSelect: RecordId | null = null;
 
-      if (previouslySelectedCaseId && casesMap.has(previouslySelectedCaseId)) {
+      // 优先使用localStorage中的选择
+      if (previouslySelectedCaseId && fetchedCases?.some(c => String(c.id) === String(previouslySelectedCaseId))) {
         caseToSelect = previouslySelectedCaseId;
-      } else if (lastCaseId && casesMap.has(lastCaseId)) {
+      } 
+      // 其次使用用户上次登录的案件
+      else if (lastCaseId && fetchedCases?.some(c => String(c.id) === String(lastCaseId))) {
         caseToSelect = lastCaseId;
-      } else if (fetchedCases.length === 1 && fetchedCases[0].id) {
+      } 
+      // 最后选择第一个可用案件
+      else if (fetchedCases && fetchedCases.length > 0 && fetchedCases[0].id) {
         caseToSelect = fetchedCases[0].id;
       }
 
       if (caseToSelect) {
-        // Call selectCaseInternal - note: it's not async, so no await needed here
-        selectCaseInternal(caseToSelect, actualResults);
+        setSelectedCaseId(caseToSelect);
+        localStorage.setItem('cuckoox-selectedCaseId', serializeRecordId(caseToSelect));
+        // 清空当前案件角色，后续通过权限系统查询
+        setCurrentUserCaseRoles([]);
       } else {
         setCurrentUserCaseRoles([]);
         setSelectedCaseId(null);
         localStorage.removeItem('cuckoox-selectedCaseId');
         setNavMenuItems([]); // Clear menu if no case is selected after loading
       }
-
 
     } catch (error) {
       console.error("Error loading user cases and roles:", error);
@@ -469,7 +448,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setIsCaseLoading(false);
     }
-  }, [isConnected, serviceWorkerComm, client]); // 添加client依赖
+  }, [isConnected, client]); // 简化依赖
 
   const clearAuthState = useCallback(async (shouldInvalidate: boolean = true) => {
     const currentUser = user;
@@ -595,16 +574,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const handleAuthStateChange = (event: CustomEvent) => {
       const { isAuthenticated, reason, timestamp } = event.detail;
       console.log('AuthContext: Received auth state change event:', { isAuthenticated, reason, timestamp });
-      
+
       // 如果用户未认证，清除认证状态并重定向到登录页面
       if (!isAuthenticated) {
         console.log('AuthContext: User not authenticated, clearing auth state');
-        
+
         // 异步清除认证状态，避免阻塞事件处理
         setTimeout(async () => {
           try {
             await clearAuthState(true);
-            
+
             // 重定向到登录页面
             if (window.location.pathname !== '/login') {
               console.log('AuthContext: Redirecting to login page');
@@ -619,7 +598,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // 添加事件监听器
     window.addEventListener('auth-state-changed', handleAuthStateChange as EventListener);
-    
+
     // 清理事件监听器
     return () => {
       window.removeEventListener('auth-state-changed', handleAuthStateChange as EventListener);
@@ -683,7 +662,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     try {
-      await queryWithAuth(client, 'UPDATE user SET last_selected_case_id = $caseId WHERE id = $userId;', {
+      await queryWithAuth(client, 'UPDATE user SET last_login_case_id = $caseId WHERE id = $userId;', {
         userId,
         caseId,
       });
@@ -693,22 +672,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Internal helper to set roles based on a selected case ID and pre-fetched UserCaseRoleDetails
-  const selectCaseInternal = (caseIdToSelect: RecordId, allUserCaseRolesDetails: UserCaseRoleDetails[]) => {
-    setSelectedCaseId(caseIdToSelect);
-    localStorage.setItem('cuckoox-selectedCaseId', serializeRecordId(caseIdToSelect));
-
-    const rolesForSelectedCase: Role[] = [];
-    if (allUserCaseRolesDetails && Array.isArray(allUserCaseRolesDetails)) {
-      allUserCaseRolesDetails.forEach(ucr => {
-        if (ucr.case_details && ucr.case_details.id === caseIdToSelect && ucr.role_details) {
-          rolesForSelectedCase.push(ucr.role_details);
-        }
-      });
-    }
-    setCurrentUserCaseRoles(rolesForSelectedCase);
-    // 移除直接调用，让 useEffect 来处理菜单更新
-  };
 
   const selectCase = async (caseIdToSelect: RecordId | string) => {
     if (!user || !user.id || !isConnected) {
@@ -732,43 +695,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setIsCaseLoading(true);
     try {
-      // Fetch all user_case_role entries for the user to correctly populate roles for the selected case
-      const query = `
-        SELECT id, user_id, case_id.* AS case_details, role_id.* AS role_details 
-        FROM user_case_role WHERE user_id = $userId FETCH case_id, role_id;`;
-      const results: UserCaseRoleDetails[] = await queryWithAuth(client, query, { userId: user.id });
-
-      let userCaseRolesDetails: UserCaseRoleDetails[] = [];
-      if (results && results.length > 0 && Array.isArray(results)) {
-        userCaseRolesDetails = results;
-      }
-
-      // Check if the caseIdToSelect is one of the user's cases
+      // 检查案件是否在用户可访问的案件列表中
       const caseExistsForUser = userCases.some(c => c.id.toString() === recordId.toString());
-      if (!caseExistsForUser && userCaseRolesDetails.some(ucrd => ucrd.case_details.id.toString() === recordId.toString())) {
-        // This implies userCases might be stale if selectCase is called with a new valid case not yet in userCases
-        // This could happen if roles/cases are modified externally and refreshUserCasesAndRoles wasn't called yet
-        // For simplicity, we'll rely on userCases being up-to-date from loadUserCasesAndRoles or refreshUserCasesAndRoles
-        // Or, ensure loadUserCasesAndRoles is called if caseIdToSelect is not in userCases
-        console.warn("selectCase called with a caseId not in the current userCases list. Roles might be based on a fresh fetch.");
+      if (!caseExistsForUser) {
+        console.warn("selectCase called with a caseId not in the current userCases list.");
+        return;
       }
 
-      selectCaseInternal(recordId, userCaseRolesDetails);
+      // 直接设置选中的案件ID
+      setSelectedCaseId(recordId);
+      localStorage.setItem('cuckoox-selectedCaseId', serializeRecordId(recordId));
+      
+      // 清空当前案件角色，后续通过权限系统查询
+      setCurrentUserCaseRoles([]);
 
-      // Convert string caseIdToSelect to RecordId for storage
+      // 更新数据库中的用户last_login_case_id
       await client.merge(user.id, { last_login_case_id: recordId });
 
-      // Update user object in context with the new last_login_case_id
+      // 更新本地用户对象
       setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
-      // 更新用户对象在context中的新last_login_case_id
-      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
-      // 注意：不需要手动保存，merge操作已经更新了数据库
 
-      // Update last selected case in DB
+      // 更新数据库中的last_login_case_id（备用方式）
       if (user?.id) {
         await updateLastSelectedCaseInDB(user.id, recordId);
       }
-
 
     } catch (error) {
       console.error(`Error selecting case ${recordId}:`, error);

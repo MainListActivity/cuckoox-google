@@ -42,13 +42,13 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useCaseStatus, CaseStatus } from '@/src/contexts/CaseStatusContext'; 
 import RichTextEditor,{ QuillDelta } from '@/src/components/RichTextEditor'; 
 import { Delta } from 'quill/core'; 
-import { useSnackbar, SnackbarContextType } from '@/src/contexts/SnackbarContext';
+import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import type { AlertColor } from '@mui/material/Alert';
 
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { Meeting as MeetingData, MeetingAttendee, useLiveMeetings } from '@/src/hooks/useLiveMeetingData'; 
 import { useCaseParticipants, Participant } from '@/src/hooks/useCaseParticipants'; 
-import type { SurrealLike } from '@/src/types/db';
+import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
 import type { SnackbarContextType } from '@/src/contexts/SnackbarContext';
 
 // Extended MeetingFormData to include attendees for the form
@@ -86,7 +86,7 @@ const OnlineMeetingPage: React.FC = () => {
 
   const { user, selectedCaseId, hasRole, isLoading: isAuthLoading } = useAuth(); 
   const { caseStatus, isLoading: isCaseStatusLoading } = useCaseStatus();
-  const [client, setClient] = useState<SurrealLike | null>(null);
+  const [client, setClient] = useState<SurrealWorkerAPI | null>(null);
 
   // Get Surreal client from context
   const contextClient = useSurrealClient();

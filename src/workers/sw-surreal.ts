@@ -45,6 +45,22 @@ const eventHandlers = {
           await initializeTokenManager();
           // 初始化 DataCacheManager
           await initializeDataCacheManager();
+          
+          // 尝试恢复连接配置
+          const restoredConfig = await restoreConnectionConfig();
+          if (restoredConfig) {
+            connectionConfig = restoredConfig;
+            console.log('ServiceWorker: Connection config restored during activation');
+            
+            // 尝试自动重连
+            try {
+              await ensureConnection();
+              console.log('ServiceWorker: Auto-reconnection successful after activation');
+            } catch (reconnectError) {
+              console.warn('ServiceWorker: Auto-reconnection failed after activation:', reconnectError);
+            }
+          }
+          
           // Service Worker 激活后，主动同步 localStorage 中的 token
           await syncTokensFromLocalStorage();
         } catch (e) {
@@ -121,6 +137,12 @@ const eventHandlers = {
             await tokenManager!.storeToken(tokenInfo);
           }
           await ensureConnection(payload);
+          
+          // 如果连接成功，保存连接配置
+          if (isConnected && connectionConfig) {
+            await saveConnectionConfig(connectionConfig);
+          }
+          
           respond({ status: isConnected ? 'connected' : 'disconnected' });
           break;
 
@@ -171,6 +193,15 @@ const eventHandlers = {
         case 'mutate': {
           await ensureConnection();
           if (!db) throw new Error("Database not initialized");
+          
+          // 检查连接状态，如果我们认为未连接，先尝试重新连接
+          if (!isConnected) {
+            console.log('ServiceWorker: Query/mutate requested but isConnected=false, attempting reconnection');
+            await ensureConnection();
+            if (!isConnected) {
+              throw new Error("Database connection not available");
+            }
+          }
 
           // 提取查询中的表名
           const tableNames = extractTableNamesFromQuery(payload.sql);
@@ -229,7 +260,6 @@ const eventHandlers = {
                 console.log(`ServiceWorker: Caching personal data component: ${personalDataComponent.type}`);
 
                 // 获取或创建用户个人数据缓存
-                const cacheKey = `${userId}_${payload.vars?.case_id || 'global'}`;
                 let existingPersonalData = await dataCacheManager!.getPersonalData(userId, payload.vars?.case_id);
 
                 if (!existingPersonalData) {
@@ -436,17 +466,25 @@ const eventHandlers = {
 
         case 'force_reconnect': {
           console.log('ServiceWorker: Force reconnection requested by client');
-          if (isConnected) {
-            stopConnectionHealthCheck();
-            if (db) {
-              try {
-                await db.close();
-              } catch (e) {
-                console.warn('ServiceWorker: Error closing connection during force reconnect:', e);
-              }
+          stopConnectionHealthCheck();
+          if (db) {
+            try {
+              await db.close();
+              console.log('ServiceWorker: Closed connection for force reconnect');
+            } catch (e) {
+              console.warn('ServiceWorker: Error closing connection during force reconnect:', e);
             }
-            isConnected = false;
           }
+          isConnected = false;
+          console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 强制重连', {
+            timestamp: new Date().toISOString(),
+            previousState: true,
+            newState: false,
+            reason: '强制重连',
+            dbStatus: db?.status,
+            reconnectAttempts: reconnectAttempts,
+            stackTrace: new Error().stack
+          });
           stopReconnection();
           triggerReconnection();
           respond({ success: true });
@@ -799,6 +837,9 @@ let connectionConfig: {
   auth?: AnyAuth;
 } | null = null;
 
+// 连接配置存储键
+const CONNECTION_CONFIG_KEY = 'sw_connection_config';
+
 // Live query management
 const liveQuerySubscriptions = new Map<string, {
   query: string;
@@ -898,15 +939,19 @@ function extractPersonalDataComponent(sql: string, result: any): { type: string;
  * 通知客户端连接状态变化
  */
 function notifyConnectionStateChange(error?: Error) {
-  const currentState = db?.status || ConnectionStatus.Disconnected;
+  // 优先使用我们维护的连接状态，而不是 db.status
+  const currentState = isConnected ? 'connected' : 'disconnected';
+  const dbStatus = db?.status || ConnectionStatus.Disconnected;
 
-  console.log(`ServiceWorker: Connection state is ${currentState}`);
+  console.log(`ServiceWorker: Connection state is ${currentState} (isConnected=${isConnected}, db.status=${dbStatus})`);
 
   // 通知所有客户端连接状态变化
   broadcastToAllClients({
     type: 'connection_state_changed',
     payload: {
       state: currentState,
+      isConnected: isConnected,
+      dbStatus: dbStatus,
       error: error?.message,
       timestamp: Date.now()
     }
@@ -932,13 +977,60 @@ function startConnectionHealthCheck() {
   
   connectionHealthCheck = setInterval(async () => {
     try {
-      // 检查实际连接状态
-      const actualState = await checkActualConnectionState();
+      // 只有在我们认为已连接时才进行健康检查
+      if (!isConnected) {
+        console.log('ServiceWorker: Skipping health check - isConnected is false');
+        return;
+      }
       
-      // 如果检测到连接已断开，但我们的状态还是连接中，更新状态
-      if (!actualState.isConnected && isConnected) {
-        console.warn('ServiceWorker: Health check detected disconnection');
+      // 使用更轻量的连接测试
+      if (!db) {
+        console.warn('ServiceWorker: Health check - db instance not available');
+        const previousState = isConnected;
         isConnected = false;
+        console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 健康检查中db实例不可用', {
+          timestamp: new Date().toISOString(),
+          previousState: previousState,
+          newState: false,
+          reason: '健康检查中db实例不可用',
+          dbStatus: db?.status,
+          reconnectAttempts: reconnectAttempts,
+          stackTrace: new Error().stack
+        });
+        notifyConnectionStateChange();
+        triggerReconnection();
+        return;
+      }
+      
+      // 执行简单的连接测试
+      try {
+        const testResult = await Promise.race([
+          db.query('return 1;'),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Health check timeout')), 5000)
+          )
+        ]);
+        
+        if (testResult) {
+          // 连接正常，保持现有状态
+          console.log('ServiceWorker: Health check passed - connection is healthy');
+        }
+      } catch (testError) {
+        console.warn('ServiceWorker: Health check failed - connection appears broken:', testError);
+        
+        // 健康检查失败，更新连接状态
+        const previousState = isConnected;
+        isConnected = false;
+        console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 健康检查失败', {
+          timestamp: new Date().toISOString(),
+          previousState: previousState,
+          newState: false,
+          reason: '健康检查失败',
+          error: testError,
+          dbStatus: db?.status,
+          reconnectAttempts: reconnectAttempts,
+          stackTrace: new Error().stack
+        });
         notifyConnectionStateChange();
         
         // 触发重连
@@ -948,6 +1040,24 @@ function startConnectionHealthCheck() {
       }
     } catch (error) {
       console.error('ServiceWorker: Health check error:', error);
+      // 健康检查本身出错，认为连接有问题
+      const previousState = isConnected;
+      isConnected = false;
+      console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 健康检查异常', {
+        timestamp: new Date().toISOString(),
+        previousState: previousState,
+        newState: false,
+        reason: '健康检查异常',
+        error: error,
+        dbStatus: db?.status,
+        reconnectAttempts: reconnectAttempts,
+        stackTrace: new Error().stack
+      });
+      notifyConnectionStateChange();
+      
+      if (!isReconnecting) {
+        triggerReconnection();
+      }
     }
   }, 30000); // 每30秒检查一次
   
@@ -1007,7 +1117,7 @@ async function performReconnection() {
 
   try {
     // 清理当前连接
-    if (db && isConnected) {
+    if (db) {
       try {
         await db.close();
         console.log('ServiceWorker: Closed existing connection for reconnection');
@@ -1016,23 +1126,33 @@ async function performReconnection() {
       }
     }
 
+    // 明确设置为断开状态
+    const previousState = isConnected;
     isConnected = false;
+    console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 重连前状态重置', {
+      timestamp: new Date().toISOString(),
+      previousState: previousState,
+      newState: false,
+      reason: '重连前状态重置',
+      reconnectAttempts: reconnectAttempts,
+      dbStatus: db?.status,
+      stackTrace: new Error().stack
+    });
 
     // 确保数据库实例存在（使用单例模式）
     await initializeSurreal();
 
-    // 设置连接超时
+    // 设置连接超时（连接成功时，connectWithTimeout内部会设置isConnected=true）
     const connectPromise = connectWithTimeout();
     await connectPromise;
 
-    // 重连成功
-    isConnected = true;
+    // 重连成功 - isConnected已经在connectWithTimeout中设置为true了
     reconnectAttempts = 0;
     isReconnecting = false;
 
+    console.log('ServiceWorker: Reconnection successful, isConnected state:', isConnected);
     notifyConnectionStateChange();
     startConnectionHealthCheck();
-    console.log('ServiceWorker: Reconnection successful');
 
     // 重新订阅所有 Live Query
     await resubscribeAllLiveQueries();
@@ -1072,6 +1192,11 @@ async function connectWithTimeout(): Promise<void> {
       try {
         const conn = await db!.connect(connectionConfig!.endpoint);
         console.log('ServiceWorker: connect resp:', conn)
+        
+        // 连接成功，更新状态
+        isConnected = conn;
+        console.log('ServiceWorker: Connection established, isConnected set to true');
+        
         // 设置连接事件监听器
         setupConnectionEventListeners();
 
@@ -1091,6 +1216,18 @@ async function connectWithTimeout(): Promise<void> {
         clearTimeout(timeout);
         resolve();
       } catch (error) {
+        // 连接失败，确保状态正确
+        const previousState = isConnected;
+        isConnected = false;
+        console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 连接失败', {
+          timestamp: new Date().toISOString(),
+          previousState: previousState,
+          newState: false,
+          reason: '连接失败',
+          error: error,
+          connectionConfig: connectionConfig,
+          stackTrace: new Error().stack
+        });
         clearTimeout(timeout);
         reject(error);
       }
@@ -1105,48 +1242,92 @@ async function connectWithTimeout(): Promise<void> {
  */
 function setupConnectionEventListeners() {
   if (!db || !db.emitter) {
+    console.warn('ServiceWorker: Cannot setup connection event listeners - db or emitter not available');
     return;
   }
 
   // 监听连接状态变化
   db.emitter.subscribe('disconnected', () => {
-    console.warn('ServiceWorker: Database connection lost');
+    console.warn('ServiceWorker: Database connection lost (disconnected event)');
+    const wasConnected = isConnected;
     isConnected = false;
-    notifyConnectionStateChange();
+    console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 数据库断开连接事件', {
+      timestamp: new Date().toISOString(),
+      previousState: wasConnected,
+      newState: false,
+      reason: '数据库断开连接事件',
+      dbStatus: db?.status,
+      reconnectAttempts: reconnectAttempts,
+      stackTrace: new Error().stack
+    });
+    
+    if (wasConnected) {
+      console.log('ServiceWorker: Connection state changed from connected to disconnected');
+      notifyConnectionStateChange();
+    }
+    
     stopConnectionHealthCheck();
 
     // 立即触发重连
-    triggerReconnection();
+    if (!isReconnecting) {
+      triggerReconnection();
+    }
   });
 
   db.emitter.subscribe('error', (error: Error) => {
     console.error('ServiceWorker: Database connection error:', error);
+    const wasConnected = isConnected;
     isConnected = false;
+    console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 数据库错误事件', {
+      timestamp: new Date().toISOString(),
+      previousState: wasConnected,
+      newState: false,
+      reason: '数据库错误事件',
+      error: error,
+      dbStatus: db?.status,
+      reconnectAttempts: reconnectAttempts,
+      stackTrace: new Error().stack
+    });
+    
+    if (wasConnected) {
+      console.log('ServiceWorker: Connection state changed to disconnected due to error');
+    }
+    
     notifyConnectionStateChange(error);
     stopConnectionHealthCheck();
 
     // 立即触发重连
-    triggerReconnection();
+    if (!isReconnecting) {
+      triggerReconnection();
+    }
   });
 
   // 监听连接成功事件
   db.emitter.subscribe('connected', () => {
-    console.log('ServiceWorker: Database connection established');
+    console.log('ServiceWorker: Database connection established (connected event)');
+    const wasDisconnected = !isConnected;
     isConnected = true;
     isReconnecting = false;
     reconnectAttempts = 0;
+    
+    if (wasDisconnected) {
+      console.log('ServiceWorker: Connection state changed from disconnected to connected');
+    }
+    
     notifyConnectionStateChange();
     startConnectionHealthCheck();
   });
 
   // 监听重连事件
   db.emitter.subscribe('reconnecting', () => {
-    console.log('ServiceWorker: Database reconnecting...');
+    console.log('ServiceWorker: Database reconnecting... (reconnecting event)');
+    // 注意：reconnecting 时不要修改 isConnected 状态，
+    // 因为这只是表示正在重连，实际连接状态要等 connected 或 disconnected 事件
     isReconnecting = true;
     notifyConnectionStateChange();
   });
 
-  console.log('ServiceWorker: Connection event listeners set up');
+  console.log('ServiceWorker: Connection event listeners set up successfully');
 }
 
 /**
@@ -1164,7 +1345,7 @@ function stopReconnection() {
 
 /**
  * 检查实际的连接状态
- * 通过执行一个简单的查询来确定连接是否真的可用
+ * 主要依赖自己维护的 isConnected 字段，通过执行查询来验证连接是否真的可用
  * 同时检查用户登录状态
  */
 async function checkActualConnectionState(): Promise<{
@@ -1176,6 +1357,15 @@ async function checkActualConnectionState(): Promise<{
     // 如果数据库实例不存在，直接返回未连接状态
     if (!db) {
       console.log('ServiceWorker: checkActualConnectionState - no db instance');
+      const previousState = isConnected;
+      isConnected = false;
+      console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 数据库实例不存在', {
+        timestamp: new Date().toISOString(),
+        previousState: previousState,
+        newState: false,
+        reason: '数据库实例不存在',
+        stackTrace: new Error().stack
+      });
       return {
         state: 'disconnected',
         isConnected: false,
@@ -1183,25 +1373,33 @@ async function checkActualConnectionState(): Promise<{
       };
     }
 
-    // 检查数据库的内部状态
-    const dbStatus = db.status;
-    console.log('ServiceWorker: db.status =', dbStatus);
+    // 优先使用自己维护的连接状态
+    console.log('ServiceWorker: Current isConnected state:', isConnected);
     
-    // 如果数据库状态显示未连接，更新我们的状态
-    if (dbStatus === ConnectionStatus.Disconnected || dbStatus === ConnectionStatus.Reconnecting) {
-      isConnected = false;
-      return {
-        state: dbStatus.toLowerCase(),
-        isConnected: false,
-        isAuthenticated: false
-      };
+    // 如果我们认为已经断开连接，先检查 db.status 是否有变化
+    if (!isConnected) {
+      const dbStatus = db.status;
+      console.log('ServiceWorker: db.status when isConnected=false:', dbStatus);
+      
+      // 如果 db.status 显示已连接，但我们的状态是断开，说明可能是状态不同步
+      if (dbStatus === ConnectionStatus.Connected) {
+        console.log('ServiceWorker: db.status shows connected but isConnected=false, testing connection...');
+        // 继续下面的连接测试
+      } else {
+        // db.status 也显示未连接，直接返回
+        return {
+          state: dbStatus.toLowerCase(),
+          isConnected: false,
+          isAuthenticated: false
+        };
+      }
     }
 
-    // 尝试执行一个简单的查询来测试连接和认证状态
+    // 只有在我们认为已连接或状态不确定时，才进行实际的连接测试
     try {
       // 使用一个非常简单的查询来测试连接可用性和认证状态
       const result = await Promise.race([
-        db.query('return $auth;'),
+        db.query('return 1;'),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Connection test timeout')), 3000)
         )
@@ -1211,7 +1409,7 @@ async function checkActualConnectionState(): Promise<{
         // 查询成功，连接正常
         if (!isConnected) {
           isConnected = true;
-          console.log('ServiceWorker: Connection state corrected to connected');
+          console.log('ServiceWorker: Connection state corrected to connected after test');
         }
         
         // 检查认证状态
@@ -1250,11 +1448,27 @@ async function checkActualConnectionState(): Promise<{
     } catch (queryError) {
       // 查询失败，连接有问题
       console.warn('ServiceWorker: Connection test query failed:', queryError);
-      isConnected = false;
       
-      // 如果查询失败，触发重连
-      if (!isReconnecting) {
-        triggerReconnection();
+      // 更新我们维护的连接状态
+      const wasConnected = isConnected;
+      isConnected = false;
+      console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 连接测试查询失败', {
+        timestamp: new Date().toISOString(),
+        previousState: wasConnected,
+        newState: false,
+        reason: '连接测试查询失败',
+        error: queryError,
+        dbStatus: db?.status,
+        reconnectAttempts: reconnectAttempts,
+        stackTrace: new Error().stack
+      });
+      
+      if (wasConnected) {
+        console.log('ServiceWorker: Connection state changed from connected to disconnected');
+        // 触发重连
+        if (!isReconnecting) {
+          triggerReconnection();
+        }
       }
       
       return {
@@ -1264,15 +1478,25 @@ async function checkActualConnectionState(): Promise<{
       };
     }
 
-    // 默认情况下，如果无法确定状态，返回未连接
+    // 默认情况下，返回当前的连接状态
     return {
-      state: 'disconnected',
-      isConnected: false,
+      state: isConnected ? 'connected' : 'disconnected',
+      isConnected: isConnected,
       isAuthenticated: false
     };
   } catch (error) {
     console.error('ServiceWorker: Error checking connection state:', error);
+    const previousState = isConnected;
     isConnected = false;
+    console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 连接状态检查异常', {
+      timestamp: new Date().toISOString(),
+      previousState: previousState,
+      newState: false,
+      reason: '连接状态检查异常',
+      error: error,
+      dbStatus: db?.status,
+      stackTrace: new Error().stack
+    });
     return {
       state: 'error',
       isConnected: false,
@@ -1296,6 +1520,86 @@ async function syncTokensFromLocalStorage() {
     }
   } catch (error) {
     console.error('ServiceWorker: Failed to sync tokens from localStorage:', error);
+  }
+}
+
+/**
+ * 保存连接配置到持久化存储
+ */
+async function saveConnectionConfig(config: typeof connectionConfig): Promise<void> {
+  try {
+    if (!config) {
+      console.warn('ServiceWorker: Cannot save null connection config');
+      return;
+    }
+    
+    await ensureDataCacheManager();
+    
+    // 使用本地数据库存储连接配置
+    if (localDb) {
+      await localDb.update('sw_connection_config:current', {
+        endpoint: config.endpoint,
+        namespace: config.namespace,
+        database: config.database,
+        auth: config.auth,
+        saved_at: Date.now()
+      });
+      
+      console.log('ServiceWorker: Connection config saved to persistent storage', config);
+    }
+  } catch (error) {
+    console.error('ServiceWorker: Failed to save connection config:', error);
+  }
+}
+
+/**
+ * 从持久化存储恢复连接配置
+ */
+async function restoreConnectionConfig(): Promise<typeof connectionConfig> {
+  try {
+    await ensureDataCacheManager();
+    
+    if (localDb) {
+      const storedConfig = await localDb.select('sw_connection_config:current');
+      
+      if (storedConfig && typeof storedConfig === 'object') {
+        const config = storedConfig as any;
+        
+        // 验证配置有效性
+        if (config.endpoint && config.namespace && config.database) {
+          console.log('ServiceWorker: Connection config restored from persistent storage', config);
+          
+          return {
+            endpoint: config.endpoint,
+            namespace: config.namespace,
+            database: config.database,
+            auth: config.auth
+          };
+        }
+      }
+    }
+    
+    console.log('ServiceWorker: No valid connection config found in persistent storage');
+    return null;
+  } catch (error) {
+    console.error('ServiceWorker: Failed to restore connection config:', error);
+    return null;
+  }
+}
+
+/**
+ * 清除持久化存储的连接配置
+ */
+async function clearConnectionConfig(): Promise<void> {
+  try {
+    await ensureDataCacheManager();
+    
+    if (localDb) {
+      await localDb.delete('sw_connection_config:current');
+      console.log('ServiceWorker: Connection config cleared from persistent storage');
+    }
+  } catch (error) {
+    console.error('ServiceWorker: Failed to clear connection config:', error);
   }
 }
 
@@ -1671,7 +1975,18 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
             console.warn("ServiceWorker: Error closing connection:", e);
           }
         }
+        const previousState = isConnected;
         isConnected = false;
+        console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 端点变更', {
+          timestamp: new Date().toISOString(),
+          previousState: previousState,
+          newState: false,
+          reason: '端点变更',
+          oldEndpoint: connectionConfig.endpoint,
+          newEndpoint: newConfig.endpoint,
+          dbStatus: db?.status,
+          stackTrace: new Error().stack
+        });
         notifyConnectionStateChange();
         connectionConfig = newConfig;
       } else if (namespaceChanged || databaseChanged) {
@@ -1695,7 +2010,19 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
             }
           } catch (e) {
             console.error("ServiceWorker: Failed to switch namespace/database:", e);
+            const previousState = isConnected;
             isConnected = false;
+            console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 命名空间/数据库切换失败', {
+              timestamp: new Date().toISOString(),
+              previousState: previousState,
+              newState: false,
+              reason: '命名空间/数据库切换失败',
+              error: e,
+              oldConfig: { namespace: connectionConfig.namespace, database: connectionConfig.database },
+              newConfig: { namespace: newConfig.namespace, database: newConfig.database },
+              dbStatus: db?.status,
+              stackTrace: new Error().stack
+            });
             notifyConnectionStateChange(e as Error);
             triggerReconnection();
           }
@@ -1735,9 +2062,18 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
     }
 
     if (!connectionConfig) {
-      console.error("ServiceWorker: Connection config not set.");
-      notifyConnectionStateChange();
-      return false;
+      console.log("ServiceWorker: Connection config not set, attempting to restore from storage");
+      
+      // 尝试从持久化存储恢复连接配置
+      const restoredConfig = await restoreConnectionConfig();
+      if (restoredConfig) {
+        connectionConfig = restoredConfig;
+        console.log("ServiceWorker: Connection config restored from storage");
+      } else {
+        console.error("ServiceWorker: No connection config available and cannot restore from storage");
+        notifyConnectionStateChange();
+        return false;
+      }
     }
 
     if (db && db.status === ConnectionStatus.Disconnected) {
@@ -1753,6 +2089,9 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
         startConnectionHealthCheck();
         console.log("ServiceWorker: Connection established.");
 
+        // 保存连接配置
+        await saveConnectionConfig(connectionConfig);
+
         // 重置重连计数
         reconnectAttempts = 0;
 
@@ -1761,7 +2100,18 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<bo
 
       } catch (e) {
         console.error("ServiceWorker: Connection failed.", e);
+        const previousState = isConnected;
         isConnected = false;
+        console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 连接建立失败', {
+          timestamp: new Date().toISOString(),
+          previousState: previousState,
+          newState: false,
+          reason: '连接建立失败',
+          error: e,
+          connectionConfig: connectionConfig,
+          reconnectAttempts: reconnectAttempts,
+          stackTrace: new Error().stack
+        });
         notifyConnectionStateChange(e as Error);
 
         // 触发自动重连
@@ -2107,7 +2457,7 @@ async function persistOfflineQueue(syncKey: string, queue: any[]): Promise<void>
 
     await localDb!.create('offline_queue', queueRecord);
     console.log('ServiceWorker: Persisted offline queue for sync key:', syncKey);
-  } catch (_error) {
+  } catch {
     // 如果创建失败，尝试更新
     try {
       const queueRecord = {

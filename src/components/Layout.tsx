@@ -388,43 +388,77 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </Typography>
 
           {/* Case Switcher Button and Menu */}
-          {userCases && userCases.length > 1 && (
+          {userCases && userCases.length > 0 && (
             <>
               <Button
                 id="case-switcher-button"
                 aria-controls={anchorEl ? 'case-switcher-menu' : undefined}
                 aria-haspopup="true"
                 aria-expanded={anchorEl ? 'true' : undefined}
-                onClick={handleClick}
+                onClick={userCases.length > 1 ? handleClick : undefined}
                 color="inherit"
+                disabled={userCases.length === 1}
                 sx={{ 
                   textTransform: 'none',
                   minWidth: { xs: 'auto', sm: 'auto' },
                   px: { xs: 1, sm: 2 },
+                  cursor: userCases.length === 1 ? 'default' : 'pointer',
+                  maxWidth: { xs: 120, sm: 200 },
+                  '&.Mui-disabled': {
+                    color: 'inherit',
+                    opacity: 0.8,
+                  }
                 }}
                 startIcon={<SvgIcon><path d={mdiBriefcaseSearchOutline} /></SvgIcon>}
               >
-                <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
-                  {selectedCaseId ? userCases.find(c => c.id === selectedCaseId)?.name : t('select_case_button', 'Select Case')}
+                <Box sx={{ 
+                  display: { xs: 'none', sm: 'block' },
+                  textOverflow: 'ellipsis',
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {selectedCaseId ? userCases.find(c => c.id === selectedCaseId)?.name : t('select_case_button', '选择案件')}
                 </Box>
               </Button>
-              <Menu
-                id="case-switcher-menu"
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleClose}
-                MenuListProps={{ 'aria-labelledby': 'case-switcher-button' }}
-              >
-                {userCases.map((caseItem) => (
-                  <MenuItem
-                    key={caseItem.id.toString()}
-                    selected={caseItem.id === selectedCaseId}
-                    onClick={() => handleCaseSelect(caseItem.id)}
-                  >
-                    {caseItem.name || caseItem.case_number || caseItem.id.toString()}
-                  </MenuItem>
-                ))}
-              </Menu>
+              {userCases.length > 1 && (
+                <Menu
+                  id="case-switcher-menu"
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleClose}
+                  MenuListProps={{ 'aria-labelledby': 'case-switcher-button' }}
+                  PaperProps={{
+                    sx: {
+                      maxWidth: 300,
+                      minWidth: 200,
+                    }
+                  }}
+                >
+                  {userCases.map((caseItem) => (
+                    <MenuItem
+                      key={caseItem.id.toString()}
+                      selected={caseItem.id === selectedCaseId}
+                      onClick={() => handleCaseSelect(caseItem.id)}
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-start',
+                        minHeight: 48,
+                        py: 1,
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {caseItem.name || caseItem.case_number || caseItem.id.toString()}
+                      </Typography>
+                      {caseItem.case_number && caseItem.name && (
+                        <Typography variant="caption" color="text.secondary">
+                          {caseItem.case_number}
+                        </Typography>
+                      )}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              )}
             </>
           )}
 
