@@ -1,13 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock dataService interface
-const mockDataService = {
+// Mock SurrealWorkerAPI interface
+const mockClient = {
   query: vi.fn(),
   select: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
-  queryWithAuth: vi.fn()
+  merge: vi.fn(),
+  live: vi.fn(),
+  kill: vi.fn(),
+  connect: vi.fn(),
+  authenticate: vi.fn(),
+  invalidate: vi.fn(),
+  setConfig: vi.fn(),
+  close: vi.fn(),
+  recoverTokens: vi.fn(),
+  getConnectionState: vi.fn(),
+  forceReconnect: vi.fn(),
+  subscribeLive: vi.fn(),
+  mutate: vi.fn()
 };
 
 // Mock RecordId class
@@ -27,7 +39,6 @@ import { RecordId } from 'surrealdb';
 describe('caseMemberService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    caseMemberService.setDataService(mockDataService);
   });
   
   describe('fetchCaseMembers', () => {
@@ -35,38 +46,51 @@ describe('caseMemberService', () => {
       // Arrange
       const testCaseId = new RecordId('case', 'test123') as any;
       const mockResult = [
-        {
-          userId: new RecordId('user', '001'),
-          userName: 'Test User',
-          userEmail: 'test@example.com',
+        // 认证结果 (第一个元素)
+        { id: 'user:auth_user', name: 'Test User' },
+        // 实际查询结果数组 (第二个元素)
+        [{
+          members: [
+            {
+              userId: new RecordId('user', '001'),
+              userName: 'Test User',
+              userEmail: 'test@example.com'
+            }
+          ],
           roles: [
-            { 
-              id: new RecordId('role', 'case_manager'), 
-              name: 'case_manager', 
-              description: '案件管理人' 
+            {
+              userId: new RecordId('user', '001'),
+              role_id: { 
+                id: new RecordId('role', 'case_manager'), 
+                name: 'case_manager', 
+                description: '案件管理人' 
+              }
             },
-            { 
-              id: new RecordId('role', 'assistant_lawyer'), 
-              name: 'assistant_lawyer', 
-              description: '协办律师' 
+            {
+              userId: new RecordId('user', '001'),
+              role_id: { 
+                id: new RecordId('role', 'assistant_lawyer'), 
+                name: 'assistant_lawyer', 
+                description: '协办律师' 
+              }
             }
           ]
-        }
+        }]
       ];
       
-      mockDataService.query.mockResolvedValue(mockResult);
+      mockClient.query.mockResolvedValue(mockResult);
       
       // Act
-      const members = await fetchCaseMembers(testCaseId);
+      const members = await fetchCaseMembers(mockClient, testCaseId);
       
       // Assert
-      expect(mockDataService.query).toHaveBeenCalledWith(
+      expect(mockClient.query).toHaveBeenCalledWith(
         expect.stringContaining('FROM has_member'),
         { caseId: testCaseId }
       );
       
-      expect(mockDataService.query).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE in = $caseId'),
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE case_id = $caseId'),
         { caseId: testCaseId }
       );
       
@@ -86,24 +110,34 @@ describe('caseMemberService', () => {
       // Arrange
       const testCaseId = new RecordId('case', 'test123') as any;
       const mockResult = [
-        {
-          userId: new RecordId('user', '002'),
-          userName: 'Another User',
-          userEmail: 'another@example.com',
+        // 认证结果 (第一个元素)
+        { id: 'user:auth_user', name: 'Test User' },
+        // 实际查询结果数组 (第二个元素)
+        [{
+          members: [
+            {
+              userId: new RecordId('user', '002'),
+              userName: 'Another User',
+              userEmail: 'another@example.com'
+            }
+          ],
           roles: [
-            { 
-              id: new RecordId('role', 'owner'), 
-              name: 'owner', 
-              description: '案件负责人' 
+            {
+              userId: new RecordId('user', '002'),
+              role_id: { 
+                id: new RecordId('role', 'owner'), 
+                name: 'owner', 
+                description: '案件负责人' 
+              }
             }
           ]
-        }
+        }]
       ];
       
-      mockDataService.query.mockResolvedValue(mockResult);
+      mockClient.query.mockResolvedValue(mockResult);
       
       // Act
-      const members = await fetchCaseMembers(testCaseId);
+      const members = await fetchCaseMembers(mockClient, testCaseId);
       
       // Assert
       expect(members[0].roles).toHaveLength(1);

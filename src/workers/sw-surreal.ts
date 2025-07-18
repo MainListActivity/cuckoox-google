@@ -249,7 +249,7 @@ const eventHandlers = {
 
                 // 检查是否包含认证检查
                 const hasAuthCheck = payload.sql.includes('return $auth;');
-                
+
                 // 尝试从缓存获取数据
                 const cachedData = await dataCacheManager!.queryCache(table, payload.sql, payload.vars, userId);
 
@@ -257,7 +257,7 @@ const eventHandlers = {
                   const queryEndTime = performance.now();
                   const responseTime = Math.round((queryEndTime - queryStartTime) * 100) / 100;
                   console.log(`ServiceWorker: 查询完成 [缓存] 表: ${table}, 响应时间: ${responseTime}ms, 数据源: LocalDB, 记录数: ${cachedData.length}`);
-                  
+
                   // 如果包含认证检查，需要先执行认证检查
                   if (hasAuthCheck) {
                     try {
@@ -284,7 +284,7 @@ const eventHandlers = {
                     const queryEndTime = performance.now();
                     const responseTime = Math.round((queryEndTime - queryStartTime) * 100) / 100;
                     console.log(`ServiceWorker: 查询完成 [自动同步] 表: ${table}, 响应时间: ${responseTime}ms, 数据源: LocalDB, 记录数: ${syncedData.length}`);
-                    
+
                     // 如果包含认证检查，需要先执行认证检查
                     if (hasAuthCheck) {
                       try {
@@ -312,7 +312,7 @@ const eventHandlers = {
                     break;
                   }
                 }
-                
+
                 if (allTablesCached) {
                   console.log(`ServiceWorker: All auto-sync tables cached for multi-table query: ${autoSyncTables.join(', ')}`);
                 }
@@ -417,13 +417,13 @@ const eventHandlers = {
           const totalQueryTime = performance.now() - queryStartTime;
           const totalResponseTime = Math.round(totalQueryTime * 100) / 100;
           const resultCount = Array.isArray(results) ? results.length : (results ? 1 : 0);
-          
+
           if (type === 'query') {
             console.log(`ServiceWorker: 查询完成 [远程] 表: ${tableNames.join(', ')}, 总响应时间: ${totalResponseTime}ms, 远程查询时间: ${remoteResponseTime}ms, 数据源: RemoteDB, 记录数: ${resultCount}`);
           } else {
             console.log(`ServiceWorker: 变更完成 [远程] 表: ${tableNames.join(', ')}, 总响应时间: ${totalResponseTime}ms, 远程执行时间: ${remoteResponseTime}ms, 数据源: RemoteDB`);
           }
-          
+
           respond(results);
           break;
         }
@@ -432,13 +432,13 @@ const eventHandlers = {
           const operationStartTime = performance.now();
           const connectionState = await ensureConnection();
           if (!connectionState.hasDb) throw new Error("Database not initialized");
-          
+
           const createResult = await db!.create(payload.thing, payload.data);
-          
+
           const operationEndTime = performance.now();
           const responseTime = Math.round((operationEndTime - operationStartTime) * 100) / 100;
           console.log(`ServiceWorker: 创建完成 [远程] 表: ${payload.thing}, 响应时间: ${responseTime}ms, 数据源: RemoteDB`);
-          
+
           respond(createResult);
           break;
         }
@@ -447,14 +447,14 @@ const eventHandlers = {
           const operationStartTime = performance.now();
           const connectionState = await ensureConnection();
           if (!connectionState.hasDb) throw new Error("Database not initialized");
-          
+
           const selectResult = await db!.select(payload.thing as string | RecordId);
-          
+
           const operationEndTime = performance.now();
           const responseTime = Math.round((operationEndTime - operationStartTime) * 100) / 100;
           const resultCount = Array.isArray(selectResult) ? selectResult.length : (selectResult ? 1 : 0);
           console.log(`ServiceWorker: 查询完成 [远程] 记录: ${payload.thing}, 响应时间: ${responseTime}ms, 数据源: RemoteDB, 记录数: ${resultCount}`);
-          
+
           respond(selectResult);
           break;
         }
@@ -463,13 +463,13 @@ const eventHandlers = {
           const operationStartTime = performance.now();
           const connectionState = await ensureConnection();
           if (!connectionState.hasDb) throw new Error("Database not initialized");
-          
+
           const updateResult = await db!.update(payload.thing as string | RecordId, payload.data);
-          
+
           const operationEndTime = performance.now();
           const responseTime = Math.round((operationEndTime - operationStartTime) * 100) / 100;
           console.log(`ServiceWorker: 更新完成 [远程] 记录: ${payload.thing}, 响应时间: ${responseTime}ms, 数据源: RemoteDB`);
-          
+
           respond(updateResult);
           break;
         }
@@ -478,13 +478,13 @@ const eventHandlers = {
           const operationStartTime = performance.now();
           const connectionState = await ensureConnection();
           if (!connectionState.hasDb) throw new Error("Database not initialized");
-          
+
           const mergeResult = await db!.merge(payload.thing as string | RecordId, payload.data);
-          
+
           const operationEndTime = performance.now();
           const responseTime = Math.round((operationEndTime - operationStartTime) * 100) / 100;
           console.log(`ServiceWorker: 合并完成 [远程] 记录: ${payload.thing}, 响应时间: ${responseTime}ms, 数据源: RemoteDB`);
-          
+
           respond(mergeResult);
           break;
         }
@@ -493,13 +493,13 @@ const eventHandlers = {
           const operationStartTime = performance.now();
           const connectionState = await ensureConnection();
           if (!connectionState.hasDb) throw new Error("Database not initialized");
-          
+
           const deleteResult = await db!.delete(payload.thing as string | RecordId);
-          
+
           const operationEndTime = performance.now();
           const responseTime = Math.round((operationEndTime - operationStartTime) * 100) / 100;
           console.log(`ServiceWorker: 删除完成 [远程] 记录: ${payload.thing}, 响应时间: ${responseTime}ms, 数据源: RemoteDB`);
-          
+
           respond(deleteResult);
           break;
         }
@@ -979,6 +979,13 @@ let authStateTimer: NodeJS.Timeout | null = null;
 const AUTH_CACHE_DURATION = 30000; // 30秒缓存有效期
 const AUTH_REFRESH_INTERVAL = 25000; // 25秒刷新间隔
 
+// 防抖：用于避免过度频繁的认证状态变化广播
+let lastAuthStateBroadcast: {
+  isAuthenticated: boolean;
+  timestamp: number;
+} | null = null;
+const AUTH_BROADCAST_DEBOUNCE_TIME = 5000; // 5秒防抖间隔
+
 
 // Live query management
 const liveQuerySubscriptions = new Map<string, {
@@ -1008,7 +1015,7 @@ const CONNECTION_TIMEOUT = 10000; // 10秒连接超时
  */
 function startAuthStateRefresh() {
   stopAuthStateRefresh(); // 先停止现有的定时器
-  
+
   authStateTimer = setInterval(async () => {
     try {
       if (isConnected && db) {
@@ -1018,7 +1025,7 @@ function startAuthStateRefresh() {
       console.warn('ServiceWorker: Auth state refresh failed:', error);
     }
   }, AUTH_REFRESH_INTERVAL);
-  
+
   console.log('ServiceWorker: Auth state refresh timer started');
 }
 
@@ -1059,7 +1066,7 @@ async function refreshAuthStateCache(): Promise<void> {
 
     const isAuthenticated = authResult && typeof authResult === 'object' && authResult !== null;
     const userId = isAuthenticated ? String((authResult as any).id || null) : null;
-    
+
     const now = Date.now();
     authStateCache = {
       userId,
@@ -1097,13 +1104,13 @@ function getCachedAuthState(): AuthState | null {
   if (!authStateCache) {
     return null;
   }
-  
+
   // 检查缓存是否过期
   if (Date.now() > authStateCache.expiresAt) {
     console.log('ServiceWorker: Auth state cache expired');
     return null;
   }
-  
+
   return authStateCache;
 }
 
@@ -1112,16 +1119,50 @@ function getCachedAuthState(): AuthState | null {
  */
 async function updateAuthStateCache(userId: string | null, isAuthenticated: boolean): Promise<void> {
   const now = Date.now();
+  // 确保 isAuthenticated 是明确的 boolean 值
+  const authenticatedBool = Boolean(isAuthenticated);
+
   authStateCache = {
     userId,
-    isAuthenticated,
+    isAuthenticated: authenticatedBool,
     lastUpdated: now,
     expiresAt: now + AUTH_CACHE_DURATION
   };
-  
+
   console.log('ServiceWorker: Auth state cache updated', {
     userId: userId ? `${userId.substring(0, 10)}...` : null,
-    isAuthenticated
+    isAuthenticated: authenticatedBool
+  });
+}
+
+/**
+ * 防抖的认证状态广播
+ */
+function broadcastAuthStateChange(isAuthenticated: boolean, reason: string = 'query_check'): void {
+  const now = Date.now();
+
+  // 检查是否需要防抖
+  if (lastAuthStateBroadcast &&
+    lastAuthStateBroadcast.isAuthenticated === isAuthenticated &&
+    now - lastAuthStateBroadcast.timestamp < AUTH_BROADCAST_DEBOUNCE_TIME) {
+    console.log('ServiceWorker: Auth state broadcast skipped (debounced)');
+    return;
+  }
+
+  // 更新最后广播时间
+  lastAuthStateBroadcast = {
+    isAuthenticated,
+    timestamp: now
+  };
+
+  console.log('ServiceWorker: Broadcasting auth state change:', { isAuthenticated, reason });
+  broadcastToAllClients({
+    type: 'auth_state_changed',
+    payload: {
+      isAuthenticated,
+      reason,
+      timestamp: now
+    }
   });
 }
 
@@ -1462,9 +1503,6 @@ async function connectWithTimeout(): Promise<void> {
         isConnected = true;
         console.log('ServiceWorker: Connection established, isConnected set to true');
 
-        // 设置连接事件监听器
-        setupConnectionEventListeners();
-
         await db!.use({ namespace: connectionConfig!.namespace, database: connectionConfig!.database });
 
         // 重新认证
@@ -1594,7 +1632,7 @@ function setupConnectionEventListeners() {
 
     notifyConnectionStateChange();
     startConnectionHealthCheck();
-    
+
     // 连接成功后，尝试刷新认证状态缓存
     if (db) {
       refreshAuthStateCache().catch(error => {
@@ -1935,10 +1973,10 @@ async function getCurrentUserId(): Promise<string | undefined> {
       if (auth.id) {
         const userId = String(auth.id);
         console.log('ServiceWorker: Current user ID from query:', userId);
-        
+
         // 更新缓存
         await updateAuthStateCache(userId, true);
-        
+
         return userId;
       }
     }
@@ -2053,6 +2091,9 @@ async function initializeSurreal(): Promise<void> {
     // Create a new SurrealDB instance (singleton)
     db = new Surreal();
     console.log("ServiceWorker: SurrealDB singleton initialized successfully");
+
+    // 设置连接事件监听器
+    setupConnectionEventListeners();
   } catch (error) {
     console.error("ServiceWorker: Failed to initialize SurrealDB:", error);
     throw error;
@@ -2187,7 +2228,7 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<Co
       } else {
         // db.status 显示已连接，但我们的状态是断开，需要同步状态
         console.log('ServiceWorker: db.status shows connected but isConnected=false, syncing state...');
-        
+
         // 通过执行简单查询来验证连接是否真正可用
         try {
           await Promise.race([
@@ -2196,7 +2237,7 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<Co
               setTimeout(() => reject(new Error('Connection sync test timeout')), 3000)
             )
           ]);
-          
+
           // 查询成功，同步状态
           isConnected = true;
           console.log('ServiceWorker: Connection state synced - db is actually connected');
@@ -2218,7 +2259,7 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<Co
     // 5. 检查认证状态（优先使用缓存）
     try {
       let isAuthenticated = false;
-      
+
       // 优先从缓存获取认证状态
       const cachedAuth = getCachedAuthState();
       if (cachedAuth && cachedAuth.isAuthenticated) {
@@ -2256,19 +2297,15 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<Co
         // 更新认证状态缓存
         const userId = isAuthenticated ? String((authResult as any).id || null) : null;
         await updateAuthStateCache(userId, isAuthenticated);
+
+        // 确保 isAuthenticated 是明确的 boolean 值
+        isAuthenticated = Boolean(isAuthenticated);
       }
 
       // 如果未认证，广播认证状态变化
       if (!isAuthenticated) {
         console.log('ServiceWorker: User not authenticated, broadcasting auth state change');
-        broadcastToAllClients({
-          type: 'auth_state_changed',
-          payload: {
-            isAuthenticated: false,
-            reason: 'connection_check',
-            timestamp: Date.now()
-          }
-        });
+        broadcastAuthStateChange(false, 'connection_check');
       }
 
       return {

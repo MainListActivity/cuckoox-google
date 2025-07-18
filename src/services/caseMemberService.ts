@@ -87,34 +87,48 @@ export async function fetchCaseMembers(client: SurrealWorkerAPI, caseId: RecordI
     console.log(`[SurrealDB API] Fetching members for case: ${caseId}`);
 
     try {
-      // 查询案件成员及其在案件中的角色
+      // 优化后的查询：一次性获取所有数据，减少子查询
       const query = `
-        SELECT 
-          out as userId,
-          out.name as userName,
-          out.email as userEmail,
-          (SELECT role_id FROM has_case_role WHERE in = out AND case_id = $caseId FETCH role_id) as roles
-        FROM has_member 
-        WHERE in = $caseId
-        FETCH out;
+        LET $members = (SELECT out as userId, out.name as userName, out.email as userEmail FROM has_member WHERE in = $caseId FETCH out);
+        LET $roles = (SELECT in as userId, role_id FROM has_case_role WHERE case_id = $caseId FETCH role_id);
+        SELECT {
+          members: $members,
+          roles: $roles
+        };
       `;
 
-      const result = await queryWithAuth<MemberQueryResult[]>(client, query, { caseId });
+      const result = await queryWithAuth<[{
+        members: { userId: RecordId; userName: string; userEmail?: string }[];
+        roles: { userId: RecordId; role_id: Role }[];
+      }]>(client, query, { caseId });
 
-      if (!result || result.length === 0) {
+      if (!result || result.length === 0 || !result[0].members) {
         return [];
       }
 
-      const members: CaseMember[] = result.map((row: MemberQueryResult) => ({
-        id: row.userId,
+      const { members, roles } = result[0];
+
+      // 构建角色映射
+      const rolesByUserId = new Map<string, Role[]>();
+      roles.forEach(roleEntry => {
+        const userId = roleEntry.userId.toString();
+        if (!rolesByUserId.has(userId)) {
+          rolesByUserId.set(userId, []);
+        }
+        rolesByUserId.get(userId)!.push(roleEntry.role_id);
+      });
+
+      // 构建最终的成员列表
+      const membersList: CaseMember[] = members.map(member => ({
+        id: member.userId,
         caseId: caseId,
-        roles: row.roles || [],
-        userName: row.userName,
-        userEmail: row.userEmail,
-        avatarUrl: row.userEmail ? `https://i.pravatar.cc/150?u=${row.userEmail}` : `https://i.pravatar.cc/150?u=${row.userId}`
+        roles: rolesByUserId.get(member.userId.toString()) || [],
+        userName: member.userName,
+        userEmail: member.userEmail,
+        avatarUrl: member.userEmail ? `https://i.pravatar.cc/150?u=${member.userEmail}` : `https://i.pravatar.cc/150?u=${member.userId}`
       }));
 
-      return members;
+      return membersList;
     } catch (error) {
       console.error('[SurrealDB API] Error fetching case members:', error);
       throw error;
