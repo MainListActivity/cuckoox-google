@@ -2,12 +2,50 @@ import { RecordId } from 'surrealdb';
 import type Surreal from 'surrealdb';
 import type { DatabaseQueryResult, DatabaseSubscriptionItem, FlexibleRecord, UnknownData, QueryParams, UpdateData, CacheData, QueryResultItem } from '../types/surreal';
 
+/**
+ * 递归检查并重构被序列化的RecordId对象
+ * 当RecordId对象通过ServiceWorker传递时，会丢失其原型，变成普通对象
+ * 这个函数会检测这种情况并重新构造RecordId
+ */
+function deserializeRecordIds(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  // 检查是否是被序列化的RecordId对象（具有id和tb属性）
+  if (typeof obj === 'object' && 'id' in obj && 'tb' in obj) {
+    // 这很可能是一个被序列化的RecordId，重新构造它
+    return new RecordId(obj.tb, obj.id);
+  }
+
+  // 如果是数组，递归处理每个元素
+  if (Array.isArray(obj)) {
+    return obj.map(item => deserializeRecordIds(item));
+  }
+
+  // 如果是对象，递归处理每个属性
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = deserializeRecordIds(value);
+    }
+    if (Object.entries(result).length !== 0) {
+      return result;
+    }
+  }
+
+  // 其他类型直接返回
+  return obj;
+}
+
 // 自动同步表配置
 export const AUTO_SYNC_TABLES = [
   'user',
   'role', 
   'has_case_role',
   'has_role',
+  'case',
+  'has_member',
   'menu_metadata',
   'operation_button',
   'user_personal_data'
@@ -534,6 +572,7 @@ export class DataCacheManager {
           AND (case_id = $case_id OR case_id IS NULL)
           AND (expires_at IS NULL OR expires_at > time::now())
         ORDER BY created_at DESC
+        LIMIT 1
       `;
       
       const cacheResult = await this.localDb.query(cacheQuery, {
@@ -546,25 +585,15 @@ export class DataCacheManager {
         // 从缓存中获取数据
         const cachedData = cacheResult.map((item: DatabaseQueryResult) => item.data).flat();
         
-        // 如果有具体查询条件，在缓存数据上执行查询
-        if (query && query.trim() !== `SELECT * FROM ${table}`) {
-          // 这里可以实现更复杂的查询逻辑
-          return cachedData;
+        // 如果有缓存数据，直接返回缓存数据
+        if (cachedData && cachedData.length > 0) {
+          // 对于简单查询，直接返回缓存数据，但需要反序列化RecordId
+          // 复杂查询的本地执行暂时跳过，直接返回缓存数据
+          return deserializeRecordIds(cachedData);
         }
-        
-        return cachedData;
       }
       
-      // 缓存中没有数据，从远程获取
-      if (this.remoteDb) {
-        const remoteResult = await this.remoteDb.query(query, params);
-        
-        // 将结果缓存到本地
-        await this.cacheData(table, remoteResult, 'temporary', userId, caseId);
-        
-        return remoteResult;
-      }
-      
+      // 缓存中没有数据，返回空数组让调用者去远程获取
       return [];
     } catch (error) {
       console.error('DataCacheManager: Error querying cache:', error);
@@ -659,14 +688,18 @@ export class DataCacheManager {
         created_at: new Date()
       };
       
-      // 尝试先删除旧记录，然后创建新记录
+      // 使用UPSERT来避免重复创建问题
       try {
-        await this.localDb.delete(recordId);
+        await this.localDb.upsert(recordId, subscriptionData as unknown as FlexibleRecord);
       } catch {
-        // 删除失败说明记录不存在，这是正常的
+        // 如果UPSERT失败，尝试删除后重新创建
+        try {
+          await this.localDb.delete(recordId);
+          await this.localDb.create(recordId, subscriptionData as unknown as FlexibleRecord);
+        } catch (createError) {
+          console.warn('DataCacheManager: Failed to create subscription after delete:', createError);
+        }
       }
-      
-      await this.localDb.create(recordId, subscriptionData as unknown as FlexibleRecord);
     } catch (error) {
       console.warn('DataCacheManager: Failed to record subscription:', error);
       throw error; // 重新抛出错误以便上层处理
@@ -1001,7 +1034,8 @@ export class DataCacheManager {
         case_id: caseId
       });
       
-      return (result as DatabaseQueryResult[])?.[0]?.data || [];
+      const data = (result as DatabaseQueryResult[])?.[0]?.data || [];
+      return deserializeRecordIds(data);
     } catch (error) {
       console.warn('DataCacheManager: Failed to get cached data:', error);
       return [];
@@ -1247,7 +1281,8 @@ export class DataCacheManager {
         case_id: caseId
       });
       
-      return (result as DatabaseQueryResult[])?.[0]?.data;
+      const data = (result as DatabaseQueryResult[])?.[0]?.data;
+      return deserializeRecordIds(data);
     } catch (error) {
       console.warn('DataCacheManager: Failed to get personal data:', error);
       return null;
@@ -1379,7 +1414,7 @@ export class DataCacheManager {
         const cacheData = (result[0] as any)?.data;
         if (Array.isArray(cacheData) && cacheData.length > 0) {
           console.log(`DataCacheManager: Found cached record ${recordId} for table: ${table}`);
-          return cacheData[0];
+          return deserializeRecordIds(cacheData[0]);
         }
       }
       

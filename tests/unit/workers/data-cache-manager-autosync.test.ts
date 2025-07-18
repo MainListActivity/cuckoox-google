@@ -49,15 +49,17 @@ describe('DataCacheManager Auto Sync', () => {
       expect(isAutoSyncTable('role')).toBe(true);
       expect(isAutoSyncTable('has_case_role')).toBe(true);
       expect(isAutoSyncTable('has_role')).toBe(true);
+      expect(isAutoSyncTable('case')).toBe(true);
+      expect(isAutoSyncTable('has_member')).toBe(true);
       expect(isAutoSyncTable('menu_metadata')).toBe(true);
       expect(isAutoSyncTable('operation_button')).toBe(true);
       expect(isAutoSyncTable('user_personal_data')).toBe(true);
     });
 
     it('should correctly identify non-auto sync tables', () => {
-      expect(isAutoSyncTable('case')).toBe(false);
       expect(isAutoSyncTable('claim')).toBe(false);
       expect(isAutoSyncTable('document')).toBe(false);
+      expect(isAutoSyncTable('notification')).toBe(false);
     });
 
     it('should correctly identify auto sync tables using static method', () => {
@@ -73,6 +75,8 @@ describe('DataCacheManager Auto Sync', () => {
         'role', 
         'has_case_role',
         'has_role',
+        'case',
+        'has_member',
         'menu_metadata',
         'operation_button',
         'user_personal_data'
@@ -84,7 +88,7 @@ describe('DataCacheManager Auto Sync', () => {
 
   describe('checkAndAutoCache method', () => {
     it('should return false for non-auto sync tables', async () => {
-      const result = await dataCacheManager.checkAndAutoCache('case', 'user:test');
+      const result = await dataCacheManager.checkAndAutoCache('claim', 'user:test');
       expect(result).toBe(false);
     });
 

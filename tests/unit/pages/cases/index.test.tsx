@@ -1189,4 +1189,132 @@ describe('CaseListPage', () => {
       expect(headers.length).toBe(7); // Should have 7 columns
     });
   });
+
+  describe('缓存数据问题修复', () => {
+    it('should filter out cases with null or undefined id fields', async () => {
+      // 模拟从缓存返回的数据，包含一些没有 id 的项目
+      const mockCasesDataWithNullIds = [
+        {
+          id: { toString: () => 'case:valid001' },
+          case_number: 'BK-VALID-001',
+          case_lead_name: 'Valid User',
+          case_manager_name: 'Valid User',
+          case_procedure: '破产清算',
+          creator_name: 'System',
+          procedure_phase: '立案',
+          acceptance_date: '2023-01-01',
+          created_by_user: { toString: () => 'user:admin' },
+          case_lead_user_id: { toString: () => 'user:valid' }
+        },
+        {
+          // 没有 id 字段的数据，应该被过滤掉
+          case_number: 'BK-INVALID-001',
+          case_lead_name: 'Invalid User',
+          case_manager_name: 'Invalid User',
+          case_procedure: '破产清算',
+          creator_name: 'System',
+          procedure_phase: '立案',
+          acceptance_date: '2023-01-02',
+          created_by_user: { toString: () => 'user:admin' },
+          case_lead_user_id: { toString: () => 'user:invalid' }
+        },
+        {
+          id: null, // id 为 null 的数据，应该被过滤掉
+          case_number: 'BK-NULL-001',
+          case_lead_name: 'Null User',
+          case_manager_name: 'Null User',
+          case_procedure: '破产清算',
+          creator_name: 'System',
+          procedure_phase: '立案',
+          acceptance_date: '2023-01-03',
+          created_by_user: { toString: () => 'user:admin' },
+          case_lead_user_id: { toString: () => 'user:null' }
+        },
+        {
+          id: undefined, // id 为 undefined 的数据，应该被过滤掉
+          case_number: 'BK-UNDEFINED-001',
+          case_lead_name: 'Undefined User',
+          case_manager_name: 'Undefined User',
+          case_procedure: '破产清算',
+          creator_name: 'System',
+          procedure_phase: '立案',
+          acceptance_date: '2023-01-04',
+          created_by_user: { toString: () => 'user:admin' },
+          case_lead_user_id: { toString: () => 'user:undefined' }
+        },
+        {
+          id: { toString: () => 'case:valid002' },
+          case_number: 'BK-VALID-002',
+          case_lead_name: 'Valid User 2',
+          case_manager_name: 'Valid User 2',
+          case_procedure: '破产重整',
+          creator_name: 'System',
+          procedure_phase: '债权申报',
+          acceptance_date: '2023-01-05',
+          created_by_user: { toString: () => 'user:admin' },
+          case_lead_user_id: { toString: () => 'user:valid2' }
+        }
+      ];
+
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockCasesDataWithNullIds]);
+      renderCaseListPage();
+
+      await waitFor(() => {
+        // 应该只显示有效的案件（id 不为 null 或 undefined 的）
+        expect(screen.getByText('BK-VALID-001')).toBeInTheDocument();
+        expect(screen.getByText('BK-VALID-002')).toBeInTheDocument();
+        
+        // 无效的案件不应该显示
+        expect(screen.queryByText('BK-INVALID-001')).not.toBeInTheDocument();
+        expect(screen.queryByText('BK-NULL-001')).not.toBeInTheDocument();
+        expect(screen.queryByText('BK-UNDEFINED-001')).not.toBeInTheDocument();
+        
+        // 统计应该显示正确的数量（只计算有效案件）
+        const totalCasesElements = screen.getAllByText('2');
+        expect(totalCasesElements.length).toBeGreaterThan(0); // 只有2个有效案件
+      });
+    });
+
+    it('should not throw errors when processing data with missing id fields', async () => {
+      // 模拟完全没有 id 字段的数据
+      const mockCasesDataWithoutIds = [
+        {
+          // 完全没有 id 字段
+          case_number: 'BK-NO-ID-001',
+          case_lead_name: 'Test User',
+          case_manager_name: 'Test User',
+          case_procedure: '破产清算',
+          creator_name: 'System',
+          procedure_phase: '立案',
+          acceptance_date: '2023-01-01',
+          created_by_user: { toString: () => 'user:admin' },
+          case_lead_user_id: { toString: () => 'user:test' }
+        },
+        {
+          id: undefined,
+          case_number: 'BK-UNDEFINED-ID-001',
+          case_lead_name: 'Test User 2',
+          case_manager_name: 'Test User 2',
+          case_procedure: '破产清算',
+          creator_name: 'System',
+          procedure_phase: '立案',
+          acceptance_date: '2023-01-02',
+          created_by_user: { toString: () => 'user:admin' },
+          case_lead_user_id: { toString: () => 'user:test2' }
+        }
+      ];
+
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockCasesDataWithoutIds]);
+      
+      // 这应该不会抛出错误
+      expect(() => {
+        renderCaseListPage();
+      }).not.toThrow();
+
+      await waitFor(() => {
+        // 应该显示"暂无案件数据"，因为所有数据都被过滤掉了
+        expect(screen.getByText('暂无案件数据')).toBeInTheDocument();
+      });
+    });
+  });
 });

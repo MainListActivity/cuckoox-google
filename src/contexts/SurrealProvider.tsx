@@ -821,11 +821,11 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
           }
         });
         
-        // 10秒超时
+        // 15秒超时 - 给service worker更多时间进行连接和重连
         setTimeout(() => {
           navigator.serviceWorker.removeEventListener('message', handleMessage);
           reject(new Error('Connection initialization timeout'));
-        }, 10000);
+        }, 15000);
       });
       
       if (result.status !== 'connected') {

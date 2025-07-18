@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient, AuthenticationRequiredError } from '@/src/contexts/SurrealProvider';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { RecordId } from 'surrealdb';
 import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
@@ -102,6 +102,7 @@ const CaseListPage: React.FC = () => {
   const { showSuccess, showError } = useSnackbar();
   const theme = useTheme();
   const client = useSurrealClient();
+  const navigate = useNavigate();
 
   // Check operation permissions
   const { permissions, isLoading: isPermissionsLoading } = useOperationPermissions([
@@ -145,6 +146,14 @@ const CaseListPage: React.FC = () => {
       setError(null);
       
       try {
+        // 首次加载时清除可能有问题的缓存数据
+        const shouldClearCache = !sessionStorage.getItem('case_cache_initialized');
+        if (shouldClearCache) {
+          console.log('CaseList: Clearing cache on first load');
+          await client.clearTableCache?.('case');
+          sessionStorage.setItem('case_cache_initialized', 'true');
+        }
+        
         // Query cases with related user information
         const query = `
           SELECT 
@@ -170,16 +179,23 @@ const CaseListPage: React.FC = () => {
         if (Array.isArray(result)) {
           const casesData = result as RawCaseData[];
           
-          // Transform the data to match our CaseItem interface
-          const transformedCases: CaseItem[] = casesData.map(caseData => ({
-            id: caseData.id.toString().replace('case:', ''),
-            case_number: caseData.case_number || `BK-${caseData.id.toString().slice(-6)}`,
-            case_lead_name: caseData.case_lead_name || caseData.case_manager_name || t('unassigned', '未分配'),
-            case_procedure: caseData.case_procedure || '破产',
-            creator_name: caseData.creator_name || t('system', '系统'),
-            current_stage: caseData.procedure_phase as CaseStatus || '立案',
-            acceptance_date: caseData.acceptance_date ? new Date(caseData.acceptance_date).toISOString().split('T')[0] : '',
-          }));
+          // Transform the data to match our CaseItem interface, filter out items without id
+          const transformedCases: CaseItem[] = casesData
+            .filter(caseData => caseData.id != null) // 过滤掉没有 id 的数据
+            .map(caseData => {
+              const idString = caseData.id.toString();
+              const caseId = idString.replace('case:', '');
+              
+              return {
+                id: caseId,
+                case_number: caseData.case_number || `BK-${caseId.slice(-6)}`,
+                case_lead_name: caseData.case_lead_name || caseData.case_manager_name || t('unassigned', '未分配'),
+                case_procedure: caseData.case_procedure || '破产',
+                creator_name: caseData.creator_name || t('system', '系统'),
+                current_stage: caseData.procedure_phase as CaseStatus || '立案',
+                acceptance_date: caseData.acceptance_date ? new Date(caseData.acceptance_date).toISOString().split('T')[0] : '',
+              };
+            });
           
           setCases(transformedCases);
         } else {
@@ -187,6 +203,14 @@ const CaseListPage: React.FC = () => {
         }
       } catch (err) {
         console.error('Error fetching cases:', err);
+        
+        // Check if it's an authentication error
+        if (err instanceof AuthenticationRequiredError) {
+          // Navigate to login page
+          navigate('/login');
+          return;
+        }
+        
         setError(t('error_fetching_cases', '获取案件列表失败'));
         showError(t('error_fetching_cases', '获取案件列表失败'));
       } finally {
@@ -195,7 +219,7 @@ const CaseListPage: React.FC = () => {
     };
 
     fetchCases();
-  }, [client, t, showError]);
+  }, [client, t, showError, navigate]);
 
   // Statistics
   const stats = [
@@ -360,16 +384,23 @@ const CaseListPage: React.FC = () => {
         if (Array.isArray(result)) {
           const casesData = result as RawCaseData[];
           
-          // Transform the data to match our CaseItem interface
-          const transformedCases: CaseItem[] = casesData.map(caseData => ({
-            id: caseData.id.toString().replace('case:', ''),
-            case_number: caseData.case_number || `BK-${caseData.id.toString().slice(-6)}`,
-            case_lead_name: caseData.case_lead_name || caseData.case_manager_name || t('unassigned', '未分配'),
-            case_procedure: caseData.case_procedure || '破产',
-            creator_name: caseData.creator_name || t('system', '系统'),
-            current_stage: caseData.procedure_phase as CaseStatus || '立案',
-            acceptance_date: caseData.acceptance_date ? new Date(caseData.acceptance_date).toISOString().split('T')[0] : '',
-          }));
+          // Transform the data to match our CaseItem interface, filter out items without id
+          const transformedCases: CaseItem[] = casesData
+            .filter(caseData => caseData.id != null) // 过滤掉没有 id 的数据
+            .map(caseData => {
+              const idString = caseData.id.toString();
+              const caseId = idString.replace('case:', '');
+              
+              return {
+                id: caseId,
+                case_number: caseData.case_number || `BK-${caseId.slice(-6)}`,
+                case_lead_name: caseData.case_lead_name || caseData.case_manager_name || t('unassigned', '未分配'),
+                case_procedure: caseData.case_procedure || '破产',
+                creator_name: caseData.creator_name || t('system', '系统'),
+                current_stage: caseData.procedure_phase as CaseStatus || '立案',
+                acceptance_date: caseData.acceptance_date ? new Date(caseData.acceptance_date).toISOString().split('T')[0] : '',
+              };
+            });
           
           setCases(transformedCases);
         } else {
@@ -377,6 +408,14 @@ const CaseListPage: React.FC = () => {
         }
       } catch (err) {
         console.error('Error fetching cases:', err);
+        
+        // Check if it's an authentication error
+        if (err instanceof AuthenticationRequiredError) {
+          // Navigate to login page
+          navigate('/login');
+          return;
+        }
+        
         setError(t('error_fetching_cases', '获取案件列表失败'));
         showError(t('error_fetching_cases', '获取案件列表失败'));
       } finally {
