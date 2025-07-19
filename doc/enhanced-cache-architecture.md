@@ -59,6 +59,14 @@ interface EnhancedQueryHandler {
 }
 ```
 
+**导入路径标准化**:
+所有核心组件现在使用统一的路径别名 `@/src/types/surreal` 导入类型定义，提升了代码的一致性和可维护性：
+
+```typescript
+// 统一的导入方式
+import type { QueryParams, UnknownData } from '@/src/types/surreal';
+```
+
 ### 2. QueryRouter (智能查询路由器)
 
 **职责**: 分析SQL查询特征，决定最优缓存策略

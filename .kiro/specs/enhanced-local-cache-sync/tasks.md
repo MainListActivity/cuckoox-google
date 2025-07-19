@@ -40,6 +40,7 @@
   - 在activate事件中初始化EnhancedQueryHandler
   - 添加ensureEnhancedQueryHandler函数确保组件可用
   - 在beforeunload事件中添加清理逻辑
+  - 统一使用 `@/src/types/surreal` 路径别名，提升代码一致性
   - _需求: 1.1, 1.2_
 
 - [x] 0.2 替换query和mutate消息处理逻辑
