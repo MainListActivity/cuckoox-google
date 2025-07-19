@@ -587,10 +587,9 @@ INSERT INTO menu_metadata (menu_id, path, label_key, icon_name, display_order, i
 ('claims_list', '/claims', 'nav_claim_management', 'mdiFileDocumentOutline', 5, true, time::now(), time::now()),
 ('my_claims', '/my-claims', 'nav_my_claims', 'mdiFileDocumentSearchOutline', 6, true, time::now(), time::now()),
 ('claims_submit', '/claims/submit', 'nav_claim_submission', 'mdiFileUploadOutline', 7, true, time::now(), time::now()),
-('claim_dashboard', '/claim-dashboard', 'nav_claim_dashboard', 'mdiChartBar', 8, true, time::now(), time::now()),
-('online_meetings', '/online-meetings', 'nav_online_meetings', 'mdiVideo', 9, true, time::now(), time::now()),
-('messages', '/messages', 'nav_message_center', 'mdiMessageTextOutline', 10, true, time::now(), time::now()),
-('admin_home', '/admin', 'nav_system_management', 'mdiCog', 11, true, time::now(), time::now());
+('online_meetings', '/online-meetings', 'nav_online_meetings', 'mdiVideo', 8, true, time::now(), time::now()),
+('messages', '/messages', 'nav_message_center', 'mdiMessageTextOutline', 9, true, time::now(), time::now()),
+('admin_home', '/admin', 'nav_system_management', 'mdiCog', 10, true, time::now(), time::now());
 
 -- 初始化操作元数据
 INSERT INTO operation_metadata (operation_id, menu_id, operation_name, operation_type, description, tables, is_active, created_at, updated_at) VALUES 
@@ -646,7 +645,7 @@ FOR $menu IN (SELECT id FROM menu_metadata) {
 };
 
 -- case_manager 菜单权限
-FOR $menu_id IN ['dashboard', 'cases', 'case_members', 'creditors', 'claims_list', 'claim_dashboard', 'online_meetings', 'messages'] {
+FOR $menu_id IN ['dashboard', 'cases', 'case_members', 'creditors', 'claims_list', 'online_meetings', 'messages'] {
     LET $menu = (SELECT id FROM menu_metadata WHERE menu_id = $menu_id)[0];
     RELATE role:case_manager->can_access_menu->$menu SET can_access = true, assigned_at = time::now();
 };
@@ -664,7 +663,7 @@ FOR $menu_id IN ['dashboard', 'cases', 'creditors', 'claims_list', 'online_meeti
 };
 
 -- claim_reviewer 菜单权限
-FOR $menu_id IN ['dashboard', 'claims_list', 'claim_dashboard'] {
+FOR $menu_id IN ['dashboard', 'claims_list'] {
     LET $menu = (SELECT id FROM menu_metadata WHERE menu_id = $menu_id)[0];
     RELATE role:claim_reviewer->can_access_menu->$menu SET can_access = true, assigned_at = time::now();
 };

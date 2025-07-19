@@ -29,7 +29,6 @@ const routesRequiringCaseSelection: string[] = [
   '/claims',
   '/claims/submit',
   '/claims/:id/review',
-  '/claim-dashboard',
   '/online-meetings',
   // '/messages', // 消息中心不需要案件上下文
   // '/admin', // Admin page might operate outside a specific case context or have its own logic

@@ -21,7 +21,7 @@ import { RecordId } from 'surrealdb';
 const HomePage = React.lazy(() => import('@/src/pages/index'));
 const DocumentCenterDemo = React.lazy(() => import('@/src/pages/documents/demo'));
 const LoginPage = React.lazy(() => import('@/src/pages/login'));
-const DashboardPage = React.lazy(() => import('@/src/pages/dashboard/index'));
+const DashboardPage = React.lazy(() => import('@/src/pages/dashboard/unified'));
 const CaseListPage = React.lazy(() => import('@/src/pages/cases/index'));
 const CaseDetailPage = React.lazy(() => import('@/src/pages/cases/[caseId]'));
 const CreditorListPage = React.lazy(() => import('@/src/pages/creditors/index')); // MODIFIED PATH
@@ -34,7 +34,6 @@ const AccessDeniedPage = React.lazy(() => import('@/src/pages/access-denied'));
 const AccessDeniedRolePage = React.lazy(() => import('@/src/pages/access-denied-role'));
 const CaseStatusToggler = React.lazy(() => import('@/src/components/admin/CaseStatusToggler')); // This is a component, path is likely correct
 const ClaimReviewDetailPage = React.lazy(() => import('@/src/pages/claims/[claimId]/review'));
-const ClaimDataDashboardPage = React.lazy(() => import('@/src/pages/dashboard/claims'));
 const OnlineMeetingPage = React.lazy(() => import('@/src/pages/meetings'));
 const MessageCenterPage = React.lazy(() => import('@/src/pages/messages'));
 const AdminPage = React.lazy(() => import('@/src/pages/admin/index'));
@@ -183,7 +182,7 @@ function App() {
                                 <Route path="/my-claims/:claimId/submitted" element={<ProtectedRoute requiredCaseStatus="债权申报"><SubmittedClaimDetailPage /></ProtectedRoute>} /> {/* Route for creditor viewing their submitted claim */}
                                 {/* End Claim Submission Module */}
                                 <Route path="/claims/:id/review" element={<ProtectedRoute><ClaimReviewDetailPage /></ProtectedRoute> as ReactNode} />
-                                <Route path="/claim-dashboard" element={<ProtectedRoute><ClaimDataDashboardPage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/claim-dashboard" element={<Navigate to="/dashboard" replace />} />
                                 <Route path="/online-meetings" element={<ProtectedRoute><OnlineMeetingPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/messages" element={<ProtectedRoute><MessageCenterPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminPage /></ProtectedRoute> as ReactNode} />

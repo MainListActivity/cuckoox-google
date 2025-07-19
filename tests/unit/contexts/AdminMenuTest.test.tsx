@@ -131,11 +131,11 @@ describe('Admin Menu Permissions', () => {
     const expectedMenuItems = [
       'dashboard',
       'cases',
+      'case_members',
       'creditors',
       'claims_list',
       'my_claims',
       'claims_submit',
-      'claim_dashboard',
       'online_meetings',
       'messages',
       'admin_home',

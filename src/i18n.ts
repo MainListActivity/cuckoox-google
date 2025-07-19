@@ -54,7 +54,6 @@ const resources = {
       "nav_case_management": "案件管理",
       "nav_creditor_management": "债权人管理",
       "nav_claim_management": "债权申报与审核",
-      "nav_claim_dashboard": "债权数据大屏",
       "nav_online_meetings": "在线会议",
       "nav_message_center": "消息中心",
       "nav_system_management": "系统管理",
