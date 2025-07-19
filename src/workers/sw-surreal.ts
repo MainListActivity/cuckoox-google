@@ -1913,6 +1913,9 @@ async function connectWithTimeout(): Promise<void> {
         console.log('ServiceWorker: Connection established, isConnected set to true');
 
         await db!.use({ namespace: connectionConfig!.namespace, database: connectionConfig!.database });
+        
+        // 更新 EnhancedQueryHandler 及其组件的远程数据库引用
+        updateEnhancedQueryHandlerRemoteDb();
 
         // 重新认证
         await ensureTokenManager();
@@ -2395,7 +2398,7 @@ async function initializeOfflineManager(): Promise<void> {
     console.log('ServiceWorker: Initializing OfflineManager...');
 
     // 确保本地数据库已初始化
-    await ensureLocalSurrealDB();
+    await initializeLocalSurrealDB();
 
     // 创建 OfflineManager 实例
     offlineManager = new OfflineManager({
@@ -2493,7 +2496,7 @@ async function initializeDataConsistencyManager(): Promise<void> {
     console.log('ServiceWorker: Initializing DataConsistencyManager...');
 
     // 确保本地数据库已初始化
-    await ensureLocalSurrealDB();
+    await initializeLocalSurrealDB();
 
     // 创建 DataConsistencyManager 实例
     dataConsistencyManager = new DataConsistencyManager({
@@ -2537,7 +2540,20 @@ function updateEnhancedQueryHandlerRemoteDb(): void {
   if (enhancedQueryHandler && db) {
     // 通过反射更新私有属性（这是一个临时解决方案）
     (enhancedQueryHandler as any).remoteDb = db;
-    console.log('ServiceWorker: Updated EnhancedQueryHandler remote database reference');
+    
+    // 同时更新 CacheExecutor 的 remoteDb 引用
+    if ((enhancedQueryHandler as any).cacheExecutor) {
+      (enhancedQueryHandler as any).cacheExecutor.remoteDb = db;
+      console.log('ServiceWorker: Updated CacheExecutor remote database reference');
+    }
+    
+    // 同时更新 SubscriptionManager 的 remoteDb 引用
+    if ((enhancedQueryHandler as any).subscriptionManager) {
+      (enhancedQueryHandler as any).subscriptionManager.remoteDb = db;
+      console.log('ServiceWorker: Updated SubscriptionManager remote database reference');
+    }
+    
+    console.log('ServiceWorker: Updated EnhancedQueryHandler and related components remote database reference');
   }
 }
 

@@ -290,7 +290,7 @@ export class DataCacheManager {
     processedParams: QueryParams;
   } {
     let processedSql = sql;
-    let processedParams = params ? { ...params } : {};
+    const processedParams = params ? { ...params } : {};
 
     // 检查 SQL 中是否包含 $auth 变量
     if (/\$auth\b/.test(sql)) {

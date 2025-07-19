@@ -160,7 +160,7 @@ export class MultiTenantManager {
 
     // 为不同类型的查询添加租户条件
     let modifiedSql = sql;
-    let modifiedParams = { ...params };
+    const modifiedParams = { ...params };
 
     // SELECT 查询
     if (sql.toLowerCase().includes('select')) {
