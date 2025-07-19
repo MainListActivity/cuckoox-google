@@ -554,8 +554,25 @@ export class SubscriptionManager {
   ): Promise<void> {
     
     try {
-      // 获取现有缓存数据
-      const existingData = await this.getCachedTableData(table, userId, caseId);
+      // 使用自动路由系统获取现有缓存数据
+      let query = `SELECT * FROM ${table}`;
+      const queryParams: QueryParams = {};
+      
+      const conditions: string[] = [];
+      if (userId) {
+        conditions.push('user_id = $user_id');
+        queryParams.user_id = userId;
+      }
+      if (caseId) {
+        conditions.push('case_id = $case_id');
+        queryParams.case_id = caseId;
+      }
+      
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
+      }
+      
+      const existingData = await this.dataCacheManager.query(query, queryParams) || [];
       
       // 合并数据
       const mergedData = this.mergeDataArrays(existingData, data);
@@ -569,38 +586,6 @@ export class SubscriptionManager {
     }
   }
 
-  /**
-   * 获取缓存的表数据
-   */
-  private async getCachedTableData(
-    table: string,
-    userId?: string,
-    caseId?: string
-  ): Promise<UnknownData[]> {
-    
-    try {
-      const query = `
-        SELECT data FROM data_table_cache 
-        WHERE table_name = $table_name 
-          AND (user_id = $user_id OR user_id IS NULL)
-          AND (case_id = $case_id OR case_id IS NULL)
-          AND (expires_at IS NULL OR expires_at > time::now())
-        ORDER BY created_at DESC 
-        LIMIT 1
-      `;
-      
-      const result = await this.localDb.query(query, {
-        table_name: table,
-        user_id: userId,
-        case_id: caseId
-      });
-      
-      return (result as any[])?.[0]?.data || [];
-    } catch (error) {
-      console.warn(`SubscriptionManager: Failed to get cached data for ${table}:`, error);
-      return [];
-    }
-  }
 
   /**
    * 合并数据数组
@@ -631,7 +616,25 @@ export class SubscriptionManager {
    */
   private async updateLocalCacheFromChange(event: DataChangeEvent): Promise<void> {
     try {
-      const existingData = await this.getCachedTableData(event.table, event.userId, event.caseId);
+      // 使用自动路由系统获取现有缓存数据
+      let query = `SELECT * FROM ${event.table}`;
+      const queryParams: QueryParams = {};
+      
+      const conditions: string[] = [];
+      if (event.userId) {
+        conditions.push('user_id = $user_id');
+        queryParams.user_id = event.userId;
+      }
+      if (event.caseId) {
+        conditions.push('case_id = $case_id');
+        queryParams.case_id = event.caseId;
+      }
+      
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
+      }
+      
+      const existingData = await this.dataCacheManager.query(query, queryParams) || [];
       let updatedData = [...existingData];
 
       switch (event.action) {
