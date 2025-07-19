@@ -32,6 +32,7 @@ export interface PagePreloadQuery {
  */
 export interface PageCacheStatus {
   pagePath: string;
+  pageId?: string;
   isActive: boolean;
   subscribedTables: string[];
   lastSyncTime: number;
@@ -225,19 +226,20 @@ export class PageDataCacheService {
     
     try {
       // 订阅页面数据
-      await this.subscribePageData(config, userId, caseId);
+      const pageId = await this.subscribePageData(config, userId, caseId);
       
       // 记录激活状态
       this.activeCaches.set(pagePath, {
         pagePath,
+        pageId,
         isActive: true,
         subscribedTables: config.requiredTables,
         lastSyncTime: Date.now(),
         dataCount: {}
       });
       
-      // 执行预加载
-      await this.preloadPageData(config, userId, caseId);
+      // 执行预加载（页面感知订阅系统会自动处理预加载）
+      // await this.preloadPageData(config, userId, caseId);
       
       console.log('PageDataCacheService: Page cache activated successfully for:', pagePath);
       
@@ -261,7 +263,9 @@ export class PageDataCacheService {
     
     try {
       // 取消订阅页面数据
-      await this.unsubscribePageData(cacheStatus.subscribedTables, userId, caseId);
+      if (cacheStatus.pageId) {
+        await this.unsubscribePageData(cacheStatus.pageId);
+      }
       
       // 移除激活状态
       this.activeCaches.delete(pagePath);
@@ -344,39 +348,46 @@ export class PageDataCacheService {
     config: PageCacheConfig,
     userId: string,
     caseId?: string
-  ): Promise<void> {
-    if (config.requiredTables.length === 0) return;
+  ): Promise<string> {
+    if (config.requiredTables.length === 0) return '';
     
-    // 发送订阅消息到Service Worker
-    await this.sendMessageToServiceWorker('subscribe_page_data', {
-      tables: config.requiredTables,
+    // 使用页面感知订阅系统
+    const result = await this.sendMessageToServiceWorker('activate_page_subscription', {
+      pagePath: config.pagePath,
       userId,
       caseId: caseId || null,
-      config: {
-        type: 'temporary',
-        enableLiveQuery: true,
-        enableIncrementalSync: true,
-        syncInterval: this.getSyncInterval(config.cacheStrategy),
-        expirationMs: config.maxAge
+      customRequirement: {
+        requiredTables: config.requiredTables,
+        cacheStrategy: config.cacheStrategy,
+        subscriptionPriority: this.getSubscriptionPriority(config.cacheStrategy),
+        preloadQueries: config.preloadQueries?.map(query => ({
+          table: query.table,
+          query: query.query,
+          params: query.params,
+          priority: query.priority,
+          cacheType: 'temporary'
+        }))
       }
     });
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to activate page subscription');
+    }
+    
+    return result.pageId || '';
   }
   
   /**
    * 取消订阅页面数据
    */
   private async unsubscribePageData(
-    tables: string[],
-    userId: string,
-    caseId?: string
+    pageId: string
   ): Promise<void> {
-    if (tables.length === 0) return;
+    if (!pageId) return;
     
-    // 发送取消订阅消息到Service Worker
-    await this.sendMessageToServiceWorker('unsubscribe_page_data', {
-      tables,
-      userId,
-      caseId: caseId || null
+    // 使用页面感知取消订阅系统
+    await this.sendMessageToServiceWorker('deactivate_page_subscription', {
+      pageId
     });
   }
   
@@ -440,6 +451,21 @@ export class PageDataCacheService {
       case 'custom':
       default:
         return 30 * 1000; // 30秒
+    }
+  }
+
+  /**
+   * 获取订阅优先级
+   */
+  private getSubscriptionPriority(strategy: 'aggressive' | 'conservative' | 'custom'): number {
+    switch (strategy) {
+      case 'aggressive':
+        return 8; // 高优先级
+      case 'conservative':
+        return 6; // 中等优先级
+      case 'custom':
+      default:
+        return 7; // 默认优先级
     }
   }
   

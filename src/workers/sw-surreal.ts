@@ -47,6 +47,18 @@ const eventHandlers = {
           await initializeDataCacheManager();
           // 初始化 EnhancedQueryHandler
           await initializeEnhancedQueryHandler();
+          // 初始化 PageAwareSubscriptionManager
+          await initializePageAwareSubscriptionManager();
+          // 初始化 OfflineManager
+          await initializeOfflineManager();
+          // 初始化 ConnectionRecoveryManager
+          await initializeConnectionRecoveryManager();
+          // 初始化 DataConsistencyManager
+          await initializeDataConsistencyManager();
+          // 初始化 MultiTenantManager
+          await initializeMultiTenantManager();
+          // 初始化 TenantSwitchHandler
+          await initializeTenantSwitchHandler();
 
           // 尝试恢复连接配置
           const restoredConfig = await restoreConnectionConfig();
@@ -95,6 +107,30 @@ const eventHandlers = {
       if (dataCacheManager) {
         await dataCacheManager.close();
         dataCacheManager = null;
+      }
+
+      // 关闭 PageAwareSubscriptionManager
+      if (pageAwareSubscriptionManager) {
+        await pageAwareSubscriptionManager.close();
+        pageAwareSubscriptionManager = null;
+      }
+
+      // 关闭 OfflineManager
+      if (offlineManager) {
+        await offlineManager.close();
+        offlineManager = null;
+      }
+
+      // 关闭 ConnectionRecoveryManager
+      if (connectionRecoveryManager) {
+        await connectionRecoveryManager.close();
+        connectionRecoveryManager = null;
+      }
+
+      // 关闭 DataConsistencyManager
+      if (dataConsistencyManager) {
+        await dataConsistencyManager.close();
+        dataConsistencyManager = null;
       }
 
       // 关闭 EnhancedQueryHandler
@@ -226,27 +262,101 @@ const eventHandlers = {
 
         case 'query':
         case 'mutate': {
-          // 确保连接状态
-          const connectionState = await ensureConnection();
-          if (!connectionState.hasDb) throw new Error("Database not initialized");
-
-          // 检查连接状态，如果我们认为未连接，先尝试重新连接
-          if (!connectionState.isConnected) {
-            console.log('ServiceWorker: Query/mutate requested but not connected, attempting reconnection');
-            const reconnectionState = await ensureConnection();
-            if (!reconnectionState.isConnected) {
-              throw new Error("Database connection not available");
+          // 确保离线管理器已初始化
+          await ensureOfflineManager();
+          
+          // 检查是否处于离线模式
+          const isOffline = offlineManager!.isOffline();
+          
+          if (isOffline && type === 'mutate') {
+            // 离线模式下的写操作：添加到离线队列
+            console.log('ServiceWorker: Offline mode detected, queuing mutation operation');
+            
+            const userId = await getCurrentUserId();
+            const caseId = payload.case_id;
+            
+            const operationId = await offlineManager!.queueOfflineOperation({
+              type: 'query',
+              table: extractTableNameFromSQL(payload.sql) || 'unknown',
+              sql: payload.sql,
+              params: payload.vars,
+              userId,
+              caseId,
+              maxRetries: 3
+            });
+            
+            respond({ 
+              success: true, 
+              offline: true, 
+              operationId,
+              message: '操作已添加到离线队列，将在网络恢复后自动同步'
+            });
+            break;
+          }
+          
+          if (isOffline && type === 'query') {
+            // 离线模式下的查询：尝试从本地数据库查询
+            try {
+              console.log('ServiceWorker: Offline mode detected, executing query from local database');
+              const result = await offlineManager!.executeOfflineQuery(payload.sql, payload.vars);
+              respond(result);
+              break;
+            } catch (error) {
+              console.error('ServiceWorker: Offline query failed:', error);
+              respondError(new Error('离线模式下无法执行此查询，请检查网络连接'));
+              break;
             }
           }
 
-          // 确保 EnhancedQueryHandler 已初始化
-          await ensureEnhancedQueryHandler();
-
-          // 获取用户和案件信息
-          const userId = await getCurrentUserId();
-          const caseId = payload.case_id; // 从payload中获取案件ID
-
+          // 在线模式：正常处理
           try {
+            // 确保连接状态
+            const connectionState = await ensureConnection();
+            if (!connectionState.hasDb) throw new Error("Database not initialized");
+
+            // 检查连接状态，如果我们认为未连接，先尝试重新连接
+            if (!connectionState.isConnected) {
+              console.log('ServiceWorker: Query/mutate requested but not connected, attempting reconnection');
+              const reconnectionState = await ensureConnection();
+              if (!reconnectionState.isConnected) {
+                // 连接失败，切换到离线模式
+                console.log('ServiceWorker: Connection failed, switching to offline mode');
+                
+                if (type === 'query') {
+                  const result = await offlineManager!.executeOfflineQuery(payload.sql, payload.vars);
+                  respond(result);
+                } else {
+                  const userId = await getCurrentUserId();
+                  const caseId = payload.case_id;
+                  
+                  const operationId = await offlineManager!.queueOfflineOperation({
+                    type: 'query',
+                    table: extractTableNameFromSQL(payload.sql) || 'unknown',
+                    sql: payload.sql,
+                    params: payload.vars,
+                    userId,
+                    caseId,
+                    maxRetries: 3
+                  });
+                  
+                  respond({ 
+                    success: true, 
+                    offline: true, 
+                    operationId,
+                    message: '网络连接失败，操作已添加到离线队列'
+                  });
+                }
+                break;
+              }
+            }
+
+            // 确保 EnhancedQueryHandler 已初始化
+            await ensureEnhancedQueryHandler();
+
+            // 获取用户和案件信息
+            const userId = await getCurrentUserId();
+            const caseId = payload.case_id; // 从payload中获取案件ID
+
             // 使用 EnhancedQueryHandler 处理查询
             let result;
             if (type === 'query') {
@@ -275,10 +385,38 @@ const eventHandlers = {
           } catch (error) {
             console.error(`ServiceWorker: Enhanced query handler failed for ${type}:`, error);
             
-            // 降级处理：如果智能缓存系统失败，回退到原始的远程查询
-            console.log('ServiceWorker: Falling back to direct remote query');
-            const fallbackResult = await db!.query(payload.sql, payload.vars);
-            respond(fallbackResult);
+            // 尝试离线降级处理
+            try {
+              if (type === 'query') {
+                console.log('ServiceWorker: Falling back to offline query');
+                const result = await offlineManager!.executeOfflineQuery(payload.sql, payload.vars);
+                respond(result);
+              } else {
+                console.log('ServiceWorker: Falling back to offline queue for mutation');
+                const userId = await getCurrentUserId();
+                const caseId = payload.case_id;
+                
+                const operationId = await offlineManager!.queueOfflineOperation({
+                  type: 'query',
+                  table: extractTableNameFromSQL(payload.sql) || 'unknown',
+                  sql: payload.sql,
+                  params: payload.vars,
+                  userId,
+                  caseId,
+                  maxRetries: 3
+                });
+                
+                respond({ 
+                  success: true, 
+                  offline: true, 
+                  operationId,
+                  message: '操作失败，已添加到离线队列'
+                });
+              }
+            } catch (offlineError) {
+              console.error('ServiceWorker: Offline fallback also failed:', offlineError);
+              respondError(error as Error);
+            }
           }
           break;
         }
@@ -541,31 +679,113 @@ const eventHandlers = {
           break;
         }
 
-        // 页面数据缓存管理相关消息
-        case 'subscribe_page_data': {
-          await ensureDataCacheManager();
-          const { tables } = payload;
+        // 页面感知订阅管理相关消息
+        case 'activate_page_subscription': {
+          await ensurePageAwareSubscriptionManager();
+          const { pagePath, userId, caseId, customRequirement } = payload;
 
-          // 简化版本：直接自动同步涉及的表
           try {
-            await dataCacheManager!.autoSyncTables();
-            console.log(`ServiceWorker: Auto-synced tables for page data: ${tables.join(', ')}`);
+            const pageId = await pageAwareSubscriptionManager!.activatePageSubscription(
+              pagePath,
+              userId,
+              caseId,
+              customRequirement
+            );
+            respond({ success: true, pageId });
           } catch (error) {
-            console.warn('ServiceWorker: Failed to auto sync tables for page data:', error);
+            console.error('ServiceWorker: Failed to activate page subscription:', error);
+            respond({ success: false, error: error.message });
           }
+          break;
+        }
 
+        case 'deactivate_page_subscription': {
+          await ensurePageAwareSubscriptionManager();
+          const { pageId } = payload;
+
+          try {
+            await pageAwareSubscriptionManager!.deactivatePageSubscription(pageId);
+            respond({ success: true });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to deactivate page subscription:', error);
+            respond({ success: false, error: error.message });
+          }
+          break;
+        }
+
+        case 'update_page_access_time': {
+          await ensurePageAwareSubscriptionManager();
+          const { pageId } = payload;
+
+          pageAwareSubscriptionManager!.updatePageAccessTime(pageId);
           respond({ success: true });
           break;
         }
 
+        case 'get_page_subscription_status': {
+          await ensurePageAwareSubscriptionManager();
+          const { pageId } = payload;
+
+          const status = pageAwareSubscriptionManager!.getPageSubscriptionStatus(pageId);
+          respond({ status });
+          break;
+        }
+
+        case 'get_subscription_debug_info': {
+          await ensurePageAwareSubscriptionManager();
+
+          const debugInfo = pageAwareSubscriptionManager!.getDebugInfo();
+          respond({ debugInfo });
+          break;
+        }
+
+        // 兼容性支持：保留原有的简化版页面数据订阅消息
+        case 'subscribe_page_data': {
+          await ensurePageAwareSubscriptionManager();
+          const { tables, userId, caseId, pagePath } = payload;
+
+          try {
+            // 如果提供了 pagePath，使用页面感知订阅
+            if (pagePath) {
+              const pageId = await pageAwareSubscriptionManager!.activatePageSubscription(
+                pagePath,
+                userId || 'unknown',
+                caseId,
+                { requiredTables: tables }
+              );
+              respond({ success: true, pageId });
+            } else {
+              // 否则回退到简单的自动同步
+              await ensureDataCacheManager();
+              await dataCacheManager!.autoSyncTables();
+              console.log(`ServiceWorker: Auto-synced tables for page data: ${tables.join(', ')}`);
+              respond({ success: true });
+            }
+          } catch (error) {
+            console.warn('ServiceWorker: Failed to process page data subscription:', error);
+            respond({ success: false, error: error.message });
+          }
+          break;
+        }
+
         case 'unsubscribe_page_data': {
-          await ensureDataCacheManager();
-          const { tables } = payload;
+          await ensurePageAwareSubscriptionManager();
+          const { tables, pageId } = payload;
 
-          // 简化版本：无需取消订阅，缓存会自动管理
-          console.log(`ServiceWorker: Page data unsubscribe request processed for tables: ${tables.join(', ')}`);
-
-          respond({ success: true });
+          try {
+            // 如果提供了 pageId，使用页面感知取消订阅
+            if (pageId) {
+              await pageAwareSubscriptionManager!.deactivatePageSubscription(pageId);
+              respond({ success: true });
+            } else {
+              // 否则只是记录日志（兼容性）
+              console.log(`ServiceWorker: Page data unsubscribe request processed for tables: ${tables.join(', ')}`);
+              respond({ success: true });
+            }
+          } catch (error) {
+            console.warn('ServiceWorker: Failed to process page data unsubscription:', error);
+            respond({ success: false, error: error.message });
+          }
           break;
         }
 
@@ -864,6 +1084,198 @@ const eventHandlers = {
           break;
         }
 
+        // 离线管理相关消息
+        case 'get_offline_status': {
+          await ensureOfflineManager();
+          const isOffline = offlineManager!.isOffline();
+          const networkStatus = offlineManager!.getNetworkStatus();
+          const pendingOperations = offlineManager!.getPendingOperationsCount();
+          const operationStats = offlineManager!.getOperationStats();
+          
+          respond({
+            isOffline,
+            networkStatus,
+            pendingOperations,
+            operationStats
+          });
+          break;
+        }
+
+        case 'queue_offline_operation': {
+          await ensureOfflineManager();
+          const { operation } = payload;
+          const operationId = await offlineManager!.queueOfflineOperation(operation);
+          respond({ operationId });
+          break;
+        }
+
+        case 'execute_offline_query': {
+          await ensureOfflineManager();
+          const { sql, params } = payload;
+          try {
+            const result = await offlineManager!.executeOfflineQuery(sql, params);
+            respond(result);
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'start_offline_sync': {
+          await ensureOfflineManager();
+          try {
+            await offlineManager!.startAutoSync();
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'clear_completed_operations': {
+          await ensureOfflineManager();
+          await offlineManager!.clearCompletedOperations();
+          respond({ success: true });
+          break;
+        }
+
+        case 'clear_failed_operations': {
+          await ensureOfflineManager();
+          await offlineManager!.clearFailedOperations();
+          respond({ success: true });
+          break;
+        }
+
+        case 'retry_failed_operations': {
+          await ensureOfflineManager();
+          await offlineManager!.retryFailedOperations();
+          respond({ success: true });
+          break;
+        }
+
+        // 连接恢复管理相关消息
+        case 'get_connection_stats': {
+          await ensureConnectionRecoveryManager();
+          const connectionState = connectionRecoveryManager!.getConnectionState();
+          const connectionStats = connectionRecoveryManager!.getConnectionStats();
+          
+          respond({
+            connectionState,
+            connectionStats
+          });
+          break;
+        }
+
+        case 'retry_connection': {
+          await ensureConnectionRecoveryManager();
+          try {
+            const success = await connectionRecoveryManager!.retryConnection();
+            respond({ success });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'reset_connection_state': {
+          await ensureConnectionRecoveryManager();
+          connectionRecoveryManager!.resetConnectionState();
+          respond({ success: true });
+          break;
+        }
+
+        // 数据一致性管理相关消息
+        case 'validate_data_integrity': {
+          await ensureDataConsistencyManager();
+          const { table, data } = payload;
+          try {
+            const result = await dataConsistencyManager!.validateDataIntegrity(table, data);
+            respond(result);
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'detect_data_conflict': {
+          await ensureDataConsistencyManager();
+          const { table, recordId, localData, remoteData } = payload;
+          try {
+            const conflict = await dataConsistencyManager!.detectConflict(table, recordId, localData, remoteData);
+            respond({ conflict });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'resolve_data_conflict': {
+          await ensureDataConsistencyManager();
+          const { conflictId, strategy, manualData } = payload;
+          try {
+            const resolvedData = await dataConsistencyManager!.resolveConflict(conflictId, strategy, manualData);
+            respond({ resolvedData });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_data_conflicts': {
+          await ensureDataConsistencyManager();
+          const conflicts = dataConsistencyManager!.getConflicts();
+          const unresolvedConflicts = dataConsistencyManager!.getUnresolvedConflicts();
+          
+          respond({
+            allConflicts: conflicts,
+            unresolvedConflicts
+          });
+          break;
+        }
+
+        case 'clear_resolved_conflicts': {
+          await ensureDataConsistencyManager();
+          dataConsistencyManager!.clearResolvedConflicts();
+          respond({ success: true });
+          break;
+        }
+
+        case 'begin_transaction': {
+          await ensureDataConsistencyManager();
+          const { transactionId } = payload;
+          try {
+            await dataConsistencyManager!.beginTransaction(transactionId);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'commit_transaction': {
+          await ensureDataConsistencyManager();
+          const { transactionId } = payload;
+          try {
+            await dataConsistencyManager!.commitTransaction(transactionId);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'rollback_transaction': {
+          await ensureDataConsistencyManager();
+          const { transactionId } = payload;
+          try {
+            await dataConsistencyManager!.rollbackTransaction(transactionId);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -890,6 +1302,12 @@ import { EnhancedQueryHandler } from './enhanced-query-handler';
 import { QueryRouter } from './query-router';
 import { CacheExecutor } from './cache-executor';
 import { SubscriptionManager } from './subscription-manager';
+import { PageAwareSubscriptionManager } from './page-aware-subscription-manager';
+import { OfflineManager } from './offline-manager';
+import { ConnectionRecoveryManager } from './connection-recovery-manager';
+import { DataConsistencyManager } from './data-consistency-manager';
+import { MultiTenantManager, type TenantContext } from './multi-tenant-manager';
+import { TenantSwitchHandler } from './tenant-switch-handler';
 
 // 获取WASM引擎的函数
 async function getWasmEngines() {
@@ -936,6 +1354,18 @@ let tokenManager: TokenManager | null = null;
 let dataCacheManager: DataCacheManager | null = null;
 // 增强查询处理器实例
 let enhancedQueryHandler: EnhancedQueryHandler | null = null;
+// 页面感知订阅管理器实例
+let pageAwareSubscriptionManager: PageAwareSubscriptionManager | null = null;
+// 离线管理器实例
+let offlineManager: OfflineManager | null = null;
+// 连接恢复管理器实例
+let connectionRecoveryManager: ConnectionRecoveryManager | null = null;
+// 数据一致性管理器实例
+let dataConsistencyManager: DataConsistencyManager | null = null;
+// 多租户管理器实例
+let multiTenantManager: MultiTenantManager | null = null;
+// 租户切换处理器实例
+let tenantSwitchHandler: TenantSwitchHandler | null = null;
 let isConnected = false;
 let isLocalDbInitialized = false;
 let connectionConfig: {
@@ -1855,11 +2285,21 @@ async function initializeDataCacheManager(): Promise<void> {
     // 先初始化本地数据库
     await initializeLocalSurrealDB();
 
+    // 创建多租户管理器实例
+    const multiTenantManager = new MultiTenantManager({
+      enableStrictIsolation: true,
+      cacheNamespacePrefix: 'tenant_cache_',
+      allowCrossTenantAccess: false,
+      tenantIdField: 'case_id',
+      auditTenantAccess: true
+    });
+
     // 创建 DataCacheManager 实例
     dataCacheManager = new DataCacheManager({
       localDb: localDb!,
       remoteDb: db!,
       broadcastToAllClients: broadcastToAllClients,
+      multiTenantManager: multiTenantManager,
     });
 
     await dataCacheManager.initialize();
@@ -1904,6 +2344,177 @@ async function initializeEnhancedQueryHandler(): Promise<void> {
   } catch (error) {
     console.error('ServiceWorker: Failed to initialize EnhancedQueryHandler:', error);
     throw error;
+  }
+}
+
+/**
+ * 初始化 PageAwareSubscriptionManager
+ */
+async function initializePageAwareSubscriptionManager(): Promise<void> {
+  if (pageAwareSubscriptionManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing PageAwareSubscriptionManager...');
+
+    // 确保依赖组件已初始化
+    await ensureEnhancedQueryHandler();
+
+    // 获取 SubscriptionManager 实例
+    const subscriptionManager = enhancedQueryHandler!.getSubscriptionManager();
+
+    // 创建 PageAwareSubscriptionManager 实例
+    pageAwareSubscriptionManager = new PageAwareSubscriptionManager(
+      subscriptionManager,
+      dataCacheManager!,
+      broadcastToAllClients
+    );
+
+    console.log('ServiceWorker: PageAwareSubscriptionManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize PageAwareSubscriptionManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 PageAwareSubscriptionManager 已初始化
+ */
+async function ensurePageAwareSubscriptionManager(): Promise<void> {
+  if (!pageAwareSubscriptionManager) {
+    await initializePageAwareSubscriptionManager();
+  }
+}
+
+/**
+ * 初始化 OfflineManager
+ */
+async function initializeOfflineManager(): Promise<void> {
+  if (offlineManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing OfflineManager...');
+
+    // 确保本地数据库已初始化
+    await ensureLocalSurrealDB();
+
+    // 创建 OfflineManager 实例
+    offlineManager = new OfflineManager({
+      localDb: localDb!,
+      remoteDb: db,
+      broadcastToAllClients
+    });
+
+    console.log('ServiceWorker: OfflineManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize OfflineManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 OfflineManager 已初始化
+ */
+async function ensureOfflineManager(): Promise<void> {
+  if (!offlineManager) {
+    await initializeOfflineManager();
+  }
+}
+
+/**
+ * 初始化 ConnectionRecoveryManager
+ */
+async function initializeConnectionRecoveryManager(): Promise<void> {
+  if (connectionRecoveryManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing ConnectionRecoveryManager...');
+
+    // 创建 ConnectionRecoveryManager 实例
+    connectionRecoveryManager = new ConnectionRecoveryManager({
+      broadcastToAllClients,
+      connectFunction: async (config) => {
+        try {
+          // 使用现有的连接逻辑
+          connectionConfig = config;
+          const connectionState = await ensureConnection();
+          return connectionState.isConnected;
+        } catch (error) {
+          console.error('ConnectionRecoveryManager: Connect function failed:', error);
+          return false;
+        }
+      },
+      disconnectFunction: async () => {
+        try {
+          if (db) {
+            await db.close();
+          }
+          isConnected = false;
+        } catch (error) {
+          console.warn('ConnectionRecoveryManager: Disconnect function failed:', error);
+        }
+      },
+      maxReconnectAttempts: 10
+    });
+
+    // 设置连接配置
+    if (connectionConfig) {
+      connectionRecoveryManager.setConnectionConfig({
+        url: connectionConfig.endpoint,
+        namespace: connectionConfig.namespace,
+        database: connectionConfig.database,
+        username: connectionConfig.username,
+        password: connectionConfig.password
+      });
+    }
+
+    console.log('ServiceWorker: ConnectionRecoveryManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize ConnectionRecoveryManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 ConnectionRecoveryManager 已初始化
+ */
+async function ensureConnectionRecoveryManager(): Promise<void> {
+  if (!connectionRecoveryManager) {
+    await initializeConnectionRecoveryManager();
+  }
+}
+
+/**
+ * 初始化 DataConsistencyManager
+ */
+async function initializeDataConsistencyManager(): Promise<void> {
+  if (dataConsistencyManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing DataConsistencyManager...');
+
+    // 确保本地数据库已初始化
+    await ensureLocalSurrealDB();
+
+    // 创建 DataConsistencyManager 实例
+    dataConsistencyManager = new DataConsistencyManager({
+      localDb: localDb!,
+      remoteDb: db,
+      broadcastToAllClients
+    });
+
+    console.log('ServiceWorker: DataConsistencyManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize DataConsistencyManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 DataConsistencyManager 已初始化
+ */
+async function ensureDataConsistencyManager(): Promise<void> {
+  if (!dataConsistencyManager) {
+    await initializeDataConsistencyManager();
   }
 }
 
@@ -1971,6 +2582,14 @@ function extractTableNamesFromQuery(sql: string): string[] {
 
   // 去重并返回
   return [...new Set(tables)];
+}
+
+/**
+ * 从SQL查询中提取主要表名（返回第一个找到的表名）
+ */
+function extractTableNameFromSQL(sql: string): string | null {
+  const tables = extractTableNamesFromQuery(sql);
+  return tables.length > 0 ? tables[0] : null;
 }
 
 
@@ -2953,5 +3572,79 @@ async function clearOfflineQueue(syncKey: string): Promise<void> {
   } catch (error) {
     console.error('ServiceWorker: Error clearing offline queue:', error);
     throw error;
+  }
+}
+/**
+
+ * 初始化 MultiTenantManager
+ */
+async function initializeMultiTenantManager(): Promise<void> {
+  if (multiTenantManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing MultiTenantManager...');
+
+    multiTenantManager = new MultiTenantManager({
+      enableStrictIsolation: true,
+      cacheNamespacePrefix: 'tenant_cache_',
+      allowCrossTenantAccess: false,
+      tenantIdField: 'case_id',
+      auditTenantAccess: true
+    });
+
+    console.log('ServiceWorker: MultiTenantManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize MultiTenantManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 MultiTenantManager 已初始化
+ */
+async function ensureMultiTenantManager(): Promise<void> {
+  if (!multiTenantManager) {
+    await initializeMultiTenantManager();
+  }
+}
+
+/**
+ * 初始化 TenantSwitchHandler
+ */
+async function initializeTenantSwitchHandler(): Promise<void> {
+  if (tenantSwitchHandler) return;
+
+  try {
+    console.log('ServiceWorker: Initializing TenantSwitchHandler...');
+
+    // 确保依赖组件已初始化
+    await ensureDataCacheManager();
+    await ensurePageAwareSubscriptionManager();
+
+    tenantSwitchHandler = new TenantSwitchHandler(
+      dataCacheManager!,
+      pageAwareSubscriptionManager!.getSubscriptionManager(),
+      {
+        enablePreloading: true,
+        enableProgressTracking: true,
+        maxSwitchTimeMs: 30000,
+        retryAttempts: 3,
+        cleanupOldTenantData: true
+      }
+    );
+
+    console.log('ServiceWorker: TenantSwitchHandler initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize TenantSwitchHandler:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 TenantSwitchHandler 已初始化
+ */
+async function ensureTenantSwitchHandler(): Promise<void> {
+  if (!tenantSwitchHandler) {
+    await initializeTenantSwitchHandler();
   }
 }

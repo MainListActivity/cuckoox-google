@@ -1,5 +1,6 @@
 import { RecordId } from 'surrealdb';
 import type { QueryParams, UnknownData } from '../types/surreal';
+import type { TenantContext } from './multi-tenant-manager';
 
 // 查询类型枚举
 export enum QueryType {
@@ -178,11 +179,12 @@ export class QueryRouter {
   }
 
   /**
-   * 根据查询分析决定缓存路由策略
+   * 根据查询分析决定缓存路由策略，支持多租户上下文
    */
-  decideCacheStrategy(analysis: QueryAnalysis, userId?: string): CacheRoutingDecision {
+  decideCacheStrategy(analysis: QueryAnalysis, userId?: string, tenantContext?: TenantContext | null): CacheRoutingDecision {
     // 个人数据查询优先本地缓存（优先级高于查询类型检查）
     if (analysis.isPersonalDataQuery) {
+      const tenantReasoning = tenantContext ? ` (租户: ${tenantContext.tenantId})` : '';
       return {
         strategy: CacheStrategy.LOCAL_FIRST,
         consistencyLevel: ConsistencyLevel.EVENTUAL,
@@ -190,12 +192,13 @@ export class QueryRouter {
         enableLiveQuery: true,
         enableIncrementalSync: true,
         priority: 8,
-        reasoning: '个人数据查询优先使用本地缓存'
+        reasoning: `个人数据查询优先使用本地缓存${tenantReasoning}`
       };
     }
 
     // 写操作直接走远程
     if (analysis.queryType !== QueryType.SELECT) {
+      const tenantReasoning = tenantContext ? ` (租户: ${tenantContext.tenantId})` : '';
       return {
         strategy: CacheStrategy.REMOTE_ONLY,
         consistencyLevel: ConsistencyLevel.STRONG,
@@ -203,7 +206,7 @@ export class QueryRouter {
         enableLiveQuery: false,
         enableIncrementalSync: false,
         priority: 10,
-        reasoning: '写操作必须走远程数据库'
+        reasoning: `写操作必须走远程数据库${tenantReasoning}`
       };
     }
 
@@ -217,6 +220,7 @@ export class QueryRouter {
       }
 
       // 未知表的默认策略
+      const tenantReasoning = tenantContext ? ` (租户: ${tenantContext.tenantId})` : '';
       return {
         strategy: CacheStrategy.HYBRID,
         consistencyLevel: ConsistencyLevel.EVENTUAL,
@@ -224,7 +228,7 @@ export class QueryRouter {
         enableLiveQuery: true,
         enableIncrementalSync: true,
         priority: 5,
-        reasoning: '未知表使用混合缓存策略'
+        reasoning: `未知表使用混合缓存策略${tenantReasoning}`
       };
     }
 

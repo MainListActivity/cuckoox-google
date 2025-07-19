@@ -1,6 +1,7 @@
 import { RecordId } from 'surrealdb';
 import type Surreal from 'surrealdb';
 import type { QueryParams, UnknownData } from '../types/surreal';
+import { MultiTenantManager, type TenantContext } from './multi-tenant-manager';
 
 /**
  * 递归检查并重构被序列化的RecordId对象
@@ -51,25 +52,34 @@ export function isAutoSyncTable(table: string): table is AutoSyncTable {
 
 /**
  * 简化的数据缓存管理器
- * 核心理念：简单的 SQL 转发 + 表级别缓存策略
+ * 核心理念：简单的 SQL 转发 + 表级别缓存策略 + 多租户数据隔离
  */
 export class DataCacheManager {
   private localDb: Surreal;
   private remoteDb?: Surreal;
   private broadcastToAllClients: (message: Record<string, unknown>) => Promise<void>;
+  private multiTenantManager: MultiTenantManager;
 
   // 简单的缓存状态跟踪
   private cachedTables = new Set<string>();
   private currentAuthState: UnknownData | null = null;
+  
+  // 租户特定的缓存状态跟踪
+  private tenantCachedTables = new Map<string, Set<string>>();
 
   constructor(config: {
     localDb: Surreal;
     remoteDb?: Surreal;
     broadcastToAllClients: (message: Record<string, unknown>) => Promise<void>;
+    multiTenantManager?: MultiTenantManager;
   }) {
     this.localDb = config.localDb;
     this.remoteDb = config.remoteDb;
     this.broadcastToAllClients = config.broadcastToAllClients;
+    this.multiTenantManager = config.multiTenantManager || new MultiTenantManager();
+    
+    // 注册租户切换回调
+    this.multiTenantManager.onTenantSwitch(this.handleTenantSwitch.bind(this));
   }
 
   /**
@@ -85,7 +95,7 @@ export class DataCacheManager {
   }
 
   /**
-   * 主查询方法 - 智能路由到本地或远程
+   * 主查询方法 - 智能路由到本地或远程，支持多租户隔离
    */
   async query(sql: string, params?: QueryParams): Promise<UnknownData[]> {
     console.log('DataCacheManager: Executing query:', sql);
@@ -96,28 +106,40 @@ export class DataCacheManager {
         return await this.handleAuthQuery(sql, params);
       }
 
-      // 2. 提取主要表名
-      const tableName = this.extractTableName(sql);
+      // 2. 应用多租户隔离
+      const { sql: isolatedSql, params: isolatedParams } = this.multiTenantManager.addTenantIsolationToQuery(sql, params);
 
-      // 3. 如果是自动同步表且已缓存，使用本地查询
-      if (tableName && isAutoSyncTable(tableName) && this.cachedTables.has(tableName)) {
-        console.log(`DataCacheManager: Using local cache for table: ${tableName}`);
-        const result = await this.localDb.query(sql, params);
+      // 3. 提取主要表名
+      const tableName = this.extractTableName(isolatedSql);
+
+      // 4. 验证数据访问权限
+      if (tableName && !this.multiTenantManager.validateDataAccess(tableName, undefined, 'read')) {
+        throw new Error(`Access denied to table: ${tableName}`);
+      }
+
+      // 5. 检查租户特定的缓存状态
+      const currentTenant = this.multiTenantManager.getCurrentTenant();
+      const tenantCacheKey = currentTenant ? `${currentTenant.tenantId}:${tableName}` : tableName;
+      
+      // 6. 如果是自动同步表且已缓存，使用本地查询
+      if (tableName && isAutoSyncTable(tableName) && this.isTenantTableCached(tableName)) {
+        console.log(`DataCacheManager: Using local cache for table: ${tableName} (tenant: ${currentTenant?.tenantId})`);
+        const result = await this.localDb.query(isolatedSql, isolatedParams);
         return deserializeRecordIds(result);
       }
 
-      // 4. 使用远程查询
+      // 7. 使用远程查询
       if (!this.remoteDb) {
         console.warn('DataCacheManager: No remote database connection');
         return [];
       }
 
       console.log('DataCacheManager: Using remote query');
-      const result = await this.remoteDb.query(sql, params);
+      const result = await this.remoteDb.query(isolatedSql, isolatedParams);
 
-      // 5. 如果是自动同步表，缓存整个表的数据
-      if (tableName && isAutoSyncTable(tableName) && !this.cachedTables.has(tableName)) {
-        await this.cacheTableData(tableName);
+      // 8. 如果是自动同步表，缓存整个表的数据
+      if (tableName && isAutoSyncTable(tableName) && !this.isTenantTableCached(tableName)) {
+        await this.cacheTenantTableData(tableName);
       }
 
       return deserializeRecordIds(result);
@@ -445,12 +467,231 @@ export class DataCacheManager {
   }
 
   /**
+   * 设置租户上下文
+   */
+  async setTenantContext(tenant: TenantContext | null): Promise<void> {
+    await this.multiTenantManager.setCurrentTenant(tenant);
+  }
+
+  /**
+   * 获取当前租户上下文
+   */
+  getCurrentTenant(): TenantContext | null {
+    return this.multiTenantManager.getCurrentTenant();
+  }
+
+  /**
+   * 处理租户切换
+   */
+  private async handleTenantSwitch(oldTenant: TenantContext | null, newTenant: TenantContext | null): Promise<void> {
+    console.log('DataCacheManager: Handling tenant switch from', oldTenant?.tenantId, 'to', newTenant?.tenantId);
+
+    try {
+      // 清理旧租户的缓存数据
+      if (oldTenant) {
+        await this.clearTenantCache(oldTenant.tenantId);
+      }
+
+      // 为新租户预加载数据
+      if (newTenant) {
+        await this.preloadTenantData(newTenant);
+      }
+
+      // 广播租户切换事件
+      await this.broadcastToAllClients({
+        type: 'tenant_switched',
+        oldTenant: oldTenant?.tenantId || null,
+        newTenant: newTenant?.tenantId || null,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log('DataCacheManager: Tenant switch completed successfully');
+    } catch (error) {
+      console.error('DataCacheManager: Failed to handle tenant switch:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 检查租户表是否已缓存
+   */
+  private isTenantTableCached(tableName: string): boolean {
+    const currentTenant = this.multiTenantManager.getCurrentTenant();
+    if (!currentTenant) {
+      return this.cachedTables.has(tableName);
+    }
+
+    const tenantTables = this.tenantCachedTables.get(currentTenant.tenantId);
+    return tenantTables ? tenantTables.has(tableName) : false;
+  }
+
+  /**
+   * 缓存租户特定的表数据
+   */
+  private async cacheTenantTableData(tableName: string): Promise<void> {
+    if (!this.remoteDb) return;
+
+    const currentTenant = this.multiTenantManager.getCurrentTenant();
+    
+    try {
+      console.log(`DataCacheManager: Caching tenant table data for: ${tableName} (tenant: ${currentTenant?.tenantId})`);
+
+      // 构建租户特定的查询
+      let query = `SELECT * FROM ${tableName}`;
+      let params: QueryParams = {};
+
+      if (currentTenant) {
+        const { sql: isolatedSql, params: isolatedParams } = this.multiTenantManager.addTenantIsolationToQuery(query, {});
+        query = isolatedSql;
+        params = isolatedParams;
+      }
+
+      // 从远程获取租户特定的数据
+      const data = await this.remoteDb.query(query, params);
+      const records = Array.isArray(data) && Array.isArray(data[0]) ? data[0] : [];
+
+      if (records.length > 0) {
+        // 清除本地现有数据（租户特定）
+        if (currentTenant) {
+          const clearQuery = `DELETE FROM ${tableName} WHERE case_id = $tenant_id`;
+          await this.localDb.query(clearQuery, { tenant_id: currentTenant.tenantId });
+        } else {
+          await this.localDb.query(`DELETE FROM ${tableName}`);
+        }
+
+        // 批量插入新数据
+        for (const record of records) {
+          try {
+            await this.localDb.create(record.id || new RecordId(tableName, crypto.randomUUID()), record);
+          } catch (error) {
+            console.warn(`DataCacheManager: Failed to cache record in ${tableName}:`, error);
+          }
+        }
+
+        // 更新缓存状态
+        this.markTenantTableAsCached(tableName);
+        console.log(`DataCacheManager: Cached ${records.length} records for table: ${tableName} (tenant: ${currentTenant?.tenantId})`);
+      } else {
+        console.log(`DataCacheManager: No data to cache for table: ${tableName} (tenant: ${currentTenant?.tenantId})`);
+        this.markTenantTableAsCached(tableName); // 标记为已缓存，即使是空表
+      }
+    } catch (error) {
+      console.error(`DataCacheManager: Failed to cache tenant table ${tableName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 标记租户表为已缓存
+   */
+  private markTenantTableAsCached(tableName: string): void {
+    const currentTenant = this.multiTenantManager.getCurrentTenant();
+    
+    if (!currentTenant) {
+      this.cachedTables.add(tableName);
+      return;
+    }
+
+    if (!this.tenantCachedTables.has(currentTenant.tenantId)) {
+      this.tenantCachedTables.set(currentTenant.tenantId, new Set());
+    }
+
+    this.tenantCachedTables.get(currentTenant.tenantId)!.add(tableName);
+  }
+
+  /**
+   * 清理租户缓存
+   */
+  private async clearTenantCache(tenantId: string): Promise<void> {
+    console.log('DataCacheManager: Clearing cache for tenant:', tenantId);
+
+    try {
+      // 清理租户特定的缓存表记录
+      const tenantTables = this.tenantCachedTables.get(tenantId);
+      if (tenantTables) {
+        for (const tableName of tenantTables) {
+          try {
+            // 删除租户特定的数据
+            const clearQuery = `DELETE FROM ${tableName} WHERE case_id = $tenant_id`;
+            await this.localDb.query(clearQuery, { tenant_id: tenantId });
+            console.log(`DataCacheManager: Cleared tenant data from table: ${tableName}`);
+          } catch (error) {
+            console.warn(`DataCacheManager: Failed to clear tenant data from table ${tableName}:`, error);
+          }
+        }
+        
+        // 清理租户缓存状态
+        this.tenantCachedTables.delete(tenantId);
+      }
+
+      console.log('DataCacheManager: Tenant cache cleared successfully');
+    } catch (error) {
+      console.error('DataCacheManager: Failed to clear tenant cache:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 预加载租户数据
+   */
+  private async preloadTenantData(tenant: TenantContext): Promise<void> {
+    console.log('DataCacheManager: Preloading data for tenant:', tenant.tenantId);
+
+    try {
+      // 预加载自动同步表的租户数据
+      for (const tableName of AUTO_SYNC_TABLES) {
+        try {
+          await this.cacheTenantTableData(tableName);
+        } catch (error) {
+          console.warn(`DataCacheManager: Failed to preload table ${tableName} for tenant:`, error);
+        }
+      }
+
+      console.log('DataCacheManager: Tenant data preloading completed');
+    } catch (error) {
+      console.error('DataCacheManager: Failed to preload tenant data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取多租户统计信息
+   */
+  getMultiTenantStats(): {
+    currentTenant: string | null;
+    tenantCacheCount: number;
+    totalCachedTables: number;
+    tenantManager: ReturnType<MultiTenantManager['getTenantStats']>;
+  } {
+    const currentTenant = this.multiTenantManager.getCurrentTenant();
+    let totalCachedTables = this.cachedTables.size;
+    
+    for (const tenantTables of this.tenantCachedTables.values()) {
+      totalCachedTables += tenantTables.size;
+    }
+
+    return {
+      currentTenant: currentTenant?.tenantId || null,
+      tenantCacheCount: this.tenantCachedTables.size,
+      totalCachedTables,
+      tenantManager: this.multiTenantManager.getTenantStats()
+    };
+  }
+
+  /**
    * 关闭缓存管理器
    */
   async close(): Promise<void> {
     console.log('DataCacheManager: Closing simplified cache manager...');
+    
+    // 关闭多租户管理器
+    await this.multiTenantManager.close();
+    
+    // 清理所有缓存状态
     this.cachedTables.clear();
+    this.tenantCachedTables.clear();
     this.currentAuthState = null;
+    
     console.log('DataCacheManager: Closed successfully');
   }
 }

@@ -99,21 +99,29 @@ export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataC
       
       console.log('usePageDataCache: Subscribing to tables:', tables);
       
-      await sendMessageToServiceWorker('subscribe_page_data', {
-        tables
+      // 使用页面感知订阅系统
+      const result = await sendMessageToServiceWorker('subscribe_page_data', {
+        tables,
+        userId: user.id.toString(),
+        caseId: selectedCaseId?.toString() || null,
+        pagePath: window.location.pathname // 获取当前页面路径
       });
       
-      subscriptionRef.current = subscriptionId;
-      setIsSubscribed(true);
-      
-      // 如果启用了预加载，预加载数据
-      if (defaultConfig.preloadData) {
-        await Promise.all(
-          tables.map(table => queryData(table, `SELECT * FROM ${table} LIMIT 50`))
-        );
+      if (result.success) {
+        subscriptionRef.current = result.pageId || subscriptionId;
+        setIsSubscribed(true);
+        
+        // 如果启用了预加载，预加载数据
+        if (defaultConfig.preloadData) {
+          await Promise.all(
+            tables.map(table => queryData(table, `SELECT * FROM ${table} LIMIT 50`))
+          );
+        }
+        
+        console.log('usePageDataCache: Successfully subscribed to:', subscriptionRef.current);
+      } else {
+        throw new Error(result.error || 'Failed to subscribe');
       }
-      
-      console.log('usePageDataCache: Successfully subscribed to:', subscriptionId);
       
     } catch (err) {
       console.error('usePageDataCache: Error subscribing:', err);
@@ -130,8 +138,10 @@ export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataC
     try {
       console.log('usePageDataCache: Unsubscribing from:', subscriptionRef.current);
       
+      // 使用页面感知取消订阅系统
       await sendMessageToServiceWorker('unsubscribe_page_data', {
-        tables
+        tables,
+        pageId: subscriptionRef.current
       });
       
       subscriptionRef.current = null;
