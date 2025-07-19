@@ -2465,8 +2465,9 @@ async function initializeConnectionRecoveryManager(): Promise<void> {
         url: connectionConfig.endpoint,
         namespace: connectionConfig.namespace,
         database: connectionConfig.database,
-        username: connectionConfig.username,
-        password: connectionConfig.password
+        token: connectionConfig.auth?.token,
+        username: connectionConfig.auth?.username,
+        password: connectionConfig.auth?.password
       });
     }
 
