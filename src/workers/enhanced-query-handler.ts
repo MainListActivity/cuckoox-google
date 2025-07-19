@@ -8,7 +8,7 @@ import { CacheExecutor } from './cache-executor';
 import { SubscriptionManager } from './subscription-manager';
 import { DataCacheManager } from './data-cache-manager';
 import type { Surreal } from 'surrealdb';
-import type { QueryParams, UnknownData } from '../types/surreal';
+import type { QueryParams, UnknownData } from '@/src/types/surreal';
 
 // 查询处理结果
 export interface QueryHandlerResult {

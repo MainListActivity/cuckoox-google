@@ -1,7 +1,7 @@
 import { QueryRouter, CacheStrategy, QueryAnalysis, CacheRoutingDecision } from './query-router';
 import { DataCacheManager } from './data-cache-manager';
 import type { Surreal } from 'surrealdb';
-import type { QueryParams, UnknownData } from '../types/surreal';
+import type { QueryParams, UnknownData } from '@/src/types/surreal';
 
 // 执行结果类型
 export interface QueryExecutionResult {
