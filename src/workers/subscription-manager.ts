@@ -1,7 +1,7 @@
 import { RecordId } from 'surrealdb';
 import type { Surreal } from 'surrealdb';
 import { DataCacheManager } from './data-cache-manager';
-import type { UnknownData, QueryParams } from '../types/surreal';
+import type { UnknownData, QueryParams } from '@/src/types/surreal';
 
 // 订阅类型
 export enum SubscriptionType {
