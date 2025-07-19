@@ -271,7 +271,7 @@ export class SubscriptionManager {
     try {
       // 取消Live Query
       if (subscription.liveQueryUuid && this.remoteDb) {
-        await this.remoteDb.kill(subscription.liveQueryUuid);
+        await this.remoteDb.kill(subscription.liveQueryUuid as any);
       }
 
       // 清除定时器
@@ -746,7 +746,7 @@ export class SubscriptionManager {
       // 取消旧的Live Query
       if (subscription.liveQueryUuid && this.remoteDb) {
         try {
-          await this.remoteDb.kill(subscription.liveQueryUuid);
+          await this.remoteDb.kill(subscription.liveQueryUuid as any);
         } catch (e) {
           // 忽略kill错误
         }

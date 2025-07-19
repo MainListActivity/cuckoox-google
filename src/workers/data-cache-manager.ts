@@ -1,6 +1,6 @@
 import { RecordId } from 'surrealdb';
 import type Surreal from 'surrealdb';
-import type { QueryParams, UnknownData } from '../types/surreal';
+import type { QueryParams, UnknownData } from '@/src/types/surreal';
 
 /**
  * 递归检查并重构被序列化的RecordId对象
@@ -32,7 +32,7 @@ function deserializeRecordIds(obj: any): any {
 // 自动同步表列表
 export const AUTO_SYNC_TABLES = [
   'user',
-  'role', 
+  'role',
   'has_case_role',
   'has_role',
   'case',
@@ -57,11 +57,11 @@ export class DataCacheManager {
   private localDb: Surreal;
   private remoteDb?: Surreal;
   private broadcastToAllClients: (message: Record<string, unknown>) => Promise<void>;
-  
+
   // 简单的缓存状态跟踪
   private cachedTables = new Set<string>();
   private currentAuthState: UnknownData | null = null;
-  
+
   constructor(config: {
     localDb: Surreal;
     remoteDb?: Surreal;
@@ -77,10 +77,10 @@ export class DataCacheManager {
    */
   async initialize(): Promise<void> {
     console.log('DataCacheManager: Initializing simplified cache manager...');
-    
+
     // 为自动同步表创建本地表结构（如果不存在）
     await this.createLocalTables();
-    
+
     console.log('DataCacheManager: Initialized successfully');
   }
 
@@ -89,7 +89,7 @@ export class DataCacheManager {
    */
   async query(sql: string, params?: QueryParams): Promise<UnknownData[]> {
     console.log('DataCacheManager: Executing query:', sql);
-    
+
     try {
       // 1. 处理认证查询
       if (this.containsAuth(sql)) {
@@ -98,7 +98,7 @@ export class DataCacheManager {
 
       // 2. 提取主要表名
       const tableName = this.extractTableName(sql);
-      
+
       // 3. 如果是自动同步表且已缓存，使用本地查询
       if (tableName && isAutoSyncTable(tableName) && this.cachedTables.has(tableName)) {
         console.log(`DataCacheManager: Using local cache for table: ${tableName}`);
@@ -114,7 +114,7 @@ export class DataCacheManager {
 
       console.log('DataCacheManager: Using remote query');
       const result = await this.remoteDb.query(sql, params);
-      
+
       // 5. 如果是自动同步表，缓存整个表的数据
       if (tableName && isAutoSyncTable(tableName) && !this.cachedTables.has(tableName)) {
         await this.cacheTableData(tableName);
@@ -146,14 +146,14 @@ export class DataCacheManager {
   /**
    * 自动同步所有自动同步表
    */
-  async autoSyncTables(): Promise<void> {
+  async autoSyncTables(userId?: string, caseId?: string): Promise<void> {
     if (!this.remoteDb) {
       console.warn('DataCacheManager: No remote database for auto sync');
       return;
     }
 
     console.log('DataCacheManager: Starting auto sync for all tables...');
-    
+
     for (const table of AUTO_SYNC_TABLES) {
       try {
         await this.cacheTableData(table);
@@ -174,15 +174,15 @@ export class DataCacheManager {
     }
 
     console.log(`DataCacheManager: Refreshing cache for table: ${tableName}`);
-    
+
     try {
       // 清除本地表数据
       await this.localDb.query(`DELETE FROM ${tableName}`);
       this.cachedTables.delete(tableName);
-      
+
       // 重新缓存
       await this.cacheTableData(tableName);
-      
+
       console.log(`DataCacheManager: Cache refreshed for table: ${tableName}`);
     } catch (error) {
       console.error(`DataCacheManager: Failed to refresh cache for table ${tableName}:`, error);
@@ -195,7 +195,7 @@ export class DataCacheManager {
    */
   async clearAllCache(): Promise<void> {
     console.log('DataCacheManager: Clearing all cache...');
-    
+
     for (const table of AUTO_SYNC_TABLES) {
       try {
         await this.localDb.query(`DELETE FROM ${table}`);
@@ -203,10 +203,10 @@ export class DataCacheManager {
         console.warn(`DataCacheManager: Failed to clear table ${table}:`, error);
       }
     }
-    
+
     this.cachedTables.clear();
     this.currentAuthState = null;
-    
+
     console.log('DataCacheManager: All cache cleared');
   }
 
@@ -234,18 +234,18 @@ export class DataCacheManager {
    */
   private async handleAuthQuery(sql: string, params?: QueryParams): Promise<UnknownData[]> {
     const authState = this.currentAuthState;
-    
+
     // 移除 return $auth 部分
     const actualSql = sql.replace(/return\s+\$auth\s*;?\s*/i, '').trim();
-    
+
     // 如果只是获取认证状态
     if (!actualSql) {
       return authState ? [authState] : [null];
     }
-    
+
     // 执行实际查询
     let queryResult: UnknownData[] = [];
-    
+
     const tableName = this.extractTableName(actualSql);
     if (tableName && isAutoSyncTable(tableName) && this.cachedTables.has(tableName)) {
       // 使用本地查询，需要处理 $auth 变量替换
@@ -255,7 +255,7 @@ export class DataCacheManager {
       // 使用远程查询
       return await this.remoteDb.query(sql, params);
     }
-    
+
     // 返回认证状态 + 查询结果
     return [authState, ...deserializeRecordIds(queryResult)];
   }
@@ -268,13 +268,13 @@ export class DataCacheManager {
     processedParams: QueryParams;
   } {
     let processedSql = sql;
-    let processedParams = { ...params } || {};
-    
+    let processedParams = params ? { ...params } : {};
+
     // 检查 SQL 中是否包含 $auth 变量
     if (/\$auth\b/.test(sql)) {
       // 将 $auth 替换为 $userId
       processedSql = sql.replace(/\$auth\b/g, '$userId');
-      
+
       // 在参数中添加 userId
       if (authState && typeof authState === 'object' && 'id' in authState) {
         processedParams.userId = authState.id;
@@ -286,11 +286,11 @@ export class DataCacheManager {
         // 如果无法提取用户ID，使用空值
         processedParams.userId = null;
       }
-      
+
       console.log('DataCacheManager: Replaced $auth with $userId in local query');
       console.log('DataCacheManager: userId =', processedParams.userId);
     }
-    
+
     return { processedSql, processedParams };
   }
 
@@ -303,13 +303,13 @@ export class DataCacheManager {
     if (fromMatch) {
       return fromMatch[1];
     }
-    
+
     // 匹配 SELECT * FROM table
     const selectMatch = sql.match(/select\s+.*\s+from\s+([a-zA-Z_][a-zA-Z0-9_]*)/i);
     if (selectMatch) {
       return selectMatch[1];
     }
-    
+
     return null;
   }
 
@@ -318,17 +318,17 @@ export class DataCacheManager {
    */
   private async cacheTableData(tableName: string): Promise<void> {
     if (!this.remoteDb) return;
-    
+
     try {
       console.log(`DataCacheManager: Caching table data for: ${tableName}`);
-      
+
       // 从远程获取全表数据
       const data = await this.remoteDb.select(tableName);
-      
+
       if (Array.isArray(data) && data.length > 0) {
         // 清除本地现有数据
         await this.localDb.query(`DELETE FROM ${tableName}`);
-        
+
         // 批量插入新数据
         for (const record of data) {
           try {
@@ -337,7 +337,7 @@ export class DataCacheManager {
             console.warn(`DataCacheManager: Failed to cache record in ${tableName}:`, error);
           }
         }
-        
+
         this.cachedTables.add(tableName);
         console.log(`DataCacheManager: Cached ${data.length} records for table: ${tableName}`);
       } else {
@@ -357,6 +357,91 @@ export class DataCacheManager {
     // 这里可以根据需要定义本地表结构
     // 或者让 SurrealDB 自动创建表结构
     console.log('DataCacheManager: Local tables ready');
+  }
+
+  /**
+   * 缓存数据到指定表
+   */
+  async cacheData(
+    table: string,
+    data: UnknownData[],
+    cacheType: 'persistent' | 'temporary',
+    userId?: string,
+    caseId?: string
+  ): Promise<void> {
+    if (isAutoSyncTable(table)) {
+      await this.cacheTableData(table);
+    }
+  }
+
+  /**
+   * 更新数据
+   */
+  async updateData(
+    table: string,
+    recordId: string,
+    data: UnknownData,
+    userId?: string,
+    caseId?: string
+  ): Promise<UnknownData> {
+    // 简化实现：直接返回数据
+    return data;
+  }
+
+  /**
+   * 清除表缓存
+   */
+  async clearTableCache(table: string, userId?: string, caseId?: string): Promise<void> {
+    if (isAutoSyncTable(table)) {
+      try {
+        await this.localDb.query(`DELETE FROM ${table}`);
+        this.cachedTables.delete(table);
+        console.log(`DataCacheManager: Cleared cache for table: ${table}`);
+      } catch (error) {
+        console.warn(`DataCacheManager: Failed to clear cache for table ${table}:`, error);
+      }
+    }
+  }
+
+  /**
+   * 缓存单个记录
+   */
+  async cacheRecord(
+    table: string,
+    recordId: string,
+    record: UnknownData,
+    cacheType: 'persistent' | 'temporary',
+    userId?: string,
+    caseId?: string
+  ): Promise<void> {
+    // 简化实现
+    console.log(`DataCacheManager: Caching record ${recordId} in table ${table}`);
+  }
+
+  /**
+   * 获取缓存的记录
+   */
+  async getCachedRecord(
+    table: string,
+    recordId: string,
+    userId?: string,
+    caseId?: string
+  ): Promise<UnknownData | null> {
+    // 简化实现
+    return null;
+  }
+
+  /**
+   * 清除缓存的记录
+   */
+  async clearCachedRecord(
+    table: string,
+    recordId: string,
+    userId?: string,
+    caseId?: string
+  ): Promise<void> {
+    // 简化实现
+    console.log(`DataCacheManager: Clearing cached record ${recordId} from table ${table}`);
   }
 
   /**

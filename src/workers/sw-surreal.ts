@@ -45,6 +45,8 @@ const eventHandlers = {
           await initializeTokenManager();
           // 初始化 DataCacheManager
           await initializeDataCacheManager();
+          // 初始化 EnhancedQueryHandler
+          await initializeEnhancedQueryHandler();
 
           // 尝试恢复连接配置
           const restoredConfig = await restoreConnectionConfig();
@@ -93,6 +95,12 @@ const eventHandlers = {
       if (dataCacheManager) {
         await dataCacheManager.close();
         dataCacheManager = null;
+      }
+
+      // 关闭 EnhancedQueryHandler
+      if (enhancedQueryHandler) {
+        await enhancedQueryHandler.cleanup();
+        enhancedQueryHandler = null;
       }
 
       // 关闭本地数据库
@@ -218,7 +226,7 @@ const eventHandlers = {
 
         case 'query':
         case 'mutate': {
-          const queryStartTime = performance.now();
+          // 确保连接状态
           const connectionState = await ensureConnection();
           if (!connectionState.hasDb) throw new Error("Database not initialized");
 
@@ -231,172 +239,47 @@ const eventHandlers = {
             }
           }
 
-          // 提取查询中的表名
-          const tableNames = extractTableNamesFromQuery(payload.sql);
+          // 确保 EnhancedQueryHandler 已初始化
+          await ensureEnhancedQueryHandler();
+
+          // 获取用户和案件信息
           const userId = await getCurrentUserId();
+          const caseId = payload.case_id; // 从payload中获取案件ID
 
-          // 对于SELECT查询，检查是否可以从缓存返回
-          if (type === 'query') {
-            // 检查是否所有涉及的表都是自动同步表
-            const autoSyncTables = tableNames.filter(table => isAutoSyncTable(table));
-            if (autoSyncTables.length > 0) {
-              await ensureDataCacheManager();
-
-              // 对于单表查询，优先尝试缓存
-              if (tableNames.length === 1) {
-                const table = tableNames[0];
-                console.log(`ServiceWorker: Checking cache for auto-sync table: ${table}`);
-
-                // 检查是否包含认证检查
-                // const hasAuthCheck = payload.sql.includes('return $auth;'); // 新版本中已内置处理
-
-                // 尝试从缓存获取数据
-                const cachedData = await dataCacheManager!.query(payload.sql, payload.vars);
-
-                if (cachedData && cachedData.length > 0) {
-                  const queryEndTime = performance.now();
-                  const responseTime = Math.round((queryEndTime - queryStartTime) * 100) / 100;
-                  console.log(`ServiceWorker: 查询完成 [缓存] 表: ${table}, 响应时间: ${responseTime}ms, 数据源: LocalDB, 记录数: ${cachedData.length}`);
-
-                  // 新的 query 方法已经内置认证处理逻辑
-                  respond(cachedData);
-                  break;
-                }
-
-                // 缓存中没有数据，尝试自动同步
-                try {
-                  await dataCacheManager!.autoSyncTables();
-                  // 重新尝试从缓存获取
-                  const syncedData = await dataCacheManager!.query(payload.sql, payload.vars);
-                  if (syncedData && syncedData.length > 0) {
-                    const queryEndTime = performance.now();
-                    const responseTime = Math.round((queryEndTime - queryStartTime) * 100) / 100;
-                    console.log(`ServiceWorker: 查询完成 [自动同步] 表: ${table}, 响应时间: ${responseTime}ms, 数据源: LocalDB, 记录数: ${syncedData.length}`);
-
-                    // 新的 query 方法已经内置认证处理逻辑
-                    respond(syncedData);
-                    break;
-                  }
-                } catch (error) {
-                  console.warn('ServiceWorker: Auto sync failed:', error);
-                }
-              } else {
-                // 对于多表查询，确保所有涉及的自动同步表都已缓存
-                try {
-                  await dataCacheManager!.autoSyncTables();
-                  console.log(`ServiceWorker: Auto-sync completed for multi-table query involving: ${autoSyncTables.join(', ')}`);
-                } catch (error) {
-                  console.warn('ServiceWorker: Multi-table auto sync failed:', error);
-                }
-              }
+          try {
+            // 使用 EnhancedQueryHandler 处理查询
+            let result;
+            if (type === 'query') {
+              result = await enhancedQueryHandler!.handleQuery(
+                payload.sql,
+                payload.vars,
+                userId,
+                caseId
+              );
+            } else {
+              result = await enhancedQueryHandler!.handleMutation(
+                payload.sql,
+                payload.vars,
+                userId,
+                caseId
+              );
             }
+
+            // 记录性能日志
+            const operationType = type === 'query' ? '查询' : '变更';
+            console.log(`ServiceWorker: ${operationType}完成 [${result.source}] 策略: ${result.strategy}, 响应时间: ${result.executionTime}ms, 缓存命中: ${result.cacheHit}`);
+
+            // 返回查询结果
+            respond(result.data);
+
+          } catch (error) {
+            console.error(`ServiceWorker: Enhanced query handler failed for ${type}:`, error);
+            
+            // 降级处理：如果智能缓存系统失败，回退到原始的远程查询
+            console.log('ServiceWorker: Falling back to direct remote query');
+            const fallbackResult = await db!.query(payload.sql, payload.vars);
+            respond(fallbackResult);
           }
-
-          // 执行远程查询
-          const remoteQueryStartTime = performance.now();
-          const results = await db!.query(payload.sql, payload.vars);
-          const remoteQueryEndTime = performance.now();
-          const remoteResponseTime = Math.round((remoteQueryEndTime - remoteQueryStartTime) * 100) / 100;
-
-          // 检查是否为个人数据查询，如果是则自动缓存
-          if (type === 'query' && isPersonalDataQuery(payload.sql, tableNames)) {
-            console.log('ServiceWorker: Detected personal data query, attempting to cache');
-
-            try {
-              await ensureDataCacheManager();
-
-              // 提取个人数据组件
-              const personalDataComponent = extractPersonalDataComponent(payload.sql, results);
-
-              if (personalDataComponent && userId) {
-                console.log(`ServiceWorker: Caching personal data component: ${personalDataComponent.type}`);
-
-                // 获取当前认证状态（包含个人数据）
-                let existingPersonalData = dataCacheManager!.getCacheStatus().hasAuth ? {} : null;
-
-                if (!existingPersonalData) {
-                  existingPersonalData = {
-                    permissions: { operations: [] },
-                    roles: { global: [], case: {} },
-                    menus: [],
-                    syncTimestamp: Date.now()
-                  };
-                }
-
-                // 更新对应的数据组件
-                if (personalDataComponent.type === 'operations') {
-                  existingPersonalData.permissions.operations = personalDataComponent.data.map((item: any) => ({
-                    operation_id: item.operation_id,
-                    case_id: item.case_id,
-                    can_execute: item.can_execute,
-                    conditions: item.conditions
-                  }));
-                } else if (personalDataComponent.type === 'menus') {
-                  existingPersonalData.menus = personalDataComponent.data.map((item: any) => ({
-                    id: item.id,
-                    path: item.path,
-                    labelKey: item.labelKey,
-                    iconName: item.iconName,
-                    parent_id: item.parent_id,
-                    order_index: item.order_index,
-                    is_active: item.is_active,
-                    required_permissions: item.required_permissions
-                  }));
-                } else if (personalDataComponent.type === 'globalRoles') {
-                  existingPersonalData.roles.global = personalDataComponent.data.map((item: any) => item.role_name);
-                } else if (personalDataComponent.type === 'caseRoles') {
-                  const caseRoleMap: Record<string, string[]> = {};
-                  personalDataComponent.data.forEach((item: any) => {
-                    const caseId = String(item.case_id);
-                    if (!caseRoleMap[caseId]) {
-                      caseRoleMap[caseId] = [];
-                    }
-                    caseRoleMap[caseId].push(item.role_name);
-                  });
-                  existingPersonalData.roles.case = { ...existingPersonalData.roles.case, ...caseRoleMap };
-                }
-
-                // 更新同步时间戳
-                existingPersonalData.syncTimestamp = Date.now();
-
-                // 更新认证状态
-                await dataCacheManager!.updateAuthState(existingPersonalData);
-
-                console.log('ServiceWorker: Successfully cached personal data component');
-              }
-            } catch (cacheError) {
-              console.warn('ServiceWorker: Failed to cache personal data, but query succeeded:', cacheError);
-            }
-          }
-
-          // 对于自动同步表的查询结果，自动缓存
-          if (type === 'query' && tableNames.length === 1) {
-            const table = tableNames[0];
-            if (isAutoSyncTable(table) && results && results.length > 0) {
-              await ensureDataCacheManager();
-
-              try {
-                // 缓存查询结果
-                await dataCacheManager!.cacheData(table, results, 'persistent', userId);
-                console.log(`ServiceWorker: Cached query results for auto-sync table: ${table}`);
-              } catch (cacheError) {
-                console.warn(`ServiceWorker: Failed to cache results for table: ${table}`, cacheError);
-              }
-            }
-          }
-
-          // 记录远程查询日志
-          const totalQueryTime = performance.now() - queryStartTime;
-          const totalResponseTime = Math.round(totalQueryTime * 100) / 100;
-          const resultCount = Array.isArray(results) ? results.length : (results ? 1 : 0);
-
-          if (type === 'query') {
-            console.log(`ServiceWorker: 查询完成 [远程] 表: ${tableNames.join(', ')}, 总响应时间: ${totalResponseTime}ms, 远程查询时间: ${remoteResponseTime}ms, 数据源: RemoteDB, 记录数: ${resultCount}`);
-          } else {
-            console.log(`ServiceWorker: 变更完成 [远程] 表: ${tableNames.join(', ')}, 总响应时间: ${totalResponseTime}ms, 远程执行时间: ${remoteResponseTime}ms, 数据源: RemoteDB`);
-          }
-
-          respond(results);
           break;
         }
 
@@ -857,6 +740,130 @@ const eventHandlers = {
           break;
         }
 
+        // 新的缓存管理消息类型
+        case 'get_cache_stats': {
+          await ensureEnhancedQueryHandler();
+          
+          try {
+            const stats = enhancedQueryHandler!.getPerformanceStats();
+            respond({ 
+              success: true, 
+              stats: {
+                ...stats,
+                timestamp: Date.now(),
+                version: SW_VERSION
+              }
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get cache stats:', error);
+            respond({ 
+              success: false, 
+              error: (error as Error).message 
+            });
+          }
+          break;
+        }
+
+        case 'preload_cache': {
+          await ensureEnhancedQueryHandler();
+          
+          try {
+            const { tables, userId, caseId } = payload;
+            
+            if (!Array.isArray(tables) || tables.length === 0) {
+              throw new Error('Tables array is required for cache preloading');
+            }
+
+            await enhancedQueryHandler!.preloadCache(tables, userId, caseId);
+            
+            respond({ 
+              success: true, 
+              message: `Cache preloaded for ${tables.length} tables`,
+              tables: tables
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to preload cache:', error);
+            respond({ 
+              success: false, 
+              error: (error as Error).message 
+            });
+          }
+          break;
+        }
+
+        case 'get_subscription_status': {
+          await ensureEnhancedQueryHandler();
+          
+          try {
+            const subscriptionManager = enhancedQueryHandler!.getSubscriptionManager();
+            const activeSubscriptions = subscriptionManager.getActiveSubscriptions();
+            const syncStatus = subscriptionManager.getSyncStatus();
+            const healthStatus = subscriptionManager.getHealthStatus();
+
+            respond({ 
+              success: true, 
+              subscriptionStatus: {
+                activeSubscriptions: Array.from(activeSubscriptions.entries()).map(([id, sub]) => ({
+                  id,
+                  table: sub.strategy.table,
+                  type: sub.strategy.type,
+                  userId: sub.userId,
+                  caseId: sub.caseId,
+                  isHealthy: sub.isHealthy,
+                  lastSyncTime: sub.lastSyncTime,
+                  subscriptionTime: sub.subscriptionTime
+                })),
+                syncStatus: Array.from(syncStatus.entries()).map(([table, status]) => ({
+                  table,
+                  ...status
+                })),
+                healthStatus,
+                timestamp: Date.now()
+              }
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get subscription status:', error);
+            respond({ 
+              success: false, 
+              error: (error as Error).message 
+            });
+          }
+          break;
+        }
+
+        case 'configure_table_cache': {
+          await ensureEnhancedQueryHandler();
+          
+          try {
+            const { table, config } = payload;
+            
+            if (!table || typeof table !== 'string') {
+              throw new Error('Table name is required for cache configuration');
+            }
+
+            if (!config || typeof config !== 'object') {
+              throw new Error('Cache configuration object is required');
+            }
+
+            const queryRouter = enhancedQueryHandler!.getQueryRouter();
+            queryRouter.updateTableProfile(table, config);
+            
+            respond({ 
+              success: true, 
+              message: `Cache configuration updated for table: ${table}`,
+              table,
+              config
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to configure table cache:', error);
+            respond({ 
+              success: false, 
+              error: (error as Error).message 
+            });
+          }
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -879,6 +886,10 @@ console.log("Service Worker event listeners registered");
 import { Surreal, RecordId, ConnectionStatus, StringRecordId } from 'surrealdb';
 import { TokenManager, TokenInfo } from './token-manager';
 import { DataCacheManager, isAutoSyncTable } from './data-cache-manager';
+import { EnhancedQueryHandler } from './enhanced-query-handler';
+import { QueryRouter } from './query-router';
+import { CacheExecutor } from './cache-executor';
+import { SubscriptionManager } from './subscription-manager';
 
 // 获取WASM引擎的函数
 async function getWasmEngines() {
@@ -923,6 +934,8 @@ let db: Surreal;
 let localDb: Surreal | null = null;
 let tokenManager: TokenManager | null = null;
 let dataCacheManager: DataCacheManager | null = null;
+// 增强查询处理器实例
+let enhancedQueryHandler: EnhancedQueryHandler | null = null;
 let isConnected = false;
 let isLocalDbInitialized = false;
 let connectionConfig: {
@@ -1863,6 +1876,57 @@ async function initializeDataCacheManager(): Promise<void> {
 async function ensureDataCacheManager(): Promise<void> {
   if (!dataCacheManager) {
     await initializeDataCacheManager();
+  }
+}
+
+/**
+ * 初始化 EnhancedQueryHandler
+ */
+async function initializeEnhancedQueryHandler(): Promise<void> {
+  if (enhancedQueryHandler) return;
+
+  try {
+    console.log('ServiceWorker: Initializing EnhancedQueryHandler...');
+
+    // 确保依赖组件已初始化
+    await initializeLocalSurrealDB();
+    await ensureDataCacheManager();
+
+    // 创建 EnhancedQueryHandler 实例
+    enhancedQueryHandler = new EnhancedQueryHandler(
+      localDb!,
+      dataCacheManager!,
+      broadcastToAllClients,
+      db || undefined // 远程数据库可能为空，在连接建立后会更新
+    );
+
+    console.log('ServiceWorker: EnhancedQueryHandler initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize EnhancedQueryHandler:', error);
+    throw error;
+  }
+}
+
+/**
+ * 确保 EnhancedQueryHandler 已初始化
+ */
+async function ensureEnhancedQueryHandler(): Promise<void> {
+  if (!enhancedQueryHandler) {
+    await initializeEnhancedQueryHandler();
+  } else {
+    // 如果已初始化，确保远程数据库引用是最新的
+    updateEnhancedQueryHandlerRemoteDb();
+  }
+}
+
+/**
+ * 更新 EnhancedQueryHandler 中的远程数据库引用
+ */
+function updateEnhancedQueryHandlerRemoteDb(): void {
+  if (enhancedQueryHandler && db) {
+    // 通过反射更新私有属性（这是一个临时解决方案）
+    (enhancedQueryHandler as any).remoteDb = db;
+    console.log('ServiceWorker: Updated EnhancedQueryHandler remote database reference');
   }
 }
 

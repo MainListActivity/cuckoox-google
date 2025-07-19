@@ -171,3 +171,93 @@ FOR $menu IN (SELECT id FROM menu_metadata) {
     RELATE role:admin->can_access_menu->$menu SET ...
 };
 ```
+
+## 查询语法
+
+```sql
+SELECT 
+	VALUE @field | @fields [ AS @alias ] [ OMIT @fields ... ]
+	FROM [ ONLY ] @targets
+	[ WITH [ NOINDEX | INDEX @indexes ... ]]
+	[ WHERE @conditions ]
+	[ SPLIT [ ON ] @field, ... ]
+	[ GROUP [ BY ] @field, ... ]
+	[ ORDER [ BY ] 
+		@field [ COLLATE ] [ NUMERIC ] [ ASC | DESC ], ...
+		| RAND() ]
+	[ LIMIT [ BY ] @limit ]
+	[ START [ AT ] @start 0 ]
+	[ FETCH @fields ... ]
+	[ TIMEOUT @duration ]
+	[ PARALLEL ]
+	[ TEMPFILES ]
+	[ EXPLAIN [ FULL ]]
+;
+
+```
+
+### 查询示例
+
+```sql
+
+SELECT * FROM person;
+
+-- Field `address` now shows up as "string::uppercase"
+-- name.first structure now flattened into a simple field
+SELECT
+	name.first AS user_name,
+	string::uppercase(address)
+FROM person;
+
+-- "Morgan Hitchcock" added to `name` field structure,
+-- `angry_address` for field name instead of automatically
+-- generated "string::uppercase(address) + '!!!'"
+SELECT
+	name.first,
+	"Morgan Hitchcock" AS name.last,
+	string::uppercase(address) + "!!!" AS angry_address
+FROM person;
+
+```
+
+### 返回示例
+
+query方法的每一个分号都会作为一个数组返回，可以同时执行多个查询语句
+
+```json
+-------- Query --------
+
+[
+	{
+		address: '1 Bagshot Row',
+		email: 'tobie@surrealdb.com',
+		id: person:tobie,
+		name: {
+			first: 'Tobie'
+		}
+	}
+]
+
+-------- Query --------
+
+[
+	{
+		"string::uppercase": '1 BAGSHOT ROW',
+		user_name: 'Tobie'
+	}
+]
+
+-------- Query --------
+
+[
+	{
+		angry_address: '1 BAGSHOT ROW!!!',
+		name: {
+			first: 'Tobie',
+			last: 'Morgan Hitchcock'
+		}
+	}
+]
+
+```
+

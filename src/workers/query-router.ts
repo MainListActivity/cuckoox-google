@@ -1,5 +1,5 @@
 import { RecordId } from 'surrealdb';
-import type { QueryParams, UnknownData } from '../types/surreal';
+import type { QueryParams, UnknownData } from '@/src/types/surreal';
 
 // 查询类型枚举
 export enum QueryType {
@@ -63,6 +63,7 @@ export interface TableCacheProfile {
   accessPattern: 'read_heavy' | 'write_heavy' | 'balanced';
   maxCacheSize: number;
   defaultTTL: number;
+  priority: number; // 优先级 1-10
 }
 
 /**
@@ -93,7 +94,8 @@ export class QueryRouter {
         dataVolatility: 'low',
         accessPattern: 'read_heavy',
         maxCacheSize: 10000,
-        defaultTTL: 24 * 60 * 60 * 1000 // 24小时
+        defaultTTL: 24 * 60 * 60 * 1000, // 24小时
+        priority: 9
       });
     });
 
@@ -108,7 +110,8 @@ export class QueryRouter {
         dataVolatility: 'medium',
         accessPattern: 'balanced',
         maxCacheSize: 5000,
-        defaultTTL: 4 * 60 * 60 * 1000 // 4小时
+        defaultTTL: 4 * 60 * 60 * 1000, // 4小时
+        priority: 8
       });
     });
 
@@ -123,7 +126,8 @@ export class QueryRouter {
         dataVolatility: 'high',
         accessPattern: 'write_heavy',
         maxCacheSize: 1000,
-        defaultTTL: 5 * 60 * 1000 // 5分钟
+        defaultTTL: 5 * 60 * 1000, // 5分钟
+        priority: 10
       });
     });
   }
