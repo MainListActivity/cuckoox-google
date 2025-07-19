@@ -1,5 +1,5 @@
 import { RecordId } from 'surrealdb';
-import type { QueryParams, UnknownData } from '@/src/types/surreal';
+import type { QueryParams, UnknownData } from '../types/surreal';
 
 // 查询类型枚举
 export enum QueryType {
@@ -375,30 +375,30 @@ export class QueryRouter {
     const tables: string[] = [];
     
     // SELECT ... FROM table
-    const fromMatches = sql.matchAll(/from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+    const fromMatches = Array.from(sql.matchAll(/from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g));
     for (const match of fromMatches) {
       tables.push(match[1]);
     }
     
     // INSERT INTO table
-    const insertMatches = sql.matchAll(/insert\s+into\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+    const insertMatches = Array.from(sql.matchAll(/insert\s+into\s+([a-zA-Z_][a-zA-Z0-9_]*)/g));
     for (const match of insertMatches) {
       tables.push(match[1]);
     }
     
     // UPDATE table
-    const updateMatches = sql.matchAll(/update\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+    const updateMatches = Array.from(sql.matchAll(/update\s+([a-zA-Z_][a-zA-Z0-9_]*)/g));
     for (const match of updateMatches) {
       tables.push(match[1]);
     }
     
     // DELETE FROM table
-    const deleteMatches = sql.matchAll(/delete\s+from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g);
+    const deleteMatches = Array.from(sql.matchAll(/delete\s+from\s+([a-zA-Z_][a-zA-Z0-9_]*)/g));
     for (const match of deleteMatches) {
       tables.push(match[1]);
     }
     
-    return [...new Set(tables)]; // 去重
+    return Array.from(new Set(tables)); // 去重
   }
 
   /**
@@ -505,7 +505,7 @@ export class QueryRouter {
     // 保留使用频率高的查询，清理低频查询
     const highFrequencyThreshold = 5;
     
-    for (const [hash, count] of this.queryFrequencyMap.entries()) {
+    for (const [hash, count] of Array.from(this.queryFrequencyMap.entries())) {
       if (count < highFrequencyThreshold) {
         this.queryFrequencyMap.delete(hash);
         this.performanceMetrics.delete(hash);

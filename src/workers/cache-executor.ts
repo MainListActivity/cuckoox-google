@@ -1,7 +1,7 @@
 import { QueryRouter, CacheStrategy, QueryAnalysis, CacheRoutingDecision } from './query-router';
 import { DataCacheManager } from './data-cache-manager';
 import type { Surreal } from 'surrealdb';
-import type { QueryParams, UnknownData } from '@/src/types/surreal';
+import type { QueryParams, UnknownData } from '../types/surreal';
 
 // 执行结果类型
 export interface QueryExecutionResult {
@@ -649,7 +649,7 @@ export class CacheExecutor {
     const now = Date.now();
     const maxAge = 24 * 60 * 60 * 1000; // 24小时
 
-    for (const [hash, stats] of this.executionStats.entries()) {
+    for (const [hash, stats] of Array.from(this.executionStats.entries())) {
       if (now - stats.lastUpdated > maxAge) {
         this.executionStats.delete(hash);
       }

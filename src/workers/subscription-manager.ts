@@ -1,7 +1,7 @@
 import { RecordId } from 'surrealdb';
 import type { Surreal } from 'surrealdb';
 import { DataCacheManager } from './data-cache-manager';
-import type { UnknownData, QueryParams } from '@/src/types/surreal';
+import type { UnknownData, QueryParams } from '../types/surreal';
 
 // 订阅类型
 export enum SubscriptionType {
@@ -718,7 +718,7 @@ export class SubscriptionManager {
     const now = Date.now();
     const maxHeartbeatAge = 5 * 60 * 1000; // 5分钟
 
-    for (const [id, subscription] of this.activeSubscriptions.entries()) {
+    for (const [id, subscription] of Array.from(this.activeSubscriptions.entries())) {
       const heartbeatAge = now - subscription.lastHeartbeat;
       
       if (heartbeatAge > maxHeartbeatAge) {
@@ -867,7 +867,7 @@ export class SubscriptionManager {
     let healthy = 0;
     let unhealthy = 0;
 
-    for (const subscription of this.activeSubscriptions.values()) {
+    for (const subscription of Array.from(this.activeSubscriptions.values())) {
       if (subscription.isHealthy) {
         healthy++;
       } else {

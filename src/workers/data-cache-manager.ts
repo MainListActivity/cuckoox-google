@@ -1,6 +1,6 @@
 import { RecordId } from 'surrealdb';
 import type Surreal from 'surrealdb';
-import type { QueryParams, UnknownData } from '@/src/types/surreal';
+import type { QueryParams, UnknownData } from '../types/surreal';
 
 /**
  * 递归检查并重构被序列化的RecordId对象
