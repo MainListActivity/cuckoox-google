@@ -45,12 +45,12 @@ export async function loadUserMenus(client: SurrealWorkerAPI, caseId?: RecordId 
   console.log('MenuService.loadUserMenus using surrealClient');
   
   try {
-    // 使用数据库中定义的图查询函数获取用户可访问的菜单
+    // 使用权限检查查询获取用户可访问的菜单
     // 菜单查询需要用户登录后才能访问，所以使用 queryWithAuth
     const query = `select * from menu_metadata`;
     
     const params = caseId ? { case_id: caseId } : {};
-    console.log('Executing query:', query, 'with params:', params);
+    console.log('Executing menu permission query with params:', params);
     
     const menuItems = await queryWithAuth<MenuMetadata[]>(client, query, params);
 

@@ -413,7 +413,7 @@ export class CacheExecutor {
     
     // 对于单表简单查询，直接从缓存获取
     if (tables.length === 1 && this.isSimpleSelectQuery(sql)) {
-      return this.dataCacheManager.queryCache(tables[0], sql, params, userId, caseId);
+      return this.dataCacheManager.query(sql, params);
     }
     
     // 对于复杂查询，尝试在本地数据库执行

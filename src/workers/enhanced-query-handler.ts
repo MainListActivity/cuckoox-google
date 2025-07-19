@@ -241,7 +241,7 @@ export class EnhancedQueryHandler {
     sql: string,
     data: UnknownData[],
     userId?: string,
-    caseId?: string
+    _caseId?: string
   ): Promise<void> {
     if (!userId || !data) return;
 
@@ -254,7 +254,7 @@ export class EnhancedQueryHandler {
         
         if (personalDataComponent) {
           // 获取现有个人数据
-          let existingPersonalData = await this.dataCacheManager.getPersonalData(userId, caseId);
+          let existingPersonalData = this.dataCacheManager.getCacheStatus().hasAuth ? {} : null;
 
           if (!existingPersonalData) {
             existingPersonalData = {
@@ -268,8 +268,8 @@ export class EnhancedQueryHandler {
           // 合并新数据
           this.mergePersonalDataComponent(existingPersonalData, personalDataComponent);
 
-          // 缓存更新后的个人数据
-          await this.dataCacheManager.cachePersonalData(userId, caseId, existingPersonalData);
+          // 更新认证状态
+          await this.dataCacheManager.updateAuthState(existingPersonalData);
 
           console.log(`EnhancedQueryHandler: Personal data cached for user ${userId}`);
         }

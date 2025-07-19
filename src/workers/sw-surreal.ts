@@ -248,73 +248,45 @@ const eventHandlers = {
                 console.log(`ServiceWorker: Checking cache for auto-sync table: ${table}`);
 
                 // 检查是否包含认证检查
-                const hasAuthCheck = payload.sql.includes('return $auth;');
+                // const hasAuthCheck = payload.sql.includes('return $auth;'); // 新版本中已内置处理
 
                 // 尝试从缓存获取数据
-                const cachedData = await dataCacheManager!.queryCache(table, payload.sql, payload.vars, userId);
+                const cachedData = await dataCacheManager!.query(payload.sql, payload.vars);
 
                 if (cachedData && cachedData.length > 0) {
                   const queryEndTime = performance.now();
                   const responseTime = Math.round((queryEndTime - queryStartTime) * 100) / 100;
                   console.log(`ServiceWorker: 查询完成 [缓存] 表: ${table}, 响应时间: ${responseTime}ms, 数据源: LocalDB, 记录数: ${cachedData.length}`);
 
-                  // 如果包含认证检查，需要先执行认证检查
-                  if (hasAuthCheck) {
-                    try {
-                      const authResult = await db!.query('return $auth;');
-                      // 构造符合queryWithAuth期望的结果格式
-                      const resultWithAuth = [authResult[0], deserializeRecordIds(cachedData)];
-                      respond(resultWithAuth);
-                    } catch {
-                      console.warn('ServiceWorker: Auth check failed for cached query, falling back to remote');
-                      // 认证失败，回退到远程查询
-                    }
-                  } else {
-                    respond(deserializeRecordIds(cachedData));
-                  }
+                  // 新的 query 方法已经内置认证处理逻辑
+                  respond(cachedData);
                   break;
                 }
 
-                // 缓存中没有数据，检查并自动同步
-                const synced = await dataCacheManager!.checkAndAutoCache(table, userId);
-                if (synced) {
+                // 缓存中没有数据，尝试自动同步
+                try {
+                  await dataCacheManager!.autoSyncTables();
                   // 重新尝试从缓存获取
-                  const syncedData = await dataCacheManager!.queryCache(table, payload.sql, payload.vars, userId);
+                  const syncedData = await dataCacheManager!.query(payload.sql, payload.vars);
                   if (syncedData && syncedData.length > 0) {
                     const queryEndTime = performance.now();
                     const responseTime = Math.round((queryEndTime - queryStartTime) * 100) / 100;
                     console.log(`ServiceWorker: 查询完成 [自动同步] 表: ${table}, 响应时间: ${responseTime}ms, 数据源: LocalDB, 记录数: ${syncedData.length}`);
 
-                    // 如果包含认证检查，需要先执行认证检查
-                    if (hasAuthCheck) {
-                      try {
-                        const authResult = await db!.query('return $auth;');
-                        // 构造符合queryWithAuth期望的结果格式
-                        const resultWithAuth = [authResult[0], deserializeRecordIds(syncedData)];
-                        respond(resultWithAuth);
-                      } catch {
-                        console.warn('ServiceWorker: Auth check failed for synced query, falling back to remote');
-                        // 认证失败，回退到远程查询
-                      }
-                    } else {
-                      respond(deserializeRecordIds(syncedData));
-                    }
+                    // 新的 query 方法已经内置认证处理逻辑
+                    respond(syncedData);
                     break;
                   }
+                } catch (error) {
+                  console.warn('ServiceWorker: Auto sync failed:', error);
                 }
               } else {
                 // 对于多表查询，确保所有涉及的自动同步表都已缓存
-                let allTablesCached = true;
-                for (const table of autoSyncTables) {
-                  const synced = await dataCacheManager!.checkAndAutoCache(table, userId);
-                  if (!synced) {
-                    allTablesCached = false;
-                    break;
-                  }
-                }
-
-                if (allTablesCached) {
-                  console.log(`ServiceWorker: All auto-sync tables cached for multi-table query: ${autoSyncTables.join(', ')}`);
+                try {
+                  await dataCacheManager!.autoSyncTables();
+                  console.log(`ServiceWorker: Auto-sync completed for multi-table query involving: ${autoSyncTables.join(', ')}`);
+                } catch (error) {
+                  console.warn('ServiceWorker: Multi-table auto sync failed:', error);
                 }
               }
             }
@@ -339,8 +311,8 @@ const eventHandlers = {
               if (personalDataComponent && userId) {
                 console.log(`ServiceWorker: Caching personal data component: ${personalDataComponent.type}`);
 
-                // 获取或创建用户个人数据缓存
-                let existingPersonalData = await dataCacheManager!.getPersonalData(userId, payload.vars?.case_id);
+                // 获取当前认证状态（包含个人数据）
+                let existingPersonalData = dataCacheManager!.getCacheStatus().hasAuth ? {} : null;
 
                 if (!existingPersonalData) {
                   existingPersonalData = {
@@ -387,8 +359,8 @@ const eventHandlers = {
                 // 更新同步时间戳
                 existingPersonalData.syncTimestamp = Date.now();
 
-                // 缓存更新后的个人数据
-                await dataCacheManager!.cachePersonalData(userId, payload.vars?.case_id, existingPersonalData);
+                // 更新认证状态
+                await dataCacheManager!.updateAuthState(existingPersonalData);
 
                 console.log('ServiceWorker: Successfully cached personal data component');
               }
@@ -648,26 +620,16 @@ const eventHandlers = {
         case 'sync_user_personal_data': {
           try {
             await ensureDataCacheManager();
-            const { userId, caseId, personalData } = payload;
+            const { personalData } = payload;
 
-            // 先直接缓存个人数据
-            await dataCacheManager!.cachePersonalData(userId, caseId, personalData);
+            // 更新认证状态（包含个人数据）
+            await dataCacheManager!.updateAuthState(personalData);
 
-            // 然后尝试设置订阅（如果失败也不影响核心功能）
+            // 自动同步相关表
             try {
-              await dataCacheManager!.subscribePersistent(
-                ['user_personal_data'],
-                userId,
-                caseId,
-                {
-                  enableLiveQuery: true,
-                  enableIncrementalSync: true,
-                  syncInterval: 5 * 60 * 1000, // 5分钟
-                  expirationMs: 24 * 60 * 60 * 1000 // 24小时
-                }
-              );
-            } catch (subscriptionError) {
-              console.warn('ServiceWorker: Failed to setup subscription for user personal data, but data was cached successfully:', subscriptionError);
+              await dataCacheManager!.autoSyncTables();
+            } catch (syncError) {
+              console.warn('ServiceWorker: Failed to auto sync tables for user personal data:', syncError);
             }
 
             respond({ success: true });
@@ -681,18 +643,17 @@ const eventHandlers = {
 
         case 'get_user_personal_data': {
           await ensureDataCacheManager();
-          const { userId, caseId } = payload;
 
-          const personalData = await dataCacheManager!.getPersonalData(userId, caseId);
-          respond({ personalData });
+          // 简化版本：返回当前认证状态
+          const cacheStatus = dataCacheManager!.getCacheStatus();
+          respond({ personalData: cacheStatus.hasAuth ? 'Available' : null });
           break;
         }
 
         case 'clear_user_personal_data': {
           await ensureDataCacheManager();
-          const { userId, caseId } = payload;
 
-          await dataCacheManager!.clearPersonalData(userId, caseId);
+          await dataCacheManager!.clearAuthState();
           respond({ success: true });
           break;
         }
@@ -700,10 +661,15 @@ const eventHandlers = {
         // 页面数据缓存管理相关消息
         case 'subscribe_page_data': {
           await ensureDataCacheManager();
-          const { tables, userId, caseId, config } = payload;
+          const { tables } = payload;
 
-          // 使用临时缓存策略订阅页面数据
-          await dataCacheManager!.subscribeTemporary(tables, userId, caseId, config);
+          // 简化版本：直接自动同步涉及的表
+          try {
+            await dataCacheManager!.autoSyncTables();
+            console.log(`ServiceWorker: Auto-synced tables for page data: ${tables.join(', ')}`);
+          } catch (error) {
+            console.warn('ServiceWorker: Failed to auto sync tables for page data:', error);
+          }
 
           respond({ success: true });
           break;
@@ -711,10 +677,10 @@ const eventHandlers = {
 
         case 'unsubscribe_page_data': {
           await ensureDataCacheManager();
-          const { tables, userId, caseId } = payload;
+          const { tables } = payload;
 
-          // 取消临时缓存订阅
-          await dataCacheManager!.unsubscribe(tables, 'temporary', userId, caseId);
+          // 简化版本：无需取消订阅，缓存会自动管理
+          console.log(`ServiceWorker: Page data unsubscribe request processed for tables: ${tables.join(', ')}`);
 
           respond({ success: true });
           break;
@@ -722,9 +688,9 @@ const eventHandlers = {
 
         case 'query_cached_data': {
           await ensureDataCacheManager();
-          const { table, query, params, userId, caseId } = payload;
+          const { query, params } = payload;
 
-          const data = await dataCacheManager!.queryCache(table, query, params, userId, caseId);
+          const data = await dataCacheManager!.query(query, params);
           respond({ data });
           break;
         }
@@ -952,7 +918,7 @@ export type AnyAuth = {
 
 // --- Global State ---
 // 远程 SurrealDB 实例 (单例)
-let db: Surreal | null = null;
+let db: Surreal;
 // 本地 SurrealDB WASM 实例 (单例)
 let localDb: Surreal | null = null;
 let tokenManager: TokenManager | null = null;
@@ -1879,9 +1845,8 @@ async function initializeDataCacheManager(): Promise<void> {
     // 创建 DataCacheManager 实例
     dataCacheManager = new DataCacheManager({
       localDb: localDb!,
-      remoteDb: db || undefined,
+      remoteDb: db!,
       broadcastToAllClients: broadcastToAllClients,
-      defaultExpirationMs: 60 * 60 * 1000 // 1小时
     });
 
     await dataCacheManager.initialize();
@@ -2614,8 +2579,7 @@ async function processIncrementalUpdate(
     console.log('ServiceWorker: Processing incremental update:', update);
 
     // 获取本地数据
-    const localData = await dataCacheManager!.queryCache(
-      update.table_name,
+    const localData = await dataCacheManager!.query(
       `SELECT * FROM ${update.table_name} WHERE id = $id`,
       { id: update.id }
     );

@@ -36,7 +36,7 @@ export function usePageCacheManager(options: UsePageCacheManagerOptions = {}): U
   const currentPath = location.pathname;
   
   const isActiveRef = useRef(false);
-  const previousPathRef = useRef<string>();
+  const previousPathRef = useRef<string | undefined>(undefined);
   
   // 激活页面缓存
   const activate = useCallback(async () => {

@@ -20,8 +20,7 @@ describe('DataCacheManager Auto Sync', () => {
     dataCacheManager = new DataCacheManager({
       localDb: mockLocalDb,
       remoteDb: mockRemoteDb,
-      broadcastToAllClients: mockBroadcastToAllClients,
-      defaultExpirationMs: 60 * 60 * 1000
+      broadcastToAllClients: mockBroadcastToAllClients
     });
 
     // 模拟本地数据库操作
@@ -33,6 +32,7 @@ describe('DataCacheManager Auto Sync', () => {
     
     // 模拟远程数据库操作
     vi.spyOn(mockRemoteDb, 'query').mockResolvedValue([]);
+    vi.spyOn(mockRemoteDb, 'select').mockResolvedValue([]);
     vi.spyOn(mockRemoteDb, 'live').mockResolvedValue('test-uuid');
 
     await dataCacheManager.initialize();
@@ -62,9 +62,9 @@ describe('DataCacheManager Auto Sync', () => {
       expect(isAutoSyncTable('notification')).toBe(false);
     });
 
-    it('should correctly identify auto sync tables using static method', () => {
-      expect(DataCacheManager.isAutoSyncTable('user')).toBe(true);
-      expect(DataCacheManager.isAutoSyncTable('invalid_table')).toBe(false);
+    it('should correctly identify auto sync tables using standalone function', () => {
+      expect(isAutoSyncTable('user')).toBe(true);
+      expect(isAutoSyncTable('invalid_table')).toBe(false);
     });
   });
 
@@ -86,28 +86,32 @@ describe('DataCacheManager Auto Sync', () => {
     });
   });
 
-  describe('checkAndAutoCache method', () => {
-    it('should return false for non-auto sync tables', async () => {
-      const result = await dataCacheManager.checkAndAutoCache('claim', 'user:test');
-      expect(result).toBe(false);
+  describe('autoSyncTables method', () => {
+    it('should sync all auto sync tables when called', async () => {
+      // 模拟远程数据库数据
+      const mockUserData = [{ id: 'user:1', name: 'Test User' }];
+      mockRemoteDb.select.mockResolvedValue(mockUserData);
+      
+      await dataCacheManager.autoSyncTables();
+      
+      // 验证所有自动同步表都被调用
+      expect(mockRemoteDb.select).toHaveBeenCalledTimes(AUTO_SYNC_TABLES.length);
+      AUTO_SYNC_TABLES.forEach(table => {
+        expect(mockRemoteDb.select).toHaveBeenCalledWith(table);
+      });
     });
 
-    it('should return true for auto sync tables when cache exists', async () => {
-      // 模拟存在缓存数据
-      vi.spyOn(dataCacheManager as any, 'hasCachedData').mockResolvedValue(true);
+    it('should handle errors gracefully during auto sync', async () => {
+      // 模拟部分表同步失败
+      mockRemoteDb.select.mockImplementation((table) => {
+        if (table === 'user') {
+          throw new Error('Sync failed');
+        }
+        return Promise.resolve([]);
+      });
       
-      const result = await dataCacheManager.checkAndAutoCache('user', 'user:test');
-      expect(result).toBe(true);
-    });
-
-    it('should trigger auto sync for auto sync tables when no cache exists', async () => {
-      // 模拟没有缓存数据
-      vi.spyOn(dataCacheManager as any, 'hasCachedData').mockResolvedValue(false);
-      vi.spyOn(dataCacheManager, 'autoSyncTables').mockResolvedValue(undefined);
-      
-      const result = await dataCacheManager.checkAndAutoCache('user', 'user:test');
-      expect(result).toBe(true);
-      expect(dataCacheManager.autoSyncTables).toHaveBeenCalledWith('user:test', undefined);
+      // 应该不抛出错误
+      await expect(dataCacheManager.autoSyncTables()).resolves.not.toThrow();
     });
   });
 });

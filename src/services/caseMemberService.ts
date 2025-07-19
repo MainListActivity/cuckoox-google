@@ -16,12 +16,6 @@ export interface CaseInfo {
 }
 
 // 查询结果类型定义
-interface MemberQueryResult {
-  userId: RecordId;
-  userName: string;
-  userEmail?: string;
-  roles: Role[];
-}
 
 interface UserQueryResult {
   id: RecordId;
@@ -87,48 +81,48 @@ export async function fetchCaseMembers(client: SurrealWorkerAPI, caseId: RecordI
     console.log(`[SurrealDB API] Fetching members for case: ${caseId}`);
 
     try {
-      // 优化后的查询：一次性获取所有数据，减少子查询
+      // 简化的查询：直接从has_member获取所有需要的信息
       const query = `
-        LET $members = (SELECT out as userId, out.name as userName, out.email as userEmail FROM has_member WHERE in = $caseId FETCH out);
-        LET $roles = (SELECT in as userId, role_id FROM has_case_role WHERE case_id = $caseId FETCH role_id);
-        SELECT {
-          members: $members,
-          roles: $roles
-        };
+        SELECT out.* AS user, role_id, assigned_at
+        FROM has_member 
+        WHERE in = $caseId  order by assigned_at desc
+        FETCH out, role_id;
       `;
 
-      const result = await queryWithAuth<[{
-        members: { userId: RecordId; userName: string; userEmail?: string }[];
-        roles: { userId: RecordId; role_id: Role }[];
-      }]>(client, query, { caseId });
+      const result = await queryWithAuth<Array<{
+        user: { id: RecordId; name: string; email?: string };
+        role_id: Role;
+      }>>(client, query, { caseId });
 
-      if (!result || result.length === 0 || !result[0].members) {
+      if (!result || result.length === 0) {
         return [];
       }
 
-      const { members, roles } = result[0];
-
-      // 构建角色映射
-      const rolesByUserId = new Map<string, Role[]>();
-      roles.forEach(roleEntry => {
-        const userId = roleEntry.userId.toString();
-        if (!rolesByUserId.has(userId)) {
-          rolesByUserId.set(userId, []);
+      // 按用户分组角色
+      const membersByUserId = new Map<string, CaseMember>();
+      
+      result.forEach(item => {
+        const userId = item.user.id.toString();
+        
+        if (!membersByUserId.has(userId)) {
+          membersByUserId.set(userId, {
+            id: item.user.id,
+            caseId: caseId,
+            roles: [],
+            userName: item.user.name,
+            userEmail: item.user.email,
+            avatarUrl: item.user.email ? `https://i.pravatar.cc/150?u=${item.user.email}` : `https://i.pravatar.cc/150?u=${item.user.id}`
+          });
         }
-        rolesByUserId.get(userId)!.push(roleEntry.role_id);
+        
+        // 添加角色（避免重复）
+        const member = membersByUserId.get(userId)!;
+        if (!member.roles.some(role => role.id.toString() === item.role_id.id.toString())) {
+          member.roles.push(item.role_id);
+        }
       });
 
-      // 构建最终的成员列表
-      const membersList: CaseMember[] = members.map(member => ({
-        id: member.userId,
-        caseId: caseId,
-        roles: rolesByUserId.get(member.userId.toString()) || [],
-        userName: member.userName,
-        userEmail: member.userEmail,
-        avatarUrl: member.userEmail ? `https://i.pravatar.cc/150?u=${member.userEmail}` : `https://i.pravatar.cc/150?u=${member.userId}`
-      }));
-
-      return membersList;
+      return Array.from(membersByUserId.values());
     } catch (error) {
       console.error('[SurrealDB API] Error fetching case members:', error);
       throw error;

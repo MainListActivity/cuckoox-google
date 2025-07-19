@@ -619,6 +619,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
 
+    if (!client) {
+      console.log('No client available, skipping menu load');
+      return;
+    }
+
     console.log('Loading menus for user:', user.id, 'case:', selectedCaseId);
     setIsMenuLoading(true);
 
@@ -653,7 +658,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setIsMenuLoading(false);
     }
-  }, [user, selectedCaseId]); // 修复依赖
+  }, [user, selectedCaseId, client]); // 修复依赖
 
   // Helper function to update last selected case in DB
   const updateLastSelectedCaseInDB = async (userId: RecordId, caseId: RecordId) => {
@@ -778,16 +783,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   useEffect(() => {
-    // 只有当用户存在并且 SurrealDB 连接已建立时才加载菜单
-    if (user && isConnected) {
+    // 只有当用户存在并且 SurrealDB 连接已建立并且 client 可用时才加载菜单
+    if (user && isConnected && client) {
       console.log('User ready and SurrealDB connected, loading menus...');
       fetchAndUpdateMenuPermissions();
     } else if (!user) {
       setNavMenuItems([]); // Clear menu if no user
     } else if (user && !isConnected) {
       console.log('User ready but SurrealDB not connected yet, waiting...');
+    } else if (user && isConnected && !client) {
+      console.log('User ready and SurrealDB connected but client not available yet, waiting...');
     }
-  }, [user, isConnected, selectedCaseId, fetchAndUpdateMenuPermissions]);
+  }, [user, isConnected, selectedCaseId, fetchAndUpdateMenuPermissions, client]);
 
   // Effect for automatic navigation to creditor management
   useEffect(() => {

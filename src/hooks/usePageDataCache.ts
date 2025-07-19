@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useServiceWorkerComm } from '../contexts/SurrealProvider';
-import { CacheConfig } from '../workers/data-cache-manager';
+// 移除不再存在的 CacheConfig 导入
 
-export interface PageDataCacheConfig extends Partial<CacheConfig> {
+export interface PageDataCacheConfig {
   // 页面特定的配置
   autoRefresh?: boolean; // 是否自动刷新
   refreshInterval?: number; // 刷新间隔（毫秒）
@@ -61,11 +61,6 @@ export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataC
   
   // 默认配置
   const defaultConfig: PageDataCacheConfig = {
-    type: 'temporary',
-    enableLiveQuery: true,
-    enableIncrementalSync: true,
-    syncInterval: 30 * 1000, // 30秒
-    expirationMs: 60 * 60 * 1000, // 1小时
     autoRefresh: false,
     refreshInterval: 5 * 60 * 1000, // 5分钟
     preloadData: true,
@@ -105,10 +100,7 @@ export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataC
       console.log('usePageDataCache: Subscribing to tables:', tables);
       
       await sendMessageToServiceWorker('subscribe_page_data', {
-        tables,
-        userId: user.id.toString(),
-        caseId: selectedCaseId?.toString() || null,
-        config: defaultConfig
+        tables
       });
       
       subscriptionRef.current = subscriptionId;
@@ -139,9 +131,7 @@ export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataC
       console.log('usePageDataCache: Unsubscribing from:', subscriptionRef.current);
       
       await sendMessageToServiceWorker('unsubscribe_page_data', {
-        tables,
-        userId: user.id.toString(),
-        caseId: selectedCaseId?.toString() || null
+        tables
       });
       
       subscriptionRef.current = null;
@@ -166,11 +156,8 @@ export function usePageDataCache(options: UsePageDataCacheOptions): UsePageDataC
       const queryString = query || `SELECT * FROM ${table}`;
       
       const result = await sendMessageToServiceWorker('query_cached_data', {
-        table,
         query: queryString,
-        params,
-        userId: user.id.toString(),
-        caseId: selectedCaseId?.toString() || null
+        params
       });
       
       return result.data || [];
