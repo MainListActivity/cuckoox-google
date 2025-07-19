@@ -10,6 +10,7 @@
 - **初始化逻辑**: 在activate事件中添加了initializeEnhancedQueryHandler()调用
 - **清理逻辑**: 在beforeunload事件中添加了enhancedQueryHandler的清理
 - **确保函数**: 创建了ensureEnhancedQueryHandler()和updateEnhancedQueryHandlerRemoteDb()函数
+- **导入路径标准化**: 统一使用 `@/src/types/surreal` 路径别名，提升代码一致性
 
 #### ✅ 任务 0.2 - 替换query和mutate消息处理逻辑
 - **简化处理**: 将复杂的缓存逻辑替换为使用EnhancedQueryHandler的简洁调用
