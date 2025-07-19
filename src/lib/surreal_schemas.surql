@@ -583,7 +583,7 @@ INSERT INTO menu_metadata (menu_id, path, label_key, icon_name, display_order, i
 ('dashboard', '/dashboard', 'nav_dashboard', 'mdiViewDashboard', 1, true, time::now(), time::now()),
 ('cases', '/cases', 'nav_case_management', 'mdiBriefcase', 2, true, time::now(), time::now()),
 ('case_members', '/case-members', 'nav_case_member_management', 'mdiAccountGroup', 3, true, time::now(), time::now()),
-('creditors', '/creditors', 'nav_creditor_management', 'mdiAccountMultiple', 4, true, time::now(), time::now()),
+('creditors', '/creditors', 'nav_creditor_management', 'mdiAccountCash', 4, true, time::now(), time::now()),
 ('claims_list', '/claims', 'nav_claim_management', 'mdiFileDocumentOutline', 5, true, time::now(), time::now()),
 ('my_claims', '/my-claims', 'nav_my_claims', 'mdiFileDocumentSearchOutline', 6, true, time::now(), time::now()),
 ('claims_submit', '/claims/submit', 'nav_claim_submission', 'mdiFileUploadOutline', 7, true, time::now(), time::now()),

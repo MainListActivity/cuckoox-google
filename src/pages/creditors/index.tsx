@@ -50,6 +50,7 @@ import { useDebounce } from '@/src/hooks/useDebounce'; // ADDED
 import { useOperationPermission } from '@/src/hooks/usePermission';
 import { AuthenticationRequiredError } from '@/src/contexts/SurrealProvider'; // Added for new auth check
 import { useNavigate } from 'react-router-dom'; // Added for navigation
+import { queryWithAuth } from '@/src/utils/surrealAuth'; // Added for auth queries
 
 // Creditor interface moved to ./types.ts
 
@@ -122,6 +123,7 @@ const CreditorListPage: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
+      // First query: get creditors basic information
       let dataQuery = `SELECT 
         id, 
         type, 
@@ -131,9 +133,7 @@ const CreditorListPage: React.FC = () => {
         contact_phone, 
         contact_address, 
         created_at, 
-        case_id,
-        (SELECT math::sum(asserted_claim_details.total_asserted_amount) FROM claim WHERE creditor_id = \$parent.id AND case_id = \$parent.case_id GROUP ALL)[0] AS total_claim_amount,
-        (SELECT count() FROM claim WHERE creditor_id = \$parent.id AND case_id = \$parent.case_id GROUP ALL)[0] AS claim_count
+        case_id
       FROM creditor WHERE case_id = $caseId`;
       let countQuery = 'SELECT count() AS total FROM creditor WHERE case_id = $caseId';
       const queryParams: Record<string, unknown> = {
@@ -207,23 +207,66 @@ const CreditorListPage: React.FC = () => {
       countQuery += ' GROUP ALL;';
 
       // Fetch paginated data with authentication check
-      const dataResult: unknown = await client.query(dataQuery, queryParams);
+      const dataResult: unknown = await queryWithAuth(client, dataQuery, queryParams);
       const fetchedData = Array.isArray(dataResult) ? dataResult as RawCreditorData[] : [];
-      const formattedCreditors: Creditor[] = fetchedData.map((cred: RawCreditorData) => ({
-        id: cred.id,
-        name: cred.name,
-        identifier: cred.legal_id,
-        contact_person_name: cred.contact_person_name,
-        contact_person_phone: cred.contact_phone,
-        address: cred.contact_address,
-        type: cred.type === 'organization' ? '组织' : '个人',
-        case_id: cred.case_id,
-        created_at: cred.created_at,
-        updated_at: cred.updated_at,
-        total_claim_amount: cred.total_claim_amount || 0,
-        claim_count: cred.claim_count || 0,
-      }));
-      setCreditors(formattedCreditors);
+      
+      // For each creditor, get claim summary
+      const creditorsWithClaims: Creditor[] = [];
+      for (const cred of fetchedData) {
+        try {
+          // Query claim amounts and counts for this creditor
+          const claimSummaryQuery = `
+            SELECT 
+              math::sum(asserted_claim_details.total_asserted_amount) AS total_amount,
+              count() AS claim_count
+            FROM claim 
+            WHERE creditor_id = $creditorId AND case_id = $caseId
+            GROUP ALL
+          `;
+          
+          const claimSummary: unknown = await queryWithAuth(client, claimSummaryQuery, {
+            creditorId: cred.id,
+            caseId: selectedCaseId
+          });
+          
+          const claimData = Array.isArray(claimSummary) && claimSummary.length > 0 ? claimSummary[0] : null;
+          const totalClaimAmount = claimData && typeof claimData === 'object' && 'total_amount' in claimData && typeof claimData.total_amount === 'number' ? claimData.total_amount : 0;
+          const claimCount = claimData && typeof claimData === 'object' && 'claim_count' in claimData && typeof claimData.claim_count === 'number' ? claimData.claim_count : 0;
+          
+          creditorsWithClaims.push({
+            id: cred.id,
+            name: cred.name,
+            identifier: cred.legal_id,
+            contact_person_name: cred.contact_person_name,
+            contact_person_phone: cred.contact_phone,
+            address: cred.contact_address,
+            type: cred.type === 'organization' ? '组织' : '个人',
+            case_id: cred.case_id,
+            created_at: cred.created_at,
+            updated_at: cred.updated_at,
+            total_claim_amount: totalClaimAmount,
+            claim_count: claimCount,
+          });
+        } catch (claimErr) {
+          console.warn(`Failed to fetch claim data for creditor ${cred.id}:`, claimErr);
+          // Still add the creditor but with zero claims
+          creditorsWithClaims.push({
+            id: cred.id,
+            name: cred.name,
+            identifier: cred.legal_id,
+            contact_person_name: cred.contact_person_name,
+            contact_person_phone: cred.contact_phone,
+            address: cred.contact_address,
+            type: cred.type === 'organization' ? '组织' : '个人',
+            case_id: cred.case_id,
+            created_at: cred.created_at,
+            updated_at: cred.updated_at,
+            total_claim_amount: 0,
+            claim_count: 0,
+          });
+        }
+      }
+      setCreditors(creditorsWithClaims);
 
       // Fetch total count with authentication check
       // Remove limit and start params for count query, keep all search-related params
@@ -248,7 +291,7 @@ const CreditorListPage: React.FC = () => {
       } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
         countQueryParams.searchTerm = currentSearchTerm;
       }
-      const countResult: unknown = await client.query(countQuery, countQueryParams);
+      const countResult: unknown = await queryWithAuth(client, countQuery, countQueryParams);
 
       // SurrealDB's count() GROUP ALL returns an array with an object, e.g., [{ total: 50 }]
       // If no records, it might return an empty array or an array with an object where total is 0 or undefined.
@@ -369,7 +412,7 @@ const CreditorListPage: React.FC = () => {
         };
 
         // dataToSave.id is the full record ID string like 'creditor:uuid'
-        await client.mutate('UPDATE $id MERGE $data;', {
+        await queryWithAuth(client, 'UPDATE $id MERGE $data;', {
           id: dataToSave.id,
           data: dataForUpdate
         });
@@ -412,8 +455,8 @@ const CreditorListPage: React.FC = () => {
       };
 
       try {
-        // Use client.create with authentication check
-        const result = await client.query('CREATE creditor CONTENT $data', { data: newCreditorData });
+        // Use queryWithAuth for authentication check
+        const result = await queryWithAuth(client, 'CREATE creditor CONTENT $data', { data: newCreditorData });
         console.log("Creditor created successfully:", result);
         showSuccess(t('creditor_added_success', '债权人已成功添加'));
         fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the creditor list with current search criteria
@@ -491,7 +534,7 @@ const CreditorListPage: React.FC = () => {
           };
 
           try {
-            await client.query('CREATE creditor CONTENT $data', { data: creditorDataToCreate });
+            await queryWithAuth(client, 'CREATE creditor CONTENT $data', { data: creditorDataToCreate });
             successfulImports++;
           } catch (err: unknown) {
             const error = err as Error;
@@ -564,7 +607,7 @@ const CreditorListPage: React.FC = () => {
 
     try {
       // creditorToDelete.id is the full record ID, e.g., 'creditor:xyz'
-      await client.mutate('DELETE $id;', { id: creditorToDelete.id });
+      await queryWithAuth(client, 'DELETE $id;', { id: creditorToDelete.id });
 
       showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
       fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the list with current search criteria

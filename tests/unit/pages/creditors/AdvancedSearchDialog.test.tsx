@@ -6,7 +6,7 @@ import { createTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n/i18n';
+import i18n from '@/src/i18n';
 
 import AdvancedSearchDialog, { type AdvancedSearchCriteria } from '@/src/pages/creditors/AdvancedSearchDialog';
 

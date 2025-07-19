@@ -586,7 +586,7 @@ describe('AuthContext', () => {
       const caseManagerMenus = [
         { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard' },
         { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase' },
-        { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountGroup' },
+        { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountCash' },
       ];
       (menuService.loadUserMenus as Mock).mockResolvedValue(caseManagerMenus);
       
@@ -620,7 +620,7 @@ describe('AuthContext', () => {
        const menusWithCreditors = [
          { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard' },
          { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase' },
-         { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountGroup' },
+         { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountCash' },
        ];
        (menuService.loadUserMenus as Mock).mockResolvedValue(menusWithCreditors);
        

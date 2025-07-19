@@ -65,6 +65,25 @@ vi.mock('@/src/hooks/useDebounce', () => ({
   useDebounce: (value: string) => value,
 }));
 
+vi.mock('@/src/utils/surrealAuth', () => ({
+  queryWithAuth: vi.fn(),
+}));
+
+vi.mock('@/src/hooks/usePermission', () => ({
+  useOperationPermission: () => ({
+    hasPermission: true,
+    isLoading: false,
+  }),
+}));
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => vi.fn(),
+  };
+});
+
 vi.mock('@/src/contexts/AuthContext', () => ({
   useAuth: () => ({
     selectedCaseId: 'case:123',
@@ -79,6 +98,13 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
     surreal: mockSurrealClient,
     isSuccess: true, // This should be true to indicate DB is connected
   }),
+  useSurrealClient: () => mockSurrealClient,
+  AuthenticationRequiredError: class AuthenticationRequiredError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'AuthenticationRequiredError';
+    }
+  },
 }));
 
 // Mock test data
