@@ -155,7 +155,7 @@ export class QueryRouter {
     
     // 检查是否为个人数据查询
     const isPersonalDataQuery = normalizedSql.includes('return $auth') ||
-                               tables.some(table => ['user_personal_data', 'has_role', 'has_case_role'].includes(table));
+                               tables.some(table => ['user_personal_data', 'has_role', 'has_case_role', 'menu_metadata', 'operation_metadata'].includes(table));
     
     // 估算结果大小
     const estimatedResultSize = this.estimateResultSize(normalizedSql, tables, hasConditions);
@@ -181,6 +181,19 @@ export class QueryRouter {
    * 根据查询分析决定缓存路由策略
    */
   decideCacheStrategy(analysis: QueryAnalysis, userId?: string): CacheRoutingDecision {
+    // 个人数据查询优先本地缓存（优先级高于查询类型检查）
+    if (analysis.isPersonalDataQuery) {
+      return {
+        strategy: CacheStrategy.LOCAL_FIRST,
+        consistencyLevel: ConsistencyLevel.EVENTUAL,
+        cacheTTL: 60 * 60 * 1000, // 1小时
+        enableLiveQuery: true,
+        enableIncrementalSync: true,
+        priority: 8,
+        reasoning: '个人数据查询优先使用本地缓存'
+      };
+    }
+
     // 写操作直接走远程
     if (analysis.queryType !== QueryType.SELECT) {
       return {
@@ -191,19 +204,6 @@ export class QueryRouter {
         enableIncrementalSync: false,
         priority: 10,
         reasoning: '写操作必须走远程数据库'
-      };
-    }
-
-    // 个人数据查询优先本地缓存
-    if (analysis.isPersonalDataQuery) {
-      return {
-        strategy: CacheStrategy.LOCAL_FIRST,
-        consistencyLevel: ConsistencyLevel.EVENTUAL,
-        cacheTTL: 60 * 60 * 1000, // 1小时
-        enableLiveQuery: true,
-        enableIncrementalSync: true,
-        priority: 8,
-        reasoning: '个人数据查询优先使用本地缓存'
       };
     }
 
@@ -342,13 +342,29 @@ export class QueryRouter {
    * 提取查询类型
    */
   private extractQueryType(sql: string): QueryType {
-    if (sql.startsWith('select')) return QueryType.SELECT;
-    if (sql.startsWith('insert')) return QueryType.INSERT;
-    if (sql.startsWith('update')) return QueryType.UPDATE;
-    if (sql.startsWith('delete')) return QueryType.DELETE;
-    if (sql.startsWith('live')) return QueryType.LIVE;
-    if (sql.startsWith('create')) return QueryType.CREATE;
-    if (sql.startsWith('relate')) return QueryType.RELATE;
+    // 处理复合查询，如 "return $auth;select * from table"
+    // 查找主要的查询操作关键字
+    if (sql.includes('select') && (sql.startsWith('select') || sql.includes(';select'))) {
+      return QueryType.SELECT;
+    }
+    if (sql.includes('insert') && (sql.startsWith('insert') || sql.includes(';insert'))) {
+      return QueryType.INSERT;
+    }
+    if (sql.includes('update') && (sql.startsWith('update') || sql.includes(';update'))) {
+      return QueryType.UPDATE;
+    }
+    if (sql.includes('delete') && (sql.startsWith('delete') || sql.includes(';delete'))) {
+      return QueryType.DELETE;
+    }
+    if (sql.includes('live') && (sql.startsWith('live') || sql.includes(';live'))) {
+      return QueryType.LIVE;
+    }
+    if (sql.includes('create') && (sql.startsWith('create') || sql.includes(';create'))) {
+      return QueryType.CREATE;
+    }
+    if (sql.includes('relate') && (sql.startsWith('relate') || sql.includes(';relate'))) {
+      return QueryType.RELATE;
+    }
     return QueryType.COMPLEX;
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { DataCacheManager, isAutoSyncTable } from '@/src/workers/data-cache-manager';
+import { DataCacheManager } from '@/src/workers/data-cache-manager';
 import { Surreal } from 'surrealdb';
 
 describe('DataCacheManager Auth Variables', () => {
@@ -114,22 +114,26 @@ describe('DataCacheManager Auth Variables', () => {
       const sql = 'return $auth; select * from claim where creator = $auth';
       
       mockRemoteDb.query.mockResolvedValueOnce([
-        { id: 'claim:1', creator: 'user:123' }
+        { id: 'user:123', github_id: 'test-user', name: 'Test User' }, // 认证状态
+        [{ id: 'claim:1', creator: 'user:123' }] // 实际查询结果
       ]);
 
       const result = await dataCacheManager.query(sql);
 
-      // 验证使用远程查询，但会移除 return $auth 部分
-      expect(mockRemoteDb.query).toHaveBeenCalledWith('select * from claim where creator = $auth', undefined);
+      // 验证使用远程查询，包含完整的查询字符串
+      expect(mockRemoteDb.query).toHaveBeenCalledWith('return $auth; select * from claim where creator = $auth', undefined);
       expect(mockLocalDb.query).not.toHaveBeenCalled();
       
-      // 验证返回结果包含认证状态
+      // 验证返回结果包含认证状态和查询结果
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
         id: 'user:123',
         github_id: 'test-user',
         name: 'Test User'
       });
+      expect(result[1]).toEqual([
+        { id: 'claim:1', creator: 'user:123' }
+      ]);
     });
 
     it('should handle auth state with null userId gracefully', async () => {

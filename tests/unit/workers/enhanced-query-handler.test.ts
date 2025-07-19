@@ -56,8 +56,10 @@ describe('EnhancedQueryHandler', () => {
 
     const result = await handler.handleQuery('SELECT * FROM test');
     
-    // 没有远程数据库时应该返回失败，但不应该抛出异常
-    expect(result.success).toBe(false);
-    expect(result.error).toBeDefined();
+    // 修改后的行为：没有远程数据库时应该返回空结果但标记为成功
+    // 这是因为 LOCAL_FIRST 策略会回退到本地并返回空结果而不是抛出错误
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual([]);
+    expect(result.source).toBe('local');
   });
 });

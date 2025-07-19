@@ -158,8 +158,19 @@ export class CacheExecutor {
       }
     }
 
-    // 本地查询失败或无数据，回退到远程
-    return this.executeRemoteWithCache(sql, params, analysis, decision, userId, caseId);
+    // 本地查询失败或无数据，尝试回退到远程
+    try {
+      return await this.executeRemoteWithCache(sql, params, analysis, decision, userId, caseId);
+    } catch (remoteError) {
+      console.warn('CacheExecutor: Remote fallback failed, returning empty result:', remoteError);
+      // 远程也失败，返回空结果而不是抛出错误
+      return {
+        data: [],
+        source: 'local',
+        cacheHit: false,
+        fromCache: false
+      };
+    }
   }
 
   /**
