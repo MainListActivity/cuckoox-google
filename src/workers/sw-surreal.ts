@@ -55,10 +55,7 @@ const eventHandlers = {
           await initializeConnectionRecoveryManager();
           // 初始化 DataConsistencyManager
           await initializeDataConsistencyManager();
-          // 初始化 MultiTenantManager
-          await initializeMultiTenantManager();
-          // 初始化 TenantSwitchHandler
-          await initializeTenantSwitchHandler();
+
 
           // 尝试恢复连接配置
           const restoredConfig = await restoreConnectionConfig();
@@ -264,17 +261,17 @@ const eventHandlers = {
         case 'mutate': {
           // 确保离线管理器已初始化
           await ensureOfflineManager();
-          
+
           // 检查是否处于离线模式
           const isOffline = offlineManager!.isOffline();
-          
+
           if (isOffline && type === 'mutate') {
             // 离线模式下的写操作：添加到离线队列
             console.log('ServiceWorker: Offline mode detected, queuing mutation operation');
-            
+
             const userId = await getCurrentUserId();
             const caseId = payload.case_id;
-            
+
             const operationId = await offlineManager!.queueOfflineOperation({
               type: 'query',
               table: extractTableNameFromSQL(payload.sql) || 'unknown',
@@ -284,16 +281,16 @@ const eventHandlers = {
               caseId,
               maxRetries: 3
             });
-            
-            respond({ 
-              success: true, 
-              offline: true, 
+
+            respond({
+              success: true,
+              offline: true,
               operationId,
               message: '操作已添加到离线队列，将在网络恢复后自动同步'
             });
             break;
           }
-          
+
           if (isOffline && type === 'query') {
             // 离线模式下的查询：尝试从本地数据库查询
             try {
@@ -321,14 +318,14 @@ const eventHandlers = {
               if (!reconnectionState.isConnected) {
                 // 连接失败，切换到离线模式
                 console.log('ServiceWorker: Connection failed, switching to offline mode');
-                
+
                 if (type === 'query') {
                   const result = await offlineManager!.executeOfflineQuery(payload.sql, payload.vars);
                   respond(result);
                 } else {
                   const userId = await getCurrentUserId();
                   const caseId = payload.case_id;
-                  
+
                   const operationId = await offlineManager!.queueOfflineOperation({
                     type: 'query',
                     table: extractTableNameFromSQL(payload.sql) || 'unknown',
@@ -338,10 +335,10 @@ const eventHandlers = {
                     caseId,
                     maxRetries: 3
                   });
-                  
-                  respond({ 
-                    success: true, 
-                    offline: true, 
+
+                  respond({
+                    success: true,
+                    offline: true,
                     operationId,
                     message: '网络连接失败，操作已添加到离线队列'
                   });
@@ -384,7 +381,7 @@ const eventHandlers = {
 
           } catch (error) {
             console.error(`ServiceWorker: Enhanced query handler failed for ${type}:`, error);
-            
+
             // 尝试离线降级处理
             try {
               if (type === 'query') {
@@ -395,7 +392,7 @@ const eventHandlers = {
                 console.log('ServiceWorker: Falling back to offline queue for mutation');
                 const userId = await getCurrentUserId();
                 const caseId = payload.case_id;
-                
+
                 const operationId = await offlineManager!.queueOfflineOperation({
                   type: 'query',
                   table: extractTableNameFromSQL(payload.sql) || 'unknown',
@@ -405,10 +402,10 @@ const eventHandlers = {
                   caseId,
                   maxRetries: 3
                 });
-                
-                respond({ 
-                  success: true, 
-                  offline: true, 
+
+                respond({
+                  success: true,
+                  offline: true,
                   operationId,
                   message: '操作失败，已添加到离线队列'
                 });
@@ -963,11 +960,11 @@ const eventHandlers = {
         // 新的缓存管理消息类型
         case 'get_cache_stats': {
           await ensureEnhancedQueryHandler();
-          
+
           try {
             const stats = enhancedQueryHandler!.getPerformanceStats();
-            respond({ 
-              success: true, 
+            respond({
+              success: true,
               stats: {
                 ...stats,
                 timestamp: Date.now(),
@@ -976,9 +973,9 @@ const eventHandlers = {
             });
           } catch (error) {
             console.error('ServiceWorker: Failed to get cache stats:', error);
-            respond({ 
-              success: false, 
-              error: (error as Error).message 
+            respond({
+              success: false,
+              error: (error as Error).message
             });
           }
           break;
@@ -986,26 +983,26 @@ const eventHandlers = {
 
         case 'preload_cache': {
           await ensureEnhancedQueryHandler();
-          
+
           try {
             const { tables, userId, caseId } = payload;
-            
+
             if (!Array.isArray(tables) || tables.length === 0) {
               throw new Error('Tables array is required for cache preloading');
             }
 
             await enhancedQueryHandler!.preloadCache(tables, userId, caseId);
-            
-            respond({ 
-              success: true, 
+
+            respond({
+              success: true,
               message: `Cache preloaded for ${tables.length} tables`,
               tables: tables
             });
           } catch (error) {
             console.error('ServiceWorker: Failed to preload cache:', error);
-            respond({ 
-              success: false, 
-              error: (error as Error).message 
+            respond({
+              success: false,
+              error: (error as Error).message
             });
           }
           break;
@@ -1013,15 +1010,15 @@ const eventHandlers = {
 
         case 'get_subscription_status': {
           await ensureEnhancedQueryHandler();
-          
+
           try {
             const subscriptionManager = enhancedQueryHandler!.getSubscriptionManager();
             const activeSubscriptions = subscriptionManager.getActiveSubscriptions();
             const syncStatus = subscriptionManager.getSyncStatus();
             const healthStatus = subscriptionManager.getHealthStatus();
 
-            respond({ 
-              success: true, 
+            respond({
+              success: true,
               subscriptionStatus: {
                 activeSubscriptions: Array.from(activeSubscriptions.entries()).map(([id, sub]) => ({
                   id,
@@ -1043,9 +1040,9 @@ const eventHandlers = {
             });
           } catch (error) {
             console.error('ServiceWorker: Failed to get subscription status:', error);
-            respond({ 
-              success: false, 
-              error: (error as Error).message 
+            respond({
+              success: false,
+              error: (error as Error).message
             });
           }
           break;
@@ -1053,10 +1050,10 @@ const eventHandlers = {
 
         case 'configure_table_cache': {
           await ensureEnhancedQueryHandler();
-          
+
           try {
             const { table, config } = payload;
-            
+
             if (!table || typeof table !== 'string') {
               throw new Error('Table name is required for cache configuration');
             }
@@ -1067,18 +1064,18 @@ const eventHandlers = {
 
             const queryRouter = enhancedQueryHandler!.getQueryRouter();
             queryRouter.updateTableProfile(table, config);
-            
-            respond({ 
-              success: true, 
+
+            respond({
+              success: true,
               message: `Cache configuration updated for table: ${table}`,
               table,
               config
             });
           } catch (error) {
             console.error('ServiceWorker: Failed to configure table cache:', error);
-            respond({ 
-              success: false, 
-              error: (error as Error).message 
+            respond({
+              success: false,
+              error: (error as Error).message
             });
           }
           break;
@@ -1091,7 +1088,7 @@ const eventHandlers = {
           const networkStatus = offlineManager!.getNetworkStatus();
           const pendingOperations = offlineManager!.getPendingOperationsCount();
           const operationStats = offlineManager!.getOperationStats();
-          
+
           respond({
             isOffline,
             networkStatus,
@@ -1158,7 +1155,7 @@ const eventHandlers = {
           await ensureConnectionRecoveryManager();
           const connectionState = connectionRecoveryManager!.getConnectionState();
           const connectionStats = connectionRecoveryManager!.getConnectionStats();
-          
+
           respond({
             connectionState,
             connectionStats
@@ -1225,7 +1222,7 @@ const eventHandlers = {
           await ensureDataConsistencyManager();
           const conflicts = dataConsistencyManager!.getConflicts();
           const unresolvedConflicts = dataConsistencyManager!.getUnresolvedConflicts();
-          
+
           respond({
             allConflicts: conflicts,
             unresolvedConflicts
@@ -1297,17 +1294,12 @@ console.log("Service Worker event listeners registered");
 
 import { Surreal, RecordId, ConnectionStatus, StringRecordId } from 'surrealdb';
 import { TokenManager, TokenInfo } from './token-manager';
-import { DataCacheManager, isAutoSyncTable } from './data-cache-manager';
+import { DataCacheManager } from './data-cache-manager';
 import { EnhancedQueryHandler } from './enhanced-query-handler';
-import { QueryRouter } from './query-router';
-import { CacheExecutor } from './cache-executor';
-import { SubscriptionManager } from './subscription-manager';
 import { PageAwareSubscriptionManager } from './page-aware-subscription-manager';
 import { OfflineManager } from './offline-manager';
 import { ConnectionRecoveryManager } from './connection-recovery-manager';
 import { DataConsistencyManager } from './data-consistency-manager';
-import { MultiTenantManager, type TenantContext } from './multi-tenant-manager';
-import { TenantSwitchHandler } from './tenant-switch-handler';
 
 // 获取WASM引擎的函数
 async function getWasmEngines() {
@@ -1362,10 +1354,7 @@ let offlineManager: OfflineManager | null = null;
 let connectionRecoveryManager: ConnectionRecoveryManager | null = null;
 // 数据一致性管理器实例
 let dataConsistencyManager: DataConsistencyManager | null = null;
-// 多租户管理器实例
-let multiTenantManager: MultiTenantManager | null = null;
-// 租户切换处理器实例
-let tenantSwitchHandler: TenantSwitchHandler | null = null;
+
 let isConnected = false;
 let isLocalDbInitialized = false;
 let connectionConfig: {
@@ -1913,7 +1902,7 @@ async function connectWithTimeout(): Promise<void> {
         console.log('ServiceWorker: Connection established, isConnected set to true');
 
         await db!.use({ namespace: connectionConfig!.namespace, database: connectionConfig!.database });
-        
+
         // 更新 EnhancedQueryHandler 及其组件的远程数据库引用
         updateEnhancedQueryHandlerRemoteDb();
 
@@ -2288,21 +2277,11 @@ async function initializeDataCacheManager(): Promise<void> {
     // 先初始化本地数据库
     await initializeLocalSurrealDB();
 
-    // 创建多租户管理器实例
-    const multiTenantManager = new MultiTenantManager({
-      enableStrictIsolation: true,
-      cacheNamespacePrefix: 'tenant_cache_',
-      allowCrossTenantAccess: false,
-      tenantIdField: 'case_id',
-      auditTenantAccess: true
-    });
-
     // 创建 DataCacheManager 实例
     dataCacheManager = new DataCacheManager({
       localDb: localDb!,
       remoteDb: db!,
       broadcastToAllClients: broadcastToAllClients,
-      multiTenantManager: multiTenantManager,
     });
 
     await dataCacheManager.initialize();
@@ -2541,19 +2520,19 @@ function updateEnhancedQueryHandlerRemoteDb(): void {
   if (enhancedQueryHandler && db) {
     // 通过反射更新私有属性（这是一个临时解决方案）
     (enhancedQueryHandler as any).remoteDb = db;
-    
+
     // 同时更新 CacheExecutor 的 remoteDb 引用
     if ((enhancedQueryHandler as any).cacheExecutor) {
       (enhancedQueryHandler as any).cacheExecutor.remoteDb = db;
       console.log('ServiceWorker: Updated CacheExecutor remote database reference');
     }
-    
+
     // 同时更新 SubscriptionManager 的 remoteDb 引用
     if ((enhancedQueryHandler as any).subscriptionManager) {
       (enhancedQueryHandler as any).subscriptionManager.remoteDb = db;
       console.log('ServiceWorker: Updated SubscriptionManager remote database reference');
     }
-    
+
     console.log('ServiceWorker: Updated EnhancedQueryHandler and related components remote database reference');
   }
 }
@@ -3147,6 +3126,7 @@ async function handleConfigurationChanges(newConfig?: typeof connectionConfig): 
       if (isConnected && db) {
         try {
           await db.use({ namespace: newConfig.namespace, database: newConfig.database });
+          await localDb!.use({ namespace: newConfig.namespace, database: newConfig.database });
 
           // 重新认证
           await ensureTokenManager();
@@ -3591,77 +3571,4 @@ async function clearOfflineQueue(syncKey: string): Promise<void> {
     throw error;
   }
 }
-/**
 
- * 初始化 MultiTenantManager
- */
-async function initializeMultiTenantManager(): Promise<void> {
-  if (multiTenantManager) return;
-
-  try {
-    console.log('ServiceWorker: Initializing MultiTenantManager...');
-
-    multiTenantManager = new MultiTenantManager({
-      enableStrictIsolation: true,
-      cacheNamespacePrefix: 'tenant_cache_',
-      allowCrossTenantAccess: false,
-      tenantIdField: 'case_id',
-      auditTenantAccess: true
-    });
-
-    console.log('ServiceWorker: MultiTenantManager initialized successfully');
-  } catch (error) {
-    console.error('ServiceWorker: Failed to initialize MultiTenantManager:', error);
-    throw error;
-  }
-}
-
-/**
- * 确保 MultiTenantManager 已初始化
- */
-async function ensureMultiTenantManager(): Promise<void> {
-  if (!multiTenantManager) {
-    await initializeMultiTenantManager();
-  }
-}
-
-/**
- * 初始化 TenantSwitchHandler
- */
-async function initializeTenantSwitchHandler(): Promise<void> {
-  if (tenantSwitchHandler) return;
-
-  try {
-    console.log('ServiceWorker: Initializing TenantSwitchHandler...');
-
-    // 确保依赖组件已初始化
-    await ensureDataCacheManager();
-    await ensurePageAwareSubscriptionManager();
-
-    tenantSwitchHandler = new TenantSwitchHandler(
-      dataCacheManager!,
-      pageAwareSubscriptionManager!.getSubscriptionManager(),
-      {
-        enablePreloading: true,
-        enableProgressTracking: true,
-        maxSwitchTimeMs: 30000,
-        retryAttempts: 3,
-        cleanupOldTenantData: true
-      }
-    );
-
-    console.log('ServiceWorker: TenantSwitchHandler initialized successfully');
-  } catch (error) {
-    console.error('ServiceWorker: Failed to initialize TenantSwitchHandler:', error);
-    throw error;
-  }
-}
-
-/**
- * 确保 TenantSwitchHandler 已初始化
- */
-async function ensureTenantSwitchHandler(): Promise<void> {
-  if (!tenantSwitchHandler) {
-    await initializeTenantSwitchHandler();
-  }
-}

@@ -433,11 +433,43 @@ const preloadCache = async () => {
 - **降级支持**: 缓存系统失败时自动回退到原始查询
 - **渐进式升级**: 支持新旧系统并存
 
+## 多租户数据库管理
+
+多租户数据库隔离现在完全自动化，系统在用户登录时自动获取租户信息并设置数据库连接，无需手动调用API接口。
+
+**自动化特性**:
+- ✅ **自动获取租户信息**: 系统在用户登录时自动从认证状态中提取租户代码
+- ✅ **自动设置数据库连接**: 系统自动调用 `localDb.use()` 和 `remoteDb.use()` 方法连接到租户特定的database
+- ✅ **透明操作**: 所有后续数据库操作都在正确的租户database中执行，无需额外处理
+- ✅ **自动清理**: 用户退出登录时自动清除租户信息和数据库连接状态
+
+**设计简化**:
+- 🎯 **租户=Database**: 租户直接对应SurrealDB的database，简化映射关系
+- 🚀 **零配置**: 无需手动设置或切换租户数据库
+- 🔒 **数据安全**: 通过database级别隔离确保租户数据完全分离
+
+**实现原理**:
+```typescript
+// 用户登录时自动设置租户数据库
+async updateAuthState(authData: UnknownData): Promise<void> {
+  this.currentAuthState = authData;
+  
+  // 如果有租户信息，自动设置数据库连接
+  if (authData && typeof authData === 'object' && 'tenant_code' in authData) {
+    const tenantCode = authData.tenant_code as string;
+    if (tenantCode) {
+      await this.tenantDatabaseManager.setTenantDatabase(tenantCode);
+    }
+  }
+}
+```
+
 ## 注意事项
 
 1. **Service Worker模式**: 所有缓存功能仅在Service Worker模式下可用
 2. **网络依赖**: 首次数据加载仍需要网络连接
 3. **内存使用**: 缓存会占用一定的内存空间，需要合理配置
 4. **数据一致性**: 缓存数据可能存在短暂的不一致，需要根据业务需求选择合适的一致性级别
+5. **多租户隔离**: 租户数据库连接完全自动化，开发者无需关心租户切换逻辑
 
 这套API为破产案件管理平台提供了强大的数据缓存能力，确保了在各种网络环境下的稳定运行和优秀的用户体验。

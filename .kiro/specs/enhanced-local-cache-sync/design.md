@@ -255,7 +255,85 @@ async activatePageCache(pagePath: string, userId: string, caseId?: string) {
 }
 ```
 
-### 认证状态内存管理
+### 多租户数据隔离
+
+#### 基于Database的租户隔离设计
+
+系统采用SurrealDB的database级别隔离来实现多租户功能，每个租户使用独立的database，确保数据完全隔离。租户直接对应database，在用户登录时自动设置数据库连接，无需复杂的切换逻辑。
+
+**设计原则**:
+- 🎯 **租户≠案件**: 明确租户不等同于案件，不需要考虑本地案件数据的隔离
+- 🔗 **租户=Database**: 租户直接对应SurrealDB的database，简化映射关系
+- 🚀 **自动设置**: 在用户登录时自动设置数据库连接，无需手动切换
+- 📚 **参考原有逻辑**: 切换逻辑参考原来remoteDb的use调用时机
+
+```typescript
+interface TenantInfo {
+  // 租户标识（直接作为database名称）
+  tenantCode: string;
+  
+  // 数据库配置
+  namespace: string;
+  database: string; // 等同于tenantCode
+  
+  // 用户信息
+  userId: string;
+  username?: string;
+}
+
+// 简化的租户数据库管理
+class TenantDatabaseManager {
+  private currentTenantCode: string | null = null;
+  
+  // 设置租户数据库（在用户登录时调用）
+  async setTenantDatabase(tenantCode: string, namespace: string = 'ck_go'): Promise<void> {
+    // 如果已经是当前租户，无需重复设置
+    if (this.currentTenantCode === tenantCode) {
+      console.log('TenantDatabaseManager: Already using tenant database:', tenantCode);
+      return;
+    }
+
+    console.log('TenantDatabaseManager: Setting tenant database to:', tenantCode);
+
+    // 直接在现有的数据库连接上调用use方法
+    if (this.dataCacheManager.localDb) {
+      await this.dataCacheManager.localDb.use({
+        namespace: namespace,
+        database: tenantCode
+      });
+      console.log('TenantDatabaseManager: Local database set to tenant:', tenantCode);
+    }
+    
+    if (this.dataCacheManager.remoteDb) {
+      await this.dataCacheManager.remoteDb.use({
+        namespace: namespace,
+        database: tenantCode
+      });
+      console.log('TenantDatabaseManager: Remote database set to tenant:', tenantCode);
+    }
+    
+    this.currentTenantCode = tenantCode;
+    console.log('TenantDatabaseManager: Successfully set tenant database to:', tenantCode);
+  }
+  
+  // 获取当前租户代码
+  getCurrentTenantCode(): string | null {
+    return this.currentTenantCode;
+  }
+  
+  // 清除租户信息（用户退出时调用）
+  clearTenantInfo(): void {
+    this.currentTenantCode = null;
+    console.log('TenantDatabaseManager: Tenant info cleared');
+  }
+  
+  // 检查是否有有效的租户设置
+  hasValidTenant(): boolean {
+    return this.currentTenantCode !== null && 
+           this.dataCacheManager.isConnected();
+  }
+}
+```
 
 #### 认证状态结构设计
 
@@ -266,21 +344,20 @@ interface AuthState {
   github_id?: string;
   username?: string;
   
+  // 租户信息（用于数据库连接）
+  tenant_code?: string;
+  
   // 权限信息
   permissions: {
     operations: Array<{
       operation_id: string;
-      case_id?: string;
       can_execute: boolean;
       conditions?: any;
     }>;
   };
   
   // 角色信息
-  roles: {
-    global: string[];
-    case: Record<string, string[]>; // case_id -> role_names
-  };
+  roles: string[];
   
   // 菜单权限
   menus: Array<{
@@ -302,9 +379,15 @@ interface AuthState {
 class AuthStateManager {
   private currentAuthState: AuthState | null = null;
   
-  // 更新认证状态
+  // 更新认证状态（登录时调用）
   async updateAuthState(authData: AuthState): Promise<void> {
     this.currentAuthState = authData;
+    
+    // 如果有租户信息，自动设置数据库连接
+    if (authData.tenant_code) {
+      await this.tenantDatabaseManager.setTenantDatabase(authData.tenant_code);
+    }
+    
     console.log('AuthStateManager: Auth state updated');
   }
   
@@ -313,24 +396,28 @@ class AuthStateManager {
     return this.currentAuthState;
   }
   
-  // 清除认证状态
+  // 清除认证状态（退出登录时调用）
   clearAuthState(): void {
     this.currentAuthState = null;
+    this.tenantDatabaseManager.clearTenantInfo();
     console.log('AuthStateManager: Auth state cleared');
   }
   
   // 检查权限
-  hasPermission(operationId: string, caseId?: string): boolean {
+  hasPermission(operationId: string): boolean {
     if (!this.currentAuthState) return false;
     
     return this.currentAuthState.permissions.operations.some(op => 
       op.operation_id === operationId && 
-      (!caseId || op.case_id === caseId) && 
       op.can_execute
     );
   }
+  
+  // 获取租户代码
+  getTenantCode(): string | null {
+    return this.currentAuthState?.tenant_code || null;
+  }
 }
-```
 
 ### 缓存配置管理
 
