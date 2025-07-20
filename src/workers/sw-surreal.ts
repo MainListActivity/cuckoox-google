@@ -1081,6 +1081,456 @@ const eventHandlers = {
           break;
         }
 
+        // 性能监控相关消息
+        case 'get_performance_report': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { startTime, endTime } = payload;
+            const performanceMonitor = enhancedQueryHandler!.getPerformanceMonitor();
+            const report = performanceMonitor.generatePerformanceReport(startTime, endTime);
+
+            respond({
+              success: true,
+              report,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get performance report:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'get_performance_trend': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { hours = 24 } = payload;
+            const performanceMonitor = enhancedQueryHandler!.getPerformanceMonitor();
+            const trendData = performanceMonitor.getPerformanceTrend(hours);
+
+            respond({
+              success: true,
+              trendData,
+              hours,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get performance trend:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'get_performance_anomalies': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { hours = 24 } = payload;
+            const performanceMonitor = enhancedQueryHandler!.getPerformanceMonitor();
+            const anomalies = performanceMonitor.getAnomalies(hours);
+
+            respond({
+              success: true,
+              anomalies,
+              hours,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get performance anomalies:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'get_realtime_performance': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const performanceMonitor = enhancedQueryHandler!.getPerformanceMonitor();
+            const realTimeStats = performanceMonitor.getRealTimeStats();
+
+            respond({
+              success: true,
+              realTimeStats,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get realtime performance:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'export_performance_data': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { format = 'json' } = payload;
+            const performanceMonitor = enhancedQueryHandler!.getPerformanceMonitor();
+            const exportData = performanceMonitor.exportPerformanceData(format);
+
+            respond({
+              success: true,
+              data: exportData,
+              format,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to export performance data:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'reset_performance_stats': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const performanceMonitor = enhancedQueryHandler!.getPerformanceMonitor();
+            performanceMonitor.reset();
+
+            respond({
+              success: true,
+              message: 'Performance statistics have been reset',
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to reset performance stats:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        // 缓存调试相关消息
+        case 'inspect_cache_state': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { table } = payload;
+            const cacheDebugger = enhancedQueryHandler!.getCacheDebugger();
+            const inspection = await cacheDebugger.inspectCacheState(table);
+
+            respond({
+              success: true,
+              inspection,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to inspect cache state:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'trace_query_execution': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { sql, params, userId, caseId } = payload;
+            const cacheDebugger = enhancedQueryHandler!.getCacheDebugger();
+            const trace = await cacheDebugger.traceQueryExecution(sql, params, userId, caseId);
+
+            respond({
+              success: true,
+              trace,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to trace query execution:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'validate_cache_data': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { table, forceRefresh = false } = payload;
+            
+            if (!table || typeof table !== 'string') {
+              throw new Error('Table name is required for cache validation');
+            }
+
+            const cacheDebugger = enhancedQueryHandler!.getCacheDebugger();
+            const validation = await cacheDebugger.validateCacheData(table, forceRefresh);
+
+            respond({
+              success: true,
+              validation,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to validate cache data:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'check_cache_content': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { table } = payload;
+            
+            if (!table || typeof table !== 'string') {
+              throw new Error('Table name is required for cache content check');
+            }
+
+            const cacheDebugger = enhancedQueryHandler!.getCacheDebugger();
+            const contentCheck = await cacheDebugger.checkCacheContent(table);
+
+            respond({
+              success: true,
+              contentCheck,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to check cache content:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'get_query_traces': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { limit = 100 } = payload;
+            const cacheDebugger = enhancedQueryHandler!.getCacheDebugger();
+            const traces = cacheDebugger.getQueryTraces(limit);
+
+            respond({
+              success: true,
+              traces,
+              count: traces.length,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get query traces:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'export_debug_info': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { includeTraces = true, includeValidation = true } = payload;
+            const cacheDebugger = enhancedQueryHandler!.getCacheDebugger();
+            const debugInfo = await cacheDebugger.exportDebugInfo(includeTraces, includeValidation);
+
+            respond({
+              success: true,
+              debugInfo,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to export debug info:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        // 日志记录相关消息
+        case 'get_logs': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { filter, limit = 1000 } = payload;
+            const cacheLogger = enhancedQueryHandler!.getCacheLogger();
+            const logs = cacheLogger.getLogs(filter, limit);
+
+            respond({
+              success: true,
+              logs,
+              count: logs.length,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get logs:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'analyze_logs': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { startTime, endTime } = payload;
+            const cacheLogger = enhancedQueryHandler!.getCacheLogger();
+            const analysis = cacheLogger.analyzeLogs(startTime, endTime);
+
+            respond({
+              success: true,
+              analysis,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to analyze logs:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'export_logs': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { format = 'json', filter } = payload;
+            const cacheLogger = enhancedQueryHandler!.getCacheLogger();
+            const exportData = cacheLogger.exportLogs(format, filter);
+
+            respond({
+              success: true,
+              data: exportData,
+              format,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to export logs:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'get_error_stats': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const cacheLogger = enhancedQueryHandler!.getCacheLogger();
+            const errorStats = cacheLogger.getErrorStats();
+            
+            // 转换Map为普通对象以便序列化
+            const statsArray = Array.from(errorStats.entries()).map(([type, stats]) => ({
+              errorType: type,
+              count: stats.count,
+              firstOccurrence: stats.firstOccurrence,
+              lastOccurrence: stats.lastOccurrence,
+              affectedUsers: Array.from(stats.affectedUsers),
+              affectedTables: Array.from(stats.affectedTables),
+              errorRate: stats.errorRate,
+              avgFrequency: stats.avgFrequency,
+              severity: stats.severity,
+              sampleErrors: stats.sampleErrors.slice(0, 3) // 只返回前3个样本
+            }));
+
+            respond({
+              success: true,
+              errorStats: statsArray,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to get error stats:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'set_log_level': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { level } = payload;
+            
+            if (typeof level !== 'number' || level < 0 || level > 4) {
+              throw new Error('Invalid log level. Must be 0-4 (DEBUG, INFO, WARN, ERROR, CRITICAL)');
+            }
+
+            const cacheLogger = enhancedQueryHandler!.getCacheLogger();
+            cacheLogger.setLogLevel(level);
+
+            respond({
+              success: true,
+              message: `Log level set to ${level}`,
+              level,
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to set log level:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
+        case 'cleanup_logs': {
+          await ensureEnhancedQueryHandler();
+
+          try {
+            const { maxAge } = payload;
+            const cacheLogger = enhancedQueryHandler!.getCacheLogger();
+            cacheLogger.cleanup(maxAge);
+
+            respond({
+              success: true,
+              message: 'Log cleanup completed',
+              timestamp: Date.now()
+            });
+          } catch (error) {
+            console.error('ServiceWorker: Failed to cleanup logs:', error);
+            respond({
+              success: false,
+              error: (error as Error).message
+            });
+          }
+          break;
+        }
+
         // 离线管理相关消息
         case 'get_offline_status': {
           await ensureOfflineManager();

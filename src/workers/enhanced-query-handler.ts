@@ -7,6 +7,9 @@ import { QueryRouter } from './query-router';
 import { CacheExecutor } from './cache-executor';
 import { SubscriptionManager } from './subscription-manager';
 import { DataCacheManager } from './data-cache-manager';
+import { PerformanceMonitor } from './performance-monitor';
+import { CacheDebugger } from './cache-debugger';
+import { CacheLogger, LogCategory } from './cache-logger';
 import type { Surreal } from 'surrealdb';
 import type { QueryParams, UnknownData } from '../types/surreal';
 
@@ -30,6 +33,9 @@ export class EnhancedQueryHandler {
   private cacheExecutor: CacheExecutor;
   private subscriptionManager: SubscriptionManager;
   private dataCacheManager: DataCacheManager;
+  private performanceMonitor: PerformanceMonitor;
+  private cacheDebugger: CacheDebugger;
+  private cacheLogger: CacheLogger;
   private localDb: Surreal;
   private remoteDb?: Surreal;
 
@@ -44,7 +50,14 @@ export class EnhancedQueryHandler {
     this.dataCacheManager = dataCacheManager;
 
     // 初始化智能缓存组件
+    this.cacheLogger = new CacheLogger();
+    this.performanceMonitor = new PerformanceMonitor();
     this.queryRouter = new QueryRouter();
+    this.cacheDebugger = new CacheDebugger(
+      this.localDb,
+      this.dataCacheManager,
+      this.queryRouter
+    );
     this.cacheExecutor = new CacheExecutor(
       this.queryRouter,
       this.dataCacheManager,
@@ -57,6 +70,12 @@ export class EnhancedQueryHandler {
       broadcastToAllClients,
       this.remoteDb
     );
+
+    // 记录系统启动日志
+    this.cacheLogger.info(LogCategory.SYSTEM, 'Enhanced query handler initialized', {
+      hasRemoteDb: !!this.remoteDb,
+      components: ['QueryRouter', 'CacheExecutor', 'SubscriptionManager', 'PerformanceMonitor', 'CacheDebugger']
+    }, 'EnhancedQueryHandler');
   }
 
   /**
@@ -71,19 +90,48 @@ export class EnhancedQueryHandler {
     const startTime = Date.now();
 
     try {
-      console.log(`EnhancedQueryHandler: Processing query for user ${userId}, case ${caseId}`);
-      console.log(`Query: ${sql.substring(0, 100)}${sql.length > 100 ? '...' : ''}`);
+      this.cacheLogger.debug(LogCategory.QUERY, 'Processing query', {
+        sql: sql.substring(0, 200),
+        hasParams: !!params,
+        userId,
+        caseId
+      }, 'EnhancedQueryHandler');
+
+      // 开始性能计时
+      const timerId = `query_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      this.cacheLogger.startTimer(timerId);
 
       // 使用智能缓存执行器执行查询
       const result = await this.cacheExecutor.executeQuery(sql, params, userId, caseId);
+
+      // 结束性能计时
+      this.cacheLogger.endTimer(timerId, LogCategory.QUERY, 'Query execution completed', {
+        source: result.source,
+        cacheHit: result.cacheHit,
+        strategy: result.strategy,
+        userId,
+        caseId
+      }, 'EnhancedQueryHandler');
+
+      // 记录查询执行日志
+      this.cacheLogger.logQuery(sql, params, result.executionTime, result.source, result.cacheHit, userId, caseId);
+
+      // 记录性能指标
+      const analysis = this.queryRouter.analyzeQuery(sql, params);
+      this.performanceMonitor.recordQueryPerformance(
+        sql,
+        params,
+        result.source,
+        result.executionTime,
+        result.cacheHit,
+        analysis.tables
+      );
 
       // 处理订阅逻辑
       await this.handleSubscriptionLogic(sql, result, userId, caseId);
 
       // 处理个人数据缓存逻辑
       await this.handlePersonalDataCaching(sql, result.data, userId, caseId);
-
-      console.log(`EnhancedQueryHandler: Query completed - Source: ${result.source}, Cache Hit: ${result.cacheHit}, Time: ${result.executionTime}ms`);
 
       return {
         success: true,
@@ -95,13 +143,34 @@ export class EnhancedQueryHandler {
       };
 
     } catch (error) {
-      console.error('EnhancedQueryHandler: Query execution failed:', error);
+      const executionTime = Date.now() - startTime;
+      
+      // 记录错误日志
+      this.cacheLogger.error(LogCategory.QUERY, 'Query execution failed', error as Error, {
+        sql: sql.substring(0, 200),
+        hasParams: !!params,
+        userId,
+        caseId,
+        executionTime
+      }, 'EnhancedQueryHandler');
+      
+      // 记录错误性能指标
+      const analysis = this.queryRouter.analyzeQuery(sql, params);
+      this.performanceMonitor.recordQueryPerformance(
+        sql,
+        params,
+        'remote',
+        executionTime,
+        false,
+        analysis.tables,
+        (error as Error).message
+      );
       
       return {
         success: false,
         error: (error as Error).message,
         source: 'remote',
-        executionTime: Date.now() - startTime,
+        executionTime,
         cacheHit: false,
         strategy: 'ERROR'
       };
@@ -120,7 +189,12 @@ export class EnhancedQueryHandler {
     const startTime = Date.now();
 
     try {
-      console.log(`EnhancedQueryHandler: Processing mutation for user ${userId}`);
+      this.cacheLogger.info(LogCategory.QUERY, 'Processing mutation', {
+        sql: sql.substring(0, 200),
+        hasParams: !!params,
+        userId,
+        caseId
+      }, 'EnhancedQueryHandler');
 
       // 写操作必须走远程数据库
       if (!this.remoteDb) {
@@ -139,7 +213,25 @@ export class EnhancedQueryHandler {
       await this.broadcastMutationEvent(analysis, result, userId, caseId);
 
       const executionTime = Date.now() - startTime;
-      console.log(`EnhancedQueryHandler: Mutation completed in ${executionTime}ms`);
+      
+      // 记录写操作日志
+      this.cacheLogger.info(LogCategory.QUERY, 'Mutation completed', {
+        executionTime,
+        affectedTables: analysis.tables,
+        queryType: analysis.queryType,
+        userId,
+        caseId
+      }, 'EnhancedQueryHandler');
+
+      // 记录写操作性能指标
+      this.performanceMonitor.recordQueryPerformance(
+        sql,
+        params,
+        'remote',
+        executionTime,
+        false,
+        analysis.tables
+      );
 
       return {
         success: true,
@@ -151,13 +243,34 @@ export class EnhancedQueryHandler {
       };
 
     } catch (error) {
-      console.error('EnhancedQueryHandler: Mutation execution failed:', error);
+      const executionTime = Date.now() - startTime;
+      
+      // 记录写操作错误日志
+      this.cacheLogger.error(LogCategory.QUERY, 'Mutation execution failed', error as Error, {
+        sql: sql.substring(0, 200),
+        hasParams: !!params,
+        userId,
+        caseId,
+        executionTime
+      }, 'EnhancedQueryHandler');
+      
+      // 记录写操作错误性能指标
+      const analysis = this.queryRouter.analyzeQuery(sql, params);
+      this.performanceMonitor.recordQueryPerformance(
+        sql,
+        params,
+        'remote',
+        executionTime,
+        false,
+        analysis.tables,
+        (error as Error).message
+      );
       
       return {
         success: false,
         error: (error as Error).message,
         source: 'remote',
-        executionTime: Date.now() - startTime,
+        executionTime,
         cacheHit: false,
         strategy: 'ERROR'
       };
@@ -484,8 +597,32 @@ export class EnhancedQueryHandler {
     return {
       executionStats: this.cacheExecutor.getExecutionStats(),
       subscriptionHealth: this.subscriptionManager.getHealthStatus(),
-      syncStatus: this.subscriptionManager.getSyncStatus()
+      syncStatus: this.subscriptionManager.getSyncStatus(),
+      performanceReport: this.performanceMonitor.generatePerformanceReport(),
+      realTimeStats: this.performanceMonitor.getRealTimeStats(),
+      anomalies: this.performanceMonitor.getAnomalies()
     };
+  }
+
+  /**
+   * 获取性能监控器
+   */
+  getPerformanceMonitor(): PerformanceMonitor {
+    return this.performanceMonitor;
+  }
+
+  /**
+   * 获取缓存调试器
+   */
+  getCacheDebugger(): CacheDebugger {
+    return this.cacheDebugger;
+  }
+
+  /**
+   * 获取缓存日志记录器
+   */
+  getCacheLogger(): CacheLogger {
+    return this.cacheLogger;
   }
 
   /**
@@ -510,16 +647,19 @@ export class EnhancedQueryHandler {
    * 清理资源
    */
   async cleanup(): Promise<void> {
-    console.log('EnhancedQueryHandler: Cleaning up resources...');
+    this.cacheLogger.info(LogCategory.SYSTEM, 'Cleaning up resources', {}, 'EnhancedQueryHandler');
     
     // 清理统计数据
     this.cacheExecutor.cleanupStats();
     this.queryRouter.cleanupFrequencyStats();
+    this.performanceMonitor.cleanup();
+    this.cacheDebugger.cleanup();
+    this.cacheLogger.cleanup();
     
     // 关闭订阅管理器
     await this.subscriptionManager.close();
     
-    console.log('EnhancedQueryHandler: Cleanup completed');
+    this.cacheLogger.info(LogCategory.SYSTEM, 'Cleanup completed', {}, 'EnhancedQueryHandler');
   }
 
   /**

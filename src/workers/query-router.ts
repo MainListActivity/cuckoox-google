@@ -1,6 +1,11 @@
 import { RecordId } from 'surrealdb';
 import type { QueryParams, UnknownData } from '../types/surreal';
-import type { TenantContext } from './multi-tenant-manager';
+// 多租户上下文类型（简化版本）
+interface TenantContext {
+  tenantId: string;
+  namespace: string;
+  database: string;
+}
 
 // 查询类型枚举
 export enum QueryType {
