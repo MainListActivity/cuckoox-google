@@ -575,24 +575,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { isAuthenticated, reason, timestamp } = event.detail;
       console.log('AuthContext: Received auth state change event:', { isAuthenticated, reason, timestamp });
 
-      // 如果用户未认证，清除认证状态并重定向到登录页面
+      // 如果用户未认证，立即清除认证状态并重定向到登录页面
       if (!isAuthenticated) {
-        console.log('AuthContext: User not authenticated, clearing auth state');
+        console.log('AuthContext: User not authenticated, clearing auth state immediately');
 
-        // 异步清除认证状态，避免阻塞事件处理
-        setTimeout(async () => {
-          try {
-            await clearAuthState(true);
+        try {
+          // 立即同步清除认证状态，确保状态立即更新
+          // 异步调用但不等待，确保状态立即设置
+          clearAuthState(true);
 
-            // 重定向到登录页面
-            if (window.location.pathname !== '/login') {
-              console.log('AuthContext: Redirecting to login page');
-              window.location.href = '/login';
-            }
-          } catch (error) {
-            console.error('AuthContext: Error clearing auth state:', error);
+          // 重定向到登录页面
+          if (window.location.pathname !== '/login') {
+            console.log('AuthContext: Redirecting to login page');
+            window.location.href = '/login';
           }
-        }, 0);
+        } catch (error) {
+          console.error('AuthContext: Error clearing auth state:', error);
+        }
       }
     };
 

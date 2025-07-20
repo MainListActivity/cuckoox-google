@@ -1,7 +1,7 @@
 // STYLING: This page currently uses Tailwind CSS. Per 规范.md, consider migration to MUI components.
 // TODO: Access Control - This page should be accessible only to users with 'admin' or specific claim review roles.
 // TODO: Auto-Navigation - Logic for automatic navigation to this page (e.g., if case status is '债权申报' and user has permissions) should be handled in higher-level routing.
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useTranslation } from 'react-i18next';
@@ -52,11 +52,9 @@ import {
   mdiPencilOutline,
   mdiEyeOutline,
   mdiFileDocumentOutline, // For attachment icon
-  mdiFilterOutline, // For advanced search
 } from '@mdi/js';
 // Import the new dialog
 import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from '@/src/components/admin/claims/AdminCreateClaimBasicInfoDialog';
-import AdvancedSearchDialog, { type AdvancedSearchCriteria } from './AdvancedSearchDialog';
 
 
 // 数据库原始数据接口
@@ -150,24 +148,6 @@ interface Claim {
   reviewOpinion?: string | null;
 }
 
-// 高级搜索条件接口
-interface AdvancedSearchCriteria {
-  // 全文检索选项
-  useFullTextSearch?: boolean;
-  fullTextSearch?: string;
-  // 字段特定搜索
-  creditorName?: string;
-  claimNumber?: string;
-  assertedAmountMin?: number;
-  assertedAmountMax?: number;
-  approvedAmountMin?: number;
-  approvedAmountMax?: number;
-  submissionDateStart?: string;
-  submissionDateEnd?: string;
-  reviewDateStart?: string;
-  reviewDateEnd?: string;
-  claimNature?: string;
-}
 
 
 // 将数据库原始数据转换为前端展示格式
@@ -212,18 +192,11 @@ const ClaimListPage: React.FC = () => {
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
-  const [currentSearchCriteria, setCurrentSearchCriteria] = useState<AdvancedSearchCriteria | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [totalClaims, setTotalClaims] = useState<number>(0);
   const [page, setPage] = useState<number>(0);
   const [rowsPerPage, setRowsPerPage] = useState<number>(25);
-  
-  // 高级搜索对话框状态
-  const [advancedSearchOpen, setAdvancedSearchOpen] = useState<boolean>(false);
-  
-  // 创建债权对话框状态
-  const [createClaimDialogOpen, setCreateClaimDialogOpen] = useState<boolean>(false);
   
   // 统计数据状态
   const [claimsStats, setClaimsStats] = useState({
@@ -309,8 +282,7 @@ const ClaimListPage: React.FC = () => {
   const fetchClaims = useCallback(async (
     currentPage: number,
     currentRowsPerPage: number,
-    currentSearchTerm: string,
-    searchCriteria?: AdvancedSearchCriteria | null
+    currentSearchTerm: string
   ) => {
     if (!selectedCaseId || !client) {
       setClaimsData([]);
@@ -327,62 +299,18 @@ const ClaimListPage: React.FC = () => {
       let whereClause = `case_id = $caseId`;
       const queryParams: Record<string, any> = { caseId: selectedCaseId };
 
-      // 构建搜索条件
+      // 构建搜索条件 - 简单全文检索
       const searchConditions: string[] = [];
       
-      if (searchCriteria) {
-        // 高级搜索模式
-        if (searchCriteria.useFullTextSearch && searchCriteria.fullTextSearch?.trim()) {
-          // 使用全文检索 - 对债权相关字段进行搜索
-          const fullTextQuery = searchCriteria.fullTextSearch.trim();
-          searchConditions.push(`AND (claim_number @@ $fullTextQuery OR asserted_claim_details.nature @@ $fullTextQuery OR asserted_claim_details.brief_description @@ $fullTextQuery)`);
-          queryParams.fullTextQuery = fullTextQuery;
-        } else {
-          // 字段特定搜索
-          if (searchCriteria.creditorName?.trim()) {
-            searchConditions.push(`AND creditor_id.name @@ $creditorNameSearch`);
-            queryParams.creditorNameSearch = searchCriteria.creditorName.trim();
-          }
-          if (searchCriteria.claimNumber?.trim()) {
-            searchConditions.push(`AND claim_number @@ $claimNumberSearch`);
-            queryParams.claimNumberSearch = searchCriteria.claimNumber.trim();
-          }
-        }
-        
-        // 数量筛选条件
-        if (searchCriteria.assertedAmountMin !== undefined) {
-          searchConditions.push(`AND asserted_claim_details.total_asserted_amount >= $assertedAmountMin`);
-          queryParams.assertedAmountMin = searchCriteria.assertedAmountMin;
-        }
-        if (searchCriteria.assertedAmountMax !== undefined) {
-          searchConditions.push(`AND asserted_claim_details.total_asserted_amount <= $assertedAmountMax`);
-          queryParams.assertedAmountMax = searchCriteria.assertedAmountMax;
-        }
-        
-        // 日期筛选条件
-        if (searchCriteria.submissionDateStart) {
-          searchConditions.push(`AND submission_time >= $submissionDateStart`);
-          queryParams.submissionDateStart = searchCriteria.submissionDateStart;
-        }
-        if (searchCriteria.submissionDateEnd) {
-          searchConditions.push(`AND submission_time <= $submissionDateEnd`);
-          queryParams.submissionDateEnd = searchCriteria.submissionDateEnd;
-        }
-        
-        // 债权性质筛选
-        if (searchCriteria.claimNature?.trim()) {
-          searchConditions.push(`AND asserted_claim_details.nature = $claimNature`);
-          queryParams.claimNature = searchCriteria.claimNature.trim();
-        }
-      } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
-        // 简单搜索模式 - 使用全文检索
-        searchConditions.push(`AND (claim_number @@ $searchTerm OR asserted_claim_details.nature @@ $searchTerm OR asserted_claim_details.brief_description @@ $searchTerm)`);
+      if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+        // 全文检索 - 对债权相关字段进行搜索
+        searchConditions.push(` AND (claim_number @@ $searchTerm OR asserted_claim_details.nature @@ $searchTerm OR asserted_claim_details.brief_description @@ $searchTerm OR creditor_id.name @@ $searchTerm)`);
         queryParams.searchTerm = currentSearchTerm.trim();
       }
 
       // 状态筛选
       if (filterStatus) {
-        searchConditions.push(`AND review_status_id.name = $filterStatus`);
+        searchConditions.push(` AND review_status_id.name = $filterStatus`);
         queryParams.filterStatus = filterStatus;
       }
       
@@ -425,15 +353,22 @@ const ClaimListPage: React.FC = () => {
         GROUP ALL
       `;
 
-      // 执行查询
-      const results = await queryWithAuth<any[]>(client, `${dataQuery};${countQuery}`, queryParams);
+      // 执行查询 - 使用 client.query 直接查询以获取多个结果
+      const combinedQuery = `return $auth;${dataQuery};${countQuery}`;
+      const rawResults = await client.query(combinedQuery, queryParams);
       
-      if (!results || results.length < 2) {
+      if (!rawResults || !Array.isArray(rawResults) || rawResults.length < 3) {
         throw new Error(t('error_invalid_query_response', '查询返回数据格式错误'));
       }
 
-      const rawClaims: RawClaimData[] = results[0] || [];
-      const countResult = results[1]?.[0];
+      // 检查认证状态
+      const authResult = rawResults[0];
+      if (!authResult || typeof authResult !== 'object') {
+        throw new AuthenticationRequiredError('用户未登录，请先登录');
+      }
+
+      const rawClaims: RawClaimData[] = rawResults[1] || [];
+      const countResult = rawResults[2]?.[0];
       const total = countResult?.total || 0;
 
       // 获取债权人信息
@@ -516,9 +451,9 @@ const ClaimListPage: React.FC = () => {
 
   // 初始化加载数据
   useEffect(() => {
-    fetchClaims(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria);
+    fetchClaims(page, rowsPerPage, debouncedSearchTerm);
     fetchClaimsStats(); // 同时加载统计数据
-  }, [fetchClaims, fetchClaimsStats, page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria]);
+  }, [fetchClaims, fetchClaimsStats, page, rowsPerPage, debouncedSearchTerm]);
 
   // 搜索或筛选条件变化时重置选中状态
   useEffect(() => {
@@ -631,7 +566,7 @@ const ClaimListPage: React.FC = () => {
       setSelected([]);
       
       // 刷新数据
-      await fetchClaims(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria);
+      await fetchClaims(page, rowsPerPage, debouncedSearchTerm);
     } catch (err) {
       console.error('Error in batch reject:', err);
       if (err instanceof AuthenticationRequiredError) {
@@ -676,19 +611,6 @@ const ClaimListPage: React.FC = () => {
     }
   };
 
-  // 高级搜索处理函数
-  const handleAdvancedSearch = (criteria: AdvancedSearchCriteria) => {
-    setCurrentSearchCriteria(criteria);
-    setSearchTerm(''); // 清空基础搜索
-    setPage(0); // 重置到第一页
-  };
-
-  const handleClearAdvancedSearch = () => {
-    setCurrentSearchCriteria(null);
-    setSearchTerm('');
-    setFilterStatus('');
-    setPage(0);
-  };
 
   return (
       <Box sx={{ p: 3 }}>
@@ -789,6 +711,7 @@ const ClaimListPage: React.FC = () => {
                 size="small"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="支持搜索债权编号、债权性质、债权描述、债权人姓名等信息"
                 InputProps={{
                   startAdornment: (
                       <InputAdornment position="start">
@@ -796,7 +719,7 @@ const ClaimListPage: React.FC = () => {
                       </InputAdornment>
                   ),
                 }}
-                sx={{ flexGrow: 1, minWidth: '250px' }}
+                sx={{ flexGrow: 1, minWidth: '400px' }}
             />
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel id="filter-status-label">{t('filter_by_status_label', '审核状态')}</InputLabel>
@@ -813,17 +736,6 @@ const ClaimListPage: React.FC = () => {
                 <MenuItem value="审核通过">{t('status_approved', '审核通过')}</MenuItem>
               </Select>
             </FormControl>
-            
-            {/* 高级搜索按钮 */}
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<SvgIcon fontSize="small"><path d={mdiFilterOutline} /></SvgIcon>}
-              onClick={() => setAdvancedSearchOpen(true)}
-              sx={{ minWidth: 'auto' }}
-            >
-              高级搜索
-            </Button>
             
             {canCreateClaim && (
               <Button
@@ -1046,15 +958,6 @@ const ClaimListPage: React.FC = () => {
             open={adminCreateClaimDialogOpen}
             onClose={() => setAdminCreateClaimDialogOpen(false)}
             onNext={handleAdminCreateClaimNext}
-        />
-
-        {/* 高级搜索对话框 */}
-        <AdvancedSearchDialog
-          open={advancedSearchOpen}
-          onClose={() => setAdvancedSearchOpen(false)}
-          onSearch={handleAdvancedSearch}
-          onClear={handleClearAdvancedSearch}
-          initialCriteria={currentSearchCriteria || {}}
         />
       </Box>
   );

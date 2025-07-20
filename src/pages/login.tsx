@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth,AppUser } from '@/src/contexts/AuthContext';
+import { useServiceWorkerComm } from '@/src/contexts/SurrealProvider';
 // import authService from '@/src/services/authService'; // GitHub OIDC login - 暂时屏蔽
 import authService from '@/src/services/authService';
 import { RecordId } from 'surrealdb';
@@ -17,7 +18,6 @@ import {
   SvgIcon,
   Container,
   Divider,
-  Link,
   useTheme,
   useMediaQuery,
   IconButton,
@@ -26,7 +26,6 @@ import {
   DialogContent,
   DialogTitle,
   Autocomplete,
-  Chip,
 } from '@mui/material';
 import { mdiEye, mdiEyeOff } from '@mdi/js';
 import Logo from '../components/Logo';
@@ -37,6 +36,7 @@ const LoginPage: React.FC = () => {
   // 移除直接使用SurrealProvider的认证方法
   const auth = useAuth(); // Store the full context
   const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState, user } = auth; // Destructure user here
+  const serviceWorkerComm = useServiceWorkerComm();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -50,7 +50,9 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [showTurnstile, setShowTurnstile] = useState<boolean>(false);
+  const [justClearedAuth, setJustClearedAuth] = useState<boolean>(false);
   const [tenantHistory, setTenantHistory] = useState<TenantHistoryItem[]>([]);
+  const [realAuthStatus, setRealAuthStatus] = useState<boolean | null>(null);
 
   const searchParams = new URLSearchParams(location.search);
   // 默认使用租户登录，除非明确指定root模式
@@ -88,15 +90,79 @@ const LoginPage: React.FC = () => {
     }
   }, [tenantFromUrl, isRootAdminMode]);
 
+  // 直接查询Service Worker的认证状态，确保获取最新的真实状态
   useEffect(() => {
-    if (!isAdminLoginAttempt && isLoggedIn && !isAuthContextLoading) {
-      const from = location.state?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true });
+    const checkRealAuthStatus = async () => {
+      try {
+        if (serviceWorkerComm) {
+          const response = await serviceWorkerComm.sendMessage('get_connection_state', {});
+          setRealAuthStatus(response?.isAuthenticated || false);
+          console.log('LoginPage: Real auth status from Service Worker:', response?.isAuthenticated);
+        }
+      } catch (error) {
+        console.error('LoginPage: Error checking real auth status:', error);
+        setRealAuthStatus(false);
+      }
+    };
+
+    checkRealAuthStatus();
+    
+    // 每隔500ms检查一次认证状态，确保及时捕获变化
+    const interval = setInterval(checkRealAuthStatus, 500);
+    
+    return () => clearInterval(interval);
+  }, [serviceWorkerComm]);
+
+  // 监听认证状态变化，防止在清除状态过程中的错误重定向
+  useEffect(() => {
+    // 如果用户对象突然消失，可能是刚刚清除了认证状态
+    if (!user && isLoggedIn) {
+      setJustClearedAuth(true);
+      // 500ms后重置标志，给状态更新足够时间
+      const timer = setTimeout(() => {
+        setJustClearedAuth(false);
+      }, 500);
+      return () => clearTimeout(timer);
     }
-    if (isAdminLoginAttempt && isLoggedIn && userIsAdmin() && !isAuthContextLoading) {
-      navigate('/admin', { replace: true });
-    }
-  }, [isLoggedIn, isAuthContextLoading, navigate, location.state, isAdminLoginAttempt, userIsAdmin]); // Added userIsAdmin to dependencies
+  }, [user, isLoggedIn]);
+
+  useEffect(() => {
+    // 添加短暂延迟，确保认证状态完全稳定后再重定向
+    // 避免在状态清除过程中的不一致导致错误重定向
+    const timer = setTimeout(() => {
+      // 如果刚刚清除了认证状态，不进行重定向
+      if (justClearedAuth) {
+        console.log('LoginPage: Just cleared auth, skipping redirect');
+        return;
+      }
+      
+      // 检查Service Worker的真实认证状态，如果为false则不重定向
+      if (realAuthStatus === false) {
+        console.log('LoginPage: Service Worker reports not authenticated, skipping redirect');
+        return;
+      }
+      
+      // 只有在用户确实存在且认证状态正常时才进行重定向
+      // 避免因为本地状态不同步导致的错误重定向
+      // 额外检查用户对象是否有有效的ID，确保认证状态完全正常
+      // 同时确保Service Worker也确认用户已认证
+      if (!isAdminLoginAttempt && isLoggedIn && user && user.id && !isAuthContextLoading && realAuthStatus === true) {
+        const from = location.state?.from?.pathname || '/dashboard';
+        if (location.pathname !== from) {
+          console.log('LoginPage: Redirecting authenticated user to:', from);
+          navigate(from, { replace: true });
+        }
+      }
+      if (isAdminLoginAttempt && isLoggedIn && user && user.id && userIsAdmin() && !isAuthContextLoading && realAuthStatus === true) {
+        if (location.pathname !== '/admin') {
+          console.log('LoginPage: Redirecting authenticated admin to /admin');
+          navigate('/admin', { replace: true });
+        }
+      }
+    }, 100); // 100ms 延迟，确保状态稳定
+
+    return () => clearTimeout(timer);
+  }, [isLoggedIn, user, isAuthContextLoading, navigate, location.state, location.pathname, isAdminLoginAttempt, userIsAdmin, justClearedAuth, realAuthStatus]); // Added userIsAdmin, justClearedAuth and realAuthStatus to dependencies
 
   const handleTurnstileSuccess = (token: string) => {
     console.log('Turnstile验证成功');
@@ -282,17 +348,10 @@ const LoginPage: React.FC = () => {
     </Box>;
   }
   
-  if (isLoggedIn && !isAuthContextLoading && !isAdminLoginAttempt) {
-     const from = location.state?.from?.pathname || '/dashboard';
-     if(location.pathname !== from) {
-        navigate(from, { replace: true });
-     }
+  if (isLoggedIn && user && user.id && !isAuthContextLoading && !isAdminLoginAttempt && !justClearedAuth && realAuthStatus === true) {
      return <GlobalLoader message={t('redirecting', 'Redirecting...')} />;
   }
-   if (isLoggedIn && userIsAdmin() && isAdminLoginAttempt) {
-    if(location.pathname !== '/admin') {
-      navigate('/admin', {replace: true});
-    }
+   if (isLoggedIn && user && user.id && userIsAdmin() && isAdminLoginAttempt && !isAuthContextLoading && !justClearedAuth && realAuthStatus === true) {
      return <GlobalLoader message={t('redirecting_admin', 'Redirecting to admin dashboard...')} />;
   }
 

@@ -117,6 +117,8 @@ import { Grid } from '@mui/material';
 </Grid>
 ```
 
+- **surrealdb全文检索**: SELECT text, title, search::highlight("->", "<-", 0) AS title, search::score(0) AS text_score, search::score(1) AS title_score FROM article WHERE text  @0@ "night" OR title @1@ "hound";
+
 
 # CuckooX Rust 项目结构指南
 

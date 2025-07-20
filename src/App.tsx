@@ -126,9 +126,9 @@ function App() {
                     <CaseStatusProvider>
                         <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
                             <Routes>
-                                <Route path="/login" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <LoginPage/>}/>
+                                <Route path="/login" element={<LoginPage/>}/>
                                 <Route path="/oidc-callback" element={<OidcCallbackPage/>}/>
-                                <Route path="/register" element={auth.isLoggedIn ? <Navigate to="/dashboard" replace/> : <RegisterPage/>}/>
+                                <Route path="/register" element={<RegisterPage/>}/>
                                 <Route path="/root-admin" element={<RootAdminPage/>}/>
                                 <Route path="/root-admin/login" element={<RootAdminLoginPage/>}/>
                             </Routes>
