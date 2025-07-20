@@ -23,7 +23,6 @@ import {
   CircularProgress, // Added for loading state
   Alert, // Added for error state
   TablePagination, // Added for pagination
-  Chip, // Added for search criteria display
 } from '@mui/material';
 import { 
   mdiAccountPlusOutline, 
@@ -31,8 +30,7 @@ import {
   mdiPencilOutline, 
   mdiDeleteOutline, 
   mdiMagnify, // Added
-  mdiFileImportOutline,
-  mdiFilterOutline, // Added for advanced search
+  mdiFileImportOutline
 } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
@@ -40,7 +38,6 @@ import PrintWaybillsDialog from './PrintWaybillsDialog'; // MODIFIED PATH
 import AddCreditorDialog from './AddCreditorDialog'; // MODIFIED PATH
 import type { CreditorFormData, Creditor, RawCreditorData, CountResult, CsvRowData } from './types'; // MODIFIED PATH for type
 import BatchImportCreditorsDialog from './BatchImportCreditorsDialog'; // MODIFIED PATH
-import AdvancedSearchDialog, { type AdvancedSearchCriteria } from './AdvancedSearchDialog';
 import CreditorClaimsDialog from './CreditorClaimsDialog';
 import ConfirmDeleteDialog from '@/src/components/common/ConfirmDeleteDialog';
 import { useAuth } from '@/src/contexts/AuthContext'; // Added
@@ -97,15 +94,11 @@ const CreditorListPage: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState<boolean>(false);
   const [creditorToDelete, setCreditorToDelete] = useState<Creditor | null>(null);
   
-  // Advanced search states
-  const [advancedSearchOpen, setAdvancedSearchOpen] = useState<boolean>(false);
-  const [currentSearchCriteria, setCurrentSearchCriteria] = useState<AdvancedSearchCriteria | null>(null);
-  
   // Creditor claims dialog states
   const [claimsDialogOpen, setClaimsDialogOpen] = useState<boolean>(false);
   const [selectedCreditorForClaims, setSelectedCreditorForClaims] = useState<Creditor | null>(null);
 
-  const fetchCreditors = React.useCallback(async (currentPage: number, currentRowsPerPage: number, currentSearchTerm: string, searchCriteria?: AdvancedSearchCriteria | null) => {
+  const fetchCreditors = React.useCallback(async (currentPage: number, currentRowsPerPage: number, currentSearchTerm: string) => {
     if (!selectedCaseId || !client) {
       setCreditors([]);
       setTotalCreditors(0);
@@ -140,58 +133,12 @@ const CreditorListPage: React.FC = () => {
         caseId: selectedCaseId,
       };
 
-      // Build search conditions based on search criteria or simple search term
+      // Build search conditions - simple full-text search only
       const searchConditions: string[] = [];
       
-      if (searchCriteria) {
-        // Advanced search mode
-        if (searchCriteria.useFullTextSearch && searchCriteria.fullTextSearch.trim()) {
-          // Use full-text search with @@ operator across multiple fields
-          const fullTextQuery = searchCriteria.fullTextSearch.trim();
-          searchConditions.push(`AND (name @@ $fullTextQuery OR legal_id @@ $fullTextQuery OR contact_person_name @@ $fullTextQuery OR contact_phone @@ $fullTextQuery OR contact_address @@ $fullTextQuery)`);
-          queryParams.fullTextQuery = fullTextQuery;
-        } else {
-          // Field-specific search
-          if (searchCriteria.name.trim()) {
-            searchConditions.push(`AND name CONTAINS $nameQuery`);
-            queryParams.nameQuery = searchCriteria.name.trim();
-          }
-          if (searchCriteria.identifier.trim()) {
-            searchConditions.push(`AND legal_id CONTAINS $identifierQuery`);
-            queryParams.identifierQuery = searchCriteria.identifier.trim();
-          }
-          if (searchCriteria.contactPersonName.trim()) {
-            searchConditions.push(`AND contact_person_name CONTAINS $contactPersonQuery`);
-            queryParams.contactPersonQuery = searchCriteria.contactPersonName.trim();
-          }
-          if (searchCriteria.contactPhone.trim()) {
-            searchConditions.push(`AND contact_phone CONTAINS $contactPhoneQuery`);
-            queryParams.contactPhoneQuery = searchCriteria.contactPhone.trim();
-          }
-          if (searchCriteria.address.trim()) {
-            searchConditions.push(`AND contact_address CONTAINS $addressQuery`);
-            queryParams.addressQuery = searchCriteria.address.trim();
-          }
-        }
-        
-        // Type filter
-        if (searchCriteria.type !== 'all') {
-          searchConditions.push(`AND type = $typeFilter`);
-          queryParams.typeFilter = searchCriteria.type;
-        }
-        
-        // Date range filters
-        if (searchCriteria.createdAfter) {
-          searchConditions.push(`AND created_at >= $createdAfter`);
-          queryParams.createdAfter = searchCriteria.createdAfter.toISOString();
-        }
-        if (searchCriteria.createdBefore) {
-          searchConditions.push(`AND created_at <= $createdBefore`);
-          queryParams.createdBefore = searchCriteria.createdBefore.toISOString();
-        }
-      } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
-        // Simple search mode (legacy)
-        searchConditions.push(`AND (name CONTAINS $searchTerm OR legal_id CONTAINS $searchTerm OR contact_person_name CONTAINS $searchTerm OR contact_phone CONTAINS $searchTerm OR contact_address CONTAINS $searchTerm)`);
+      if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+        // Full-text search across all relevant fields
+        searchConditions.push(`AND (name @@ $searchTerm OR legal_id @@ $searchTerm OR contact_person_name @@ $searchTerm OR contact_phone @@ $searchTerm OR contact_address @@ $searchTerm)`);
         queryParams.searchTerm = currentSearchTerm;
       }
       
@@ -269,26 +216,10 @@ const CreditorListPage: React.FC = () => {
       setCreditors(creditorsWithClaims);
 
       // Fetch total count with authentication check
-      // Remove limit and start params for count query, keep all search-related params
       const countQueryParams: Record<string, unknown> = { caseId: selectedCaseId };
       
       // Copy search-related parameters for count query
-      if (searchCriteria) {
-        if (searchCriteria.useFullTextSearch && searchCriteria.fullTextSearch.trim()) {
-          countQueryParams.fullTextQuery = queryParams.fullTextQuery;
-        } else {
-          // Copy field-specific search params
-          if (queryParams.nameQuery) countQueryParams.nameQuery = queryParams.nameQuery;
-          if (queryParams.identifierQuery) countQueryParams.identifierQuery = queryParams.identifierQuery;
-          if (queryParams.contactPersonQuery) countQueryParams.contactPersonQuery = queryParams.contactPersonQuery;
-          if (queryParams.contactPhoneQuery) countQueryParams.contactPhoneQuery = queryParams.contactPhoneQuery;
-          if (queryParams.addressQuery) countQueryParams.addressQuery = queryParams.addressQuery;
-        }
-        // Copy filter params
-        if (queryParams.typeFilter) countQueryParams.typeFilter = queryParams.typeFilter;
-        if (queryParams.createdAfter) countQueryParams.createdAfter = queryParams.createdAfter;
-        if (queryParams.createdBefore) countQueryParams.createdBefore = queryParams.createdBefore;
-      } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+      if (currentSearchTerm && currentSearchTerm.trim() !== '') {
         countQueryParams.searchTerm = currentSearchTerm;
       }
       const countResult: unknown = await queryWithAuth(client, countQuery, countQueryParams);
@@ -327,8 +258,8 @@ const CreditorListPage: React.FC = () => {
   }, [debouncedSearchTerm]);
 
   useEffect(() => {
-    fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria);
-  }, [fetchCreditors, page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria]);
+    fetchCreditors(page, rowsPerPage, debouncedSearchTerm);
+  }, [fetchCreditors, page, rowsPerPage, debouncedSearchTerm]);
 
   const handleChangePage = (_event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => {
     setPage(newPage);
@@ -418,7 +349,7 @@ const CreditorListPage: React.FC = () => {
         });
 
         showSuccess(t('creditor_updated_success', '债权人已成功更新'));
-        fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the list with current search criteria
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the list
         handleCloseAddCreditorDialog();
       } catch (err) {
         console.error("Error updating creditor:", err);
@@ -459,7 +390,7 @@ const CreditorListPage: React.FC = () => {
         const result = await queryWithAuth(client, 'CREATE creditor CONTENT $data', { data: newCreditorData });
         console.log("Creditor created successfully:", result);
         showSuccess(t('creditor_added_success', '债权人已成功添加'));
-        fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the creditor list with current search criteria
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the creditor list
         handleCloseAddCreditorDialog();
       } catch (err) { // ADDED opening brace
         console.error("Error creating creditor:", err);
@@ -554,7 +485,7 @@ const CreditorListPage: React.FC = () => {
 
         setIsBatchProcessing(false);
         setBatchImportOpen(false); // Close dialog
-        fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the main list with current search criteria
+        fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the main list
 
         if (failedImports > 0) {
           showError(t('batch_import_summary_with_errors',
@@ -610,7 +541,7 @@ const CreditorListPage: React.FC = () => {
       await queryWithAuth(client, 'DELETE $id;', { id: creditorToDelete.id });
 
       showSuccess(t('creditor_deleted_success', '债权人已成功删除'));
-      fetchCreditors(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria); // Refresh the list with current search criteria
+      fetchCreditors(page, rowsPerPage, debouncedSearchTerm); // Refresh the list
     } catch (err) {
       console.error("Error deleting creditor:", err);
       
@@ -626,29 +557,6 @@ const CreditorListPage: React.FC = () => {
     }
   };
 
-  // Advanced search handlers
-  const handleOpenAdvancedSearch = () => {
-    setAdvancedSearchOpen(true);
-  };
-
-  const handleCloseAdvancedSearch = () => {
-    setAdvancedSearchOpen(false);
-  };
-
-  const handleAdvancedSearch = (criteria: AdvancedSearchCriteria) => {
-    setCurrentSearchCriteria(criteria);
-    setSearchTerm(''); // Clear simple search when using advanced search
-    setPage(0); // Reset to first page for new search
-  };
-
-  const handleClearAdvancedSearch = () => {
-    setCurrentSearchCriteria(null);
-    setSearchTerm('');
-    setPage(0);
-  };
-
-  // Check if advanced search is active
-  const isAdvancedSearchActive = currentSearchCriteria !== null;
 
   // Creditor claims dialog handlers
   const handleOpenCreditorClaims = (creditor: Creditor) => {
@@ -667,114 +575,22 @@ const CreditorListPage: React.FC = () => {
       
       {/* 搜索区域 */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: isAdvancedSearchActive ? 2 : 0, flexWrap: 'wrap' }}>
-          <TextField
-            label={t('search_creditors_label', '搜索债权人')}
-            variant="outlined"
-            size="small"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            disabled={isAdvancedSearchActive}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SvgIcon fontSize="small"><path d={mdiMagnify} /></SvgIcon>
-                </InputAdornment>
-              ),
-            }}
-            sx={{ minWidth: '300px', flexGrow: { xs:1, sm: 0.5, md:0.3 } }}
-          />
-          <Button
-            variant={isAdvancedSearchActive ? "contained" : "outlined"}
-            color={isAdvancedSearchActive ? "primary" : "inherit"}
-            startIcon={<SvgIcon><path d={mdiFilterOutline} /></SvgIcon>}
-            onClick={handleOpenAdvancedSearch}
-            size="small"
-          >
-            {t('advanced_search_button', '高级搜索')}
-          </Button>
-          {isAdvancedSearchActive && (
-            <Button
-              variant="outlined"
-              color="warning"
-              onClick={handleClearAdvancedSearch}
-              size="small"
-            >
-              {t('clear_search_button', '清除搜索')}
-            </Button>
-          )}
-        </Box>
-        
-        {/* 当前搜索条件显示 */}
-        {isAdvancedSearchActive && currentSearchCriteria && (
-          <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-              {t('current_search_conditions', '当前搜索条件')}:
-            </Typography>
-            <Box sx={{ mt: 1 }}>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                {/* 全文搜索 */}
-                {currentSearchCriteria.useFullTextSearch && currentSearchCriteria.fullTextSearch && (
-                  <Chip
-                    label={`全文搜索: "${currentSearchCriteria.fullTextSearch}"`}
-                    size="small"
-                    color="primary"
-                    variant="filled"
-                  />
-                )}
-                
-                {/* 字段搜索 */}
-                {!currentSearchCriteria.useFullTextSearch && (
-                  <>
-                    {currentSearchCriteria.name && (
-                      <Chip label={`姓名: "${currentSearchCriteria.name}"`} size="small" variant="outlined" />
-                    )}
-                    {currentSearchCriteria.identifier && (
-                      <Chip label={`证件号: "${currentSearchCriteria.identifier}"`} size="small" variant="outlined" />
-                    )}
-                    {currentSearchCriteria.contactPersonName && (
-                      <Chip label={`联系人: "${currentSearchCriteria.contactPersonName}"`} size="small" variant="outlined" />
-                    )}
-                    {currentSearchCriteria.contactPhone && (
-                      <Chip label={`电话: "${currentSearchCriteria.contactPhone}"`} size="small" variant="outlined" />
-                    )}
-                    {currentSearchCriteria.address && (
-                      <Chip label={`地址: "${currentSearchCriteria.address}"`} size="small" variant="outlined" />
-                    )}
-                  </>
-                )}
-                
-                {/* 筛选条件 */}
-                {currentSearchCriteria.type !== 'all' && (
-                  <Chip 
-                    label={`类型: ${currentSearchCriteria.type === 'organization' ? '组织' : '个人'}`} 
-                    size="small" 
-                    color="secondary" 
-                    variant="outlined" 
-                  />
-                )}
-                
-                {(currentSearchCriteria.minClaimAmount || currentSearchCriteria.maxClaimAmount) && (
-                  <Chip 
-                    label={`债权金额: ${currentSearchCriteria.minClaimAmount ? `≥${currentSearchCriteria.minClaimAmount}元` : ''}${currentSearchCriteria.minClaimAmount && currentSearchCriteria.maxClaimAmount ? ' 且 ' : ''}${currentSearchCriteria.maxClaimAmount ? `≤${currentSearchCriteria.maxClaimAmount}元` : ''}`}
-                    size="small" 
-                    color="info" 
-                    variant="outlined" 
-                  />
-                )}
-                
-                {(currentSearchCriteria.createdAfter || currentSearchCriteria.createdBefore) && (
-                  <Chip 
-                    label={`创建时间: ${currentSearchCriteria.createdAfter ? currentSearchCriteria.createdAfter.toLocaleDateString() : ''}${currentSearchCriteria.createdAfter && currentSearchCriteria.createdBefore ? ' 至 ' : ''}${currentSearchCriteria.createdBefore ? currentSearchCriteria.createdBefore.toLocaleDateString() : ''}`}
-                    size="small" 
-                    color="warning" 
-                    variant="outlined" 
-                  />
-                )}
-              </Stack>
-            </Box>
-          </Box>
-        )}
+        <TextField
+          label={t('search_creditors_label', '搜索债权人')}
+          variant="outlined"
+          size="small"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="支持搜索姓名、证件号、联系人、电话、地址等信息"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SvgIcon fontSize="small"><path d={mdiMagnify} /></SvgIcon>
+              </InputAdornment>
+            ),
+          }}
+          sx={{ minWidth: '400px', maxWidth: '600px' }}
+        />
       </Box>
 
       {/* 操作按钮区域 */}
@@ -991,13 +807,6 @@ const CreditorListPage: React.FC = () => {
             ? t('delete_creditor_dialog_content', `您确定要删除债权人 "${creditorToDelete.name}" 吗？此操作不可撤销。`)
             : ''
         }
-      />
-      <AdvancedSearchDialog
-        open={advancedSearchOpen}
-        onClose={handleCloseAdvancedSearch}
-        onSearch={handleAdvancedSearch}
-        onClear={handleClearAdvancedSearch}
-        initialCriteria={currentSearchCriteria || undefined}
       />
       <CreditorClaimsDialog
         open={claimsDialogOpen}

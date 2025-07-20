@@ -399,11 +399,10 @@ export async function searchSystemUsers(client: SurrealWorkerAPI, query: string)
         // 返回所有用户（限制数量）
         searchQuery = `SELECT id, name, email FROM user LIMIT 20;`;
       } else {
-        // 按名称或邮箱搜索
+        // 按名称或邮箱搜索 - 使用全文检索
         searchQuery = `
         SELECT id, name, email FROM user 
-        WHERE string::lowercase(name) CONTAINS string::lowercase($query) 
-        OR string::lowercase(email) CONTAINS string::lowercase($query)
+        WHERE name @@ $query OR email @@ $query
         LIMIT 20;
       `;
         params.query = query;

@@ -431,7 +431,7 @@ describe('Creditors Module Tests', () => {
         // Verify that query was called with search term
         await waitFor(() => {
           expect(mockSurrealClient.query).toHaveBeenCalledWith(
-            expect.stringContaining('CONTAINS $searchTerm'),
+            expect.stringContaining('@@ $searchTerm'),
             expect.objectContaining({ searchTerm: 'Acme' })
           );
         }, { timeout: 3000 });
@@ -897,7 +897,7 @@ describe('Creditors Module Tests', () => {
       // Verify search was performed
       await waitFor(() => {
         expect(mockSurrealClient.query).toHaveBeenCalledWith(
-          expect.stringContaining('CONTAINS $searchTerm'),
+          expect.stringContaining('@@ $searchTerm'),
           expect.objectContaining({ searchTerm: 'Acme' })
         );
       });
