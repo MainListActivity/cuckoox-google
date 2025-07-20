@@ -384,6 +384,34 @@ useEffect(() => {
 3. **网络负载**: 减少远程数据库查询 50-70%
 4. **用户体验**: 页面加载和数据刷新速度明显提升
 
+## SurrealDB 全文检索集成
+
+智能缓存系统完全支持 SurrealDB 的全文检索功能，包括：
+
+### 全文检索缓存优化
+- **检索结果缓存**: 全文检索查询结果会被智能缓存，提升重复搜索的响应速度
+- **关键词索引**: 系统会为常用搜索关键词建立本地索引，加速搜索响应
+- **搜索历史**: 缓存用户的搜索历史和偏好，提供更智能的搜索建议
+
+### 全文检索语法支持
+```typescript
+// 在智能缓存系统中使用全文检索
+const searchResult = await enhancedQueryHandler.handleQuery(`
+  SELECT *,
+    search::highlight("**", "**", 0) AS highlighted_title,
+    search::score(0) AS relevance_score
+  FROM document
+  WHERE title @0@ $keyword
+  ORDER BY relevance_score DESC
+  LIMIT 10
+`, { keyword: "破产重整" }, userId, caseId);
+```
+
+### 检索性能优化
+- **本地检索**: 对于已缓存的数据，支持本地全文检索，无需网络请求
+- **混合检索**: 结合本地缓存和远程数据库，提供最全面的搜索结果
+- **增量索引**: 实时更新本地全文检索索引，确保搜索结果的时效性
+
 ## 故障排除
 
 ### 常见问题

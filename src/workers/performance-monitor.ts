@@ -10,7 +10,7 @@ export interface PerformanceMetric {
   queryHash: string;
   queryType: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'COMPLEX';
   tables: string[];
-  
+
   // 执行统计
   localStats: {
     count: number;
@@ -19,7 +19,7 @@ export interface PerformanceMetric {
     minTime: number;
     maxTime: number;
   };
-  
+
   remoteStats: {
     count: number;
     totalTime: number;
@@ -27,16 +27,16 @@ export interface PerformanceMetric {
     minTime: number;
     maxTime: number;
   };
-  
+
   // 缓存统计
   cacheHitRate: number;
   cacheHitCount: number;
   cacheMissCount: number;
-  
+
   // 时间戳
   firstSeen: number;
   lastUpdated: number;
-  
+
   // 错误统计
   errorCount: number;
   lastError?: string;
@@ -48,21 +48,21 @@ export interface PerformanceReport {
   totalQueries: number;
   totalExecutionTime: number;
   avgExecutionTime: number;
-  
+
   // 缓存统计
   overallCacheHitRate: number;
   localQueryCount: number;
   remoteQueryCount: number;
-  
+
   // 性能对比
   avgLocalTime: number;
   avgRemoteTime: number;
   performanceImprovement: number; // 性能提升百分比
-  
+
   // 错误统计
   totalErrors: number;
   errorRate: number;
-  
+
   // 热点查询
   topSlowQueries: Array<{
     queryHash: string;
@@ -70,14 +70,14 @@ export interface PerformanceReport {
     count: number;
     tables: string[];
   }>;
-  
+
   topFrequentQueries: Array<{
     queryHash: string;
     count: number;
     avgTime: number;
     cacheHitRate: number;
   }>;
-  
+
   // 表级统计
   tableStats: Array<{
     table: string;
@@ -86,14 +86,14 @@ export interface PerformanceReport {
     cacheHitRate: number;
     errorCount: number;
   }>;
-  
+
   // 时间范围
   reportPeriod: {
     startTime: number;
     endTime: number;
     duration: number;
   };
-  
+
   generatedAt: number;
 }
 
@@ -126,12 +126,12 @@ export class PerformanceMonitor {
   private metrics = new Map<string, PerformanceMetric>();
   private trendData: PerformanceTrendPoint[] = [];
   private anomalies: PerformanceAnomaly[] = [];
-  
+
   // 配置参数
   private readonly maxMetricsCount = 10000; // 最大指标数量
   private readonly trendDataRetention = 24 * 60 * 60 * 1000; // 趋势数据保留24小时
   private readonly anomalyRetention = 7 * 24 * 60 * 60 * 1000; // 异常记录保留7天
-  
+
   // 异常检测阈值
   private readonly thresholds = {
     slowQueryTime: 5000, // 慢查询阈值：5秒
@@ -159,9 +159,9 @@ export class PerformanceMonitor {
   ): void {
     const queryHash = this.generateQueryHash(sql, params);
     const queryType = this.extractQueryType(sql);
-    
+
     let metric = this.metrics.get(queryHash);
-    
+
     if (!metric) {
       metric = {
         queryHash,
@@ -188,7 +188,7 @@ export class PerformanceMonitor {
         lastUpdated: Date.now(),
         errorCount: 0
       };
-      
+
       this.metrics.set(queryHash, metric);
     }
 
@@ -206,7 +206,7 @@ export class PerformanceMonitor {
     } else {
       metric.cacheMissCount++;
     }
-    
+
     const totalCacheQueries = metric.cacheHitCount + metric.cacheMissCount;
     metric.cacheHitRate = totalCacheQueries > 0 ? metric.cacheHitCount / totalCacheQueries : 0;
 
@@ -229,7 +229,7 @@ export class PerformanceMonitor {
     const now = Date.now();
     const reportStartTime = startTime || (now - 24 * 60 * 60 * 1000); // 默认24小时
     const reportEndTime = endTime || now;
-    
+
     // 过滤时间范围内的指标
     const relevantMetrics = Array.from(this.metrics.values()).filter(
       metric => metric.lastUpdated >= reportStartTime && metric.lastUpdated <= reportEndTime
@@ -253,15 +253,15 @@ export class PerformanceMonitor {
     for (const metric of relevantMetrics) {
       const localCount = metric.localStats.count;
       const remoteCount = metric.remoteStats.count;
-      
+
       totalQueries += localCount + remoteCount;
       totalExecutionTime += metric.localStats.totalTime + metric.remoteStats.totalTime;
-      
+
       totalLocalTime += metric.localStats.totalTime;
       totalRemoteTime += metric.remoteStats.totalTime;
       localQueryCount += localCount;
       remoteQueryCount += remoteCount;
-      
+
       totalCacheHits += metric.cacheHitCount;
       totalCacheQueries += metric.cacheHitCount + metric.cacheMissCount;
       totalErrors += metric.errorCount;
@@ -272,10 +272,10 @@ export class PerformanceMonitor {
     const avgRemoteTime = remoteQueryCount > 0 ? totalRemoteTime / remoteQueryCount : 0;
     const overallCacheHitRate = totalCacheQueries > 0 ? totalCacheHits / totalCacheQueries : 0;
     const errorRate = totalQueries > 0 ? totalErrors / totalQueries : 0;
-    
+
     // 计算性能提升
-    const performanceImprovement = avgRemoteTime > 0 && avgLocalTime > 0 
-      ? ((avgRemoteTime - avgLocalTime) / avgRemoteTime) * 100 
+    const performanceImprovement = avgRemoteTime > 0 && avgLocalTime > 0
+      ? ((avgRemoteTime - avgLocalTime) / avgRemoteTime) * 100
       : 0;
 
     // 生成热点查询
@@ -293,8 +293,8 @@ export class PerformanceMonitor {
       .map(metric => ({
         queryHash: metric.queryHash,
         count: metric.localStats.count + metric.remoteStats.count,
-        avgTime: (metric.localStats.totalTime + metric.remoteStats.totalTime) / 
-                (metric.localStats.count + metric.remoteStats.count),
+        avgTime: (metric.localStats.totalTime + metric.remoteStats.totalTime) /
+          (metric.localStats.count + metric.remoteStats.count),
         cacheHitRate: metric.cacheHitRate
       }))
       .sort((a, b) => b.count - a.count)
@@ -318,13 +318,13 @@ export class PerformanceMonitor {
           cacheTotal: 0,
           errorCount: 0
         };
-        
+
         current.queryCount += metric.localStats.count + metric.remoteStats.count;
         current.totalTime += metric.localStats.totalTime + metric.remoteStats.totalTime;
         current.cacheHits += metric.cacheHitCount;
         current.cacheTotal += metric.cacheHitCount + metric.cacheMissCount;
         current.errorCount += metric.errorCount;
-        
+
         tableStatsMap.set(table, current);
       }
     }
@@ -389,7 +389,7 @@ export class PerformanceMonitor {
   } {
     const now = Date.now();
     const lastMinute = now - 60 * 1000;
-    
+
     const recentMetrics = Array.from(this.metrics.values()).filter(
       metric => metric.lastUpdated >= lastMinute
     );
@@ -423,7 +423,7 @@ export class PerformanceMonitor {
    */
   exportPerformanceData(format: 'json' | 'csv' = 'json'): string {
     const report = this.generatePerformanceReport();
-    
+
     if (format === 'json') {
       return JSON.stringify({
         report,
@@ -434,13 +434,13 @@ export class PerformanceMonitor {
     } else {
       // CSV格式导出
       const csvLines = ['Query Hash,Query Type,Tables,Total Queries,Avg Time,Cache Hit Rate,Error Count'];
-      
+
       for (const metric of Array.from(this.metrics.values())) {
         const totalQueries = metric.localStats.count + metric.remoteStats.count;
-        const avgTime = totalQueries > 0 
-          ? (metric.localStats.totalTime + metric.remoteStats.totalTime) / totalQueries 
+        const avgTime = totalQueries > 0
+          ? (metric.localStats.totalTime + metric.remoteStats.totalTime) / totalQueries
           : 0;
-        
+
         csvLines.push([
           metric.queryHash,
           metric.queryType,
@@ -451,7 +451,7 @@ export class PerformanceMonitor {
           metric.errorCount.toString()
         ].join(','));
       }
-      
+
       return csvLines.join('\n');
     }
   }
@@ -461,12 +461,12 @@ export class PerformanceMonitor {
    */
   cleanup(): void {
     const now = Date.now();
-    
+
     // 清理过期指标
     if (this.metrics.size > this.maxMetricsCount) {
       const sortedMetrics = Array.from(this.metrics.entries())
         .sort(([, a], [, b]) => a.lastUpdated - b.lastUpdated);
-      
+
       const toDelete = sortedMetrics.slice(0, sortedMetrics.length - this.maxMetricsCount);
       for (const [hash] of toDelete) {
         this.metrics.delete(hash);
@@ -503,12 +503,12 @@ export class PerformanceMonitor {
 
   private extractQueryType(sql: string): 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'COMPLEX' {
     const normalizedSql = sql.toLowerCase().trim();
-    
+
     if (normalizedSql.includes('select')) return 'SELECT';
     if (normalizedSql.includes('insert')) return 'INSERT';
     if (normalizedSql.includes('update')) return 'UPDATE';
     if (normalizedSql.includes('delete')) return 'DELETE';
-    
+
     return 'COMPLEX';
   }
 
@@ -532,7 +532,7 @@ export class PerformanceMonitor {
     // 检测高错误率
     const totalQueries = metric.localStats.count + metric.remoteStats.count;
     const errorRate = totalQueries > 0 ? metric.errorCount / totalQueries : 0;
-    
+
     if (errorRate > this.thresholds.highErrorRate && totalQueries >= 10) {
       this.anomalies.push({
         type: 'high_error_rate',
@@ -547,8 +547,8 @@ export class PerformanceMonitor {
     }
 
     // 检测缓存未命中激增
-    if (metric.cacheHitRate < (1 - this.thresholds.cacheMissSpike) && 
-        (metric.cacheHitCount + metric.cacheMissCount) >= 10) {
+    if (metric.cacheHitRate < (1 - this.thresholds.cacheMissSpike) &&
+      (metric.cacheHitCount + metric.cacheMissCount) >= 10) {
       this.anomalies.push({
         type: 'cache_miss_spike',
         severity: 'medium',

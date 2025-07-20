@@ -27,6 +27,30 @@
 └─ 裁定重整 → 提交重整计划/延迟提交重整计划 → 债权人第二次会议 → 结案
 ```
 
+## 核心技术特性
+
+### SurrealDB 全文检索支持
+系统集成了 SurrealDB 的强大全文检索功能，支持：
+
+- **智能搜索高亮**: 使用 `search::highlight()` 函数高亮匹配关键词
+- **相关性评分**: 通过 `search::score()` 函数进行搜索结果排序
+- **多字段检索**: 支持在标题、内容等多个字段中同时搜索
+- **中文分词**: 原生支持中文文本的分词和检索
+
+**使用示例**:
+```sql
+-- 在案件名称和描述中搜索关键词
+SELECT *,
+  search::highlight("**", "**", 0) AS highlighted_name,
+  search::highlight("##", "##", 1) AS highlighted_description,
+  search::score(0) + search::score(1) AS relevance_score
+FROM case
+WHERE name @0@ "破产重整"
+   OR description @1@ "债权申报"
+ORDER BY relevance_score DESC
+LIMIT 20;
+```
+
 ## 用户角色
 
 - **ADMIN**: 超级管理员

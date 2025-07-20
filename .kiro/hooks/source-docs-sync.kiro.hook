@@ -8,17 +8,12 @@
     "patterns": [
       "src/**/*.ts",
       "src/**/*.tsx",
-      "*.ts",
-      "*.tsx",
-      "*.js",
-      "*.jsx",
       "package.json",
       "tsconfig.json",
       "vite.config.ts",
-      "tailwind.config.js",
       "playwright.config.ts",
       ".eslintrc.json",
-      "*.md"
+      ".kiro/**/*.md"
     ]
   },
   "then": {

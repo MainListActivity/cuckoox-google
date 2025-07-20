@@ -50,6 +50,12 @@
   - 第三方服务集成
   - 数据库连接和配置
 
+#### 数据库功能
+- **[surrealdb-fulltext-search-guide.md](./surrealdb-fulltext-search-guide.md)** - SurrealDB全文检索使用指南
+  - 全文检索语法和函数详解
+  - 实际应用示例和TypeScript集成
+  - 智能缓存系统集成和性能优化
+
 ### 🎨 产品设计
 
 #### 产品说明
@@ -130,6 +136,7 @@
 1. 阅读 [项目README](../README.md) 了解项目概述
 2. 查看 [enhanced-cache-architecture.md](./enhanced-cache-architecture.md) 了解核心架构
 3. 参考 [cache-system-api.md](./cache-system-api.md) 学习API使用
+4. 查看 [surrealdb-fulltext-search-guide.md](./surrealdb-fulltext-search-guide.md) 学习全文检索功能
 
 ### 开发者指南
 1. 查看 [规范.md](./规范.md) 了解开发规范

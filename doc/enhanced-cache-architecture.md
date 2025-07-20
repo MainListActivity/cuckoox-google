@@ -85,13 +85,18 @@ interface EnhancedQueryHandler {
 }
 ```
 
-**导入路径标准化**:
-所有核心组件现在使用统一的路径别名 `@/src/types/surreal` 导入类型定义，提升了代码的一致性和可维护性：
+**导入路径标准化和代码质量**:
+所有核心组件现在使用统一的路径别名 `@/src/types/surreal` 导入类型定义，并完成了代码格式化优化，提升了代码的一致性和可维护性：
 
 ```typescript
 // 统一的导入方式
 import type { QueryParams, UnknownData } from '@/src/types/surreal';
 ```
+
+**代码质量改进**:
+- ✅ 统一代码格式化标准，移除多余空行
+- ✅ 优化代码结构和可读性
+- ✅ 提升代码维护性和团队协作效率
 
 ### 2. QueryRouter (智能查询路由器)
 
@@ -497,6 +502,73 @@ export default defineConfig({
 - 使用浏览器开发者工具的Application面板查看缓存状态
 - 在开发环境使用`direct`模式进行调试
 
+## SurrealDB 全文检索集成
+
+### 全文检索缓存优化
+
+增强缓存系统完全支持 SurrealDB 的全文检索功能，提供以下优化：
+
+**检索结果缓存**:
+```typescript
+// 全文检索查询会被智能缓存
+const searchResult = await enhancedQueryHandler.handleQuery(`
+  SELECT *,
+    search::highlight("**", "**", 0) AS highlighted_name,
+    search::highlight("##", "##", 1) AS highlighted_description,
+    search::score(0) + search::score(1) AS relevance_score
+  FROM case
+  WHERE name @0@ $keyword
+     OR description @1@ $keyword
+  ORDER BY relevance_score DESC
+  LIMIT 20
+`, { keyword: "破产重整" }, userId, caseId);
+```
+
+**全文检索特性**:
+- **智能搜索高亮**: 使用 `search::highlight()` 函数高亮匹配关键词
+- **相关性评分**: 通过 `search::score()` 函数进行搜索结果排序
+- **多字段检索**: 支持在标题、内容等多个字段中同时搜索
+- **中文分词**: 原生支持中文文本的分词和检索
+
+**缓存策略优化**:
+- **检索结果缓存**: 常用搜索关键词的结果会被缓存，提升重复搜索响应速度
+- **本地检索**: 对于已缓存的数据，支持本地全文检索，无需网络请求
+- **混合检索**: 结合本地缓存和远程数据库，提供最全面的搜索结果
+- **增量索引**: 实时更新本地全文检索索引，确保搜索结果的时效性
+
+### 全文检索使用示例
+
+```typescript
+// 案件搜索示例
+class CaseSearchService {
+  async searchCases(keyword: string, userId: string, caseId?: string) {
+    return await enhancedQueryHandler.handleQuery(`
+      SELECT *,
+        search::highlight("**", "**", 0) AS highlighted_name,
+        search::highlight("##", "##", 1) AS highlighted_description,
+        search::score(0) + search::score(1) AS relevance_score
+      FROM case
+      WHERE name @0@ $keyword
+         OR description @1@ $keyword
+      ORDER BY relevance_score DESC
+      LIMIT 50
+    `, { keyword }, userId, caseId);
+  }
+  
+  async searchCreditors(searchTerm: string, userId: string, caseId?: string) {
+    return await enhancedQueryHandler.handleQuery(`
+      SELECT *,
+        search::highlight("->", "<-", 0) AS highlighted_name,
+        search::score(0) AS name_score
+      FROM creditor
+      WHERE name @0@ $searchTerm
+      ORDER BY name_score DESC
+      LIMIT 100
+    `, { searchTerm }, userId, caseId);
+  }
+}
+```
+
 ## 总结
 
 增强本地缓存同步系统通过智能化的缓存策略和精细化的订阅管理，显著提升了应用的数据查询性能和用户体验。该系统具有以下特点：
@@ -506,5 +578,6 @@ export default defineConfig({
 - **可配置**: 支持表级、查询级的灵活配置
 - **高可用**: 支持离线访问和自动故障恢复
 - **易维护**: 模块化设计，完善的监控和调试工具
+- **全文检索**: 完整支持SurrealDB全文检索功能，包括中文分词和智能缓存
 
 这套系统为破产案件管理平台提供了强大的数据缓存能力，确保了在各种网络环境下的稳定运行和优秀的用户体验。

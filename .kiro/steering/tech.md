@@ -261,3 +261,25 @@ query方法的每一个分号都会作为一个数组返回，可以同时执行
 
 ```
 
+### 全文检索
+
+- search::highlight: Highlights the matching keywords for the predicate reference number.
+- search::offsets: Returns the position of the matching keywords for the predicate reference number.
+- search::score: Helps with scoring and ranking the search results based on their relevance to the search terms.
+- search::analyze: Used to test the output of a defined search analyzer.
+
+- search::highlight(...): SurrealDB can highlight the matched terms in the text.
+- search::score() works with the BM25 ranking function to return the relevance score for the matched document.
+- @@ "machine learning": SurrealDB will check if the tokens “machine” and “learning” appear in the title field’s FTS index. The number in between the two characters of the operator lets the database know in the above functions which part of the query to highlight and calculate a score for. If no search functions are used, this operator will be used as @@ without a number (e.g. `WHERE title @@ “machine” OR body @@ “machine learning”).
+```sql
+SELECT *,
+  search::highlight("**", "**", 1) AS body,
+  search::highlight("##", "", 0) AS title,
+  search::score(0) + search::score(1) AS score
+FROM article
+WHERE title @0@ "machine"
+   OR body @1@ "machine learning"
+ORDER BY score DESC
+LIMIT 10;
+```
+

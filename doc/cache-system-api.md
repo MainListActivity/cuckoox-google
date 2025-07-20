@@ -373,6 +373,67 @@ function CaseList() {
 }
 ```
 
+### 全文检索查询使用
+
+```typescript
+// 全文检索案件信息
+function searchCases(keyword: string) {
+  const { surreal } = useSurreal();
+  
+  const searchCases = async () => {
+    try {
+      // 使用 SurrealDB 全文检索功能
+      const result = await surreal.query(`
+        SELECT *,
+          search::highlight("**", "**", 0) AS highlighted_name,
+          search::highlight("##", "##", 1) AS highlighted_description,
+          search::score(0) + search::score(1) AS relevance_score
+        FROM case
+        WHERE name @0@ $keyword
+           OR description @1@ $keyword
+        ORDER BY relevance_score DESC
+        LIMIT 20
+      `, {
+        keyword: keyword
+      }, userId, caseId);
+      
+      setCases(result);
+    } catch (error) {
+      console.error('Failed to search cases:', error);
+    }
+  };
+  
+  // ...
+}
+
+// 搜索债权人信息
+function searchCreditors(searchTerm: string) {
+  const { surreal } = useSurreal();
+  
+  const searchCreditors = async () => {
+    try {
+      const result = await surreal.query(`
+        SELECT *,
+          search::highlight("->", "<-", 0) AS highlighted_name,
+          search::score(0) AS name_score
+        FROM creditor
+        WHERE name @0@ $searchTerm
+        ORDER BY name_score DESC
+        LIMIT 50
+      `, {
+        searchTerm: searchTerm
+      }, userId, caseId);
+      
+      setCreditors(result);
+    } catch (error) {
+      console.error('Failed to search creditors:', error);
+    }
+  };
+  
+  // ...
+}
+```
+
 ### 缓存管理使用
 
 ```typescript
