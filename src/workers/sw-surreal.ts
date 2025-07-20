@@ -1273,7 +1273,7 @@ const eventHandlers = {
 
           try {
             const { table, forceRefresh = false } = payload;
-            
+
             if (!table || typeof table !== 'string') {
               throw new Error('Table name is required for cache validation');
             }
@@ -1301,7 +1301,7 @@ const eventHandlers = {
 
           try {
             const { table } = payload;
-            
+
             if (!table || typeof table !== 'string') {
               throw new Error('Table name is required for cache content check');
             }
@@ -1449,7 +1449,7 @@ const eventHandlers = {
           try {
             const cacheLogger = enhancedQueryHandler!.getCacheLogger();
             const errorStats = cacheLogger.getErrorStats();
-            
+
             // 转换Map为普通对象以便序列化
             const statsArray = Array.from(errorStats.entries()).map(([type, stats]) => ({
               errorType: type,
@@ -1484,7 +1484,7 @@ const eventHandlers = {
 
           try {
             const { level } = payload;
-            
+
             if (typeof level !== 'number' || level < 0 || level > 4) {
               throw new Error('Invalid log level. Must be 0-4 (DEBUG, INFO, WARN, ERROR, CRITICAL)');
             }
