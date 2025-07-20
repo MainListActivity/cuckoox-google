@@ -1,11 +1,12 @@
-// TODO: Ensure routing for /my-claims/:claimId/submitted is set up in App.tsx to render SubmittedClaimDetailPage.tsx
-// TODO: Access Control - This page should only be accessible to users with a 'creditor' role.
-// TODO: Data - API should only return claims belonging to the logged-in creditor.
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { useSurrealClient, AuthenticationRequiredError } from '@/src/contexts/SurrealProvider';
+import { useAuth } from '@/src/contexts/AuthContext';
+import { useOperationPermission } from '@/src/hooks/usePermission';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
 import PageContainer from '@/src/components/PageContainer';
+import type { RecordId } from 'surrealdb';
 import {
   Box,
   Typography,
@@ -29,52 +30,202 @@ import {
   mdiPencil,
 } from '@mdi/js';
 
+// 数据库原始数据接口
+interface RawClaimData {
+  id: RecordId | string;
+  claim_number: string;
+  case_id: RecordId | string;
+  creditor_id: RecordId | string;
+  status: string;
+  submission_time?: string;
+  review_status_id?: RecordId | string;
+  review_time?: string;
+  reviewer_id?: RecordId | string;
+  review_comments?: string;
+  created_at: string;
+  updated_at: string;
+  created_by: RecordId | string;
+  asserted_claim_details: {
+    nature: string;
+    principal: number;
+    interest: number;
+    other_amount?: number;
+    total_asserted_amount: number;
+    currency: string;
+    brief_description?: string;
+    attachment_doc_id?: RecordId | string;
+  };
+  approved_claim_details?: {
+    nature: string;
+    principal: number;
+    interest: number;
+    other_amount?: number;
+    total_approved_amount: number;
+    currency: string;
+    approved_attachment_doc_id?: RecordId | string;
+  };
+}
 
+// 审核状态定义接口
+interface ReviewStatusDefinition {
+  id: RecordId | string;
+  name: string;
+  description?: string;
+  display_order: number;
+  is_active: boolean;
+}
+
+// 前端展示用的债权接口
 interface Claim {
   id: string;
+  claimNumber: string;
   submissionDate: string;
   claimNature: string;
   totalAmount: number;
   currency: string;
-  reviewStatus: '待审核' | '审核通过' | '已驳回' | '审核不通过' | '需要补充';
+  reviewStatus: '待审核' | '审核通过' | '已驳回' | '审核不通过' | '需要补充' | '部分通过';
   reviewOpinion?: string;
+  canWithdraw: boolean;
+  canEdit: boolean;
+  approvedAmount?: number;
 }
 
-// TODO: 在实际项目中移除这些测试数据
-const claimsData: Claim[] = [
-  { id: 'CLAIM-001', submissionDate: '2023-10-26', claimNature: '普通债权', totalAmount: 15000, currency: 'CNY', reviewStatus: '待审核', reviewOpinion: '' },
-  { id: 'CLAIM-002', submissionDate: '2023-10-20', claimNature: '有财产担保债权', totalAmount: 125000, currency: 'CNY', reviewStatus: '审核通过', reviewOpinion: '符合要求' },
-  { id: 'CLAIM-003', submissionDate: '2023-09-15', claimNature: '劳动报酬', totalAmount: 8000, currency: 'CNY', reviewStatus: '已驳回', reviewOpinion: '材料不足，请补充合同和工资流水。' },
-  { id: 'CLAIM-004', submissionDate: '2023-11-01', claimNature: '普通债权', totalAmount: 22000, currency: 'USD', reviewStatus: '需要补充', reviewOpinion: '请提供债权发生时间的证明。' },
-];
+// 将数据库原始数据转换为前端展示格式
+const transformClaimData = (rawClaim: RawClaimData, reviewStatus?: ReviewStatusDefinition): Claim => {
+  const statusName = reviewStatus?.name || rawClaim.status;
+  const mappedStatus = mapReviewStatus(statusName);
+  
+  return {
+    id: String(rawClaim.id),
+    claimNumber: rawClaim.claim_number,
+    submissionDate: rawClaim.submission_time 
+      ? new Date(rawClaim.submission_time).toLocaleDateString('zh-CN')
+      : new Date(rawClaim.created_at).toLocaleDateString('zh-CN'),
+    claimNature: rawClaim.asserted_claim_details.nature,
+    totalAmount: rawClaim.asserted_claim_details.total_asserted_amount,
+    currency: rawClaim.asserted_claim_details.currency,
+    reviewStatus: mappedStatus,
+    reviewOpinion: rawClaim.review_comments,
+    canWithdraw: mappedStatus === '待审核',
+    canEdit: ['已驳回', '需要补充'].includes(mappedStatus),
+    approvedAmount: rawClaim.approved_claim_details?.total_approved_amount,
+  };
+};
+
+// 映射数据库状态到前端状态
+const mapReviewStatus = (dbStatus: string): Claim['reviewStatus'] => {
+  const statusMap: Record<string, Claim['reviewStatus']> = {
+    '草稿': '待审核',
+    '待提交': '待审核',
+    '已提交': '待审核',
+    '待审核': '待审核',
+    '审核中': '待审核',
+    '审核通过': '审核通过',
+    '已驳回': '已驳回',
+    '需要补充': '需要补充',
+    '部分通过': '部分通过',
+  };
+  return statusMap[dbStatus] || '待审核';
+};
 
 const MyClaimsPage: React.FC = () => {
   const navigate = useNavigate();
   const { showSuccess, showError, showWarning } = useSnackbar();
-  const { surreal } = useSurreal();
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<Error | null>(null);
-  const [claims, setClaims] = React.useState<Claim[]>([]);
+  const client = useSurrealClient();
+  const { user, selectedCaseId } = useAuth();
+  const { hasPermission: canSubmitClaim } = useOperationPermission('claim_submit');
+  const { hasPermission: canEditClaim } = useOperationPermission('claim_edit_draft');
+  
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [claims, setClaims] = useState<Claim[]>([]);
 
-  // 加载数据
-  React.useEffect(() => {
-    const fetchClaims = async () => {
-      try {
-        setIsLoading(true);
-        const [[result]] = await surreal.query<[Claim[]]>('SELECT * FROM claim WHERE creditorId = $creditorId', {
-          creditorId: 'creditor:current', // TODO: 替换为实际的已登录债权人ID
-        });
-        setClaims(Array.isArray(result) ? result : []);
-      } catch (err) {
-        setError(err as Error);
-        showError('加载债权列表失败');
-      } finally {
-        setIsLoading(false);
+  // 获取我的债权数据
+  const fetchMyClaims = useCallback(async () => {
+    if (!client || !user) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // 查询当前用户的债权
+      let whereClause = 'created_by = $auth.id';
+      const queryParams: Record<string, any> = {};
+      
+      // 如果有选中的案件，只显示该案件的债权
+      if (selectedCaseId) {
+        whereClause += ' AND case_id = $caseId';
+        queryParams.caseId = selectedCaseId;
       }
-    };
 
-    fetchClaims();
-  }, [surreal, showError]);
+      const dataQuery = `
+        SELECT 
+          id,
+          claim_number,
+          case_id,
+          creditor_id,
+          status,
+          submission_time,
+          review_status_id,
+          review_time,
+          reviewer_id,
+          review_comments,
+          created_at,
+          updated_at,
+          created_by,
+          asserted_claim_details,
+          approved_claim_details
+        FROM claim 
+        WHERE ${whereClause}
+        ORDER BY created_at DESC
+      `;
+
+      const results = await queryWithAuth<any[]>(client, dataQuery, queryParams);
+      const rawClaims: RawClaimData[] = results[0] || [];
+
+      // 获取审核状态定义
+      const reviewStatusIds = [...new Set(rawClaims.map(claim => claim.review_status_id).filter(Boolean))];
+      let reviewStatuses: ReviewStatusDefinition[] = [];
+      
+      if (reviewStatusIds.length > 0) {
+        const statusQuery = `
+          SELECT id, name, description, display_order, is_active
+          FROM claim_review_status_definition 
+          WHERE id IN $statusIds
+        `;
+        const statusResults = await queryWithAuth<any[]>(client, statusQuery, { statusIds: reviewStatusIds });
+        reviewStatuses = statusResults[0] || [];
+      }
+
+      // 转换数据格式
+      const transformedClaims = rawClaims.map(rawClaim => {
+        const reviewStatus = reviewStatuses.find(rs => String(rs.id) === String(rawClaim.review_status_id));
+        return transformClaimData(rawClaim, reviewStatus);
+      });
+
+      setClaims(transformedClaims);
+    } catch (err) {
+      console.error('Error fetching my claims:', err);
+      if (err instanceof AuthenticationRequiredError) {
+        navigate('/login');
+        showError(err.message);
+      } else {
+        const errorMessage = err instanceof Error ? err.message : '加载债权列表失败';
+        setError(errorMessage);
+        showError(errorMessage);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [client, user, selectedCaseId, navigate, showError]);
+
+  // 初始化加载数据
+  useEffect(() => {
+    fetchMyClaims();
+  }, [fetchMyClaims]);
 
   const formatCurrencyDisplay = (amount: number, currency: string) => {
     return amount.toLocaleString('zh-CN', { 
@@ -96,38 +247,66 @@ const MyClaimsPage: React.FC = () => {
         return { color: 'error' as const, variant: 'outlined' as const };
       case '需要补充':
         return { color: 'info' as const, variant: 'outlined' as const };
+      case '部分通过':
+        return { color: 'warning' as const, variant: 'filled' as const };
       default:
         return { color: 'default' as const, variant: 'outlined' as const };
     }
   };
   
-  const handleWithdraw = async (claimId: string, status: Claim['reviewStatus']) => {
-    if (status !== '待审核') {
+  const handleWithdraw = async (claimId: string, claim: Claim) => {
+    if (!claim.canWithdraw) {
       showWarning('只有"待审核"状态的债权才能撤回。');
       return;
     }
 
+    if (!client) {
+      showError('缺少必要的连接信息');
+      return;
+    }
+
     try {
-      await surreal.merge(`claim:${claimId}`, {
-        reviewStatus: '已撤回',
-        withdrawalTime: new Date().toISOString(),
-      });
-      showSuccess(`债权 ${claimId} 已成功撤回 (模拟)。`);
+      // 获取草稿状态ID
+      const statusQuery = `
+        SELECT id FROM claim_review_status_definition 
+        WHERE name = '待提交' AND is_active = true
+        LIMIT 1
+      `;
       
-      // 更新本地状态
-      setClaims(claims => claims.map(claim => 
-        claim.id === claimId 
-          ? { ...claim, reviewStatus: '已撤回' as Claim['reviewStatus'] }
-          : claim
-      ));
+      const statusResults = await queryWithAuth<any[]>(client, statusQuery, {});
+      const draftStatus = statusResults[0]?.[0];
+      
+      if (!draftStatus) {
+        showError('未找到草稿状态定义');
+        return;
+      }
+      
+      const updateQuery = `
+        UPDATE $claimId SET
+          status = '草稿',
+          review_status_id = $reviewStatusId,
+          updated_at = time::now()
+      `;
+      
+      await queryWithAuth(client, updateQuery, {
+        claimId,
+        reviewStatusId: draftStatus.id,
+      });
+      
+      showSuccess(`债权 ${claim.claimNumber} 已成功撤回。`);
+      
+      // 刷新数据
+      await fetchMyClaims();
     } catch (err) {
       console.error('Failed to withdraw claim:', err);
-      showError('撤回失败，请稍后重试。');
+      if (err instanceof AuthenticationRequiredError) {
+        navigate('/login');
+        showError(err.message);
+      } else {
+        showError('撤回失败，请稍后重试。');
+      }
     }
   };
-
-  const isWithdrawDisabled = (status: Claim['reviewStatus']) => status !== '待审核';
-  const isEditDisabled = (status: Claim['reviewStatus']) => !['已驳回', '需要补充'].includes(status);
 
   return (
     <PageContainer>
@@ -143,13 +322,15 @@ const MyClaimsPage: React.FC = () => {
           <Typography variant="h4" component="h1">
             我的债权申报
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => navigate('/claims/submit')}
-          >
-            发起新的债权申报
-          </Button>
+          {canSubmitClaim && (
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => navigate('/claims/submit')}
+            >
+              发起新的债权申报
+            </Button>
+          )}
         </Box>
 
         {isLoading && (
@@ -161,12 +342,10 @@ const MyClaimsPage: React.FC = () => {
           </Box>
         )}
 
-        {!isLoading && error && (
-          <Box sx={{ textAlign: 'center', py: 6 }}>
-            <Typography variant="body1" color="error">
-              加载债权列表失败
-            </Typography>
-          </Box>
+        {error && (
+          <Paper sx={{ p: 2, mb: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
+            <Typography variant="body2">{error}</Typography>
+          </Paper>
         )}
 
         {!isLoading && !error && (
@@ -178,6 +357,7 @@ const MyClaimsPage: React.FC = () => {
                   <TableCell>申报时间</TableCell>
                   <TableCell>债权性质</TableCell>
                   <TableCell>主张债权总额</TableCell>
+                  <TableCell>认定债权总额</TableCell>
                   <TableCell>审核状态</TableCell>
                   <TableCell>审核意见</TableCell>
                   <TableCell align="center">操作</TableCell>
@@ -190,11 +370,17 @@ const MyClaimsPage: React.FC = () => {
                     sx={{ '&:hover': { backgroundColor: 'action.hover' } }}
                   >
                     <TableCell component="th" scope="row">
-                      {claim.id}
+                      {claim.claimNumber}
                     </TableCell>
                     <TableCell>{claim.submissionDate}</TableCell>
                     <TableCell>{claim.claimNature}</TableCell>
                     <TableCell>{formatCurrencyDisplay(claim.totalAmount, claim.currency)}</TableCell>
+                    <TableCell>
+                      {claim.approvedAmount !== undefined 
+                        ? formatCurrencyDisplay(claim.approvedAmount, claim.currency)
+                        : '-'
+                      }
+                    </TableCell>
                     <TableCell>
                       <Chip
                         label={claim.reviewStatus}
@@ -224,43 +410,43 @@ const MyClaimsPage: React.FC = () => {
                             size="small"
                             color="primary"
                             data-testid="view-details-button"
-                            onClick={() => navigate(`/my-claims/${claim.id}/submitted`)}
+                            onClick={() => navigate(`/my-claims/${claim.id}`)}
                           >
                             <SvgIcon fontSize="small">
                               <path d={mdiEye} />
                             </SvgIcon>
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="撤回">
-                          <span>
+                        
+                        {claim.canWithdraw && (
+                          <Tooltip title="撤回">
                             <IconButton
                               size="small"
                               color="warning"
                               data-testid="withdraw-button"
-                              onClick={() => handleWithdraw(claim.id, claim.reviewStatus)}
-                              disabled={isWithdrawDisabled(claim.reviewStatus)}
+                              onClick={() => handleWithdraw(claim.id, claim)}
                             >
                               <SvgIcon fontSize="small">
                                 <path d={mdiUndo} />
                               </SvgIcon>
                             </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title="编辑">
-                          <span>
+                          </Tooltip>
+                        )}
+                        
+                        {claim.canEdit && canEditClaim && (
+                          <Tooltip title="编辑">
                             <IconButton
                               size="small"
                               color="success"
                               data-testid="edit-button"
                               onClick={() => navigate(`/claims/submit/${claim.id}`)}
-                              disabled={isEditDisabled(claim.reviewStatus)}
                             >
                               <SvgIcon fontSize="small">
                                 <path d={mdiPencil} />
                               </SvgIcon>
                             </IconButton>
-                          </span>
-                        </Tooltip>
+                          </Tooltip>
+                        )}
                       </Box>
                     </TableCell>
                   </TableRow>

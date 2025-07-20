@@ -95,7 +95,7 @@ This is a legal case management system with the following key architectural comp
 - 支持增量数据同步，基于更新时间获取变更数据
 - 支持双向数据同步，本地和远程数据库同时修改时自动同步
 - 权限检查现在基于本地缓存的用户个人数据，提供更快的响应速度
-- 系统中有一部分页面需要用户登录之后才能访问，否则会跳转到登录页面的，针对这种查询需要在查询的sql之前添加 当前认证状态的查询 例如查询案件： `return $auth;select * from case;`，返回的数据从返回数组中的索引位置1开始获取，先获取0位置的认证状态，如果没有认证则直接跳转登录页面（项目已封装该功能，在 `dataService.ts的queryWithAuth`中）， 在service worker中判断如果命中缓存，则在远程执行`return $auth;`，后面的语句在本地执行
+- 系统中有一部分页面需要用户登录之后才能访问，否则会跳转到登录页面的，针对这种查询需要在查询的sql之前添加 当前认证状态的查询 例如查询案件： `return $auth;select * from case;`，返回的数据从返回数组中的索引位置1开始获取，先获取0位置的认证状态，如果没有认证则直接跳转登录页面（项目已封装该功能，在 `dataService.ts的queryWithAuth`中，使用queryWithAuth时 应在泛型中传入正确的类型，例如`queryWithAuth<ExtendedCase[]>(client, query)`）， 在service worker中判断如果命中缓存，则在远程执行`return $auth;`，后面的语句在本地执行
 - **权限系统架构**：权限判断现在完全集中在 `AuthContext` 中，通过 `menuService` 作为权限查询的代理。所有权限相关的功能都通过 AuthContext 提供的方法获取：
   - `useOperationPermission(operationId)` - 检查操作权限
   - `useOperationPermissions(operationIds)` - 批量检查操作权限  

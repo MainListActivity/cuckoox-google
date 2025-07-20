@@ -1,10 +1,16 @@
 // STYLING: This page currently uses Tailwind CSS. Per 规范.md, consider migration to MUI components.
 // TODO: Access Control - This page should be accessible only to users with 'admin' or specific claim review roles.
 // TODO: Auto-Navigation - Logic for automatic navigation to this page (e.g., if case status is '债权申报' and user has permissions) should be handled in higher-level routing.
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useTranslation } from 'react-i18next';
+import { useSurrealClient,AuthenticationRequiredError } from '@/src/contexts/SurrealProvider';
+import { useAuth } from '@/src/contexts/AuthContext';
+import { useOperationPermission } from '@/src/hooks/usePermission';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
+import { useDebounce } from '@/src/hooks/useDebounce';
+import type { RecordId } from 'surrealdb';
 import {
   Box,
   Typography,
@@ -32,7 +38,8 @@ import {
   DialogContent,
   DialogActions,
   SvgIcon,
-  Link as MuiLink, // For attachment links
+  Link as MuiLink,
+  TablePagination
 } from '@mui/material';
 import {
   mdiMagnify,
@@ -46,123 +53,370 @@ import {
 import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from '@/src/components/admin/claims/AdminCreateClaimBasicInfoDialog';
 
 
-// Updated Claim interface
+// 数据库原始数据接口
+interface RawClaimData {
+  id: RecordId | string;
+  claim_number: string;
+  case_id: RecordId | string;
+  creditor_id: RecordId | string;
+  status: string;
+  submission_time: string;
+  review_status_id?: RecordId | string;
+  review_time?: string;
+  reviewer_id?: RecordId | string;
+  review_comments?: string;
+  created_at: string;
+  updated_at: string;
+  created_by: RecordId | string;
+  // 主张债权详情
+  asserted_claim_details: {
+    nature: string;
+    principal: number;
+    interest: number;
+    other_amount?: number;
+    total_asserted_amount: number;
+    currency: string;
+    brief_description?: string;
+    attachment_doc_id: RecordId | string;
+  };
+  // 认定债权详情
+  approved_claim_details?: {
+    nature: string;
+    principal: number;
+    interest: number;
+    other_amount?: number;
+    total_approved_amount: number;
+    currency: string;
+    approved_attachment_doc_id?: RecordId | string;
+  };
+}
+
+// 债权人信息接口
+interface CreditorInfo {
+  id: RecordId | string;
+  name: string;
+  type: 'organization' | 'individual';
+  legal_id: string;
+  contact_person_name?: string;
+  contact_phone?: string;
+  contact_address?: string;
+}
+
+// 审核状态定义接口
+interface ReviewStatusDefinition {
+  id: RecordId | string;
+  name: string;
+  description?: string;
+  display_order: number;
+  is_active: boolean;
+}
+
+// 前端展示用的债权接口
 interface Claim {
   id: string;
   // Creditor Info
   creditorName: string;
   creditorType: '组织' | '个人';
-  creditorIdentifier: string; // New
+  creditorIdentifier: string;
   // Contact Info
-  contactPersonName: string; // New
-  contactPersonPhone: string; // New
+  contactPersonName: string;
+  contactPersonPhone: string;
   // Claim Basic Info
   claim_number: string;
   // Asserted Claim
-  assertedNature: string; // New
-  assertedPrincipal: number; // New
-  assertedInterest: number; // New
-  assertedOtherFees: number; // New
-  asserted_total: number; // Existing
-  assertedAttachmentsLink?: string; // New - placeholder
+  assertedNature: string;
+  assertedPrincipal: number;
+  assertedInterest: number;
+  assertedOtherFees: number;
+  asserted_total: number;
+  assertedAttachmentsLink?: string;
   // Approved Claim
-  approvedNature: string | null; // New
-  approvedPrincipal: number | null; // New
-  approvedInterest: number | null; // New
-  approvedOtherFees: number | null; // New
-  approved_total: number | null; // Existing
-  approvedAttachmentsLink?: string | null; // New - placeholder
+  approvedNature: string | null;
+  approvedPrincipal: number | null;
+  approvedInterest: number | null;
+  approvedOtherFees: number | null;
+  approved_total: number | null;
+  approvedAttachmentsLink?: string | null;
   // Audit Info
   auditor: string;
   audit_status: '待审核' | '部分通过' | '已驳回' | '审核通过';
   audit_time: string;
-  reviewOpinion?: string | null; // New
+  reviewOpinion?: string | null;
+}
+
+// 高级搜索条件接口
+interface AdvancedSearchCriteria {
+  creditorName?: string;
+  claimNumber?: string;
+  assertedAmountMin?: number;
+  assertedAmountMax?: number;
+  approvedAmountMin?: number;
+  approvedAmountMax?: number;
+  submissionDateStart?: string;
+  submissionDateEnd?: string;
+  reviewDateStart?: string;
+  reviewDateEnd?: string;
+  claimNature?: string;
 }
 
 
-// Updated Mock Data
-const initialMockClaims: Claim[] = [
-  {
-    id: 'claim001',
-    creditorName: 'Acme Corp', creditorType: '组织', creditorIdentifier: '91330100MA2XXXXX1A',
-    contactPersonName: 'John Doe', contactPersonPhone: '13800138000',
-    claim_number: 'CL-2023-001',
-    assertedNature: '货款', assertedPrincipal: 140000, assertedInterest: 5000, assertedOtherFees: 0,
-    asserted_total: 150000, assertedAttachmentsLink: '#',
-    approvedNature: '货款', approvedPrincipal: 140000, approvedInterest: 5000, approvedOtherFees: 0,
-    approved_total: 145000, approvedAttachmentsLink: '#',
-    auditor: 'Reviewer A', audit_status: '部分通过', audit_time: '2023-04-10', reviewOpinion: '利息部分需核实'
-  },
-  {
-    id: 'claim002',
-    creditorName: 'Jane Smith', creditorType: '个人', creditorIdentifier: '33010219900101XXXX',
-    contactPersonName: 'Jane Smith', contactPersonPhone: '13900139000',
-    claim_number: 'CL-2023-002',
-    assertedNature: '服务费', assertedPrincipal: 75000, assertedInterest: 0, assertedOtherFees: 0,
-    asserted_total: 75000, assertedAttachmentsLink: '#',
-    approvedNature: null, approvedPrincipal: null, approvedInterest: null, approvedOtherFees: null,
-    approved_total: 0, approvedAttachmentsLink: null,
-    auditor: 'Reviewer B', audit_status: '已驳回', audit_time: '2023-04-12', reviewOpinion: '服务合同无效'
-  },
-  {
-    id: 'claim003',
-    creditorName: 'Beta LLC', creditorType: '组织', creditorIdentifier: '91330100MA2YYYYY2B',
-    contactPersonName: 'Mike Johnson', contactPersonPhone: '13700137000',
-    claim_number: 'CL-2023-003',
-    assertedNature: '工程款', assertedPrincipal: 200000, assertedInterest: 20000, assertedOtherFees: 0,
-    asserted_total: 220000, assertedAttachmentsLink: '#',
-    approvedNature: null, approvedPrincipal: null, approvedInterest: null, approvedOtherFees: null,
-    approved_total: null, approvedAttachmentsLink: null,
-    auditor: '', audit_status: '待审核', audit_time: '', reviewOpinion: null
-  },
-  {
-    id: 'claim004',
-    creditorName: 'Gamma Inc', creditorType: '组织', creditorIdentifier: '91330100MA2ZZZZZ3C',
-    contactPersonName: 'Carol Williams', contactPersonPhone: '13600136000',
-    claim_number: 'CL-2023-004',
-    assertedNature: '借款', assertedPrincipal: 50000, assertedInterest: 0, assertedOtherFees: 0,
-    asserted_total: 50000, assertedAttachmentsLink: '#',
-    approvedNature: '借款', approvedPrincipal: 50000, approvedInterest: 0, approvedOtherFees: 0,
-    approved_total: 50000, approvedAttachmentsLink: null,
-    auditor: 'Reviewer C', audit_status: '审核通过', audit_time: '2023-05-15', reviewOpinion: '材料齐全，予以确认'
-  },
-];
+// 将数据库原始数据转换为前端展示格式
+const transformClaimData = (rawClaim: RawClaimData, creditor: CreditorInfo, reviewStatus?: ReviewStatusDefinition, reviewer?: { name: string }): Claim => {
+  return {
+    id: String(rawClaim.id),
+    creditorName: creditor.name,
+    creditorType: creditor.type === 'organization' ? '组织' : '个人',
+    creditorIdentifier: creditor.legal_id,
+    contactPersonName: creditor.contact_person_name || '',
+    contactPersonPhone: creditor.contact_phone || '',
+    claim_number: rawClaim.claim_number,
+    assertedNature: rawClaim.asserted_claim_details.nature,
+    assertedPrincipal: rawClaim.asserted_claim_details.principal,
+    assertedInterest: rawClaim.asserted_claim_details.interest,
+    assertedOtherFees: rawClaim.asserted_claim_details.other_amount || 0,
+    asserted_total: rawClaim.asserted_claim_details.total_asserted_amount,
+    assertedAttachmentsLink: rawClaim.asserted_claim_details.attachment_doc_id ? `/documents/${rawClaim.asserted_claim_details.attachment_doc_id}` : undefined,
+    approvedNature: rawClaim.approved_claim_details?.nature || null,
+    approvedPrincipal: rawClaim.approved_claim_details?.principal || null,
+    approvedInterest: rawClaim.approved_claim_details?.interest || null,
+    approvedOtherFees: rawClaim.approved_claim_details?.other_amount || null,
+    approved_total: rawClaim.approved_claim_details?.total_approved_amount || null,
+    approvedAttachmentsLink: rawClaim.approved_claim_details?.approved_attachment_doc_id ? `/documents/${rawClaim.approved_claim_details.approved_attachment_doc_id}` : null,
+    auditor: reviewer?.name || '',
+    audit_status: reviewStatus?.name === '待提交' ? '待审核' : (reviewStatus?.name as any) || '待审核',
+    audit_time: rawClaim.review_time ? new Date(rawClaim.review_time).toLocaleDateString('zh-CN') : '',
+    reviewOpinion: rawClaim.review_comments || null
+  };
+};
 
 const ClaimListPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { showSuccess, showWarning } = useSnackbar();
+  const { showSuccess, showWarning, showError } = useSnackbar();
+  const client = useSurrealClient();
+  const { selectedCaseId } = useAuth();
+  const { hasPermission: canCreateClaim } = useOperationPermission('claim_create_admin');
+  const { hasPermission: canBatchReject } = useOperationPermission('claim_batch_reject');
 
-  const [claimsData, setClaimsData] = useState<Claim[]>(initialMockClaims);
+  const [claimsData, setClaimsData] = useState<Claim[]>([]);
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+  const [currentSearchCriteria, setCurrentSearchCriteria] = useState<AdvancedSearchCriteria | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalClaims, setTotalClaims] = useState<number>(0);
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(25);
+  
+  // 搜索防抖
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
+  // 获取债权数据
+  const fetchClaims = useCallback(async (
+    currentPage: number,
+    currentRowsPerPage: number,
+    currentSearchTerm: string,
+    searchCriteria?: AdvancedSearchCriteria | null
+  ) => {
+    if (!selectedCaseId || !client) {
+      setClaimsData([]);
+      setTotalClaims(0);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // 构建查询条件
+      let whereClause = `case_id = $caseId`;
+      const queryParams: Record<string, any> = { caseId: selectedCaseId };
+
+      // 基础搜索条件
+      if (currentSearchTerm) {
+        whereClause += ` AND (
+          creditor_id.name ~ $searchTerm OR 
+          claim_number ~ $searchTerm OR 
+          creditor_id.legal_id ~ $searchTerm OR 
+          creditor_id.contact_person_name ~ $searchTerm OR 
+          creditor_id.contact_phone ~ $searchTerm
+        )`;
+        queryParams.searchTerm = `(?i).*${currentSearchTerm}.*`;
+      }
+
+      // 状态筛选
+      if (filterStatus) {
+        whereClause += ` AND review_status_id.name = $filterStatus`;
+        queryParams.filterStatus = filterStatus;
+      }
+
+      // 高级搜索条件
+      if (searchCriteria) {
+        if (searchCriteria.creditorName) {
+          whereClause += ` AND creditor_id.name ~ $creditorNameSearch`;
+          queryParams.creditorNameSearch = `(?i).*${searchCriteria.creditorName}.*`;
+        }
+        if (searchCriteria.claimNumber) {
+          whereClause += ` AND claim_number ~ $claimNumberSearch`;
+          queryParams.claimNumberSearch = `(?i).*${searchCriteria.claimNumber}.*`;
+        }
+        if (searchCriteria.assertedAmountMin !== undefined) {
+          whereClause += ` AND asserted_claim_details.total_asserted_amount >= $assertedAmountMin`;
+          queryParams.assertedAmountMin = searchCriteria.assertedAmountMin;
+        }
+        if (searchCriteria.assertedAmountMax !== undefined) {
+          whereClause += ` AND asserted_claim_details.total_asserted_amount <= $assertedAmountMax`;
+          queryParams.assertedAmountMax = searchCriteria.assertedAmountMax;
+        }
+        if (searchCriteria.submissionDateStart) {
+          whereClause += ` AND submission_time >= $submissionDateStart`;
+          queryParams.submissionDateStart = searchCriteria.submissionDateStart;
+        }
+        if (searchCriteria.submissionDateEnd) {
+          whereClause += ` AND submission_time <= $submissionDateEnd`;
+          queryParams.submissionDateEnd = searchCriteria.submissionDateEnd;
+        }
+        if (searchCriteria.claimNature) {
+          whereClause += ` AND asserted_claim_details.nature = $claimNature`;
+          queryParams.claimNature = searchCriteria.claimNature;
+        }
+      }
+
+      // 数据查询
+      const dataQuery = `
+        SELECT 
+          id,
+          claim_number,
+          case_id,
+          creditor_id,
+          status,
+          submission_time,
+          review_status_id,
+          review_time,
+          reviewer_id,
+          review_comments,
+          created_at,
+          updated_at,
+          created_by,
+          asserted_claim_details,
+          approved_claim_details
+        FROM claim 
+        WHERE ${whereClause}
+        ORDER BY created_at DESC
+        LIMIT $limit START $start
+      `;
+      
+      queryParams.limit = currentRowsPerPage;
+      queryParams.start = currentPage * currentRowsPerPage;
+
+      // 统计查询
+      const countQuery = `
+        SELECT count() AS total 
+        FROM claim 
+        WHERE ${whereClause}
+        GROUP ALL
+      `;
+
+      // 执行查询
+      const results = await queryWithAuth<any[]>(client, `${dataQuery};${countQuery}`, queryParams);
+      
+      if (!results || results.length < 2) {
+        throw new Error(t('error_invalid_query_response', '查询返回数据格式错误'));
+      }
+
+      const rawClaims: RawClaimData[] = results[0] || [];
+      const countResult = results[1]?.[0];
+      const total = countResult?.total || 0;
+
+      // 获取债权人信息
+      const creditorIds = [...new Set(rawClaims.map(claim => claim.creditor_id))];
+      let creditors: CreditorInfo[] = [];
+      if (creditorIds.length > 0) {
+        const creditorQuery = `
+          SELECT id, name, type, legal_id, contact_person_name, contact_phone, contact_address
+          FROM creditor 
+          WHERE id IN $creditorIds
+        `;
+        const creditorResults = await queryWithAuth<any[]>(client, creditorQuery, { creditorIds });
+        creditors = creditorResults[0] || [];
+      }
+
+      // 获取审核状态定义
+      const reviewStatusIds = [...new Set(rawClaims.map(claim => claim.review_status_id).filter(Boolean))];
+      let reviewStatuses: ReviewStatusDefinition[] = [];
+      if (reviewStatusIds.length > 0) {
+        const statusQuery = `
+          SELECT id, name, description, display_order, is_active
+          FROM claim_review_status_definition 
+          WHERE id IN $statusIds
+        `;
+        const statusResults = await queryWithAuth<any[]>(client, statusQuery, { statusIds: reviewStatusIds });
+        reviewStatuses = statusResults[0] || [];
+      }
+
+      // 获取审核人信息
+      const reviewerIds = [...new Set(rawClaims.map(claim => claim.reviewer_id).filter(Boolean))];
+      let reviewers: { id: string; name: string }[] = [];
+      if (reviewerIds.length > 0) {
+        const reviewerQuery = `
+          SELECT id, name
+          FROM user 
+          WHERE id IN $reviewerIds
+        `;
+        const reviewerResults = await queryWithAuth<any[]>(client, reviewerQuery, { reviewerIds });
+        reviewers = reviewerResults[0] || [];
+      }
+
+      // 转换数据格式
+      const transformedClaims = rawClaims.map(rawClaim => {
+        const creditor = creditors.find(c => String(c.id) === String(rawClaim.creditor_id));
+        const reviewStatus = reviewStatuses.find(rs => String(rs.id) === String(rawClaim.review_status_id));
+        const reviewer = reviewers.find(r => String(r.id) === String(rawClaim.reviewer_id));
+        
+        if (!creditor) {
+          console.warn(`Creditor not found for claim ${rawClaim.id}:`, rawClaim.creditor_id);
+          return null;
+        }
+        
+        return transformClaimData(rawClaim, creditor, reviewStatus, reviewer);
+      }).filter(Boolean) as Claim[];
+
+      setClaimsData(transformedClaims);
+      setTotalClaims(total);
+    } catch (err) {
+      console.error('Error fetching claims:', err);
+      if (err instanceof AuthenticationRequiredError) {
+        navigate('/login');
+        showError(err.message);
+      } else {
+        const errorMessage = err instanceof Error ? err.message : t('error_fetching_claims', '获取债权列表失败。');
+        setError(errorMessage);
+        showError(errorMessage);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedCaseId, client, t, navigate, showError]);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectReasonError, setRejectReasonError] = useState('');
   const [adminCreateClaimDialogOpen, setAdminCreateClaimDialogOpen] = useState(false); // New state for admin create claim dialog
 
-  const filteredClaims = useMemo(() => {
-    let currentClaims = [...claimsData];
-    if (searchTerm) {
-      currentClaims = currentClaims.filter(claim =>
-          claim.creditorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          claim.claim_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          claim.creditorIdentifier.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          claim.contactPersonName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          claim.contactPersonPhone.includes(searchTerm)
-      );
-    }
-    if (filterStatus) {
-      currentClaims = currentClaims.filter(claim => claim.audit_status === filterStatus);
-    }
-    return currentClaims;
-  }, [claimsData, searchTerm, filterStatus]);
+  // 无需本地筛选，数据已在服务端筛选
+  const filteredClaims = claimsData;
 
+  // 初始化加载数据
+  useEffect(() => {
+    fetchClaims(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria);
+  }, [fetchClaims, page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria]);
+
+  // 搜索或筛选条件变化时重置选中状态
   useEffect(() => {
     setSelected([]);
-  }, [searchTerm, filterStatus]);
+  }, [debouncedSearchTerm, filterStatus]);
 
   const handleSelectAllClick = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
@@ -220,24 +474,67 @@ const ClaimListPage: React.FC = () => {
     setRejectReasonError('');
   }
 
-  const handleConfirmBatchReject = () => {
+  const handleConfirmBatchReject = async () => {
     if (!rejectionReason.trim()) {
-      setRejectReasonError('驳回原因不能为空。');
+      setRejectReasonError(t('rejection_reason_required', '驳回原因不能为空。'));
       return;
     }
-    setRejectReasonError('');
-
-    setClaimsData(prevClaims =>
-        prevClaims.map(claim =>
-            selected.includes(claim.id)
-                ? { ...claim, audit_status: '已驳回', reviewOpinion: rejectionReason, auditor: 'AdminUser', audit_time: new Date().toISOString().split('T')[0] }
-                : claim
-        )
-    );
-
-    showSuccess(`${selected.length} 个债权已批量驳回。`);
-    handleCloseRejectModal();
-    setSelected([]);
+    
+    if (!client || !selectedCaseId) {
+      showError(t('error_no_client_or_case', '缺少必要的连接信息'));
+      return;
+    }
+    
+    try {
+      setRejectReasonError('');
+      
+      // 获取驳回状态定义
+      const rejectStatusQuery = `
+        SELECT id FROM claim_review_status_definition 
+        WHERE name = '已驳回' AND is_active = true
+        LIMIT 1
+      `;
+      
+      const statusResults = await queryWithAuth<any[]>(client, rejectStatusQuery, {});
+      const rejectStatus = statusResults[0]?.[0];
+      
+      if (!rejectStatus) {
+        showError(t('error_reject_status_not_found', '未找到驳回状态定义'));
+        return;
+      }
+      
+      // 批量更新债权状态
+      const updateQuery = `
+        FOR $claimId IN $claimIds {
+          UPDATE $claimId SET 
+            review_status_id = $rejectStatusId,
+            review_comments = $rejectionReason,
+            review_time = time::now()
+        }
+      `;
+      
+      await queryWithAuth(client, updateQuery, {
+        claimIds: selected,
+        rejectStatusId: rejectStatus.id,
+        rejectionReason: rejectionReason
+      });
+      
+      showSuccess(t('batch_reject_success', `${selected.length} 个债权已批量驳回。`));
+      handleCloseRejectModal();
+      setSelected([]);
+      
+      // 刷新数据
+      await fetchClaims(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria);
+    } catch (err) {
+      console.error('Error in batch reject:', err);
+      if (err instanceof AuthenticationRequiredError) {
+        navigate('/login');
+        showError(err.message);
+      } else {
+        const errorMessage = err instanceof Error ? err.message : t('error_batch_reject', '批量驳回失败');
+        showError(errorMessage);
+      }
+    }
   };
 
   const formatCurrency = (amount: number | null) => {
@@ -245,18 +542,31 @@ const ClaimListPage: React.FC = () => {
     return amount.toLocaleString('zh-CN', { style: 'currency', currency: 'CNY' }); // Assuming CNY for all for now
   };
 
-  const handleAdminCreateClaimNext = (basicClaimData: AdminBasicClaimData) => {
-    const tempClaimId = `ADMIN-CLAIM-${Date.now()}`;
-    console.log('Admin Basic Claim Data:', basicClaimData);
-    console.log('Generated Temporary Claim ID:', tempClaimId);
-
-    // TODO: Store basicClaimData temporarily (e.g., in state, context, or localStorage)
-    // if it needs to be combined with attachment data later.
-    // For now, we just navigate.
-
-    setAdminCreateClaimDialogOpen(false);
-    showSuccess(t('admin_claim_basic_info_saved_success', '基本信息已保存，请继续添加附件材料。'));
-    navigate(`/admin/create-claim/${tempClaimId}/attachments`);
+  const handleAdminCreateClaimNext = async (basicClaimData: AdminBasicClaimData) => {
+    if (!client || !selectedCaseId) {
+      showError(t('error_no_client_or_case', '缺少必要的连接信息'));
+      return;
+    }
+    
+    try {
+      // TODO: 实现创建债权的完整逻辑
+      // 这里只是临时实现，实际需要根据具体业务逻辑调整
+      const tempClaimId = `temp-${Date.now()}`;
+      
+      // 将基本信息存储到 localStorage 供后续使用
+      localStorage.setItem('tempClaimData', JSON.stringify({
+        ...basicClaimData,
+        caseId: selectedCaseId,
+        tempId: tempClaimId
+      }));
+      
+      setAdminCreateClaimDialogOpen(false);
+      showSuccess(t('admin_claim_basic_info_saved_success', '基本信息已保存，请继续添加附件材料。'));
+      navigate(`/admin/create-claim/${tempClaimId}/attachments`);
+    } catch (err) {
+      console.error('Error creating claim:', err);
+      showError(t('error_create_claim', '创建债权失败'));
+    }
   };
 
   return (
@@ -297,27 +607,35 @@ const ClaimListPage: React.FC = () => {
                 <MenuItem value="审核通过">{t('status_approved', '审核通过')}</MenuItem>
               </Select>
             </FormControl>
-            {/* // TODO: Access Control - This button's visibility/enabled state should depend on user permissions (e.g., 'admin_create_claim'). */}
-            <Button
-                variant="contained"
-                startIcon={<SvgIcon><path d={mdiPlusCircleOutline} /></SvgIcon>}
-                onClick={() => setAdminCreateClaimDialogOpen(true)} // Open the new dialog
-            >
-              {t('create_claim_button', '创建债权')}
-            </Button>
-            {/* // TODO: Access Control - This button's visibility/enabled state should depend on user permissions (e.g., 'batch_reject_claims'). */}
-            <Button
-                variant="outlined"
-                color="error"
-                startIcon={<SvgIcon><path d={mdiCloseCircleOutline} /></SvgIcon>}
-                onClick={handleOpenRejectModal}
-                disabled={selected.length === 0}
-            >
-              {t('batch_reject_button', '批量驳回')}
-            </Button>
+            {canCreateClaim && (
+              <Button
+                  variant="contained"
+                  startIcon={<SvgIcon><path d={mdiPlusCircleOutline} /></SvgIcon>}
+                  onClick={() => setAdminCreateClaimDialogOpen(true)}
+              >
+                {t('create_claim_button', '创建债权')}
+              </Button>
+            )}
+            {canBatchReject && (
+              <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<SvgIcon><path d={mdiCloseCircleOutline} /></SvgIcon>}
+                  onClick={handleOpenRejectModal}
+                  disabled={selected.length === 0}
+              >
+                {t('batch_reject_button', '批量驳回')}
+              </Button>
+            )}
           </Stack>
         </Paper>
 
+        {error && (
+          <Paper sx={{ p: 2, mb: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
+            <Typography variant="body2">{error}</Typography>
+          </Paper>
+        )}
+        
         <TableContainer component={Paper}>
           <Table stickyHeader size="small" aria-label="claims table">
             <TableHead>
@@ -356,8 +674,19 @@ const ClaimListPage: React.FC = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredClaims.length === 0 && (
-                  <TableRow><TableCell colSpan={23} align="center"><Typography sx={{p:2}}>{t('no_claims_found', '暂无匹配的债权数据')}</Typography></TableCell></TableRow>
+              {isLoading && (
+                <TableRow>
+                  <TableCell colSpan={23} align="center">
+                    <Typography sx={{p:2}}>{t('loading_claims', '正在加载债权数据...')}</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+              {!isLoading && filteredClaims.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={23} align="center">
+                    <Typography sx={{p:2}}>{t('no_claims_found', '暂无匹配的债权数据')}</Typography>
+                  </TableCell>
+                </TableRow>
               )}
               {filteredClaims.map((claim) => {
                 const isItemSelected = isSelected(claim.id);
@@ -425,11 +754,10 @@ const ClaimListPage: React.FC = () => {
                       <TableCell>{claim.auditor || '-'}</TableCell>
                       <TableCell>{claim.audit_time || '-'}</TableCell>
                       <TableCell align="center">
-                        {/* // TODO: Access Control - Access to review details might depend on specific claim assignment or general admin rights. */}
                         <Tooltip title={claim.audit_status === '待审核' ? t('review_claim_tooltip', '审核债权') : t('view_claim_details_tooltip', '查看详情')}>
                           <IconButton
                               component={Link}
-                              to={`/admin/claims/${claim.id}/review`}
+                              to={`/claims/${claim.id}/review`}
                               size="small"
                               onClick={(e) => e.stopPropagation()}
                           >
@@ -443,7 +771,24 @@ const ClaimListPage: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-        {/* TODO: Add MUI Pagination component here */}
+        
+        <TablePagination
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          component="div"
+          count={totalClaims}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={(event, newPage) => setPage(newPage)}
+          onRowsPerPageChange={(event) => {
+            setRowsPerPage(parseInt(event.target.value, 10));
+            setPage(0);
+          }}
+          labelRowsPerPage={t('rows_per_page', '每页显示:')}
+          labelDisplayedRows={({ from, to, count }) => 
+            t('pagination_info', `${from}-${to} / ${count !== -1 ? count : `${to}以上`}`)
+          }
+        />
+        
         <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
           {t('claim_list_admin_footer_note', '此页面供管理员审核债权申报。支持创建、批量驳回、搜索和筛选功能。')}
         </Typography>
