@@ -123,6 +123,18 @@ DEFINE INDEX claim_case_status_idx ON claim FIELDS case_id, review_status_id;
 DEFINE INDEX claim_creditor_amount_idx ON claim FIELDS creditor_id, status, asserted_claim_details.total_asserted_amount;
 DEFINE INDEX claim_case_creditor_amount_idx ON claim FIELDS case_id, creditor_id, asserted_claim_details.total_asserted_amount;
 
+-- 全文搜索分析器 - 支持债权高级搜索功能  
+DEFINE ANALYZER claim_search_analyzer TOKENIZERS blank,punct,camel,class FILTERS lowercase,ascii;
+
+-- 债权全文搜索索引
+DEFINE INDEX claim_fulltext_claim_number_idx ON claim FIELDS claim_number SEARCH ANALYZER claim_search_analyzer BM25 HIGHLIGHTS;
+DEFINE INDEX claim_fulltext_nature_idx ON claim FIELDS asserted_claim_details.nature SEARCH ANALYZER claim_search_analyzer BM25 HIGHLIGHTS;
+DEFINE INDEX claim_fulltext_description_idx ON claim FIELDS asserted_claim_details.brief_description SEARCH ANALYZER claim_search_analyzer BM25 HIGHLIGHTS;
+
+-- 优化债权搜索性能的复合索引
+DEFINE INDEX claim_search_optimized_idx ON claim FIELDS case_id, status, created_at;
+DEFINE INDEX claim_creditor_search_idx ON claim FIELDS case_id, creditor_id, status;
+
 
 -- ------------------------------
 -- TABLE: claim_nature_definition

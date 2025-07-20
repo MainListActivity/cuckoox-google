@@ -39,7 +39,11 @@ import {
   DialogActions,
   SvgIcon,
   Link as MuiLink,
-  TablePagination
+  TablePagination,
+  Card,
+  CardContent,
+  Grid,
+  LinearProgress
 } from '@mui/material';
 import {
   mdiMagnify,
@@ -48,9 +52,11 @@ import {
   mdiPencilOutline,
   mdiEyeOutline,
   mdiFileDocumentOutline, // For attachment icon
+  mdiFilterOutline, // For advanced search
 } from '@mdi/js';
 // Import the new dialog
 import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from '@/src/components/admin/claims/AdminCreateClaimBasicInfoDialog';
+import AdvancedSearchDialog, { type AdvancedSearchCriteria } from './AdvancedSearchDialog';
 
 
 // 数据库原始数据接口
@@ -146,6 +152,10 @@ interface Claim {
 
 // 高级搜索条件接口
 interface AdvancedSearchCriteria {
+  // 全文检索选项
+  useFullTextSearch?: boolean;
+  fullTextSearch?: string;
+  // 字段特定搜索
   creditorName?: string;
   claimNumber?: string;
   assertedAmountMin?: number;
@@ -209,8 +219,91 @@ const ClaimListPage: React.FC = () => {
   const [page, setPage] = useState<number>(0);
   const [rowsPerPage, setRowsPerPage] = useState<number>(25);
   
+  // 高级搜索对话框状态
+  const [advancedSearchOpen, setAdvancedSearchOpen] = useState<boolean>(false);
+  
+  // 创建债权对话框状态
+  const [createClaimDialogOpen, setCreateClaimDialogOpen] = useState<boolean>(false);
+  
+  // 统计数据状态
+  const [claimsStats, setClaimsStats] = useState({
+    totalClaims: 0,
+    totalAssertedAmount: 0,
+    totalApprovedAmount: 0,
+    statusDistribution: {} as Record<string, number>,
+    reviewProgress: 0,
+  });
+  
   // 搜索防抖
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
+  // 获取债权统计数据
+  const fetchClaimsStats = useCallback(async () => {
+    if (!selectedCaseId || !client) {
+      return;
+    }
+
+    try {
+      // 统计查询
+      const statsQuery = `
+        -- 基础统计
+        SELECT 
+          count() AS total_claims,
+          math::sum(asserted_claim_details.total_asserted_amount) AS total_asserted_amount,
+          math::sum(approved_claim_details.total_approved_amount) AS total_approved_amount
+        FROM claim 
+        WHERE case_id = $caseId
+        GROUP ALL;
+        
+        -- 状态分布统计
+        SELECT 
+          review_status_id.name AS status,
+          count() AS count
+        FROM claim 
+        WHERE case_id = $caseId
+        GROUP BY review_status_id.name;
+        
+        -- 审核进度统计
+        SELECT 
+          count() AS reviewed_claims
+        FROM claim 
+        WHERE case_id = $caseId 
+        AND review_status_id.name IN ['审核通过', '已驳回', '部分通过']
+        GROUP ALL;
+      `;
+
+      const results = await queryWithAuth<any[]>(client, statsQuery, { caseId: selectedCaseId });
+      
+      if (results && results.length >= 3) {
+        const basicStats = results[0]?.[0] || {};
+        const statusDistribution = results[1] || [];
+        const reviewedStats = results[2]?.[0] || {};
+
+        // 处理状态分布
+        const statusMap: Record<string, number> = {};
+        statusDistribution.forEach((item: any) => {
+          if (item.status) {
+            statusMap[item.status] = item.count || 0;
+          }
+        });
+
+        // 计算审核进度
+        const totalClaims = basicStats.total_claims || 0;
+        const reviewedClaims = reviewedStats.reviewed_claims || 0;
+        const reviewProgress = totalClaims > 0 ? Math.round((reviewedClaims / totalClaims) * 100) : 0;
+
+        setClaimsStats({
+          totalClaims,
+          totalAssertedAmount: basicStats.total_asserted_amount || 0,
+          totalApprovedAmount: basicStats.total_approved_amount || 0,
+          statusDistribution: statusMap,
+          reviewProgress,
+        });
+      }
+    } catch (error) {
+      console.error('获取债权统计数据失败:', error);
+    }
+  }, [selectedCaseId, client]);
 
   // 获取债权数据
   const fetchClaims = useCallback(async (
@@ -234,55 +327,68 @@ const ClaimListPage: React.FC = () => {
       let whereClause = `case_id = $caseId`;
       const queryParams: Record<string, any> = { caseId: selectedCaseId };
 
-      // 基础搜索条件
-      if (currentSearchTerm) {
-        whereClause += ` AND (
-          creditor_id.name ~ $searchTerm OR 
-          claim_number ~ $searchTerm OR 
-          creditor_id.legal_id ~ $searchTerm OR 
-          creditor_id.contact_person_name ~ $searchTerm OR 
-          creditor_id.contact_phone ~ $searchTerm
-        )`;
-        queryParams.searchTerm = `(?i).*${currentSearchTerm}.*`;
+      // 构建搜索条件
+      const searchConditions: string[] = [];
+      
+      if (searchCriteria) {
+        // 高级搜索模式
+        if (searchCriteria.useFullTextSearch && searchCriteria.fullTextSearch?.trim()) {
+          // 使用全文检索 - 对债权相关字段进行搜索
+          const fullTextQuery = searchCriteria.fullTextSearch.trim();
+          searchConditions.push(`AND (claim_number @@ $fullTextQuery OR asserted_claim_details.nature @@ $fullTextQuery OR asserted_claim_details.brief_description @@ $fullTextQuery)`);
+          queryParams.fullTextQuery = fullTextQuery;
+        } else {
+          // 字段特定搜索
+          if (searchCriteria.creditorName?.trim()) {
+            searchConditions.push(`AND creditor_id.name @@ $creditorNameSearch`);
+            queryParams.creditorNameSearch = searchCriteria.creditorName.trim();
+          }
+          if (searchCriteria.claimNumber?.trim()) {
+            searchConditions.push(`AND claim_number @@ $claimNumberSearch`);
+            queryParams.claimNumberSearch = searchCriteria.claimNumber.trim();
+          }
+        }
+        
+        // 数量筛选条件
+        if (searchCriteria.assertedAmountMin !== undefined) {
+          searchConditions.push(`AND asserted_claim_details.total_asserted_amount >= $assertedAmountMin`);
+          queryParams.assertedAmountMin = searchCriteria.assertedAmountMin;
+        }
+        if (searchCriteria.assertedAmountMax !== undefined) {
+          searchConditions.push(`AND asserted_claim_details.total_asserted_amount <= $assertedAmountMax`);
+          queryParams.assertedAmountMax = searchCriteria.assertedAmountMax;
+        }
+        
+        // 日期筛选条件
+        if (searchCriteria.submissionDateStart) {
+          searchConditions.push(`AND submission_time >= $submissionDateStart`);
+          queryParams.submissionDateStart = searchCriteria.submissionDateStart;
+        }
+        if (searchCriteria.submissionDateEnd) {
+          searchConditions.push(`AND submission_time <= $submissionDateEnd`);
+          queryParams.submissionDateEnd = searchCriteria.submissionDateEnd;
+        }
+        
+        // 债权性质筛选
+        if (searchCriteria.claimNature?.trim()) {
+          searchConditions.push(`AND asserted_claim_details.nature = $claimNature`);
+          queryParams.claimNature = searchCriteria.claimNature.trim();
+        }
+      } else if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+        // 简单搜索模式 - 使用全文检索
+        searchConditions.push(`AND (claim_number @@ $searchTerm OR asserted_claim_details.nature @@ $searchTerm OR asserted_claim_details.brief_description @@ $searchTerm)`);
+        queryParams.searchTerm = currentSearchTerm.trim();
       }
 
       // 状态筛选
       if (filterStatus) {
-        whereClause += ` AND review_status_id.name = $filterStatus`;
+        searchConditions.push(`AND review_status_id.name = $filterStatus`);
         queryParams.filterStatus = filterStatus;
       }
-
-      // 高级搜索条件
-      if (searchCriteria) {
-        if (searchCriteria.creditorName) {
-          whereClause += ` AND creditor_id.name ~ $creditorNameSearch`;
-          queryParams.creditorNameSearch = `(?i).*${searchCriteria.creditorName}.*`;
-        }
-        if (searchCriteria.claimNumber) {
-          whereClause += ` AND claim_number ~ $claimNumberSearch`;
-          queryParams.claimNumberSearch = `(?i).*${searchCriteria.claimNumber}.*`;
-        }
-        if (searchCriteria.assertedAmountMin !== undefined) {
-          whereClause += ` AND asserted_claim_details.total_asserted_amount >= $assertedAmountMin`;
-          queryParams.assertedAmountMin = searchCriteria.assertedAmountMin;
-        }
-        if (searchCriteria.assertedAmountMax !== undefined) {
-          whereClause += ` AND asserted_claim_details.total_asserted_amount <= $assertedAmountMax`;
-          queryParams.assertedAmountMax = searchCriteria.assertedAmountMax;
-        }
-        if (searchCriteria.submissionDateStart) {
-          whereClause += ` AND submission_time >= $submissionDateStart`;
-          queryParams.submissionDateStart = searchCriteria.submissionDateStart;
-        }
-        if (searchCriteria.submissionDateEnd) {
-          whereClause += ` AND submission_time <= $submissionDateEnd`;
-          queryParams.submissionDateEnd = searchCriteria.submissionDateEnd;
-        }
-        if (searchCriteria.claimNature) {
-          whereClause += ` AND asserted_claim_details.nature = $claimNature`;
-          queryParams.claimNature = searchCriteria.claimNature;
-        }
-      }
+      
+      // 应用搜索条件
+      const searchConditionStr = searchConditions.join(' ');
+      whereClause += searchConditionStr;
 
       // 数据查询
       const dataQuery = `
@@ -411,7 +517,8 @@ const ClaimListPage: React.FC = () => {
   // 初始化加载数据
   useEffect(() => {
     fetchClaims(page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria);
-  }, [fetchClaims, page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria]);
+    fetchClaimsStats(); // 同时加载统计数据
+  }, [fetchClaims, fetchClaimsStats, page, rowsPerPage, debouncedSearchTerm, currentSearchCriteria]);
 
   // 搜索或筛选条件变化时重置选中状态
   useEffect(() => {
@@ -569,11 +676,110 @@ const ClaimListPage: React.FC = () => {
     }
   };
 
+  // 高级搜索处理函数
+  const handleAdvancedSearch = (criteria: AdvancedSearchCriteria) => {
+    setCurrentSearchCriteria(criteria);
+    setSearchTerm(''); // 清空基础搜索
+    setPage(0); // 重置到第一页
+  };
+
+  const handleClearAdvancedSearch = () => {
+    setCurrentSearchCriteria(null);
+    setSearchTerm('');
+    setFilterStatus('');
+    setPage(0);
+  };
+
   return (
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" component="h1" gutterBottom>
           {t('claim_list_admin_page_title', '债权申报与审核 (管理员)')}
         </Typography>
+
+        {/* 统计数据卡片 */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom variant="overline">
+                  债权总数
+                </Typography>
+                <Typography variant="h4">
+                  {claimsStats.totalClaims}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom variant="overline">
+                  主张总金额
+                </Typography>
+                <Typography variant="h4">
+                  ¥{(claimsStats.totalAssertedAmount / 10000).toFixed(1)}万
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom variant="overline">
+                  认定总金额
+                </Typography>
+                <Typography variant="h4">
+                  ¥{(claimsStats.totalApprovedAmount / 10000).toFixed(1)}万
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom variant="overline">
+                  审核进度
+                </Typography>
+                <Typography variant="h4" sx={{ mb: 1 }}>
+                  {claimsStats.reviewProgress}%
+                </Typography>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={claimsStats.reviewProgress} 
+                  sx={{ height: 8, borderRadius: 4 }}
+                />
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* 状态分布 */}
+        {Object.keys(claimsStats.statusDistribution).length > 0 && (
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                审核状态分布
+              </Typography>
+              <Grid container spacing={2}>
+                {Object.entries(claimsStats.statusDistribution).map(([status, count]) => (
+                  <Grid size={{ xs: 6, sm: 4, md: 2 }} key={status}>
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="h5" color="primary">
+                        {count}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        {status}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </CardContent>
+          </Card>
+        )}
 
         <Paper sx={{ mb: 2, p: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
@@ -607,6 +813,18 @@ const ClaimListPage: React.FC = () => {
                 <MenuItem value="审核通过">{t('status_approved', '审核通过')}</MenuItem>
               </Select>
             </FormControl>
+            
+            {/* 高级搜索按钮 */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<SvgIcon fontSize="small"><path d={mdiFilterOutline} /></SvgIcon>}
+              onClick={() => setAdvancedSearchOpen(true)}
+              sx={{ minWidth: 'auto' }}
+            >
+              高级搜索
+            </Button>
+            
             {canCreateClaim && (
               <Button
                   variant="contained"
@@ -828,6 +1046,15 @@ const ClaimListPage: React.FC = () => {
             open={adminCreateClaimDialogOpen}
             onClose={() => setAdminCreateClaimDialogOpen(false)}
             onNext={handleAdminCreateClaimNext}
+        />
+
+        {/* 高级搜索对话框 */}
+        <AdvancedSearchDialog
+          open={advancedSearchOpen}
+          onClose={() => setAdvancedSearchOpen(false)}
+          onSearch={handleAdvancedSearch}
+          onClear={handleClearAdvancedSearch}
+          initialCriteria={currentSearchCriteria || {}}
         />
       </Box>
   );
