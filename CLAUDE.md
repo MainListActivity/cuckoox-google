@@ -91,7 +91,7 @@ This is a legal case management system with the following key architectural comp
 - 不要尝试运行 bun run dev 判断代码是否可运行，lint检查通过并且单元测试通过就可完成任务
 - 使用service worker在后台保持与surrealdb的连接状态，所有页面与service worker通信获取数据
 - 数据库的权限全部由surrealdb数据库控制，这意味着当我们需要查询数据时，只需要加上用户输入的条件，比如查询案件时： `select * from case`，当用户输入关键字搜索： `select * form case where 'fox' IN name`;
-- 已实现完整的数据缓存架构，通过service worker作为数据库代理，所有查询（query方法）都经过service worker并在`service worker`中判断是否走缓存
+- 已实现完整的智能数据缓存架构，通过service worker作为数据库代理，所有查询（query方法）都经过service worker的EnhancedQueryHandler进行智能缓存路由，支持多种缓存策略
 - 支持增量数据同步，基于更新时间获取变更数据
 - 支持双向数据同步，本地和远程数据库同时修改时自动同步
 - 权限检查现在基于本地缓存的用户个人数据，提供更快的响应速度
