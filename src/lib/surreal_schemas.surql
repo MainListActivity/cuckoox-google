@@ -601,8 +601,8 @@ INSERT INTO menu_metadata (menu_id, path, label_key, icon_name, display_order, i
 ('claims_submit', '/claims/submit', 'nav_claim_submission', 'mdiFileUploadOutline', 7, true, time::now(), time::now()),
 ('online_meetings', '/online-meetings', 'nav_online_meetings', 'mdiVideo', 8, true, time::now(), time::now()),
 ('messages', '/messages', 'nav_message_center', 'mdiMessageTextOutline', 9, true, time::now(), time::now()),
-('admin_home', '/admin', 'nav_system_management', 'mdiCog', 10, true, time::now(), time::now());
-
+('admin_home', '/admin', 'nav_system_management', 'mdiCog', 10, true, time::now(), time::now()),
+('pdf-parser', '/pdf-parser', 'nav_pdf-parser', 'mdiFileDocumentSearchOutline', 60, true, time::now(), time::now());
 -- 初始化操作元数据
 INSERT INTO operation_metadata (operation_id, menu_id, operation_name, operation_type, description, tables, is_active, created_at, updated_at) VALUES 
 ('case_list_view', 'cases', '查看案件列表', 'read', '查看所有案件的列表', ['case'], true, time::now(), time::now()),

@@ -22,7 +22,7 @@ src/components/Logo/
 ### 基本用法
 
 ```tsx
-import Logo from '@/components/Logo';
+import Logo from '@/src/components/Logo';
 
 // 默认完整logo，自适应尺寸
 <Logo />

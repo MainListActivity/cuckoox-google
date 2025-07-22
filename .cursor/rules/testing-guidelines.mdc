@@ -128,7 +128,7 @@ describe('CaseListPage', () => {
 
 ```typescript
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { caseService } from '@/services/caseService';
+import { caseService } from '@/src/services/caseService';
 
 // Mock SurrealDB
 vi.mock('surrealdb');

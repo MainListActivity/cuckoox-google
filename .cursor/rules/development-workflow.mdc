@@ -196,7 +196,7 @@ src/
 2. **使用TanStack Query**
    ```typescript
    import { useQuery } from '@tanstack/react-query';
-   import { fetchData } from '@/services/newService';
+   import { fetchData } from '@/src/services/newService';
    
    export const useData = () => {
      return useQuery({

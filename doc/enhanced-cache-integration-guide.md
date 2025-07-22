@@ -97,7 +97,7 @@ const result = await surrealService.query('return $auth; SELECT * FROM case;');
 使用现有的Hook，系统自动增强：
 
 ```typescript
-import { usePageDataCache } from '@/hooks/usePageDataCache';
+import { usePageDataCache } from '@/src/hooks/usePageDataCache';
 
 function CasesPage() {
   // 自动预热和订阅相关数据表

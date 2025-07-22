@@ -16,7 +16,7 @@
 
 #### 2. React组件中使用
 ```tsx
-import Logo from '@/components/Logo';
+import Logo from '@/src/components/Logo';
 
 <Logo size="auto" variant="full" />
 ```

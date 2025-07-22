@@ -81,7 +81,7 @@ This is a legal case management system with the following key architectural comp
 
 ## Important Notes
 - Uses Bun as package manager instead of npm/yarn
-- Custom path alias `@/*` maps to project root
+- Custom path alias `@/*` maps to project root, example: `@/src/types/pdfParser`
 - Strict TypeScript configuration with experimental decorators
 - E2E tests require Playwright browser installation
 - Uses CSS custom properties for theming integration MUI

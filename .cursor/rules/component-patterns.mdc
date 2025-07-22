@@ -146,7 +146,7 @@ import {
 ### 使用方式
 
 ```typescript
-import RichTextEditor from '@/components/RichTextEditor';
+import RichTextEditor from '@/src/components/RichTextEditor';
 
 <RichTextEditor
   value={content}

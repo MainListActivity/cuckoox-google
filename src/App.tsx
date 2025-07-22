@@ -49,6 +49,7 @@ const PermissionManagementPage = React.lazy(() => import('@/src/pages/admin/mana
 const CaseMemberManagementPage = React.lazy(() => import('@/src/pages/case-members/index'));
 const RootAdminPage = React.lazy(() => import('@/src/pages/root-admin/index'));
 const RootAdminLoginPage = React.lazy(() => import('@/src/pages/root-admin/login'));
+const PDFParserPage = React.lazy(() => import('@/src/pages/pdf-parser/index'));
 
 
 function App() {
@@ -192,6 +193,7 @@ function App() {
                                 <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/admin/manage/permissions" element={<ProtectedRoute requiredRole="admin"><PermissionManagementPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/admin/case-status-toggler" element={<ProtectedRoute requiredRole="admin"><CaseStatusToggler /></ProtectedRoute> as ReactNode} /> {/* <-- ADDED */}
+                                <Route path="/pdf-parser" element={<ProtectedRoute><PDFParserPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/access-denied-status" element={<AccessDeniedPage />} /> {/* <-- ADDED */}
                                 <Route path="/access-denied-role" element={<AccessDeniedRolePage />} /> {/* <-- ADDED */}
                                 <Route path="*" element={<NotFoundPage />} />
