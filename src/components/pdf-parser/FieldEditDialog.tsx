@@ -16,7 +16,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ParsedField } from '@/types/pdfParser';
+import { ParsedField } from '@/src/types/pdfParser';
 import { useFieldUpdate } from '@/src/hooks/usePDFParser';
 
 interface FieldEditDialogProps {

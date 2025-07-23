@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -8,7 +8,6 @@ import {
   Link,
   Tabs,
   Tab,
-  Fab,
   Backdrop,
   CircularProgress,
   Snackbar,
@@ -22,15 +21,19 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   PictureAsPdf as PdfIcon,
   Analytics as AnalyticsIcon,
   Calculate as CalculateIcon,
-  Description as DocumentIcon,
   Settings as SettingsIcon,
   MoreVert as MoreVertIcon,
-  Close as CloseIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -38,9 +41,14 @@ import {
   PDFPreviewComponent,
   ParseResultComponent,
   FieldEditDialog,
+  PDFParserErrorBoundary,
+  NetworkStatusMonitor,
 } from '@/src/components/pdf-parser';
 import { usePDFParserState } from '@/src/hooks/usePDFParser';
-import { UploadedFile, ParsedField } from '@/types/pdfParser';
+import { usePDFParserPermissions } from '@/src/hooks/usePDFParserPermissions';
+import { useNetworkStatus } from '@/src/hooks/useNetworkStatus';
+import { handleError } from '@/src/utils/errorHandler';
+import { UploadedFile, ParsedField } from '@/src/types/pdfParser';
 import PageContainer from '@/src/components/PageContainer';
 
 interface PDFParserPageProps {
@@ -74,13 +82,23 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
   const [searchParams] = useSearchParams();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // 权限检查
+  const { permissions, checkPermission } = usePDFParserPermissions();
+  const _networkStatus = useNetworkStatus();
+
   // 状态管理
   const [selectedFile, setSelectedFile] = useState<UploadedFile | null>(null);
   const [currentFileUrl, setCurrentFileUrl] = useState<string>('');
-  const [selectedFieldName, setSelectedFieldName] = useState<string | null>(null);
+  const [_selectedFieldName, setSelectedFieldName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(isMobile ? 0 : -1); // 移动端默认显示上传tab
-  const [showBackdrop, setShowBackdrop] = useState(false);
+  const [_showBackdrop, _setShowBackdrop] = useState(false);
   const [editingField, setEditingField] = useState<ParsedField | null>(null);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [permissionDialogInfo, setPermissionDialogInfo] = useState<{
+    action: string;
+    reason: string;
+    suggestions: string[];
+  } | null>(null);
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -98,30 +116,58 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
     parseResult,
     isLoadingParse,
     parseError,
-    setCurrentParseId,
+    setCurrentParseId: _setCurrentParseId,
   } = usePDFParserState();
 
   // 从URL参数获取case ID
   const finalCaseId = caseId || searchParams.get('caseId') || undefined;
 
+  // 权限检查辅助函数
+  const checkAndExecute = useCallback((
+    action: keyof typeof permissions,
+    callback: () => void,
+    actionLabel: string
+  ) => {
+    const permissionCheck = checkPermission(action);
+    if (!permissionCheck.hasPermission) {
+      setPermissionDialogInfo({
+        action: actionLabel,
+        reason: permissionCheck.reason || '权限不足',
+        suggestions: permissionCheck.suggestions || [],
+      });
+      setShowPermissionDialog(true);
+      return false;
+    }
+    
+    try {
+      callback();
+      return true;
+    } catch (error) {
+      handleError(error instanceof Error ? error : new Error(String(error)), `execute_${action}`);
+      return false;
+    }
+  }, [permissions, checkPermission]);
+
   // 处理文件上传成功
   const handleFilesUploaded = useCallback((files: UploadedFile[]) => {
-    if (files.length > 0) {
-      const firstFile = files[0];
-      setSelectedFile(firstFile);
-      
-      // 这里需要从上传响应中获取文件URL和解析ID
-      // 暂时模拟文件URL
-      setCurrentFileUrl(URL.createObjectURL(firstFile.file));
-      
-      // 显示成功消息
-      setSnackbar({
-        open: true,
-        message: `成功上传 ${files.length} 个文件`,
-        severity: 'success',
-      });
-    }
-  }, []);
+    checkAndExecute('canUploadFile', () => {
+      if (files.length > 0) {
+        const firstFile = files[0];
+        setSelectedFile(firstFile);
+        
+        // 这里需要从上传响应中获取文件URL和解析ID
+        // 暂时模拟文件URL
+        setCurrentFileUrl(URL.createObjectURL(firstFile.file));
+        
+        // 显示成功消息
+        setSnackbar({
+          open: true,
+          message: `成功上传 ${files.length} 个文件`,
+          severity: 'success',
+        });
+      }
+    }, '上传文件');
+  }, [checkAndExecute]);
 
   // 处理文件选择
   const handleFileSelected = useCallback((file: UploadedFile) => {
@@ -146,8 +192,10 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
 
   // 处理字段编辑
   const handleFieldEdit = useCallback((field: ParsedField) => {
-    setEditingField(field);
-  }, []);
+    checkAndExecute('canEditParseResult', () => {
+      setEditingField(field);
+    }, '编辑解析结果');
+  }, [checkAndExecute]);
 
   // 处理字段编辑成功
   const handleFieldEditSuccess = useCallback(() => {
@@ -377,62 +425,135 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
   );
 
   return (
-    <PageContainer>
-      <Box>
-        {renderBreadcrumbs()}
-        {renderPageHeader()}
-        
-        {isMobile ? renderMobileLayout() : renderDesktopLayout()}
-        
-        {/* 加载遮罩 */}
-        <Backdrop
-          sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
-          open={showBackdrop || isLoadingParse}
-        >
-          <CircularProgress color="inherit" />
-        </Backdrop>
-        
-        {/* 消息提示 */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-        >
-          <Alert
-            onClose={handleCloseSnackbar}
-            severity={snackbar.severity}
-            sx={{ width: '100%' }}
+    <PDFParserErrorBoundary
+      onError={(error, errorInfo) => {
+        handleError(error, 'pdf_parser_page');
+        console.error('PDF Parser页面错误:', error, errorInfo);
+      }}
+    >
+      <PageContainer>
+        <Box>
+          {renderBreadcrumbs()}
+          {renderPageHeader()}
+          
+          {isMobile ? renderMobileLayout() : renderDesktopLayout()}
+          
+          {/* 网络状态监控 */}
+          <NetworkStatusMonitor
+            showDetailedInfo={true}
+            position="bottom"
+            autoHide={true}
+            autoHideDelay={3000}
+          />
+          
+          {/* 加载遮罩 */}
+          <Backdrop
+            sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
+            open={_showBackdrop || isLoadingParse}
           >
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-        
-        {/* 错误处理 */}
-        {parseError && (
+            <CircularProgress color="inherit" />
+          </Backdrop>
+          
+          {/* 消息提示 */}
           <Snackbar
-            open={true}
-            autoHideDuration={8000}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            open={snackbar.open}
+            autoHideDuration={6000}
+            onClose={handleCloseSnackbar}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
           >
-            <Alert severity="error">
-              解析失败: {parseError.message}
+            <Alert
+              onClose={handleCloseSnackbar}
+              severity={snackbar.severity}
+              sx={{ width: '100%' }}
+            >
+              {snackbar.message}
             </Alert>
           </Snackbar>
-        )}
+          
+          {/* 错误处理 */}
+          {parseError && (
+            <Snackbar
+              open={true}
+              autoHideDuration={8000}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+              <Alert severity="error">
+                解析失败: {parseError.message}
+              </Alert>
+            </Snackbar>
+          )}
 
-        {/* 字段编辑对话框 */}
-        {currentParseId && (
-          <FieldEditDialog
-            open={!!editingField}
-            field={editingField}
-            parseId={currentParseId}
-            onClose={handleCloseFieldEdit}
-            onSuccess={handleFieldEditSuccess}
-          />
-        )}
-      </Box>
-    </PageContainer>
+          {/* 权限不足对话框 */}
+          <Dialog
+            open={showPermissionDialog}
+            onClose={() => setShowPermissionDialog(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>
+              <Box display="flex" alignItems="center" gap={1}>
+                <LockIcon color="warning" />
+                <Typography variant="h6">权限不足</Typography>
+              </Box>
+            </DialogTitle>
+            <DialogContent>
+              {permissionDialogInfo && (
+                <Box>
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    <Typography variant="body1" gutterBottom>
+                      无法执行"{permissionDialogInfo.action}"操作
+                    </Typography>
+                    <Typography variant="body2">
+                      {permissionDialogInfo.reason}
+                    </Typography>
+                  </Alert>
+                  
+                  {permissionDialogInfo.suggestions.length > 0 && (
+                    <Box>
+                      <Typography variant="subtitle2" gutterBottom>
+                        建议解决方案：
+                      </Typography>
+                      <Box component="ul" sx={{ pl: 2 }}>
+                        {permissionDialogInfo.suggestions.map((suggestion, index) => (
+                          <Typography component="li" key={index} variant="body2" sx={{ mb: 0.5 }}>
+                            {suggestion}
+                          </Typography>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setShowPermissionDialog(false)}>
+                我知道了
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  setShowPermissionDialog(false);
+                  navigate('/settings/permissions');
+                }}
+              >
+                查看权限设置
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* 字段编辑对话框 */}
+          {currentParseId && (
+            <FieldEditDialog
+              open={!!editingField}
+              field={editingField}
+              parseId={currentParseId}
+              onClose={handleCloseFieldEdit}
+              onSuccess={handleFieldEditSuccess}
+            />
+          )}
+        </Box>
+      </PageContainer>
+    </PDFParserErrorBoundary>
   );
 };
 

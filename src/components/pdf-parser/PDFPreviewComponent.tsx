@@ -25,7 +25,7 @@ import {
   Fullscreen as FullscreenIcon,
   Download as DownloadIcon,
 } from '@mui/icons-material';
-import { HighlightRegion } from '@/types/pdfParser';
+import { HighlightRegion } from '@/src/types/pdfParser';
 
 // 设置PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;

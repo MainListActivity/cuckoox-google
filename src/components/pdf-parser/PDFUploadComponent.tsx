@@ -25,7 +25,7 @@ import {
   Error as ErrorIcon,
   HourglassTop as HourglassIcon,
 } from '@mui/icons-material';
-import { UploadedFile } from '@/types/pdfParser';
+import { UploadedFile } from '@/src/types/pdfParser';
 import { useFileUpload } from '@/src/hooks/usePDFParser';
 import { formatFileSize } from '@/src/utils/formatters';
 

@@ -123,6 +123,7 @@ export class BidirectionalSyncService {
   constructor() {
     this.setupNetworkMonitoring();
     this.setupOfflineQueuePersistence();
+    this.setupServiceWorkerLatencyListener();
   }
 
   /**
@@ -520,44 +521,29 @@ export class BidirectionalSyncService {
       this.networkStatus.lastOfflineTime = Date.now();
     });
     
-    // 定期检查网络质量
-    setInterval(() => {
-      this.checkNetworkQuality();
-    }, 30000); // 每30秒检查一次
+    // 网络质量检查现在由 service worker 的 connectionHealthCheck 负责
+    // 不再需要独立的定期检查
   }
 
   /**
-   * 检查网络质量
+   * 设置 Service Worker 延迟监听器
    */
-  private async checkNetworkQuality(): Promise<void> {
-    if (!this.networkStatus.isOnline) return;
-    
-    try {
-      const startTime = Date.now();
-      
-      // 发送一个小的请求来测试网络延迟
-      const response = await fetch('/api/ping', {
-        method: 'GET',
-        cache: 'no-cache'
+  private setupServiceWorkerLatencyListener(): void {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data.type === 'network_latency_update') {
+          const { latency, timestamp, connectionQuality } = event.data.payload;
+          
+          // 更新网络状态
+          this.networkStatus.connectionQuality = connectionQuality;
+          
+          console.log('BidirectionalSyncService: Received network latency update from Service Worker:', {
+            latency: latency + 'ms',
+            quality: connectionQuality,
+            timestamp: new Date(timestamp).toISOString()
+          });
+        }
       });
-      
-      const endTime = Date.now();
-      const latency = endTime - startTime;
-      
-      // 根据延迟判断网络质量
-      if (latency < 100) {
-        this.networkStatus.connectionQuality = 'excellent';
-      } else if (latency < 300) {
-        this.networkStatus.connectionQuality = 'good';
-      } else if (latency < 1000) {
-        this.networkStatus.connectionQuality = 'fair';
-      } else {
-        this.networkStatus.connectionQuality = 'poor';
-      }
-      
-    } catch (error) {
-      console.warn('BidirectionalSyncService: Network quality check failed:', error);
-      this.networkStatus.connectionQuality = 'poor';
     }
   }
 

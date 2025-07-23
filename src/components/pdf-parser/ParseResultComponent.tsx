@@ -35,7 +35,7 @@ import {
   ExpandLess as ExpandLessIcon,
   History as HistoryIcon,
 } from '@mui/icons-material';
-import { ParseResult, ParsedField } from '@/types/pdfParser';
+import { ParseResult, ParsedField } from '@/src/types/pdfParser';
 import { useFieldUpdate } from '@/src/hooks/usePDFParser';
 
 interface ParseResultComponentProps {

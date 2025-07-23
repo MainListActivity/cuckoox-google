@@ -2154,18 +2154,35 @@ function startConnectionHealthCheck() {
         return;
       }
 
-      // 执行简单的连接测试
+      // 执行简单的连接测试并计算延迟
       try {
+        const startTime = Date.now();
         const testResult = await Promise.race([
           db.query('return 1;'),
           new Promise((_, reject) =>
             setTimeout(() => reject(new Error('Health check timeout')), 5000)
           )
         ]);
+        const endTime = Date.now();
+        const latency = endTime - startTime;
 
         if (testResult) {
-          // 连接正常，保持现有状态
-          console.log('ServiceWorker: Health check passed - connection is healthy');
+          // 连接正常，保持现有状态并存储延迟
+          console.log('ServiceWorker: Health check passed - connection is healthy, latency:', latency + 'ms');
+          
+          // 存储延迟数据并通知页面
+          await self.clients.matchAll().then(clients => {
+            clients.forEach(client => {
+              client.postMessage({
+                type: 'network_latency_update',
+                payload: {
+                  latency,
+                  timestamp: endTime,
+                  connectionQuality: latency < 100 ? 'excellent' : latency < 300 ? 'good' : latency < 1000 ? 'fair' : 'poor'
+                }
+              });
+            });
+          });
         }
       } catch (testError) {
         console.warn('ServiceWorker: Health check failed - connection appears broken:', testError);

@@ -11,7 +11,7 @@ import {
   GeneratedDocument,
   BatchProcessSummary,
   UploadedFile
-} from '@/types/pdfParser';
+} from '@/src/types/pdfParser';
 
 // 查询键常量
 export const PDF_PARSER_QUERY_KEYS = {

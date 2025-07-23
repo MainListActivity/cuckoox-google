@@ -14,4 +14,19 @@ export const formatFileSize = (bytes: number): string => {
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   
   return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+};
+
+export const formatCurrency = (amount: number, currency: string = 'CNY'): string => {
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'currency',
+    currency: currency,
+  }).format(amount);
+};
+
+export const formatPercentage = (value: number, decimalPlaces: number = 2): string => {
+  return new Intl.NumberFormat('zh-CN', {
+    style: 'percent',
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
+  }).format(value);
 }; 
