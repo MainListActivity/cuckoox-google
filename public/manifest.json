@@ -1,0 +1,103 @@
+{
+  "name": "CuckooX 破产案件管理系统",
+  "short_name": "CuckooX",
+  "description": "企业破产案件管理系统 - 提供完整的破产案件生命周期管理",
+  "theme_color": "#1976d2",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "start_url": "/",
+  "id": "/",
+  "categories": ["business", "productivity", "utilities"],
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/assets/logo/favicon.svg",
+      "sizes": "32x32",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/logo/cuckoo-icon.svg",
+      "sizes": "48x48 72x72 96x96 144x144 192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/logo/cuckoo-icon.svg",
+      "sizes": "48x48 72x72 96x96 144x144 192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/assets/logo/cuckoo-logo-main.svg",
+      "sizes": "240x64",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "案件管理",
+      "short_name": "案件",
+      "description": "查看和管理破产案件",
+      "url": "/cases",
+      "icons": [
+        {
+          "src": "/assets/logo/cuckoo-icon.svg",
+          "sizes": "48x48",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "债权申报",
+      "short_name": "债权",
+      "description": "提交和审核债权申报",
+      "url": "/claims",
+      "icons": [
+        {
+          "src": "/assets/logo/cuckoo-icon.svg",
+          "sizes": "48x48",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "统一仪表板",
+      "short_name": "仪表板",
+      "description": "查看案件统计和实时数据",
+      "url": "/dashboard/unified",
+      "icons": [
+        {
+          "src": "/assets/logo/cuckoo-icon.svg",
+          "sizes": "48x48",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-home.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "CuckooX 桌面端主界面"
+    },
+    {
+      "src": "/screenshots/mobile-cases.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "CuckooX 移动端案件列表"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}

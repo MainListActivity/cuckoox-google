@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 import fs from 'fs';
 import path from 'path';
@@ -45,7 +46,77 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      react()
+      react(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+                }
+              }
+            }
+          ]
+        },
+        includeAssets: ['assets/logo/*.svg', 'favicon.ico'],
+        manifest: {
+          name: 'CuckooX 破产案件管理系统',
+          short_name: 'CuckooX',
+          description: '企业破产案件管理系统 - 提供完整的破产案件生命周期管理',
+          theme_color: '#1976d2',
+          background_color: '#ffffff',
+          display: 'standalone',
+          orientation: 'portrait-primary',
+          scope: '/',
+          start_url: '/',
+          id: '/',
+          categories: ['business', 'productivity', 'utilities'],
+          lang: 'zh-CN',
+          dir: 'ltr',
+          icons: [
+            {
+              src: '/assets/logo/favicon.svg',
+              sizes: '32x32',
+              type: 'image/svg+xml',
+              purpose: 'any'
+            },
+            {
+              src: '/assets/logo/cuckoo-icon.svg',
+              sizes: '48x48 72x72 96x96 144x144 192x192 512x512',
+              type: 'image/svg+xml',
+              purpose: 'any'
+            },
+            {
+              src: '/assets/logo/cuckoo-icon.svg',
+              sizes: '48x48 72x72 96x96 144x144 192x192 512x512',
+              type: 'image/svg+xml',
+              purpose: 'maskable'
+            }
+          ]
+        },
+        devOptions: {
+          enabled: true,
+          type: 'module'
+        }
+      })
     ],
     resolve: {
       alias: {

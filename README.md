@@ -16,6 +16,7 @@
 - **会议管理**: 债权人会议安排和会议纪要管理
 - **消息中心**: 系统通知和即时消息功能
 - **权限管理**: 基于角色的细粒度权限控制系统
+- **PWA应用**: 支持离线访问、推送通知、桌面安装等原生应用体验
 
 ## 业务流程
 
@@ -28,6 +29,63 @@
 ```
 
 ## 核心技术特性
+
+### PWA (Progressive Web App) 支持 ✅ **已完成**
+系统已完成PWA基础设施搭建，提供原生应用般的用户体验：
+
+- **应用安装**: 支持"添加到主屏幕"，可像原生应用一样启动
+- **离线访问**: 静态资源缓存确保网络不稳定时界面可用
+- **推送通知**: 重要案件更新和债权申报通知推送（开发中）
+- **响应式设计**: 适配手机、平板、桌面等多种设备
+- **快速启动**: App Shell架构实现秒级启动体验
+- **自动更新**: 后台检测并提示应用更新
+- **网络状态感知**: 智能检测网络状态变化，调整功能可用性
+- **跨平台兼容**: 支持Android、iOS、桌面端不同的安装流程
+
+**PWA基础设施完成情况**:
+- ✅ **Web App Manifest**: 完整的应用元数据配置，支持多尺寸SVG图标
+- ✅ **PWA安装管理器**: 智能检测安装条件，自适应不同平台的安装流程
+- ✅ **Vite PWA插件配置**: 自动生成Service Worker，优化缓存策略
+- ✅ **PWA更新通知**: 自动检测应用更新并提供用户友好的更新界面
+- ✅ **PWA工具函数和Hooks**: 完整的React集成，支持安装状态管理和更新检测
+- ✅ **多平台支持**: 针对Android、iOS、桌面端的差异化安装体验
+- ✅ **PWA测试页面**: 完整的PWA功能测试和验证工具
+
+**PWA核心组件**:
+```typescript
+// PWA安装管理 - 智能检测和自适应UI
+import PWAInstallManager from '@/src/components/PWAInstallManager';
+<PWAInstallManager 
+  autoShowPrompt={true}
+  showInstallBanner={true}
+  onInstallStateChange={(state) => console.log(state)}
+/>
+
+// PWA更新通知 - 自动检测和友好提示
+import PWAUpdateNotification from '@/src/components/PWAUpdateNotification';
+<PWAUpdateNotification autoCheckInterval={30 * 60 * 1000} />
+
+// PWA工具函数和React Hooks
+import { 
+  usePWAInstall, 
+  usePWAUpdate,
+  showPWAInstallPrompt,
+  isPWAInstalled,
+  canInstallPWA 
+} from '@/src/utils/pwaUtils';
+
+const { canInstall, isInstalled, showInstallPrompt, platforms } = usePWAInstall();
+const { updateInfo, checkForUpdates } = usePWAUpdate();
+```
+
+**PWA配置特性**:
+- **Vite PWA插件**: 自动生成Service Worker和Web App Manifest，支持自动更新
+- **Workbox集成**: 智能缓存策略和离线支持，包含字体和API缓存
+- **SVG图标支持**: 使用可缩放的SVG图标，支持任意尺寸和maskable图标
+- **应用快捷方式**: 支持案件管理、债权申报、统一仪表板等快捷入口
+- **多平台适配**: 针对Android、iOS、桌面端的差异化配置
+- **离线优先**: 静态资源缓存确保离线可用性
+- **渐进式增强**: 在支持PWA的浏览器中提供增强体验
 
 ### SurrealDB 全文检索支持
 系统集成了 SurrealDB 的强大全文检索功能，支持：
@@ -152,6 +210,22 @@ VITE_SURREALDB_DB=test
 - ✅ **渐进式迁移**: 支持新旧系统并存，可平滑升级
 - ✅ **降级机制**: 智能缓存系统失败时自动回退到原始远程查询，确保系统稳定性
 
+## 📚 文档资源
+
+### PWA功能文档
+- **[PWA优化指南](./doc/pwa-optimization-guide.md)** - PWA功能特性和使用指南
+- **[PWA组件API](./doc/pwa-components-api.md)** - PWA组件详细API文档
+- **[PWA开发设置](./doc/pwa-setup-guide.md)** - 开发环境配置和部署指南
+- **[PWA测试指南](./doc/pwa-testing-guide.md)** - 完整的PWA测试策略
+
+### 系统架构文档
+- **[增强缓存架构](./doc/enhanced-cache-architecture.md)** - 智能缓存系统架构设计
+- **[缓存系统API](./doc/cache-system-api.md)** - 缓存系统接口文档
+- **[集成指南](./doc/integration-guide.md)** - 系统集成和配置指南
+
+### 完整文档索引
+- **[文档中心](./doc/README.md)** - 所有文档的完整索引和导航
+
 ### 缓存系统架构
 
 #### 核心组件 (✅ 已完成集成)
@@ -223,6 +297,34 @@ git config --global core.sshCommand "ssh -i ~/.ssh/cuckoox"
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.dev) to your Gemini API key
 3. Run the app:
    `bun run dev`
+
+### PWA开发和测试命令
+
+```bash
+# 开发模式（支持PWA功能）
+bun run dev
+
+# 构建生产版本（包含PWA资源）
+bun run build
+
+# 预览生产版本（测试PWA功能）
+bun run preview
+
+# 运行PWA相关测试
+bun run test -- PWAInstallManager
+bun run test -- PWAUpdateNotification
+bun run test -- pwaUtils
+
+# PWA功能验证
+# 访问 http://localhost:4173/pwa-test.html 进行PWA功能测试
+```
+
+**PWA开发注意事项**:
+- **HTTPS要求**: PWA功能需要HTTPS环境，开发时Vite已配置支持PWA开发模式
+- **Service Worker**: 开发模式下Service Worker自动注册，支持热更新
+- **图标资源**: 使用SVG图标确保在所有设备上的清晰显示
+- **测试页面**: 提供专门的PWA测试页面验证安装、更新等功能
+- **浏览器兼容**: 在Chrome、Edge、Safari等主流浏览器中测试PWA功能
 
 git config --global http.proxy socks5://127.0.0.1:7891
 
