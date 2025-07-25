@@ -1,55 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CuckooX 破产案件管理系统</title>
-  
+
   <!-- PWA Meta Tags -->
   <meta name="description" content="企业破产案件管理系统 - 提供完整的破产案件生命周期管理">
   <meta name="theme-color" content="#1976d2">
   <!-- Web App Manifest -->
   <link rel="manifest" href="/manifest.json">
-  
+
   <!-- Favicon 设置 -->
   <link rel="icon" href="/assets/logo/favicon.svg" type="image/svg+xml">
   <link rel="icon" type="image/svg+xml" href="/assets/logo/cuckoo-icon.svg">
-  
+
   <!-- iOS PWA 支持 -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="CuckooX">
   <link rel="apple-touch-icon" href="/assets/logo/cuckoo-icon.svg">
-  
+
   <!-- Android PWA 支持 -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="application-name" content="CuckooX">
-  
+
   <!-- Windows PWA 支持 -->
   <meta name="msapplication-TileColor" content="#1976d2">
   <meta name="msapplication-config" content="/browserconfig.xml">
-  
-<!--  <script src="https://cdn.tailwindcss.com"></script>-->
+
+  <!--  <script src="https://cdn.tailwindcss.com"></script>-->
   <link rel="stylesheet" href="/src/styles/main.css">
   <!-- Add Material Icons for basic icon support, MUI would typically bundle its own or guide on this -->
-<!--  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">-->
-<!--  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet"> &lt;!&ndash; ADDED &ndash;&gt;-->
+  <!--  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">-->
+  <!--  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet"> &lt;!&ndash; ADDED &ndash;&gt;-->
   <style>
-    body { font-family: Roboto, sans-serif; margin: 0; }
-    #root { display: flex; flex-direction: column; min-height: 100vh; }
-    /* Basic loading message */
+    body {
+      font-family: Roboto, sans-serif;
+      margin: 0;
+    }
+
+    #root {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* CuckooX 破产案件管理系统 - 专业加载动画 */
     #root:empty::before {
-      content: "Loading CuckooX Bankruptcy Management...";
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #f6f6f6 0%, #e8f5f5 100%);
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
-      font-size: 1.2rem;
-      color: #333;
+      z-index: 9999;
+      background-image: url('/assets/loading-animation.svg');
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 400px 300px;
+    }
+
+    @media (max-width: 600px) {
+      #root:empty::before {
+        background-size: 300px 225px;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      #root:empty::before {
+        background: linear-gradient(135deg, #121212 0%, #1e1e1e 100%);
+        background-image: url('/assets/loading-animation-dark.svg');
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 400px 300px;
+      }
     }
   </style>
   <link rel="stylesheet" href="index.css">
 </head>
+
 <body>
   <noscript>You need to enable JavaScript to run this app.</noscript>
   <div id="root"></div>
@@ -57,4 +92,5 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
   <script type="module" src="/src/index.tsx"></script>
 </body>
+
 </html>

@@ -1,0 +1,276 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300'>
+  <defs>
+    <!-- 暗色主题主色调渐变 -->
+    <linearGradient id='primaryGrad' x1='0%' y1='0%' x2='100%' y2='100%'>
+      <stop offset='0%' style='stop-color:#4db6ac;stop-opacity:1' />
+      <stop offset='100%' style='stop-color:#009688;stop-opacity:1' />
+    </linearGradient>
+    
+    <!-- 暗色主题辅助色渐变 -->
+    <linearGradient id='accentGrad' x1='0%' y1='0%' x2='100%' y2='100%'>
+      <stop offset='0%' style='stop-color:#80cbc4;stop-opacity:0.8' />
+      <stop offset='100%' style='stop-color:#4db6ac;stop-opacity:0.8' />
+    </linearGradient>
+    
+    <!-- 增强发光效果滤镜 -->
+    <filter id='glow'>
+      <feGaussianBlur stdDeviation='3' result='coloredBlur'/>
+      <feMerge>
+        <feMergeNode in='coloredBlur'/>
+        <feMergeNode in='SourceGraphic'/>
+      </feMerge>
+    </filter>
+    
+    <!-- 进度条渐变 -->
+    <linearGradient id='progressGrad' x1='0%' y1='0%' x2='100%' y2='0%'>
+      <stop offset='0%' style='stop-color:#80cbc4;stop-opacity:1' />
+      <stop offset='100%' style='stop-color:#4db6ac;stop-opacity:1' />
+    </linearGradient>
+  </defs>
+  
+  <!-- 主要动画组 -->
+  <g transform='translate(200,150)'>
+    
+    <!-- 中央法律天平图标 - 静止稳定，使用实色 -->
+    <g id='scales' filter='url(#glow)'>
+      <!-- 天平支柱 - 使用实色确保显示 -->
+      <line x1='0' y1='-40' x2='0' y2='30' 
+            stroke='#4db6ac' 
+            stroke-width='3' 
+            stroke-linecap='round'/>
+      
+      <!-- 天平横梁 - 使用实色确保显示 -->
+      <line x1='-35' y1='-25' x2='35' y2='-25' 
+            stroke='#4db6ac' 
+            stroke-width='2.5' 
+            stroke-linecap='round'/>
+      
+      <!-- 左侧天平盘 -->
+      <g transform='translate(-30,-25)'>
+        <ellipse cx='0' cy='8' rx='12' ry='3' 
+                 fill='#80cbc4' 
+                 opacity='0.8'/>
+        <path d='M-12,8 Q-12,5 0,5 Q12,5 12,8' 
+              stroke='#4db6ac' 
+              stroke-width='1.5' 
+              fill='none'/>
+        <!-- 天平盘连接线 -->
+        <line x1='0' y1='0' x2='0' y2='5' 
+              stroke='#4db6ac' 
+              stroke-width='1'/>
+      </g>
+      
+      <!-- 右侧天平盘 -->
+      <g transform='translate(30,-25)'>
+        <ellipse cx='0' cy='8' rx='12' ry='3' 
+                 fill='#80cbc4' 
+                 opacity='0.8'/>
+        <path d='M-12,8 Q-12,5 0,5 Q12,5 12,8' 
+              stroke='#4db6ac' 
+              stroke-width='1.5' 
+              fill='none'/>
+        <!-- 天平盘连接线 -->
+        <line x1='0' y1='0' x2='0' y2='5' 
+              stroke='#4db6ac' 
+              stroke-width='1'/>
+      </g>
+      
+      <!-- 天平底座 -->
+      <ellipse cx='0' cy='35' rx='20' ry='4' 
+               fill='#4db6ac' 
+               opacity='0.9'/>
+    </g>
+    
+    <!-- 环绕的文档图标 - 移除旋转，只保留透明度变化 -->
+    <g id='documents'>
+      <!-- 文档1 - 左上 -->
+      <g transform='translate(-60,-20)'>
+        <rect x='-8' y='-12' width='16' height='20' rx='2' 
+              fill='#80cbc4' 
+              opacity='0.7'>
+          <animate 
+            attributeName='opacity' 
+            values='0.5;0.9;0.5' 
+            dur='3s' 
+            repeatCount='indefinite'/>
+        </rect>
+        <!-- 文档内容线条 -->
+        <line x1='-5' y1='-8' x2='5' y2='-8' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='-4' x2='5' y2='-4' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='0' x2='3' y2='0' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+      </g>
+      
+      <!-- 文档2 - 右下 -->
+      <g transform='translate(60,20)'>
+        <rect x='-8' y='-12' width='16' height='20' rx='2' 
+              fill='#80cbc4' 
+              opacity='0.7'>
+          <animate 
+            attributeName='opacity' 
+            values='0.5;0.9;0.5' 
+            dur='3.5s' 
+            repeatCount='indefinite'/>
+        </rect>
+        <line x1='-5' y1='-8' x2='5' y2='-8' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='-4' x2='5' y2='-4' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='0' x2='3' y2='0' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+      </g>
+      
+      <!-- 文档3 - 左下 -->
+      <g transform='translate(-50,40)'>
+        <rect x='-8' y='-12' width='16' height='20' rx='2' 
+              fill='#80cbc4' 
+              opacity='0.7'>
+          <animate 
+            attributeName='opacity' 
+            values='0.5;0.9;0.5' 
+            dur='4s' 
+            repeatCount='indefinite'/>
+        </rect>
+        <line x1='-5' y1='-8' x2='5' y2='-8' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='-4' x2='5' y2='-4' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='0' x2='3' y2='0' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+      </g>
+      
+      <!-- 文档4 - 右上 -->
+      <g transform='translate(45,-45)'>
+        <rect x='-8' y='-12' width='16' height='20' rx='2' 
+              fill='#80cbc4' 
+              opacity='0.7'>
+          <animate 
+            attributeName='opacity' 
+            values='0.5;0.9;0.5' 
+            dur='2.8s' 
+            repeatCount='indefinite'/>
+        </rect>
+        <line x1='-5' y1='-8' x2='5' y2='-8' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='-4' x2='5' y2='-4' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+        <line x1='-5' y1='0' x2='3' y2='0' stroke='#ffffff' stroke-width='1' opacity='0.9'/>
+      </g>
+    </g>
+    
+    <!-- 数据流动效果 -->
+    <g id='dataFlow'>
+      <!-- 数据点1 - 大圆 -->
+      <circle r='2' fill='#4db6ac' opacity='0.9'>
+        <animateMotion 
+          dur='4s' 
+          repeatCount='indefinite' 
+          path='M-80,-60 Q0,-80 80,-60 Q60,0 80,60 Q0,80 -80,60 Q-60,0 -80,-60'/>
+      </circle>
+      
+      <!-- 数据点2 - 中圆 -->
+      <circle r='1.5' fill='#80cbc4' opacity='0.7'>
+        <animateMotion 
+          dur='5s' 
+          repeatCount='indefinite' 
+          path='M80,-40 Q40,-70 -80,-40 Q-40,0 -80,40 Q-40,70 80,40 Q40,0 80,-40'/>
+      </circle>
+      
+      <!-- 数据点3 - 小圆 -->
+      <circle r='1' fill='#009688' opacity='0.8'>
+        <animateMotion 
+          dur='6s' 
+          repeatCount='indefinite' 
+          path='M-60,-80 Q-80,0 -60,80 Q0,60 60,80 Q80,0 60,-80 Q0,-60 -60,-80'/>
+      </circle>
+    </g>
+  </g>
+  
+  <!-- 系统标题 -->
+  <text x='200' y='240' 
+        text-anchor='middle' 
+        font-family='Roboto, sans-serif' 
+        font-size='16' 
+        font-weight='500' 
+        fill='#4db6ac'>
+    CuckooX 破产案件管理系统
+    <animate 
+      attributeName='opacity' 
+      values='0.7;1;0.7' 
+      dur='2s' 
+      repeatCount='indefinite'/>
+  </text>
+  
+  <!-- 布谷鸟飞行加载动画 - 简化版单只鸟 -->
+  <g id='loadingBird' transform='translate(0, 260)'>
+    
+    <!-- 单只布谷鸟及其光影拖尾 -->
+    <g id='cuckoo-group'>
+      <!-- 主布谷鸟 - 头朝右，从左向右飞行 -->
+      <g id='cuckoo' transform='scale(0.6)'>
+        <!-- 光影拖尾效果 - 长方体形状 -->
+        <g id='cuckoo-trail'>
+          <!-- 主拖尾 - 长方体 -->
+          <rect x='-60' y='4' width='60' height='8' rx='4' 
+                fill='url(#primaryGrad)' 
+                opacity='0.4'/>
+          
+          <!-- 次拖尾 - 较短的长方体 -->
+          <rect x='-40' y='5' width='40' height='6' rx='3' 
+                fill='#4db6ac' 
+                opacity='0.6'/>
+          
+          <!-- 内层拖尾 - 最短的长方体 -->
+          <rect x='-24' y='6' width='24' height='4' rx='2' 
+                fill='#80cbc4' 
+                opacity='0.8'/>
+        </g>
+        
+        <!-- 鸟身 - 头朝右 -->
+        <path d='M8 0 
+                 C4 0, 0 4, 0 8
+                 C0 12, 4 16, 8 16
+                 C10 16, 12 15, 13 13
+                 L11 12
+                 C10 13, 9 14, 8 14
+                 C6 14, 2 11, 2 8
+                 C2 5, 6 2, 8 2
+                 C10 2, 14 5, 14 8
+                 C14 9, 13 10, 12 11
+                 L14 12
+                 C15 10, 16 9, 16 8
+                 C16 4, 12 0, 8 0 Z' 
+              fill='#4db6ac' 
+              stroke='#ffffff' 
+              stroke-width='0.5'/>
+        
+        <!-- 鸟嘴 - 朝右 -->
+        <path d='M16 8 L19 7 L18 9 L16 8 Z' fill='#009688'/>
+        
+        <!-- 鸟眼 -->
+        <circle cx='10' cy='6' r='1' fill='#ffffff'/>
+        <circle cx='9.7' cy='5.7' r='0.5' fill='#37474f'/>
+        
+        <!-- 翅膀 - 扇动动画，位于鸟身左侧（背部） -->
+        <path d='M6 4 L2 2 C1 1, 0 2, 1 3 L4 6 C5 7, 6 6, 6 5 Z' 
+              fill='#80cbc4' opacity='0.9'>
+          <animateTransform 
+            attributeName='transform' 
+            type='rotate' 
+            values='0;-15;0;15;0' 
+            dur='0.35s' 
+            repeatCount='indefinite'/>
+        </path>
+        
+        <path d='M6 12 L2 14 C1 15, 0 14, 1 13 L4 10 C5 9, 6 10, 6 11 Z' 
+              fill='#80cbc4' opacity='0.9'>
+          <animateTransform 
+            attributeName='transform' 
+            type='rotate' 
+            values='0;15;0;-15;0' 
+            dur='0.35s' 
+            repeatCount='indefinite'/>
+        </path>
+        
+        <!-- 从左到右飞行动画 - 3秒循环 -->
+        <animateTransform 
+          attributeName='transform' 
+          type='translate' 
+          values='80,0;320,0' 
+          dur='3s' 
+          repeatCount='indefinite'/>
+      </g>
+    </g>
+  </g>
+</svg>
