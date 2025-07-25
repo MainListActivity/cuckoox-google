@@ -5,7 +5,8 @@ import React, { useState, useEffect } from 'react';
 import ClaimDetailView from '@/src/components/claim/ClaimDetailView';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageContainer from '@/src/components/PageContainer';
-import { Box, Button, Typography, CircularProgress } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
+import GlobalLoader from '@/src/components/GlobalLoader';
 
 // Define the structure for ClaimData, matching ClaimDetailView's expected props
 // This interface should ideally be shared if it's used across multiple files.
@@ -83,25 +84,7 @@ const SubmittedClaimDetailPage: React.FC = () => {
   }, [claimId]);
 
   if (isLoading) {
-    return (
-      <PageContainer>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '60vh',
-          }}
-        >
-          <Box sx={{ textAlign: 'center' }}>
-            <CircularProgress sx={{ mb: 2 }} />
-            <Typography variant="body1" color="text.secondary">
-              Loading claim details...
-            </Typography>
-          </Box>
-        </Box>
-      </PageContainer>
-    );
+    return <GlobalLoader message="Loading claim details..." />;
   }
 
   if (error) {

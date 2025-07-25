@@ -8,7 +8,6 @@ import {
   Box,
   Typography,
   Button,
-  CircularProgress,
   Alert,
   SvgIcon,
   Breadcrumbs,
@@ -20,6 +19,7 @@ import {
   ListItemButton,
   ListItemText,
 } from '@mui/material';
+import GlobalLoader from '@/src/components/GlobalLoader';
 import {
   mdiArrowLeft,
   mdiBookOpenOutline,
@@ -509,12 +509,7 @@ const CaseDetailPage: React.FC = () => {
   }, [caseDetail, handleExtensionTabChange]);
 
   if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px', p: 3 }}>
-        <CircularProgress />
-        <Typography sx={{ ml: 2 }}>{t('case_detail_loading')}</Typography>
-      </Box>
-    );
+    return <GlobalLoader message={t('case_detail_loading')} />;
   }
 
   if (error) {

@@ -9,7 +9,6 @@ import {
   Paper,
   Typography,
   Alert,
-  CircularProgress,
   Card,
   CardContent,
   Grid,
@@ -19,6 +18,7 @@ import {
   Divider,
   Skeleton,
 } from '@mui/material';
+import GlobalLoader from '@/src/components/GlobalLoader';
 import {
   mdiAccountGroup,
   mdiAccountMultiple,
@@ -222,16 +222,7 @@ const CaseMemberManagementPage: React.FC = () => {
 
   // Handle loading state
   if (isLoading) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
-          <CircularProgress />
-          <Typography sx={{ ml: 2 }}>
-            {t('loading_case_members', '正在加载案件成员数据...')}
-          </Typography>
-        </Box>
-      </Box>
-    );
+    return <GlobalLoader message={t('loading_case_members', '正在加载案件成员数据...')} />;
   }
 
   // Handle error state

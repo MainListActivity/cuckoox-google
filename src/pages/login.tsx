@@ -343,9 +343,7 @@ const LoginPage: React.FC = () => {
   }
 
   if (isProcessingAdminLogin && !showTurnstile) {
-    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-      <Typography>{t('admin_login_attempt_loading', 'Attempting admin login...')}</Typography>
-    </Box>;
+    return <GlobalLoader message={t('admin_login_attempt_loading', 'Attempting admin login...')} />;
   }
   
   if (isLoggedIn && user && user.id && !isAuthContextLoading && !isAdminLoginAttempt && !justClearedAuth && realAuthStatus === true) {

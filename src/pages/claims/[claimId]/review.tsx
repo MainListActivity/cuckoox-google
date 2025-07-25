@@ -29,12 +29,12 @@ import {
   ListItem,
   ListItemText,
   Divider,
-  CircularProgress,
   Alert,
   SvgIcon,
   IconButton,
   Stack,
 } from '@mui/material';
+import GlobalLoader from '@/src/components/GlobalLoader';
 import {
   mdiArrowLeft,
   mdiPencilOutline, // For "开始审核" / "修改审核结果" FAB
@@ -261,12 +261,7 @@ const ClaimReviewDetailPage: React.FC = () => {
   };
 
   if (loading) {
-    return (
-        <Container sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-          <CircularProgress />
-          <Typography sx={{ ml: 2 }}>{t('loading_claim_details', '加载债权详情中...')}</Typography>
-        </Container>
-    );
+    return <GlobalLoader message={t('loading_claim_details', '加载债权详情中...')} />;
   }
 
   if (error) {

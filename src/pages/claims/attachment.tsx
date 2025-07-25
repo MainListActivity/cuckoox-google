@@ -8,9 +8,9 @@ import {
   Typography,
   Button,
   Grid,
-  CircularProgress,
   Alert,
 } from '@mui/material';
+import GlobalLoader from '@/src/components/GlobalLoader';
 import PageContainer from '@/src/components/PageContainer';
 import FullscreenRichTextEditor from '@/src/components/FullscreenRichTextEditor';
 import { QuillDelta } from '@/src/components/RichTextEditor';
@@ -135,14 +135,7 @@ const ClaimAttachmentPage: React.FC = () => {
 
   // 加载状态
   if (isLoading) {
-    return (
-      <PageContainer>
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-          <CircularProgress />
-          <Typography sx={{ ml: 2 }}>加载债权信息中...</Typography>
-        </Box>
-      </PageContainer>
-    );
+    return <GlobalLoader message="加载债权信息中..." />;
   }
 
   // 错误状态
