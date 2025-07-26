@@ -56,7 +56,7 @@ export interface AppShellState {
 export class PWAPerformanceManager {
   private config: PWAPerformanceConfig;
   private performanceObserver: PerformanceObserver | null = null;
-  private memoryCleanupTimer: NodeJS.Timeout | null = null;
+  private memoryCleanupTimer: number | null = null;
   private metrics: PerformanceMetrics = {
     fcp: 0,
     lcp: 0,
@@ -393,7 +393,7 @@ export class PWAPerformanceManager {
       
       case 'conservative':
         // 只在WiFi连接时预加载
-        const connection = (navigator as any)?.connection;
+        const connection = (navigator as Navigator & { connection?: { type: string } })?.connection;
         return connection?.type === 'wifi' || !connection;
       
       case 'adaptive':
@@ -406,7 +406,13 @@ export class PWAPerformanceManager {
   }
 
   private isGoodNetworkCondition(): boolean {
-    const connection = (navigator as any)?.connection;
+    const connection = (navigator as Navigator & { 
+      connection?: { 
+        effectiveType: string;
+        downlink: number;
+        rtt: number;
+      }
+    })?.connection;
     if (!connection) return true; // 假设网络良好
 
     return connection.effectiveType === '4g' && 
@@ -416,7 +422,7 @@ export class PWAPerformanceManager {
 
   private isGoodDevicePerformance(): boolean {
     // 简单的设备性能检测
-    const memory = (navigator as any)?.deviceMemory;
+    const memory = (navigator as Navigator & { deviceMemory?: number })?.deviceMemory;
     const hardwareConcurrency = navigator.hardwareConcurrency;
 
     return (memory === undefined || memory >= 4) && 
@@ -469,15 +475,15 @@ export class PWAPerformanceManager {
           break;
 
         case 'largest-contentful-paint':
-          this.metrics.lcp = (entry as any).startTime;
+          this.metrics.lcp = (entry as PerformancePaintTiming).startTime;
           break;
 
         case 'first-input':
-          this.metrics.fid = (entry as any).processingStart - entry.startTime;
+          this.metrics.fid = (entry as PerformanceEventTiming).processingStart - entry.startTime;
           break;
 
         case 'layout-shift':
-          this.metrics.cls += (entry as any).value;
+          this.metrics.cls += (entry as PerformanceEntry & { value: number }).value;
           break;
       }
     });
@@ -513,7 +519,11 @@ export class PWAPerformanceManager {
 
   private updateMemoryMetrics(): void {
     if ('memory' in performance) {
-      const memory = (performance as any).memory;
+      const memory = (performance as Performance & {
+        memory: {
+          usedJSHeapSize: number;
+        }
+      }).memory;
       this.metrics.memoryUsage = memory.usedJSHeapSize / (1024 * 1024); // MB
     }
   }

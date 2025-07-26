@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Alert,
@@ -12,7 +12,9 @@ import {
   CardContent,
   CardActions,
   Stack,
-  Chip
+  Chip,
+  SxProps,
+  Theme
 } from '@mui/material';
 import Icon from '@mdi/react';
 import {
@@ -26,7 +28,7 @@ import {
   mdiRefresh,
   mdiCloudSyncOutline
 } from '@mdi/js';
-import { useNetworkState } from '../hooks/useNetworkState';
+import { useNetworkState } from '../../hooks/useNetworkState';
 
 interface OfflineStatusProps {
   /**
@@ -52,7 +54,7 @@ interface OfflineStatusProps {
   /**
    * 自定义样式
    */
-  sx?: any;
+  sx?: SxProps<Theme>;
   
   /**
    * 重连回调
@@ -113,7 +115,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
         }
       }
     }
-  }, [isOnline, isOffline, wasOffline, mode, onSync]);
+  }, [isOnline, isOffline, wasOffline, mode, handleSync]);
 
   const handleReconnect = async () => {
     setIsReconnecting(true);
@@ -129,7 +131,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
     }
   };
 
-  const handleSync = async () => {
+  const handleSync = useCallback(async () => {
     if (!onSync || !isOnline) return;
     
     setIsSyncing(true);
@@ -141,7 +143,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
     } finally {
       setIsSyncing(false);
     }
-  };
+  }, [onSync, isOnline]);
 
   const getNetworkIcon = () => {
     if (isOffline) return mdiWifiOff;
@@ -152,7 +154,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
     return mdiWifiStrength1;
   };
 
-  const getStatusColor = () => {
+  const getStatusColor = (): 'error' | 'warning' | 'success' => {
     if (isOffline) return 'error';
     if (networkQuality >= 70) return 'success';
     if (networkQuality >= 40) return 'warning';
@@ -174,7 +176,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
     return (
       <Fade in timeout={300}>
         <Alert
-          severity={getStatusColor() as any}
+          severity={getStatusColor()}
           icon={<Icon path={getNetworkIcon()} size={1} />}
           sx={{ mb: 2, ...sx }}
           action={
@@ -183,7 +185,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
                 <Chip
                   label={`${networkQuality}%`}
                   size="small"
-                  color={getStatusColor() as any}
+                  color={getStatusColor()}
                   variant="outlined"
                 />
               )}
@@ -245,7 +247,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
         <Alert
-          severity={getStatusColor() as any}
+          severity={getStatusColor()}
           icon={<Icon path={isOffline ? mdiCloudOffOutline : mdiCloudCheckOutline} size={1} />}
           onClose={() => setShowSnackbar(false)}
           action={
@@ -303,7 +305,7 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
               <LinearProgress
                 variant="determinate"
                 value={networkQuality}
-                color={getStatusColor() as any}
+                color={getStatusColor()}
                 sx={{ height: 8, borderRadius: 4 }}
               />
             </Box>

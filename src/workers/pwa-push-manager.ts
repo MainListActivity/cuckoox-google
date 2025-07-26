@@ -23,7 +23,7 @@ export interface NotificationPayload {
   icon?: string;
   badge?: string;
   image?: string;
-  data?: any;
+  data?: Record<string, unknown>;
   actions?: NotificationAction[];
   tag?: string;
   requireInteraction?: boolean;
@@ -317,7 +317,7 @@ export class PWAPushManager {
     }
   };
 
-  private handleNotificationClick(payload: any): void {
+  private handleNotificationClick(payload: { action?: string; data?: Record<string, unknown> }): void {
     console.log('PWAPushManager: Notification clicked:', payload);
     
     // 处理通知点击事件
@@ -332,7 +332,7 @@ export class PWAPushManager {
     }));
   }
 
-  private handleNotificationClose(payload: any): void {
+  private handleNotificationClose(payload: { data?: Record<string, unknown> }): void {
     console.log('PWAPushManager: Notification closed:', payload);
     
     // 可以触发自定义事件
@@ -455,7 +455,7 @@ export const PushNotificationUtils = {
     title: string;
     body: string;
     type: 'case' | 'claim' | 'message' | 'system';
-    data?: any;
+    data?: Record<string, unknown>;
     url?: string;
   }): NotificationPayload {
     const iconMap = {

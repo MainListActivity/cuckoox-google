@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode } from 'react';
-import { Button, IconButton, Fab, Tooltip } from '@mui/material';
+import { Button, IconButton, Fab, Tooltip, ButtonProps, IconButtonProps, FabProps } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { useNetworkState } from '../hooks/useNetworkState';
+import { useNetworkState } from '../../hooks/useNetworkState';
 
 interface OfflineActionContextType {
   isOnline: boolean;
@@ -93,7 +93,7 @@ interface OfflineAwareButtonProps {
   disabled?: boolean;
   showTooltip?: boolean;
   component?: 'button' | 'iconButton' | 'fab';
-  [key: string]: any; // 其他 MUI 组件 props
+  sx?: SxProps<Theme>;
 }
 
 /**

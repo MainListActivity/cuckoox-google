@@ -206,7 +206,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
               </Box>
               <Chip
                 label={getStatusText(pwaOverallStatus.grade)}
-                color={getStatusColor(pwaOverallStatus.grade) as any}
+                color={getStatusColor(pwaOverallStatus.grade) as 'success' | 'warning' | 'error' | 'default'}
                 size="large"
                 icon={<Icon path={mdiInformation} size={0.8} />}
               />
@@ -244,7 +244,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
                 <Box textAlign="center">
                   <Chip
                     label={performanceGrades.overall}
-                    color={getStatusColor(performanceGrades.overall) as any}
+                    color={getStatusColor(performanceGrades.overall) as 'success' | 'warning' | 'error' | 'default'}
                     size="small"
                     sx={{ mb: 1 }}
                   />

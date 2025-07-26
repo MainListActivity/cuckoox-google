@@ -56,7 +56,7 @@ export class PWASecurityManager {
   private config: PWASecurityConfig;
   private encryptionKey: CryptoKey | null = null;
   private isInitialized = false;
-  private lockTimer: NodeJS.Timeout | null = null;
+  private lockTimer: number | null = null;
   private securityMetrics: SecurityMetrics = {
     encryptedCaches: 0,
     lastAuthCheck: new Date(),
@@ -431,7 +431,7 @@ export class PWASecurityManager {
 
       this.lockTimer = setTimeout(() => {
         this.lockApplication();
-      }, autoLockTimeout);
+      }, autoLockTimeout) as unknown as number;
     };
 
     // 监听用户活动

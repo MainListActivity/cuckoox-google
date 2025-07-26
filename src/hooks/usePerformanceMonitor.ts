@@ -141,16 +141,16 @@ export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions = {}
           break;
 
         case 'largest-contentful-paint':
-          updates.lcp = (entry as any).startTime;
+          updates.lcp = (entry as PerformancePaintTiming).startTime;
           break;
 
         case 'first-input':
-          updates.fid = (entry as any).processingStart - entry.startTime;
+          updates.fid = (entry as PerformanceEventTiming).processingStart - entry.startTime;
           break;
 
         case 'layout-shift':
           // CLS 需要累积计算
-          updates.cls = (state.metrics.cls || 0) + (entry as any).value;
+          updates.cls = (state.metrics.cls || 0) + (entry as PerformanceEntry & { value: number }).value;
           break;
 
         case 'navigation':

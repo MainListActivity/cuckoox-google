@@ -19,7 +19,7 @@ export interface CollaborationEvent {
   userName: string;
   resourceId: string;
   resourceType: 'case' | 'claim' | 'document' | 'message';
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
 }
 
@@ -43,16 +43,20 @@ export interface PWACollaborationConfig {
 export class PWACollaborationEnhancer {
   private config: PWACollaborationConfig;
   private isDocumentVisible = true;
-  private backgroundSyncTimer: NodeJS.Timeout | null = null;
+  private backgroundSyncTimer: number | null = null;
   private collaborationEventListeners: Set<(event: CollaborationEvent) => void> = new Set();
   private currentUserId: string | null = null;
   private currentUserName: string | null = null;
   private isInitialized = false;
 
   // 引用现有的管理器
-  private networkStateManager: any = null;
-  private connectionRecoveryManager: any = null;
-  private subscriptionManager: any = null;
+  private networkStateManager: {
+    onStateChange: (callback: (state: NetworkState) => void) => void;
+  } | null = null;
+  private connectionRecoveryManager: Record<string, unknown> | null = null;
+  private subscriptionManager: {
+    createSubscription: (query: string, vars?: Record<string, unknown>) => Promise<string>;
+  } | null = null;
 
   constructor(config: PWACollaborationConfig) {
     this.config = config;
@@ -62,9 +66,13 @@ export class PWACollaborationEnhancer {
    * 初始化PWA协作增强器
    */
   async initialize(managers: {
-    networkStateManager?: any;
-    connectionRecoveryManager?: any;
-    subscriptionManager?: any;
+    networkStateManager?: {
+      onStateChange: (callback: (state: NetworkState) => void) => void;
+    };
+    connectionRecoveryManager?: Record<string, unknown>;
+    subscriptionManager?: {
+      createSubscription: (query: string, vars?: Record<string, unknown>) => Promise<string>;
+    };
   }): Promise<void> {
     if (this.isInitialized) return;
 
@@ -124,7 +132,7 @@ export class PWACollaborationEnhancer {
   /**
    * 优化Live Query订阅
    */
-  async enhanceLiveQuery(query: string, vars?: any): Promise<string> {
+  async enhanceLiveQuery(query: string, vars?: Record<string, unknown>): Promise<string> {
     if (!this.subscriptionManager) {
       throw new Error('Subscription manager not available');
     }
@@ -422,7 +430,7 @@ export class PWACollaborationEnhancer {
 
     this.backgroundSyncTimer = setInterval(() => {
       this.performBackgroundSync();
-    }, this.config.visibilityConfig.backgroundSyncInterval);
+    }, this.config.visibilityConfig.backgroundSyncInterval) as unknown as number;
   }
 
   private stopBackgroundSync(): void {
@@ -493,7 +501,7 @@ export const CollaborationUtils = {
     userName: string,
     resourceId: string,
     resourceType: CollaborationEvent['resourceType'],
-    data: any
+    data: Record<string, unknown>
   ): CollaborationEvent {
     return {
       type,

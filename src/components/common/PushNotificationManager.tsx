@@ -21,7 +21,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField
+  TextField,
+  SxProps,
+  Theme
 } from '@mui/material';
 import Icon from '@mdi/react';
 import {
@@ -39,7 +41,7 @@ import {
   mdiMessage,
   mdiMonitor
 } from '@mdi/js';
-import { PushNotificationUtils, type NotificationPayload } from '../workers/pwa-push-manager';
+import { PushNotificationUtils, type NotificationPayload, type PushSubscriptionData } from '../../workers/pwa-push-manager';
 
 interface PushNotificationManagerProps {
   /**
@@ -65,7 +67,7 @@ interface PushNotificationManagerProps {
   /**
    * 自定义样式
    */
-  sx?: any;
+  sx?: SxProps<Theme>;
 }
 
 interface NotificationSettings {
@@ -91,7 +93,7 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [subscription, setSubscription] = useState<PushSubscriptionData | null>(null);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     cases: true,
@@ -339,7 +341,7 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
             <Chip
               icon={<Icon path={getPermissionIcon()} size={0.7} />}
               label={PushNotificationUtils.getPermissionText(permission)}
-              color={getPermissionColor() as any}
+              color={getPermissionColor() as 'success' | 'error' | 'warning'}
               size="small"
             />
           </Stack>
@@ -350,7 +352,7 @@ export const PushNotificationManager: React.FC<PushNotificationManagerProps> = (
               权限状态
             </Typography>
             <Alert 
-              severity={getPermissionColor() as any}
+              severity={getPermissionColor() as 'success' | 'error' | 'warning'}
               icon={<Icon path={getPermissionIcon()} size={1} />}
             >
               {permission === 'granted' && (

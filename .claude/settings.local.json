@@ -24,5 +24,9 @@
       "Bash(bun add:*)"
     ],
     "deny": []
+  },
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-CIgYEUsjuIb1hiAa0uK7KqJqtRb5BttLu5aVutoNJQELo0mD",
+    "ANTHROPIC_BASE_URL": "https://anyrouter.top"
   }
 }

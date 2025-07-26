@@ -302,8 +302,8 @@ export const usePushNotification = (options: UsePushNotificationOptions) => {
  * 监听推送通知相关的事件
  */
 export const usePushNotificationEvents = () => {
-  const [lastNotificationClick, setLastNotificationClick] = useState<any>(null);
-  const [lastNotificationClose, setLastNotificationClose] = useState<any>(null);
+  const [lastNotificationClick, setLastNotificationClick] = useState<Record<string, unknown> | null>(null);
+  const [lastNotificationClose, setLastNotificationClose] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     const handleNotificationClick = (event: CustomEvent) => {

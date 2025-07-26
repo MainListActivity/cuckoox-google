@@ -72,7 +72,7 @@ export const PWACrossPlatformAdapter: React.FC<PWACrossPlatformAdapterProps> = (
     // 检测PWA独立模式
     const isStandaloneMode = 
       window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
       document.referrer.includes('android-app://');
     
     setIsStandalone(isStandaloneMode);
@@ -393,7 +393,7 @@ export const usePlatformDetection = () => {
 
     const isStandalone = 
       window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as any).standalone === true;
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 
     const hasNotch = 
       platform === 'ios' && 

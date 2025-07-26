@@ -19,7 +19,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  SxProps,
+  Theme
 } from '@mui/material';
 import Icon from '@mdi/react';
 import {
@@ -35,7 +37,7 @@ import {
   mdiChartLine,
   mdiDelete
 } from '@mdi/js';
-import type { PerformanceMetrics, AppShellState } from '../workers/pwa-performance-manager';
+import type { PerformanceMetrics, AppShellState } from '../../workers/pwa-performance-manager';
 
 interface PWAPerformanceMonitorProps {
   /**
@@ -56,7 +58,7 @@ interface PWAPerformanceMonitorProps {
   /**
    * 自定义样式
    */
-  sx?: any;
+  sx?: SxProps<Theme>;
 }
 
 /**
