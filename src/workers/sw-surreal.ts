@@ -6,8 +6,34 @@ declare const self: ServiceWorkerGlobalScope;
 const SW_VERSION = 'v1.0.1';
 const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
 
+// 导入静态资源缓存管理器
+import { StaticResourceCacheManager } from './static-resource-cache-manager.js';
+import { NetworkStateManager, type NetworkState } from './network-state-manager.js';
+import { PWAPushManager, type NotificationPayload } from './pwa-push-manager.js';
+import { PWACollaborationEnhancer, type CollaborationEvent } from './pwa-collaboration-enhancer.js';
+import { PWAPerformanceManager, type PWAPerformanceConfig } from './pwa-performance-manager.js';
+import { PWASecurityManager, type PWASecurityConfig } from './pwa-security-manager.js';
+
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);
+
+// 静态资源缓存管理器实例
+let staticCacheManager: StaticResourceCacheManager | null = null;
+
+// 网络状态管理器实例
+let networkStateManager: NetworkStateManager | null = null;
+
+// PWA推送通知管理器实例
+let pwaPushManager: PWAPushManager | null = null;
+
+// PWA协作增强器实例
+let pwaCollaborationEnhancer: PWACollaborationEnhancer | null = null;
+
+// PWA性能管理器实例
+let pwaPerformanceManager: PWAPerformanceManager | null = null;
+
+// PWA安全管理器实例
+let pwaSecurityManager: PWASecurityManager | null = null;
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
@@ -55,6 +81,21 @@ const eventHandlers = {
           await initializeConnectionRecoveryManager();
           // 初始化 DataConsistencyManager
           await initializeDataConsistencyManager();
+
+          // 初始化静态资源缓存管理器
+          await initializeStaticCacheManager();
+
+          // 初始化网络状态管理器
+          await initializeNetworkStateManager();
+
+          // 初始化PWA协作增强器
+          await initializePWACollaborationEnhancer();
+
+          // 初始化PWA性能管理器
+          await initializePWAPerformanceManager();
+
+          // 初始化PWA安全管理器
+          await initializePWASecurityManager();
 
 
           // 尝试恢复连接配置
@@ -144,6 +185,148 @@ const eventHandlers = {
     } catch (e) {
       console.error("Failed during cleanup:", e);
     }
+  },
+
+  push: async (event: PushEvent) => {
+    console.log('ServiceWorker: Push event received');
+    
+    let notificationData: NotificationPayload;
+    
+    try {
+      // 解析推送数据
+      if (event.data) {
+        notificationData = event.data.json();
+      } else {
+        // 默认通知
+        notificationData = {
+          title: 'CuckooX 系统通知',
+          body: '您有新的消息',
+          icon: '/assets/logo/cuckoo-icon.svg',
+          badge: '/assets/logo/favicon.svg'
+        };
+      }
+
+      // 显示通知
+      await self.registration.showNotification(notificationData.title, {
+        body: notificationData.body,
+        icon: notificationData.icon,
+        badge: notificationData.badge,
+        image: notificationData.image,
+        tag: notificationData.tag,
+        data: notificationData.data,
+        actions: notificationData.actions,
+        requireInteraction: notificationData.requireInteraction || false,
+        silent: notificationData.silent || false
+      });
+
+      console.log('ServiceWorker: Notification displayed successfully');
+    } catch (error) {
+      console.error('ServiceWorker: Error handling push event:', error);
+    }
+  },
+
+  notificationclick: async (event: NotificationEvent) => {
+    console.log('ServiceWorker: Notification clicked', event.notification);
+    
+    event.notification.close();
+
+    try {
+      const notificationData = event.notification.data || {};
+      const action = event.action;
+
+      // 处理通知操作
+      if (action === 'view' || !action) {
+        // 打开应用
+        let urlToOpen = '/';
+        
+        if (notificationData.url) {
+          urlToOpen = notificationData.url;
+        } else if (notificationData.type) {
+          // 根据通知类型确定跳转URL
+          const typeUrlMap = {
+            'case': '/cases',
+            'claim': '/claims',
+            'message': '/messages',
+            'system': '/dashboard'
+          };
+          urlToOpen = typeUrlMap[notificationData.type as keyof typeof typeUrlMap] || '/';
+        }
+
+        // 打开或聚焦窗口
+        const clients = await self.clients.matchAll({ type: 'window' });
+        
+        for (const client of clients) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            await client.focus();
+            if (client.url !== urlToOpen) {
+              client.postMessage({
+                type: 'navigate',
+                payload: { url: urlToOpen }
+              });
+            }
+            return;
+          }
+        }
+
+        // 没有打开的窗口，打开新窗口
+        await self.clients.openWindow(urlToOpen);
+      } else if (action === 'dismiss') {
+        // 忽略操作，什么都不做
+        console.log('ServiceWorker: Notification dismissed');
+      }
+
+      // 向客户端发送通知点击事件
+      broadcastToAllClients({
+        type: 'notification_clicked',
+        payload: {
+          action,
+          data: notificationData
+        }
+      });
+    } catch (error) {
+      console.error('ServiceWorker: Error handling notification click:', error);
+    }
+  },
+
+  notificationclose: async (event: NotificationEvent) => {
+    console.log('ServiceWorker: Notification closed', event.notification);
+    
+    try {
+      const notificationData = event.notification.data || {};
+      
+      // 向客户端发送通知关闭事件
+      broadcastToAllClients({
+        type: 'notification_closed',
+        payload: {
+          data: notificationData
+        }
+      });
+    } catch (error) {
+      console.error('ServiceWorker: Error handling notification close:', error);
+    }
+  },
+
+  fetch: async (event: FetchEvent) => {
+    // 首先尝试性能管理器处理
+    if (pwaPerformanceManager) {
+      const performanceResponse = await pwaPerformanceManager.handleRequest(event.request);
+      if (performanceResponse) {
+        event.respondWith(Promise.resolve(performanceResponse));
+        return;
+      }
+    }
+
+    // 然后尝试静态缓存管理器处理
+    if (staticCacheManager) {
+      const cachedResponse = await staticCacheManager.handleFetch(event.request);
+      if (cachedResponse) {
+        event.respondWith(Promise.resolve(cachedResponse));
+        return;
+      }
+    }
+    
+    // 如果都没有处理这个请求，则继续正常处理
+    // 这里可以添加其他的 fetch 处理逻辑
   },
 
   message: async (event: ExtendableMessageEvent) => {
@@ -1723,6 +1906,190 @@ const eventHandlers = {
           break;
         }
 
+        case 'static_cache_update': {
+          await ensureStaticCacheManager();
+          const { strategyName } = payload;
+          try {
+            await staticCacheManager!.updateCache(strategyName);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'static_cache_clear': {
+          await ensureStaticCacheManager();
+          try {
+            await staticCacheManager!.clearOldCaches();
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'static_cache_status': {
+          await ensureStaticCacheManager();
+          try {
+            const status = staticCacheManager!.getCacheStatus();
+            respond({ status });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_network_state': {
+          await ensureNetworkStateManager();
+          try {
+            const state = networkStateManager!.getCurrentState();
+            respond({ state });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'check_network_state': {
+          await ensureNetworkStateManager();
+          try {
+            const state = await networkStateManager!.checkNetworkStatus();
+            respond({ state });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'test_connection_quality': {
+          await ensureNetworkStateManager();
+          try {
+            const quality = await networkStateManager!.testConnectionQuality();
+            respond({ quality });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'show_notification': {
+          try {
+            const notificationData = payload as NotificationPayload;
+            
+            await self.registration.showNotification(notificationData.title, {
+              body: notificationData.body,
+              icon: notificationData.icon,
+              badge: notificationData.badge,
+              image: notificationData.image,
+              tag: notificationData.tag,
+              data: notificationData.data,
+              actions: notificationData.actions,
+              requireInteraction: notificationData.requireInteraction || false,
+              silent: notificationData.silent || false
+            });
+
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_notification_permission': {
+          try {
+            // Service Workers 无法直接检查权限，返回信息让客户端处理
+            respond({ 
+              needsClientCheck: true,
+              message: 'Permission check must be done on client side'
+            });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'set_collaboration_user': {
+          await ensurePWACollaborationEnhancer();
+          try {
+            const { userId, userName } = payload;
+            pwaCollaborationEnhancer!.setUserInfo(userId, userName);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'enhance_live_query': {
+          await ensurePWACollaborationEnhancer();
+          try {
+            const { query, vars } = payload;
+            const uuid = await pwaCollaborationEnhancer!.enhanceLiveQuery(query, vars);
+            respond({ uuid });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'handle_collaboration_event': {
+          await ensurePWACollaborationEnhancer();
+          try {
+            const event = payload as CollaborationEvent;
+            await pwaCollaborationEnhancer!.handleCollaborationEvent(event);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_performance_metrics': {
+          await ensurePWAPerformanceManager();
+          try {
+            const metrics = pwaPerformanceManager!.getPerformanceMetrics();
+            respond({ metrics });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_app_shell_state': {
+          await ensurePWAPerformanceManager();
+          try {
+            const state = pwaPerformanceManager!.getAppShellState();
+            respond({ state });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'preload_resources': {
+          await ensurePWAPerformanceManager();
+          try {
+            const { urls } = payload;
+            await pwaPerformanceManager!.preloadResources(urls);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'force_memory_cleanup': {
+          await ensurePWAPerformanceManager();
+          try {
+            await pwaPerformanceManager!.forceMemoryCleanup();
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -1738,6 +2105,10 @@ const eventHandlers = {
 self.addEventListener('install', eventHandlers.install);
 self.addEventListener('activate', eventHandlers.activate);
 self.addEventListener('beforeunload', eventHandlers.beforeunload);
+self.addEventListener('push', eventHandlers.push);
+self.addEventListener('notificationclick', eventHandlers.notificationclick);
+self.addEventListener('notificationclose', eventHandlers.notificationclose);
+self.addEventListener('fetch', eventHandlers.fetch);
 self.addEventListener('message', eventHandlers.message);
 
 console.log("Service Worker event listeners registered");
@@ -2965,6 +3336,285 @@ async function initializeDataConsistencyManager(): Promise<void> {
 async function ensureDataConsistencyManager(): Promise<void> {
   if (!dataConsistencyManager) {
     await initializeDataConsistencyManager();
+  }
+}
+
+/**
+ * 初始化静态资源缓存管理器
+ */
+async function initializeStaticCacheManager(): Promise<void> {
+  if (staticCacheManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing StaticResourceCacheManager...');
+
+    // 创建静态资源缓存管理器实例
+    staticCacheManager = new StaticResourceCacheManager();
+    
+    // 初始化缓存管理器
+    await staticCacheManager.initialize();
+
+    // 缓存 App Shell 资源
+    await staticCacheManager.cacheStaticResources('app-shell');
+    
+    // 后台缓存其他资源
+    setTimeout(async () => {
+      try {
+        if (staticCacheManager) {
+          await staticCacheManager.cacheStaticResources('static-assets');
+          await staticCacheManager.cacheStaticResources('wasm-resources');
+        }
+      } catch (error) {
+        console.warn('ServiceWorker: Background caching failed:', error);
+      }
+    }, 5000);
+
+    console.log('ServiceWorker: StaticResourceCacheManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize StaticResourceCacheManager:', error);
+    // 不抛出错误，静态缓存失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保静态资源缓存管理器已初始化
+ */
+async function ensureStaticCacheManager(): Promise<void> {
+  if (!staticCacheManager) {
+    await initializeStaticCacheManager();
+  }
+}
+
+/**
+ * 初始化网络状态管理器
+ */
+async function initializeNetworkStateManager(): Promise<void> {
+  if (networkStateManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing NetworkStateManager...');
+
+    // 创建网络状态管理器实例
+    networkStateManager = new NetworkStateManager();
+    
+    // 初始化，传入 offlineManager 以便集成
+    await networkStateManager.initialize(offlineManager);
+
+    // 监听网络状态变化并广播给客户端
+    networkStateManager.onStateChange((state: NetworkState) => {
+      broadcastToAllClients({
+        type: 'network_state_change',
+        payload: { state }
+      });
+    });
+
+    console.log('ServiceWorker: NetworkStateManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize NetworkStateManager:', error);
+    // 不抛出错误，网络状态管理失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保网络状态管理器已初始化
+ */
+async function ensureNetworkStateManager(): Promise<void> {
+  if (!networkStateManager) {
+    await initializeNetworkStateManager();
+  }
+}
+
+/**
+ * 初始化PWA协作增强器
+ */
+async function initializePWACollaborationEnhancer(): Promise<void> {
+  if (pwaCollaborationEnhancer) return;
+
+  try {
+    console.log('ServiceWorker: Initializing PWACollaborationEnhancer...');
+
+    // 创建PWA协作增强器实例
+    pwaCollaborationEnhancer = new PWACollaborationEnhancer({
+      enableBackgroundSync: true,
+      pushNotificationConfig: {
+        enabled: true
+      },
+      reconnectionConfig: {
+        maxAttempts: 5,
+        baseDelay: 1000,
+        maxDelay: 30000
+      },
+      visibilityConfig: {
+        enableVisibilityAPI: true,
+        backgroundSyncInterval: 30000 // 30秒
+      }
+    });
+
+    // 初始化，传入现有的管理器实例
+    await pwaCollaborationEnhancer.initialize({
+      networkStateManager,
+      connectionRecoveryManager: connectionRecoveryManager,
+      subscriptionManager: pageAwareSubscriptionManager
+    });
+
+    // 监听协作事件并广播给客户端
+    pwaCollaborationEnhancer.onCollaborationEvent((event: CollaborationEvent) => {
+      broadcastToAllClients({
+        type: 'collaboration_event',
+        payload: event
+      });
+    });
+
+    console.log('ServiceWorker: PWACollaborationEnhancer initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize PWACollaborationEnhancer:', error);
+    // 不抛出错误，协作增强失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保PWA协作增强器已初始化
+ */
+async function ensurePWACollaborationEnhancer(): Promise<void> {
+  if (!pwaCollaborationEnhancer) {
+    await initializePWACollaborationEnhancer();
+  }
+}
+
+/**
+ * 初始化PWA性能管理器
+ */
+async function initializePWAPerformanceManager(): Promise<void> {
+  if (pwaPerformanceManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing PWAPerformanceManager...');
+
+    // 创建性能管理器配置
+    const performanceConfig: PWAPerformanceConfig = {
+      appShell: {
+        coreResources: [
+          '/',
+          '/index.html',
+          '/static/css/main.css',
+          '/static/js/main.js',
+          '/manifest.json',
+          '/assets/logo/cuckoo-icon.svg',
+          '/assets/logo/cuckoo-logo-main.svg'
+        ],
+        shellCacheName: 'cuckoox-app-shell-v1',
+        version: SW_VERSION
+      },
+      preloading: {
+        criticalResources: [
+          '/cases',
+          '/claims',
+          '/dashboard',
+          '/static/fonts/roboto.woff2'
+        ],
+        preloadStrategy: 'adaptive',
+        maxPreloadSize: 5 * 1024 * 1024 // 5MB
+      },
+      lazyLoading: {
+        routes: [
+          '/admin',
+          '/reports',
+          '/settings'
+        ],
+        chunkSize: 100 * 1024, // 100KB
+        loadingThreshold: 200 // 200ms
+      },
+      performance: {
+        memoryThreshold: 150, // 150MB
+        cleanupInterval: 5 * 60 * 1000, // 5分钟
+        targetFCP: 1500, // 1.5秒
+        targetLCP: 2500  // 2.5秒
+      }
+    };
+
+    // 创建性能管理器实例
+    pwaPerformanceManager = new PWAPerformanceManager(performanceConfig);
+    
+    // 初始化性能管理器
+    await pwaPerformanceManager.initialize();
+
+    console.log('ServiceWorker: PWAPerformanceManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize PWAPerformanceManager:', error);
+    // 不抛出错误，性能优化失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保PWA性能管理器已初始化
+ */
+async function ensurePWAPerformanceManager(): Promise<void> {
+  if (!pwaPerformanceManager) {
+    await initializePWAPerformanceManager();
+  }
+}
+
+/**
+ * 初始化PWA安全管理器
+ */
+async function initializePWASecurityManager(): Promise<void> {
+  if (pwaSecurityManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing PWASecurityManager...');
+
+    // 创建安全管理器配置
+    const securityConfig: PWASecurityConfig = {
+      encryption: {
+        enabled: true,
+        algorithm: 'AES-GCM',
+        keyLength: 256,
+        ivLength: 12
+      },
+      authentication: {
+        autoLockTimeout: 30 * 60 * 1000, // 30分钟
+        maxInactivity: 60 * 60 * 1000, // 1小时
+        requireReauth: true,
+        sessionStorageKey: 'cuckoox-session'
+      },
+      threats: {
+        enableDetection: true,
+        maxFailedAttempts: 3,
+        lockoutDuration: 15 * 60 * 1000 // 15分钟
+      },
+      cache: {
+        encryptSensitiveData: true,
+        sensitiveDataPatterns: [
+          '/api/auth',
+          '/api/user',
+          '/api/cases/\\d+',
+          '/api/claims/\\d+',
+          'token',
+          'jwt'
+        ],
+        maxCacheAge: 24 * 60 * 60 * 1000 // 24小时
+      }
+    };
+
+    // 创建安全管理器实例
+    pwaSecurityManager = new PWASecurityManager(securityConfig);
+    
+    // 初始化安全管理器
+    await pwaSecurityManager.initialize();
+
+    console.log('ServiceWorker: PWASecurityManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize PWASecurityManager:', error);
+    // 不抛出错误，安全管理失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保PWA安全管理器已初始化
+ */
+async function ensurePWASecurityManager(): Promise<void> {
+  if (!pwaSecurityManager) {
+    await initializePWASecurityManager();
   }
 }
 
