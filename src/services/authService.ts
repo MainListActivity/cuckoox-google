@@ -224,12 +224,7 @@ class AuthService {
         endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
         namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
         database: tenantCode,
-        sync_tokens: {
-          access_token: localStorage.getItem('access_token'),
-          refresh_token: localStorage.getItem('refresh_token'),
-          token_expires_at: localStorage.getItem('token_expires_at'),
-          tenant_code: tenantCode
-        }
+        // Service Worker 将使用其内部存储的 token，不需要同步 localStorage token
       });
     }
 

@@ -32,11 +32,9 @@ const queryClient = new QueryClient(); // ADDED
 // Authentication error handler (session/token expired)
 const handleSessionExpired = () => {
   console.warn('Authentication error (session/token expired), clearing storage and redirecting to login...');
-  // Clear all auth-related localStorage items
+  // Clear only non-token localStorage items (tokens are managed by Service Worker)
   localStorage.removeItem('cuckoox-selectedCaseId');
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('token_expires_at');
+  // Note: tokens are now managed by Service Worker, no need to clear them from localStorage
 
   // Redirect to login page by reloading
   window.location.href = '/login';

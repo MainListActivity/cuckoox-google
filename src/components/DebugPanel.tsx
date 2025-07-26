@@ -4,30 +4,30 @@ import { mdiChevronDown, mdiRefresh, mdiConsole } from '@mdi/js';
 import Icon from '@mdi/react';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSurreal } from '@/src/contexts/SurrealProvider';
+import authService from '@/src/services/authService';
 
-// 性能监控 Hook
+// 性能监控 Hook - 修复无限循环问题
 const useRenderCounter = (componentName: string) => {
   const renderCount = useRef(0);
   const lastRenderTime = useRef(Date.now());
   const renderTimes = useRef<number[]>([]);
   
-  useEffect(() => {
-    renderCount.current += 1;
-    const now = Date.now();
-    renderTimes.current.push(now - lastRenderTime.current);
-    lastRenderTime.current = now;
-    
-    // 保留最近10次渲染时间
-    if (renderTimes.current.length > 10) {
-      renderTimes.current.shift();
-    }
-    
-    // 检测可能的死循环（1秒内超过10次渲染）
-    const recentRenders = renderTimes.current.filter(time => time < 100);
-    if (recentRenders.length >= 5) {
-      console.warn(`🔄 Potential infinite loop detected in ${componentName}: ${recentRenders.length} renders in quick succession`);
-    }
-  });
+  // 直接在组件渲染时更新计数器，不使用 useEffect
+  renderCount.current += 1;
+  const now = Date.now();
+  renderTimes.current.push(now - lastRenderTime.current);
+  lastRenderTime.current = now;
+  
+  // 保留最近10次渲染时间
+  if (renderTimes.current.length > 10) {
+    renderTimes.current.shift();
+  }
+  
+  // 检测可能的死循环（1秒内超过10次渲染）
+  const recentRenders = renderTimes.current.filter(time => time < 100);
+  if (recentRenders.length >= 5) {
+    console.warn(`🔄 Potential infinite loop detected in ${componentName}: ${recentRenders.length} renders in quick succession`);
+  }
   
   return {
     renderCount: renderCount.current,
@@ -52,10 +52,9 @@ const DebugPanel: React.FC = () => {
   const updateLocalStorage = useCallback(() => {
     const items: {[key: string]: string} = {};
     const relevantKeys = [
-      'access_token',
-      'refresh_token', 
-      'token_expires_at',
+      'tenant_code',
       'cuckoox-selectedCaseId'
+      // token 现在由 Service Worker 管理，不再存储在 localStorage
     ];
     
     relevantKeys.forEach(key => {
@@ -97,11 +96,14 @@ const DebugPanel: React.FC = () => {
     window.location.reload();
   };
   
-  const clearTokens = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('token_expires_at');
-    console.log('🔑 Tokens cleared');
+  const clearTokens = async () => {
+    try {
+      // Use authService to clear tokens from Service Worker
+      await authService.clearAuthTokens();
+      console.log('🔑 Tokens cleared from Service Worker');
+    } catch (error) {
+      console.error('Failed to clear tokens:', error);
+    }
   };
   
   // 显示性能信息

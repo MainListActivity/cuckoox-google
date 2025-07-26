@@ -250,7 +250,7 @@ const CreditorListPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCaseId, client, t, navigate, showError]); // Updated dependencies
+  }, [selectedCaseId, client]); // 移除经常变化的函数依赖
 
   useEffect(() => {
     // Reset page to 0 when debouncedSearchTerm changes

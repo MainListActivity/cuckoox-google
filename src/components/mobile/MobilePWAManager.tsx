@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme, useMediaQuery } from '@mui/material';
 import MobilePWAInstallGuide from './MobilePWAInstallGuide';
 import MobilePWAInstallBanner from './MobilePWAInstallBanner';
@@ -44,7 +44,6 @@ interface PWAManagerState {
   showBanner: boolean;
   showGuide: boolean;
   userEngaged: boolean;
-  pageViewCount: number;
   sessionStartTime: number;
 }
 
@@ -77,12 +76,15 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // 使用 useRef 来存储页面视图计数，避免触发重新渲染
+  const pageViewCountRef = useRef(0);
+  const sessionStartTimeRef = useRef(Date.now());
+
   const [state, setState] = useState<PWAManagerState>({
     showBanner: false,
     showGuide: false,
     userEngaged: false,
-    pageViewCount: 0,
-    sessionStartTime: Date.now()
+    sessionStartTime: sessionStartTimeRef.current
   });
 
   // 分析数据发送
@@ -92,7 +94,7 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
     const analyticsData = {
       event,
       timestamp: Date.now(),
-      sessionDuration: Date.now() - state.sessionStartTime,
+      sessionDuration: Date.now() - sessionStartTimeRef.current,
       deviceInfo: getDeviceInfo(),
       installState: mobilePWADetector.getInstallState(),
       ...data
@@ -110,7 +112,7 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
         // analytics.track(event, analyticsData);
       }
     }
-  }, [enableAnalytics, customAnalyticsHandler, state.sessionStartTime]);
+  }, [enableAnalytics, customAnalyticsHandler]);
 
   // 检查是否应该触发安装提示
   const checkTriggerConditions = useCallback(() => {
@@ -123,8 +125,8 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
       if (installState.dismissCount >= 3) return false;
     }
 
-    // 页面视图触发
-    if (triggerOnPageView && state.pageViewCount >= 2) return true;
+    // 页面视图触发 - 使用 pageViewCountRef 避免依赖循环
+    if (triggerOnPageView && pageViewCountRef.current >= 2) return true;
     
     // 用户参与触发
     if (triggerOnUserEngagement && state.userEngaged) return true;
@@ -144,8 +146,7 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
     triggerOnPageView, 
     triggerOnUserEngagement, 
     triggerOnSpecificPages,
-    state.pageViewCount,
-    state.userEngaged
+    state.userEngaged // 移除 pageViewCount 依赖
   ]);
 
   // 显示横幅
@@ -177,13 +178,10 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
     onGuideOpen?.();
   }, [sendAnalytics, state.showBanner, onGuideOpen]);
 
-  // 初始化和页面视图跟踪
+  // 初始化和页面视图跟踪 - 修复无限循环
   useEffect(() => {
-    // 记录页面视图
-    setState(prev => ({ 
-      ...prev, 
-      pageViewCount: prev.pageViewCount + 1 
-    }));
+    // 记录页面视图 - 使用 useRef 避免触发重新渲染
+    pageViewCountRef.current += 1;
 
     // 延迟显示横幅
     const timer = setTimeout(() => {
@@ -195,7 +193,12 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
 
   // 用户参与度检测
   useEffect(() => {
-    let engagementTimer: NodeJS.Timeout;
+    const engagementTimer: NodeJS.Timeout = setTimeout(() => {
+      if (!state.userEngaged) {
+        setState(prev => ({ ...prev, userEngaged: true }));
+        sendAnalytics('user_engaged', { trigger: 'timeout' });
+      }
+    }, 10000);
     let scrollDetected = false;
     let clickDetected = false;
 
@@ -219,14 +222,6 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
         sendAnalytics('user_engaged');
       }
     };
-
-    // 10秒后自动标记为参与
-    engagementTimer = setTimeout(() => {
-      if (!state.userEngaged) {
-        setState(prev => ({ ...prev, userEngaged: true }));
-        sendAnalytics('user_engaged', { trigger: 'timeout' });
-      }
-    }, 10000);
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('click', handleClick, { passive: true });
@@ -268,7 +263,7 @@ const MobilePWAManager: React.FC<MobilePWAManagerProps> = ({
   }, [showGuideOnBannerClick, showInstallGuide, sendAnalytics, onInstallStart]);
 
   // 处理横幅关闭
-  const handleBannerDismiss = useCallback(() => {
+  const _handleBannerDismiss = useCallback(() => {
     setState(prev => ({ ...prev, showBanner: false }));
     sendAnalytics('pwa_banner_dismissed');
     onBannerDismiss?.();

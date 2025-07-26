@@ -394,10 +394,13 @@ class PDFParseService {
 
   /**
    * 获取认证令牌
+   * 现在通过Service Worker管理token，直接发送请求让Service Worker处理认证
    */
   private getAuthToken(): string {
-    // TODO: 集成现有的认证系统
-    return localStorage.getItem('auth_token') || '';
+    // Token management is now handled by Service Worker
+    // Service Worker will intercept requests and add authentication headers
+    // Return empty string as Service Worker will handle token attachment
+    return '';
   }
 }
 

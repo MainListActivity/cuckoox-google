@@ -199,9 +199,6 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     if (!tenantCode) {
       // 清除认证状态
       localStorage.removeItem('cuckoox-selectedCaseId');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('token_expires_at');
       
       // 重定向到登录页面
       if (window.location.pathname !== '/login') {
@@ -346,14 +343,8 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
    */
   const handleTokenSyncRequest = useCallback(async () => {
     try {
-      // 获取 localStorage 中的 token 并同步到 Service Worker
-      const syncTokens = {
-        access_token: localStorage.getItem('access_token'),
-        refresh_token: localStorage.getItem('refresh_token'),
-        token_expires_at: localStorage.getItem('token_expires_at'),
-        tenant_code: localStorage.getItem('tenant_code'),
-      };
-
+      // Service Worker 现在完全管理 token，客户端不再需要同步 localStorage token
+      // 只需要同步租户代码用于数据库连接
       const tenantCode = localStorage.getItem('tenant_code');
       const database = tenantCode || 'test';
 
@@ -361,12 +352,12 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
         namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
         database: database,
-        sync_tokens: syncTokens,
+        // Service Worker 将使用其内部存储的 token
       });
 
-      console.log('SurrealProvider: Successfully synced tokens to Service Worker');
+      console.log('SurrealProvider: Successfully synced connection config to Service Worker');
     } catch (error) {
-      console.error('SurrealProvider: Failed to sync tokens to Service Worker:', error);
+      console.error('SurrealProvider: Failed to sync connection config to Service Worker:', error);
     }
   }, []);
 
@@ -382,12 +373,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
       namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
       database: localStorage.getItem('tenant_code') || 'test',
-      sync_tokens: {
-        access_token: localStorage.getItem('access_token'),
-        refresh_token: localStorage.getItem('refresh_token'),
-        token_expires_at: localStorage.getItem('token_expires_at'),
-        tenant_code: localStorage.getItem('tenant_code'),
-      }
+      // Service Worker 将使用其内部存储的 token，不需要同步 localStorage
     };
 
     // 设置一个超时刷新机制，防止controllerchange事件未触发
@@ -695,14 +681,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
    */
   const initializeDatabaseConnection = useCallback(async (): Promise<void> => {
     try {
-      // 获取当前token信息
-      const syncTokens = {
-        access_token: localStorage.getItem('access_token'),
-        refresh_token: localStorage.getItem('refresh_token'),
-        token_expires_at: localStorage.getItem('token_expires_at'),
-        tenant_code: localStorage.getItem('tenant_code'),
-      };
-
+      // Service Worker 现在完全管理 token，只需要提供基本连接信息
       const tenantCode = localStorage.getItem('tenant_code');
       const database = tenantCode || 'test';
 
@@ -710,7 +689,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
         namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
         database: database,
-        sync_tokens: syncTokens,
+        // Service Worker 将使用其内部存储的 token
       });
       
       if (result.status !== 'connected') {
@@ -782,14 +761,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     try {
       console.log('SurrealProvider: 正在初始化数据库连接...');
       
-      // 获取当前token信息
-      const syncTokens = {
-        access_token: localStorage.getItem('access_token'),
-        refresh_token: localStorage.getItem('refresh_token'),
-        token_expires_at: localStorage.getItem('token_expires_at'),
-        tenant_code: localStorage.getItem('tenant_code'),
-      };
-
+      // Service Worker 现在完全管理 token，只需要提供基本连接信息
       const tenantCode = localStorage.getItem('tenant_code');
       const database = tenantCode || 'test';
 
@@ -817,7 +789,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
             endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
             namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
             database: database,
-            sync_tokens: syncTokens,
+            // Service Worker 将使用其内部存储的 token
           }
         });
         
@@ -998,22 +970,15 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       // 创建内置客户端
       const client = createInternalClient();
       
-      // Use service worker client directly
+      // 使用 service worker 客户端，Service Worker 将使用其内部存储的 token
       const tenantCode = localStorage.getItem('tenant_code');
       const database = tenantCode || 'test';
-      
-      const syncTokens = {
-        access_token: localStorage.getItem('access_token'),
-        refresh_token: localStorage.getItem('refresh_token'),
-        token_expires_at: localStorage.getItem('token_expires_at'),
-        tenant_code: tenantCode,
-      };
 
       const connected = await client.connect({
         endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
         namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
         database: database,
-        sync_tokens: syncTokens,
+        // Service Worker 将使用其内部存储的 token，不需要同步 localStorage
       });
 
       if (connected) {

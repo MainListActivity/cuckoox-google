@@ -31,6 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Logo from '@/src/components/Logo';
 import { apiClient } from '@/src/utils/apiClient';
+import authService from '@/src/services/authService';
 
 interface Tenant {
   tenant_code: string;
@@ -95,13 +96,12 @@ const RootAdminPage: React.FC = () => {
 
   // 检查用户权限
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
+    // Check if user is authenticated and is a root admin
+    if (!user || !user.github_id?.startsWith('root_admin_')) {
       navigate('/root-admin/login');
       return;
     }
-    // TODO: Add JWT token validation to ensure it's for root admin
-  }, [navigate]);
+  }, [user, navigate]);
 
   // 加载数据
   useEffect(() => {
@@ -203,12 +203,16 @@ const RootAdminPage: React.FC = () => {
         </Box>
         <Button
           variant="outlined"
-          onClick={() => {
-            // Clear authentication tokens
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            localStorage.removeItem('token_expires_at');
-            navigate('/root-admin/login');
+          onClick={async () => {
+            try {
+              // Use authService to clear authentication
+              await authService.clearAuthTokens();
+              navigate('/root-admin/login');
+            } catch (error) {
+              console.error('Logout error:', error);
+              // Even if logout fails, navigate to login page
+              navigate('/root-admin/login');
+            }
           }}
         >
           {t('logout', 'Logout')}

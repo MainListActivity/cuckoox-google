@@ -25,10 +25,14 @@ class ApiClient {
   }
 
   /**
-   * Get JWT token from localStorage
+   * Get JWT token from Service Worker token manager
+   * Since all requests should go through Service Worker, 
+   * we'll let Service Worker handle token attachment
    */
   private getAccessToken(): string | null {
-    return localStorage.getItem('access_token');
+    // Token management is now handled by Service Worker
+    // Return null to indicate no local token, Service Worker will handle this
+    return null;
   }
 
   /**

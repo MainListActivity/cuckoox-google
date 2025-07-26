@@ -12,27 +12,26 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/src/contexts/AuthContext';
 import Logo from '@/src/components/Logo';
-import { apiClient } from '@/src/utils/apiClient';
+import authService from '@/src/services/authService';
 
 const RootAdminLoginPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isLoggedIn, user } = useAuth();
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if already authenticated
+  // Check if already authenticated as root admin
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      // Verify token is for root admin by checking if it contains root database
-      // For now, just navigate to root admin dashboard
+    if (isLoggedIn && user?.github_id?.startsWith('root_admin_')) {
       navigate('/root-admin');
     }
-  }, [navigate]);
+  }, [isLoggedIn, user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,29 +39,17 @@ const RootAdminLoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await apiClient.rootAdminLogin({
+      // Use authService for root admin login
+      const response = await authService.loginRootAdminWithJWT({
         username,
         password,
       });
 
-      // Store tokens
-      if (response.access_token) {
-        localStorage.setItem('access_token', response.access_token);
-        
-        if (response.refresh_token) {
-          localStorage.setItem('refresh_token', response.refresh_token);
-        }
-        
-        if (response.expires_in) {
-          const expiresAt = Date.now() + (response.expires_in * 1000);
-          localStorage.setItem('token_expires_at', expiresAt.toString());
-        }
-
-        // Navigate to root admin dashboard
-        navigate('/root-admin');
-      } else {
-        setError('Login response missing access token');
-      }
+      // AuthService handles token management via Service Worker
+      console.log('Root admin login successful:', response);
+      
+      // Navigate to root admin dashboard
+      navigate('/root-admin');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Login failed');
     } finally {
