@@ -51,6 +51,7 @@ import {
 } from '@mdi/js';
 import Logo from './Logo';
 import { RecordId } from 'surrealdb';
+import MobilePWAManager from './mobile/MobilePWAManager';
 
 // Icon map for dynamic menu items
 const iconMap: { [key: string]: string } = {
@@ -583,6 +584,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       >
         {children}
       </Box>
+      
+      {/* 移动端PWA安装管理器 */}
+      <MobilePWAManager
+        showBanner={true}
+        bannerDelay={8000}
+        bannerPosition="bottom"
+        bannerCompact={false}
+        bannerAutoHide={15000}
+        showGuideOnBannerClick={true}
+        triggerOnPageView={true}
+        triggerOnUserEngagement={true}
+        triggerOnSpecificPages={['/dashboard', '/cases', '/claims']}
+        respectUserPreference={true}
+        enableAnalytics={true}
+      />
     </Box>
   );
 };
