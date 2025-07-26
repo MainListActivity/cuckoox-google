@@ -11,6 +11,7 @@ import { StaticResourceCacheManager } from './static-resource-cache-manager.js';
 import { NetworkStateManager, type NetworkState } from './network-state-manager.js';
 import { PWAPushManager, type NotificationPayload } from './pwa-push-manager.js';
 import { PWACollaborationEnhancer, type CollaborationEvent } from './pwa-collaboration-enhancer.js';
+import { PWAPerformanceManager, type PWAPerformanceConfig } from './pwa-performance-manager.js';
 
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);
@@ -26,6 +27,9 @@ let pwaPushManager: PWAPushManager | null = null;
 
 // PWA协作增强器实例
 let pwaCollaborationEnhancer: PWACollaborationEnhancer | null = null;
+
+// PWA性能管理器实例
+let pwaPerformanceManager: PWAPerformanceManager | null = null;
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
@@ -82,6 +86,9 @@ const eventHandlers = {
 
           // 初始化PWA协作增强器
           await initializePWACollaborationEnhancer();
+
+          // 初始化PWA性能管理器
+          await initializePWAPerformanceManager();
 
 
           // 尝试恢复连接配置
@@ -293,7 +300,16 @@ const eventHandlers = {
   },
 
   fetch: async (event: FetchEvent) => {
-    // 处理静态资源缓存
+    // 首先尝试性能管理器处理
+    if (pwaPerformanceManager) {
+      const performanceResponse = await pwaPerformanceManager.handleRequest(event.request);
+      if (performanceResponse) {
+        event.respondWith(Promise.resolve(performanceResponse));
+        return;
+      }
+    }
+
+    // 然后尝试静态缓存管理器处理
     if (staticCacheManager) {
       const cachedResponse = await staticCacheManager.handleFetch(event.request);
       if (cachedResponse) {
@@ -302,7 +318,7 @@ const eventHandlers = {
       }
     }
     
-    // 如果静态缓存管理器没有处理这个请求，则继续正常处理
+    // 如果都没有处理这个请求，则继续正常处理
     // 这里可以添加其他的 fetch 处理逻辑
   },
 
@@ -2022,6 +2038,51 @@ const eventHandlers = {
           break;
         }
 
+        case 'get_performance_metrics': {
+          await ensurePWAPerformanceManager();
+          try {
+            const metrics = pwaPerformanceManager!.getPerformanceMetrics();
+            respond({ metrics });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_app_shell_state': {
+          await ensurePWAPerformanceManager();
+          try {
+            const state = pwaPerformanceManager!.getAppShellState();
+            respond({ state });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'preload_resources': {
+          await ensurePWAPerformanceManager();
+          try {
+            const { urls } = payload;
+            await pwaPerformanceManager!.preloadResources(urls);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'force_memory_cleanup': {
+          await ensurePWAPerformanceManager();
+          try {
+            await pwaPerformanceManager!.forceMemoryCleanup();
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -3410,6 +3471,79 @@ async function initializePWACollaborationEnhancer(): Promise<void> {
 async function ensurePWACollaborationEnhancer(): Promise<void> {
   if (!pwaCollaborationEnhancer) {
     await initializePWACollaborationEnhancer();
+  }
+}
+
+/**
+ * 初始化PWA性能管理器
+ */
+async function initializePWAPerformanceManager(): Promise<void> {
+  if (pwaPerformanceManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing PWAPerformanceManager...');
+
+    // 创建性能管理器配置
+    const performanceConfig: PWAPerformanceConfig = {
+      appShell: {
+        coreResources: [
+          '/',
+          '/index.html',
+          '/static/css/main.css',
+          '/static/js/main.js',
+          '/manifest.json',
+          '/assets/logo/cuckoo-icon.svg',
+          '/assets/logo/cuckoo-logo-main.svg'
+        ],
+        shellCacheName: 'cuckoox-app-shell-v1',
+        version: SW_VERSION
+      },
+      preloading: {
+        criticalResources: [
+          '/cases',
+          '/claims',
+          '/dashboard',
+          '/static/fonts/roboto.woff2'
+        ],
+        preloadStrategy: 'adaptive',
+        maxPreloadSize: 5 * 1024 * 1024 // 5MB
+      },
+      lazyLoading: {
+        routes: [
+          '/admin',
+          '/reports',
+          '/settings'
+        ],
+        chunkSize: 100 * 1024, // 100KB
+        loadingThreshold: 200 // 200ms
+      },
+      performance: {
+        memoryThreshold: 150, // 150MB
+        cleanupInterval: 5 * 60 * 1000, // 5分钟
+        targetFCP: 1500, // 1.5秒
+        targetLCP: 2500  // 2.5秒
+      }
+    };
+
+    // 创建性能管理器实例
+    pwaPerformanceManager = new PWAPerformanceManager(performanceConfig);
+    
+    // 初始化性能管理器
+    await pwaPerformanceManager.initialize();
+
+    console.log('ServiceWorker: PWAPerformanceManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize PWAPerformanceManager:', error);
+    // 不抛出错误，性能优化失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保PWA性能管理器已初始化
+ */
+async function ensurePWAPerformanceManager(): Promise<void> {
+  if (!pwaPerformanceManager) {
+    await initializePWAPerformanceManager();
   }
 }
 
