@@ -12,6 +12,7 @@ import { NetworkStateManager, type NetworkState } from './network-state-manager.
 import { PWAPushManager, type NotificationPayload } from './pwa-push-manager.js';
 import { PWACollaborationEnhancer, type CollaborationEvent } from './pwa-collaboration-enhancer.js';
 import { PWAPerformanceManager, type PWAPerformanceConfig } from './pwa-performance-manager.js';
+import { PWASecurityManager, type PWASecurityConfig } from './pwa-security-manager.js';
 
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);
@@ -30,6 +31,9 @@ let pwaCollaborationEnhancer: PWACollaborationEnhancer | null = null;
 
 // PWA性能管理器实例
 let pwaPerformanceManager: PWAPerformanceManager | null = null;
+
+// PWA安全管理器实例
+let pwaSecurityManager: PWASecurityManager | null = null;
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
@@ -89,6 +93,9 @@ const eventHandlers = {
 
           // 初始化PWA性能管理器
           await initializePWAPerformanceManager();
+
+          // 初始化PWA安全管理器
+          await initializePWASecurityManager();
 
 
           // 尝试恢复连接配置
@@ -3544,6 +3551,70 @@ async function initializePWAPerformanceManager(): Promise<void> {
 async function ensurePWAPerformanceManager(): Promise<void> {
   if (!pwaPerformanceManager) {
     await initializePWAPerformanceManager();
+  }
+}
+
+/**
+ * 初始化PWA安全管理器
+ */
+async function initializePWASecurityManager(): Promise<void> {
+  if (pwaSecurityManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing PWASecurityManager...');
+
+    // 创建安全管理器配置
+    const securityConfig: PWASecurityConfig = {
+      encryption: {
+        enabled: true,
+        algorithm: 'AES-GCM',
+        keyLength: 256,
+        ivLength: 12
+      },
+      authentication: {
+        autoLockTimeout: 30 * 60 * 1000, // 30分钟
+        maxInactivity: 60 * 60 * 1000, // 1小时
+        requireReauth: true,
+        sessionStorageKey: 'cuckoox-session'
+      },
+      threats: {
+        enableDetection: true,
+        maxFailedAttempts: 3,
+        lockoutDuration: 15 * 60 * 1000 // 15分钟
+      },
+      cache: {
+        encryptSensitiveData: true,
+        sensitiveDataPatterns: [
+          '/api/auth',
+          '/api/user',
+          '/api/cases/\\d+',
+          '/api/claims/\\d+',
+          'token',
+          'jwt'
+        ],
+        maxCacheAge: 24 * 60 * 60 * 1000 // 24小时
+      }
+    };
+
+    // 创建安全管理器实例
+    pwaSecurityManager = new PWASecurityManager(securityConfig);
+    
+    // 初始化安全管理器
+    await pwaSecurityManager.initialize();
+
+    console.log('ServiceWorker: PWASecurityManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize PWASecurityManager:', error);
+    // 不抛出错误，安全管理失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保PWA安全管理器已初始化
+ */
+async function ensurePWASecurityManager(): Promise<void> {
+  if (!pwaSecurityManager) {
+    await initializePWASecurityManager();
   }
 }
 
