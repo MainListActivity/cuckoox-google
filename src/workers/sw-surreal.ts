@@ -6,8 +6,18 @@ declare const self: ServiceWorkerGlobalScope;
 const SW_VERSION = 'v1.0.1';
 const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
 
+// 导入静态资源缓存管理器
+import { StaticResourceCacheManager } from './static-resource-cache-manager.js';
+import { NetworkStateManager, type NetworkState } from './network-state-manager.js';
+
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);
+
+// 静态资源缓存管理器实例
+let staticCacheManager: StaticResourceCacheManager | null = null;
+
+// 网络状态管理器实例
+let networkStateManager: NetworkStateManager | null = null;
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
@@ -55,6 +65,12 @@ const eventHandlers = {
           await initializeConnectionRecoveryManager();
           // 初始化 DataConsistencyManager
           await initializeDataConsistencyManager();
+
+          // 初始化静态资源缓存管理器
+          await initializeStaticCacheManager();
+
+          // 初始化网络状态管理器
+          await initializeNetworkStateManager();
 
 
           // 尝试恢复连接配置
@@ -144,6 +160,20 @@ const eventHandlers = {
     } catch (e) {
       console.error("Failed during cleanup:", e);
     }
+  },
+
+  fetch: async (event: FetchEvent) => {
+    // 处理静态资源缓存
+    if (staticCacheManager) {
+      const cachedResponse = await staticCacheManager.handleFetch(event.request);
+      if (cachedResponse) {
+        event.respondWith(Promise.resolve(cachedResponse));
+        return;
+      }
+    }
+    
+    // 如果静态缓存管理器没有处理这个请求，则继续正常处理
+    // 这里可以添加其他的 fetch 处理逻辑
   },
 
   message: async (event: ExtendableMessageEvent) => {
@@ -1723,6 +1753,73 @@ const eventHandlers = {
           break;
         }
 
+        case 'static_cache_update': {
+          await ensureStaticCacheManager();
+          const { strategyName } = payload;
+          try {
+            await staticCacheManager!.updateCache(strategyName);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'static_cache_clear': {
+          await ensureStaticCacheManager();
+          try {
+            await staticCacheManager!.clearOldCaches();
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'static_cache_status': {
+          await ensureStaticCacheManager();
+          try {
+            const status = staticCacheManager!.getCacheStatus();
+            respond({ status });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_network_state': {
+          await ensureNetworkStateManager();
+          try {
+            const state = networkStateManager!.getCurrentState();
+            respond({ state });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'check_network_state': {
+          await ensureNetworkStateManager();
+          try {
+            const state = await networkStateManager!.checkNetworkStatus();
+            respond({ state });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'test_connection_quality': {
+          await ensureNetworkStateManager();
+          try {
+            const quality = await networkStateManager!.testConnectionQuality();
+            respond({ quality });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -1738,6 +1835,7 @@ const eventHandlers = {
 self.addEventListener('install', eventHandlers.install);
 self.addEventListener('activate', eventHandlers.activate);
 self.addEventListener('beforeunload', eventHandlers.beforeunload);
+self.addEventListener('fetch', eventHandlers.fetch);
 self.addEventListener('message', eventHandlers.message);
 
 console.log("Service Worker event listeners registered");
@@ -2965,6 +3063,91 @@ async function initializeDataConsistencyManager(): Promise<void> {
 async function ensureDataConsistencyManager(): Promise<void> {
   if (!dataConsistencyManager) {
     await initializeDataConsistencyManager();
+  }
+}
+
+/**
+ * 初始化静态资源缓存管理器
+ */
+async function initializeStaticCacheManager(): Promise<void> {
+  if (staticCacheManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing StaticResourceCacheManager...');
+
+    // 创建静态资源缓存管理器实例
+    staticCacheManager = new StaticResourceCacheManager();
+    
+    // 初始化缓存管理器
+    await staticCacheManager.initialize();
+
+    // 缓存 App Shell 资源
+    await staticCacheManager.cacheStaticResources('app-shell');
+    
+    // 后台缓存其他资源
+    setTimeout(async () => {
+      try {
+        if (staticCacheManager) {
+          await staticCacheManager.cacheStaticResources('static-assets');
+          await staticCacheManager.cacheStaticResources('wasm-resources');
+        }
+      } catch (error) {
+        console.warn('ServiceWorker: Background caching failed:', error);
+      }
+    }, 5000);
+
+    console.log('ServiceWorker: StaticResourceCacheManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize StaticResourceCacheManager:', error);
+    // 不抛出错误，静态缓存失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保静态资源缓存管理器已初始化
+ */
+async function ensureStaticCacheManager(): Promise<void> {
+  if (!staticCacheManager) {
+    await initializeStaticCacheManager();
+  }
+}
+
+/**
+ * 初始化网络状态管理器
+ */
+async function initializeNetworkStateManager(): Promise<void> {
+  if (networkStateManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing NetworkStateManager...');
+
+    // 创建网络状态管理器实例
+    networkStateManager = new NetworkStateManager();
+    
+    // 初始化，传入 offlineManager 以便集成
+    await networkStateManager.initialize(offlineManager);
+
+    // 监听网络状态变化并广播给客户端
+    networkStateManager.onStateChange((state: NetworkState) => {
+      broadcastToAllClients({
+        type: 'network_state_change',
+        payload: { state }
+      });
+    });
+
+    console.log('ServiceWorker: NetworkStateManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize NetworkStateManager:', error);
+    // 不抛出错误，网络状态管理失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保网络状态管理器已初始化
+ */
+async function ensureNetworkStateManager(): Promise<void> {
+  if (!networkStateManager) {
+    await initializeNetworkStateManager();
   }
 }
 
