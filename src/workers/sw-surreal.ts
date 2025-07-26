@@ -9,6 +9,8 @@ const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
 // 导入静态资源缓存管理器
 import { StaticResourceCacheManager } from './static-resource-cache-manager.js';
 import { NetworkStateManager, type NetworkState } from './network-state-manager.js';
+import { PWAPushManager, type NotificationPayload } from './pwa-push-manager.js';
+import { PWACollaborationEnhancer, type CollaborationEvent } from './pwa-collaboration-enhancer.js';
 
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);
@@ -18,6 +20,12 @@ let staticCacheManager: StaticResourceCacheManager | null = null;
 
 // 网络状态管理器实例
 let networkStateManager: NetworkStateManager | null = null;
+
+// PWA推送通知管理器实例
+let pwaPushManager: PWAPushManager | null = null;
+
+// PWA协作增强器实例
+let pwaCollaborationEnhancer: PWACollaborationEnhancer | null = null;
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
@@ -71,6 +79,9 @@ const eventHandlers = {
 
           // 初始化网络状态管理器
           await initializeNetworkStateManager();
+
+          // 初始化PWA协作增强器
+          await initializePWACollaborationEnhancer();
 
 
           // 尝试恢复连接配置
@@ -159,6 +170,125 @@ const eventHandlers = {
       }
     } catch (e) {
       console.error("Failed during cleanup:", e);
+    }
+  },
+
+  push: async (event: PushEvent) => {
+    console.log('ServiceWorker: Push event received');
+    
+    let notificationData: NotificationPayload;
+    
+    try {
+      // 解析推送数据
+      if (event.data) {
+        notificationData = event.data.json();
+      } else {
+        // 默认通知
+        notificationData = {
+          title: 'CuckooX 系统通知',
+          body: '您有新的消息',
+          icon: '/assets/logo/cuckoo-icon.svg',
+          badge: '/assets/logo/favicon.svg'
+        };
+      }
+
+      // 显示通知
+      await self.registration.showNotification(notificationData.title, {
+        body: notificationData.body,
+        icon: notificationData.icon,
+        badge: notificationData.badge,
+        image: notificationData.image,
+        tag: notificationData.tag,
+        data: notificationData.data,
+        actions: notificationData.actions,
+        requireInteraction: notificationData.requireInteraction || false,
+        silent: notificationData.silent || false
+      });
+
+      console.log('ServiceWorker: Notification displayed successfully');
+    } catch (error) {
+      console.error('ServiceWorker: Error handling push event:', error);
+    }
+  },
+
+  notificationclick: async (event: NotificationEvent) => {
+    console.log('ServiceWorker: Notification clicked', event.notification);
+    
+    event.notification.close();
+
+    try {
+      const notificationData = event.notification.data || {};
+      const action = event.action;
+
+      // 处理通知操作
+      if (action === 'view' || !action) {
+        // 打开应用
+        let urlToOpen = '/';
+        
+        if (notificationData.url) {
+          urlToOpen = notificationData.url;
+        } else if (notificationData.type) {
+          // 根据通知类型确定跳转URL
+          const typeUrlMap = {
+            'case': '/cases',
+            'claim': '/claims',
+            'message': '/messages',
+            'system': '/dashboard'
+          };
+          urlToOpen = typeUrlMap[notificationData.type as keyof typeof typeUrlMap] || '/';
+        }
+
+        // 打开或聚焦窗口
+        const clients = await self.clients.matchAll({ type: 'window' });
+        
+        for (const client of clients) {
+          if (client.url.includes(self.location.origin) && 'focus' in client) {
+            await client.focus();
+            if (client.url !== urlToOpen) {
+              client.postMessage({
+                type: 'navigate',
+                payload: { url: urlToOpen }
+              });
+            }
+            return;
+          }
+        }
+
+        // 没有打开的窗口，打开新窗口
+        await self.clients.openWindow(urlToOpen);
+      } else if (action === 'dismiss') {
+        // 忽略操作，什么都不做
+        console.log('ServiceWorker: Notification dismissed');
+      }
+
+      // 向客户端发送通知点击事件
+      broadcastToAllClients({
+        type: 'notification_clicked',
+        payload: {
+          action,
+          data: notificationData
+        }
+      });
+    } catch (error) {
+      console.error('ServiceWorker: Error handling notification click:', error);
+    }
+  },
+
+  notificationclose: async (event: NotificationEvent) => {
+    console.log('ServiceWorker: Notification closed', event.notification);
+    
+    try {
+      const notificationData = event.notification.data || {};
+      
+      // 向客户端发送通知关闭事件
+      broadcastToAllClients({
+        type: 'notification_closed',
+        payload: {
+          data: notificationData
+        }
+      });
+    } catch (error) {
+      console.error('ServiceWorker: Error handling notification close:', error);
     }
   },
 
@@ -1820,6 +1950,78 @@ const eventHandlers = {
           break;
         }
 
+        case 'show_notification': {
+          try {
+            const notificationData = payload as NotificationPayload;
+            
+            await self.registration.showNotification(notificationData.title, {
+              body: notificationData.body,
+              icon: notificationData.icon,
+              badge: notificationData.badge,
+              image: notificationData.image,
+              tag: notificationData.tag,
+              data: notificationData.data,
+              actions: notificationData.actions,
+              requireInteraction: notificationData.requireInteraction || false,
+              silent: notificationData.silent || false
+            });
+
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'get_notification_permission': {
+          try {
+            // Service Workers 无法直接检查权限，返回信息让客户端处理
+            respond({ 
+              needsClientCheck: true,
+              message: 'Permission check must be done on client side'
+            });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'set_collaboration_user': {
+          await ensurePWACollaborationEnhancer();
+          try {
+            const { userId, userName } = payload;
+            pwaCollaborationEnhancer!.setUserInfo(userId, userName);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'enhance_live_query': {
+          await ensurePWACollaborationEnhancer();
+          try {
+            const { query, vars } = payload;
+            const uuid = await pwaCollaborationEnhancer!.enhanceLiveQuery(query, vars);
+            respond({ uuid });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
+        case 'handle_collaboration_event': {
+          await ensurePWACollaborationEnhancer();
+          try {
+            const event = payload as CollaborationEvent;
+            await pwaCollaborationEnhancer!.handleCollaborationEvent(event);
+            respond({ success: true });
+          } catch (error) {
+            respondError(error as Error);
+          }
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -1835,6 +2037,9 @@ const eventHandlers = {
 self.addEventListener('install', eventHandlers.install);
 self.addEventListener('activate', eventHandlers.activate);
 self.addEventListener('beforeunload', eventHandlers.beforeunload);
+self.addEventListener('push', eventHandlers.push);
+self.addEventListener('notificationclick', eventHandlers.notificationclick);
+self.addEventListener('notificationclose', eventHandlers.notificationclose);
 self.addEventListener('fetch', eventHandlers.fetch);
 self.addEventListener('message', eventHandlers.message);
 
@@ -3148,6 +3353,63 @@ async function initializeNetworkStateManager(): Promise<void> {
 async function ensureNetworkStateManager(): Promise<void> {
   if (!networkStateManager) {
     await initializeNetworkStateManager();
+  }
+}
+
+/**
+ * 初始化PWA协作增强器
+ */
+async function initializePWACollaborationEnhancer(): Promise<void> {
+  if (pwaCollaborationEnhancer) return;
+
+  try {
+    console.log('ServiceWorker: Initializing PWACollaborationEnhancer...');
+
+    // 创建PWA协作增强器实例
+    pwaCollaborationEnhancer = new PWACollaborationEnhancer({
+      enableBackgroundSync: true,
+      pushNotificationConfig: {
+        enabled: true
+      },
+      reconnectionConfig: {
+        maxAttempts: 5,
+        baseDelay: 1000,
+        maxDelay: 30000
+      },
+      visibilityConfig: {
+        enableVisibilityAPI: true,
+        backgroundSyncInterval: 30000 // 30秒
+      }
+    });
+
+    // 初始化，传入现有的管理器实例
+    await pwaCollaborationEnhancer.initialize({
+      networkStateManager,
+      connectionRecoveryManager: connectionRecoveryManager,
+      subscriptionManager: pageAwareSubscriptionManager
+    });
+
+    // 监听协作事件并广播给客户端
+    pwaCollaborationEnhancer.onCollaborationEvent((event: CollaborationEvent) => {
+      broadcastToAllClients({
+        type: 'collaboration_event',
+        payload: event
+      });
+    });
+
+    console.log('ServiceWorker: PWACollaborationEnhancer initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize PWACollaborationEnhancer:', error);
+    // 不抛出错误，协作增强失败不应该阻止整个 Service Worker
+  }
+}
+
+/**
+ * 确保PWA协作增强器已初始化
+ */
+async function ensurePWACollaborationEnhancer(): Promise<void> {
+  if (!pwaCollaborationEnhancer) {
+    await initializePWACollaborationEnhancer();
   }
 }
 
