@@ -43,7 +43,7 @@ import {
   mdiPlus,
   mdiMenu,
   mdiRocket,
-  mdiOfflinePin,
+  mdiCached,
   mdiBell,
   mdiSpeedometer,
   mdiStar,
@@ -241,7 +241,7 @@ const MobilePWAInstallGuide: React.FC<MobilePWAInstallGuideProps> = ({
         description: '比网页版快3倍的启动速度'
       },
       {
-        icon: mdiOfflinePin,
+        icon: mdiCached,
         title: '离线使用',
         description: '无网络时也能查看缓存数据'
       },
