@@ -56,7 +56,7 @@ const ResponsiveStatsCards: React.FC<ResponsiveStatsCardsProps> = ({
   onCardClick,
 }) => {
   const theme = useTheme();
-  const { isMobile, isTablet } = useResponsiveLayout();
+  const { isMobile } = useResponsiveLayout();
   const { cardSpacing } = useResponsiveSpacing();
 
   const getCardHeight = () => {
@@ -76,7 +76,7 @@ const ResponsiveStatsCards: React.FC<ResponsiveStatsCardsProps> = ({
     return isMobile ? 40 : 48;
   };
 
-  const renderStatCard = (stat: StatCardData, index: number) => {
+  const renderStatCard = (stat: StatCardData) => {
     const cardHeight = getCardHeight();
     const iconSize = getIconSize();
 
@@ -240,7 +240,7 @@ const ResponsiveStatsCards: React.FC<ResponsiveStatsCardsProps> = ({
 
   return (
     <Grid container spacing={cardSpacing} sx={{ mb: cardSpacing * 2 }}>
-      {stats.map((stat, index) => (
+      {stats.map((stat) => (
         <Grid
           key={stat.id}
           size={{
@@ -251,7 +251,7 @@ const ResponsiveStatsCards: React.FC<ResponsiveStatsCardsProps> = ({
             xl: columns.xl || 4,
           }}
         >
-          {renderStatCard(stat, index)}
+          {renderStatCard(stat)}
         </Grid>
       ))}
     </Grid>

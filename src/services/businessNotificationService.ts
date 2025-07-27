@@ -16,9 +16,9 @@ interface MeetingData {
   id: RecordId | string;
   meeting_name: string;
   case_id: RecordId | string;
-  participants?: (RecordId | string)[];
   scheduled_start_date: string;
   scheduled_end_date: string;
+  participants: (RecordId | string)[];
 }
 
 interface CaseData {
@@ -29,7 +29,7 @@ interface CaseData {
 }
 
 class BusinessNotificationService {
-  private clientGetter: () => Promise<SurrealWorkerAPI> | null = null;
+  private clientGetter: (() => Promise<SurrealWorkerAPI>) | null = null;
   
   /**
    * 设置客户端获取函数 - 在应用启动时由 SurrealProvider 调用
@@ -52,7 +52,15 @@ class BusinessNotificationService {
       }
     }
     
-    return await this.clientGetter();
+    if (!this.clientGetter) {
+      throw new Error('SurrealDB client getter not set');
+    }
+    
+    const client = await this.clientGetter();
+    if (!client) {
+      throw new Error('SurrealDB client is null');
+    }
+    return client;
   }
   /**
    * Send notification when claim is reviewed
@@ -61,7 +69,7 @@ class BusinessNotificationService {
     claimId: RecordId | string,
     reviewStatus: string,
     reviewComments?: string,
-    reviewerId?: RecordId | string
+    _reviewerId?: RecordId | string
   ) {
     try {
       const client = await this.getClient();
@@ -77,12 +85,6 @@ class BusinessNotificationService {
         return;
       }
       const claimData = claim[0];
-      
-      // Get case details
-      const caseData = await queryWithAuth<CaseData[]>(client,
-        `SELECT id, case_number, name FROM case WHERE id = $caseId`,
-        { caseId: claimData.case_id }
-      );
       
       const title = `债权审核通知 - ${claimData.claim_number}`;
       let content = `您提交的债权申报（编号：${claimData.claim_number}）已完成审核。\n`;
@@ -137,26 +139,32 @@ class BusinessNotificationService {
   async notifyMeetingChange(
     meetingId: RecordId | string,
     changeType: 'created' | 'updated' | 'cancelled',
-    changedBy: RecordId | string
+    _changedBy: RecordId | string
   ) {
     try {
       const client = await this.getClient();
       
       // Get meeting details
-      const [meeting] = await client.query<MeetingData[]>(
+      const meetingResult = await client.query<[MeetingData[]]>(
         `SELECT * FROM ${String(meetingId)}`
       );
       
-      if (!meeting || meeting.length === 0) {
+      if (!meetingResult || !meetingResult[0] || meetingResult[0].length === 0) {
         console.error(`Meeting not found: ${meetingId}`);
         return;
       }
-      const meetingData = meeting[0];
+      const meetingData = meetingResult[0][0];
       
       // Get case details
-      const [caseData] = await client.query<CaseData[]>(
+      const caseResult = await client.query<[CaseData[]]>(
         `SELECT id, case_number, name FROM ${String(meetingData.case_id)}`
       );
+      
+      if (!caseResult || !caseResult[0] || caseResult[0].length === 0) {
+        console.error(`Case not found: ${meetingData.case_id}`);
+        return;
+      }
+      const caseData = caseResult[0][0];
       
       let title = '';
       let content = '';
@@ -169,7 +177,7 @@ class BusinessNotificationService {
           title = `新会议通知 - ${meetingData.meeting_name}`;
           content = `新会议已安排：\n\n` +
             `会议名称：${meetingData.meeting_name}\n` +
-            `案件编号：${caseData[0].case_number}\n` +
+            `案件编号：${caseData.case_number}\n` +
             `开始时间：${meetingTime}`;
           break;
           
@@ -177,7 +185,7 @@ class BusinessNotificationService {
           title = `会议变更通知 - ${meetingData.meeting_name}`;
           content = `会议信息已更新：\n\n` +
             `会议名称：${meetingData.meeting_name}\n` +
-            `案件编号：${caseData[0].case_number}\n` +
+            `案件编号：${caseData.case_number}\n` +
             `新的开始时间：${meetingTime}\n\n` +
             `请注意查看最新的会议安排。`;
           priority = 'HIGH';
@@ -187,7 +195,7 @@ class BusinessNotificationService {
           title = `会议取消通知 - ${meetingData.meeting_name}`;
           content = `会议已取消：\n\n` +
             `会议名称：${meetingData.meeting_name}\n` +
-            `案件编号：${caseData[0].case_number}\n` +
+            `案件编号：${caseData.case_number}\n` +
             `原定时间：${meetingTime}`;
           priority = 'HIGH';
           break;
@@ -217,7 +225,7 @@ class BusinessNotificationService {
         { case_id: meetingData.case_id }
       );
       
-      if (caseMembers && caseMembers.length > 0) {
+      if (caseMembers && Array.isArray(caseMembers) && caseMembers.length > 0) {
         for (const member of caseMembers) {
           // Skip if already notified as participant
                      if (!meetingData.participants || !meetingData.participants.some((p: RecordId | string) => String(p) === String(member.user_id))) {
@@ -247,21 +255,21 @@ class BusinessNotificationService {
     caseId: RecordId | string,
     oldStatus: string,
     newStatus: string,
-    changedBy: RecordId | string
+    _changedBy: RecordId | string
   ) {
     try {
       const client = await this.getClient();
       
       // Get case details
-      const [caseData] = await client.query<CaseData[]>(
+      const caseResult = await client.query<[CaseData[]]>(
         `SELECT * FROM ${String(caseId)}`
       );
       
-      if (!caseData || caseData.length === 0) {
+      if (!caseResult || !caseResult[0] || caseResult[0].length === 0) {
         console.error(`Case not found: ${caseId}`);
         return;
       }
-      const caseInfo = caseData[0];
+      const caseInfo = caseResult[0][0];
       
       const title = `案件状态变更通知 - ${caseInfo.case_number}`;
       const content = `案件状态已更新：\n\n` +
@@ -276,7 +284,7 @@ class BusinessNotificationService {
         { case_id: caseId }
       );
       
-      if (caseMembers && caseMembers.length > 0) {
+      if (caseMembers && Array.isArray(caseMembers) && caseMembers.length > 0) {
         for (const member of caseMembers) {
           await messageService.sendNotification({
             type: 'BUSINESS_NOTIFICATION',
@@ -363,21 +371,24 @@ class BusinessNotificationService {
       const client = await this.getClient();
       
       // Get creditor details
-      const [creditor] = await client.query(
+      const creditorResult = await client.query<Array<{ name: string; legal_id: string }>[]>(
         `SELECT name, legal_id FROM ${String(creditorId)}`
       );
       
       // Get case details
-      const [caseData] = await client.query<CaseData[]>(
+      const caseResult = await client.query<CaseData[]>(
         `SELECT case_number, name FROM ${String(caseId)}`
       );
       
-      if (!creditor || creditor.length === 0 || !caseData || caseData.length === 0) {
+      if (!Array.isArray(creditorResult) || creditorResult.length === 0 || 
+          !Array.isArray(creditorResult[0]) || creditorResult[0].length === 0 ||
+          !Array.isArray(caseResult) || caseResult.length === 0 || 
+          !Array.isArray(caseResult[0]) || caseResult[0].length === 0) {
         console.error('Creditor or case not found');
         return;
       }
-      const creditorInfo = creditor[0];
-      const caseInfo = caseData[0];
+      const creditorInfo = creditorResult[0][0];
+      const caseInfo = caseResult[0][0];
       
       const title = `新债权人录入通知`;
       const content = `案件 ${caseInfo.case_number} 新增债权人：\n\n` +
@@ -386,14 +397,17 @@ class BusinessNotificationService {
         `请及时关注债权申报情况。`;
       
       // Notify case lead
-      const [caseLead] = await client.query(
+      const caseLeadResult = await client.query<Array<{ case_lead_user_id: RecordId | string }>[]>(
         `SELECT case_lead_user_id FROM ${String(caseId)}`
       );
       
-      if (caseLead && caseLead.length > 0 && caseLead[0]?.case_lead_user_id && String(caseLead[0].case_lead_user_id) !== String(addedBy)) {
+      if (Array.isArray(caseLeadResult) && caseLeadResult.length > 0 && 
+          Array.isArray(caseLeadResult[0]) && caseLeadResult[0].length > 0 &&
+          caseLeadResult[0][0]?.case_lead_user_id && 
+          String(caseLeadResult[0][0].case_lead_user_id) !== String(addedBy)) {
         await messageService.sendNotification({
           type: 'BUSINESS_NOTIFICATION',
-          target_user_id: caseLead[0].case_lead_user_id,
+          target_user_id: caseLeadResult[0][0].case_lead_user_id,
           case_id: caseId,
           title: title,
           content: content,

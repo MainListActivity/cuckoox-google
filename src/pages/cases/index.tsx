@@ -164,7 +164,7 @@ const CaseListPage: React.FC = () => {
         const shouldClearCache = !sessionStorage.getItem('case_cache_initialized');
         if (shouldClearCache) {
           console.log('CaseList: Clearing cache on first load');
-          await client.clearTableCache?.('case');
+          // Note: clearTableCache method not available, using session storage flag instead
           sessionStorage.setItem('case_cache_initialized', 'true');
         }
         
@@ -492,7 +492,7 @@ const CaseListPage: React.FC = () => {
     setCreateCaseOpen(false);
   };
 
-  const handleCaseCreated = (caseId: string, caseName: string) => {
+  const handleCaseCreated = (_caseId: string, caseName: string) => {
     // Show success message
     showSuccess(`案件"${caseName}"创建成功！您可以在案件详情页面编辑立案材料。`);
     

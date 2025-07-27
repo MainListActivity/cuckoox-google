@@ -26,12 +26,18 @@ interface MobileOptimizedLayoutProps {
   subtitle?: string;
   onBack?: () => void;
   onMenuClick?: () => void;
+  showBackButton?: boolean;
   showFab?: boolean;
   fabIcon?: string;
   onFabClick?: () => void;
   fabLabel?: string;
   headerActions?: React.ReactNode;
   backgroundColor?: string;
+  fabConfig?: {
+    icon: string;
+    action: () => void;
+    ariaLabel: string;
+  };
 }
 
 /**
@@ -44,12 +50,14 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({
   subtitle,
   onBack,
   onMenuClick,
+  showBackButton = true,
   showFab = false,
   fabIcon = mdiPlus,
   onFabClick,
   fabLabel = '添加',
   headerActions,
   backgroundColor,
+  fabConfig,
 }) => {
   const theme = useTheme();
   const { isMobile } = useResponsiveLayout();
@@ -86,7 +94,7 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({
       >
         <Toolbar sx={{ px: 1, minHeight: '56px !important' }}>
           {/* 返回按钮 */}
-          {onBack && (
+          {(onBack && showBackButton) && (
             <IconButton
               edge="start"
               onClick={onBack}
@@ -160,12 +168,12 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({
       </Box>
 
       {/* 浮动操作按钮 */}
-      {showFab && onFabClick && (
+      {(showFab && onFabClick) || fabConfig ? (
         <Zoom in={!trigger}>
           <Fab
             color="primary"
-            aria-label={fabLabel}
-            onClick={onFabClick}
+            aria-label={fabConfig?.ariaLabel || fabLabel}
+            onClick={fabConfig?.action || onFabClick}
             sx={{
               position: 'fixed',
               bottom: 16,
@@ -184,11 +192,11 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({
             }}
           >
             <SvgIcon>
-              <path d={fabIcon} />
+              <path d={fabConfig?.icon || fabIcon} />
             </SvgIcon>
           </Fab>
         </Zoom>
-      )}
+      ) : null}
     </Box>
   );
 };

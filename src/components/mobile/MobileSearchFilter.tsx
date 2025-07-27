@@ -14,9 +14,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Divider,
   useTheme,
-  Slide,
   Collapse,
 } from '@mui/material';
 import {
@@ -44,6 +42,7 @@ interface MobileSearchFilterProps {
   onSearchChange: (value: string) => void;
   searchPlaceholder?: string;
   filters?: FilterOption[];
+  filterOptions?: FilterOption[]; // backward compatibility
   onFilterChange?: (filterId: string, value: any) => void;
   onClearFilters?: () => void;
   activeFilterCount?: number;
@@ -60,6 +59,7 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
   onSearchChange,
   searchPlaceholder = '搜索...',
   filters = [],
+  filterOptions = [], // backward compatibility
   onFilterChange,
   onClearFilters,
   activeFilterCount = 0,
@@ -71,15 +71,8 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [expandedFilters, setExpandedFilters] = useState<Set<string>>(new Set());
 
-  const toggleFilterExpansion = (filterId: string) => {
-    const newExpanded = new Set(expandedFilters);
-    if (newExpanded.has(filterId)) {
-      newExpanded.delete(filterId);
-    } else {
-      newExpanded.add(filterId);
-    }
-    setExpandedFilters(newExpanded);
-  };
+  // Merge filters and filterOptions for backward compatibility
+  const allFilters = filters.length > 0 ? filters : filterOptions;
 
   const handleFilterChange = (filterId: string, value: any) => {
     onFilterChange?.(filterId, value);
@@ -189,7 +182,7 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
 
         {/* 筛选控件 */}
         <Stack spacing={3}>
-          {filters.map((filter) => renderFilterControl(filter))}
+          {allFilters.map((filter) => renderFilterControl(filter))}
         </Stack>
 
         {/* 底部操作按钮 */}
@@ -220,13 +213,13 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
   const renderDesktopFilters = () => (
     <Box sx={{ mb: 2 }}>
       <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-        {filters.slice(0, compact ? 2 : 4).map((filter) => (
+        {allFilters.slice(0, compact ? 2 : 4).map((filter) => (
           <Box key={filter.id} sx={{ minWidth: 200 }}>
             {renderFilterControl(filter)}
           </Box>
         ))}
         
-        {filters.length > (compact ? 2 : 4) && (
+        {allFilters.length > (compact ? 2 : 4) && (
           <Button
             variant="outlined"
             startIcon={
@@ -238,7 +231,7 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
               if (expandedFilters.size > 0) {
                 setExpandedFilters(new Set());
               } else {
-                setExpandedFilters(new Set(filters.map(f => f.id)));
+                setExpandedFilters(new Set(allFilters.map(f => f.id)));
               }
             }}
           >
@@ -251,7 +244,7 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
       <Collapse in={expandedFilters.size > 0}>
         <Box sx={{ mt: 2 }}>
           <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-            {filters.slice(compact ? 2 : 4).map((filter) => (
+            {allFilters.slice(compact ? 2 : 4).map((filter) => (
               <Box key={filter.id} sx={{ minWidth: 200 }}>
                 {renderFilterControl(filter)}
               </Box>
@@ -281,7 +274,7 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
                   </SvgIcon>
                 </InputAdornment>
               ),
-              endAdornment: isMobile && filters.length > 0 && (
+              endAdornment: isMobile && allFilters.length > 0 && (
                 <InputAdornment position="end">
                   <IconButton
                     onClick={() => setFilterDrawerOpen(true)}
@@ -337,7 +330,7 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
       )}
 
       {/* 筛选控件 */}
-      {filters.length > 0 && (
+      {allFilters.length > 0 && (
         <>
           {isMobile ? renderMobileFilterDrawer() : renderDesktopFilters()}
         </>

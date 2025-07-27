@@ -58,7 +58,7 @@ import {
 import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
 import ClaimMobileCard from '@/src/components/mobile/ClaimMobileCard';
 import ResponsiveStatsCards, { StatCardData } from '@/src/components/common/ResponsiveStatsCards';
-import MobileSearchFilter from '@/src/components/mobile/MobileSearchFilter';
+import MobileSearchFilter, { FilterOption } from '@/src/components/mobile/MobileSearchFilter';
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 // Import the new dialog
@@ -478,7 +478,7 @@ const ClaimListPage: React.FC = () => {
     setSelected([]);
   };
 
-  const handleClick = (event: React.MouseEvent<unknown>, id: string) => {
+  const handleClick = (_event: React.MouseEvent<unknown>, id: string) => {
     const selectedIndex = selected.indexOf(id);
     let newSelected: readonly string[] = [];
     if (selectedIndex === -1) {
@@ -671,13 +671,19 @@ const ClaimListPage: React.FC = () => {
   };
 
   // Mobile search and filter options
-  const mobileFilterOptions = [
-    { value: '', label: '所有状态' },
-    { value: '待审核', label: '待审核' },
-    { value: '部分通过', label: '部分通过' },
-    { value: '已驳回', label: '已驳回' },
-    { value: '审核通过', label: '审核通过' },
-  ];
+  const mobileFilterOptions: FilterOption[] = [{
+    id: 'status',
+    label: '审核状态',
+    type: 'select',
+    value: filterStatus,
+    options: [
+      { value: '', label: '所有状态' },
+      { value: '待审核', label: '待审核' },
+      { value: '部分通过', label: '部分通过' },
+      { value: '已驳回', label: '已驳回' },
+      { value: '审核通过', label: '审核通过' },
+    ]
+  }];
 
   // Mobile rendering
   if (isMobile) {
@@ -700,7 +706,6 @@ const ClaimListPage: React.FC = () => {
               variant="compact"
               columns={{ xs: 2, sm: 2 }}
               showTrend={false}
-              animationEnabled={true}
             />
           </Box>
 
@@ -710,10 +715,12 @@ const ClaimListPage: React.FC = () => {
               searchValue={searchTerm}
               onSearchChange={setSearchTerm}
               searchPlaceholder="搜索债权编号、债权人等..."
-              filterOptions={mobileFilterOptions}
-              selectedFilter={filterStatus}
-              onFilterChange={setFilterStatus}
-              filterLabel="审核状态"
+              filters={mobileFilterOptions}
+              onFilterChange={(filterId, value) => {
+                if (filterId === 'status') {
+                  setFilterStatus(value);
+                }
+              }}
             />
           </Box>
 
@@ -1143,7 +1150,7 @@ const ClaimListPage: React.FC = () => {
           count={totalClaims}
           rowsPerPage={rowsPerPage}
           page={page}
-          onPageChange={(event, newPage) => setPage(newPage)}
+          onPageChange={(_event, newPage) => setPage(newPage)}
           onRowsPerPageChange={(event) => {
             setRowsPerPage(parseInt(event.target.value, 10));
             setPage(0);
