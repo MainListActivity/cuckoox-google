@@ -1,6 +1,7 @@
 import { RecordId } from 'surrealdb';
 import { useSurrealClientSingleton } from '../contexts/SurrealProvider';
 import type { SurrealWorkerAPI } from '../contexts/SurrealProvider';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { messageService } from './messageService';
 
 interface ClaimData {
@@ -66,19 +67,21 @@ class BusinessNotificationService {
       const client = await this.getClient();
       
       // Get claim details
-      const [claim] = await client.query<ClaimData[]>(
-        `SELECT id, claim_number, case_id, created_by, creditor_id FROM ${String(claimId)}`
+      const claim = await queryWithAuth<ClaimData[]>(client,
+        `SELECT id, claim_number, case_id, created_by, creditor_id FROM claim WHERE id = $claimId`,
+        { claimId }
       );
       
-      if (!claim || claim.length === 0) {
+      if (!Array.isArray(claim) || claim.length === 0) {
         console.error(`Claim not found: ${claimId}`);
         return;
       }
       const claimData = claim[0];
       
       // Get case details
-      const [caseData] = await client.query<CaseData[]>(
-        `SELECT id, case_number, name FROM ${String(claimData.case_id)}`
+      const caseData = await queryWithAuth<CaseData[]>(client,
+        `SELECT id, case_number, name FROM case WHERE id = $caseId`,
+        { caseId: claimData.case_id }
       );
       
       const title = `债权审核通知 - ${claimData.claim_number}`;

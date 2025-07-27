@@ -1,4 +1,5 @@
 import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { RecordId } from 'surrealdb';
 
 export interface Role {
@@ -16,7 +17,7 @@ export const getAllRoles = async (client: SurrealWorkerAPI): Promise<Role[]> => 
   console.log('[RoleService] Fetching all roles from database');
   
   try {
-    const result = await client.query<Role[]>('SELECT * FROM role ORDER BY name');
+    const result = await queryWithAuth<Role[]>(client, 'SELECT * FROM role ORDER BY name');
     
     if (!Array.isArray(result) || result.length === 0) {
       console.warn('[RoleService] No roles found in database');
@@ -40,15 +41,16 @@ export const getRoleById = async (client: SurrealWorkerAPI, roleId: RecordId): P
   console.log(`[RoleService] Fetching role by ID: ${roleId}`);
   
   try {
-    const result = await client.select(roleId);
+    const result = await queryWithAuth<Role[]>(client, 'SELECT * FROM $roleId LIMIT 1', { roleId });
     
-    if (!result) {
+    if (!Array.isArray(result) || result.length === 0) {
       console.warn(`[RoleService] Role not found: ${roleId}`);
       return null;
     }
     
-    console.log(`[RoleService] Found role:`, result.name);
-    return result;
+    const role = result[0];
+    console.log(`[RoleService] Found role:`, role.name);
+    return role;
   } catch (error) {
     console.error(`[RoleService] Error fetching role ${roleId}:`, error);
     throw new Error('获取角色信息失败');
@@ -62,7 +64,7 @@ export const getRoleByName = async (client: SurrealWorkerAPI, roleName: string):
   console.log(`[RoleService] Fetching role by name: ${roleName}`);
   
   try {
-    const result = await client.query<Role[]>('SELECT * FROM role WHERE name = $roleName LIMIT 1', {
+    const result = await queryWithAuth<Role[]>(client, 'SELECT * FROM role WHERE name = $roleName LIMIT 1', {
       roleName
     });
     
@@ -89,7 +91,7 @@ export const getCaseMemberRoles = async (client: SurrealWorkerAPI): Promise<Role
   
   try {
     // 获取适合案件成员的角色，排除系统管理员角色
-    const result = await client.query<Role[]>(
+    const result = await queryWithAuth<Role[]>(client,
       `
       SELECT * FROM role 
       WHERE name != 'admin' 
