@@ -47,6 +47,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Include responsive styles */
+@import './responsive.css';
+
 /* Global styles */
 body {
   font-family: 'Roboto', sans-serif;

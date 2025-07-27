@@ -1,0 +1,397 @@
+/* 响应式优化样式 */
+
+/* 全局响应式设置 */
+:root {
+  /* 移动端优化的间距 */
+  --mobile-padding: 8px;
+  --mobile-margin: 8px;
+  --mobile-border-radius: 8px;
+  
+  /* 桌面端间距 */
+  --desktop-padding: 16px;
+  --desktop-margin: 16px;
+  --desktop-border-radius: 12px;
+  
+  /* 响应式字体大小 */
+  --mobile-font-size-small: 12px;
+  --mobile-font-size-medium: 14px;
+  --mobile-font-size-large: 16px;
+  --mobile-font-size-xlarge: 18px;
+  
+  --desktop-font-size-small: 14px;
+  --desktop-font-size-medium: 16px;
+  --desktop-font-size-large: 18px;
+  --desktop-font-size-xlarge: 20px;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  /* 全局容器优化 */
+  .MuiContainer-root {
+    padding-left: var(--mobile-padding) !important;
+    padding-right: var(--mobile-padding) !important;
+  }
+  
+  /* 卡片优化 */
+  .MuiCard-root {
+    border-radius: var(--mobile-border-radius) !important;
+    margin-bottom: var(--mobile-margin) !important;
+  }
+  
+  /* 按钮优化 */
+  .MuiButton-root {
+    min-height: 44px !important; /* 符合移动端触摸标准 */
+    border-radius: var(--mobile-border-radius) !important;
+  }
+  
+  .MuiButton-sizeSmall {
+    min-height: 36px !important;
+    padding: 6px 12px !important;
+  }
+  
+  /* 输入框优化 */
+  .MuiTextField-root .MuiInputBase-root {
+    min-height: 44px !important;
+    border-radius: var(--mobile-border-radius) !important;
+  }
+  
+  .MuiTextField-root .MuiInputBase-input {
+    font-size: var(--mobile-font-size-medium) !important;
+  }
+  
+  /* 表格优化 - 移动端隐藏 */
+  .mobile-hidden {
+    display: none !important;
+  }
+  
+  /* 移动端卡片列表 */
+  .mobile-card-list {
+    padding: 0 !important;
+  }
+  
+  .mobile-card-item {
+    margin-bottom: var(--mobile-margin) !important;
+    border-radius: var(--mobile-border-radius) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  /* 移动端工具栏 */
+  .MuiToolbar-root {
+    min-height: 56px !important;
+    padding-left: var(--mobile-padding) !important;
+    padding-right: var(--mobile-padding) !important;
+  }
+  
+  /* 移动端对话框 */
+  .MuiDialog-paper {
+    margin: var(--mobile-margin) !important;
+    border-radius: var(--mobile-border-radius) !important;
+    max-height: calc(100vh - 32px) !important;
+  }
+  
+  /* 移动端底部抽屉 */
+  .mobile-bottom-drawer .MuiDrawer-paper {
+    border-top-left-radius: 16px !important;
+    border-top-right-radius: 16px !important;
+    max-height: 80vh !important;
+  }
+  
+  /* 移动端FAB */
+  .MuiFab-root {
+    position: fixed !important;
+    bottom: 16px !important;
+    right: 16px !important;
+    z-index: 1050 !important;
+  }
+  
+  /* 移动端分页 */
+  .MuiTablePagination-root {
+    overflow-x: auto !important;
+  }
+  
+  .MuiTablePagination-toolbar {
+    padding-left: var(--mobile-padding) !important;
+    padding-right: var(--mobile-padding) !important;
+  }
+  
+  /* 移动端芯片 */
+  .MuiChip-root {
+    height: 28px !important;
+    font-size: 12px !important;
+  }
+  
+  /* 移动端头像 */
+  .MuiAvatar-root {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 14px !important;
+  }
+  
+  /* 移动端图标按钮 */
+  .MuiIconButton-root {
+    padding: 8px !important;
+  }
+  
+  .MuiIconButton-sizeSmall {
+    padding: 4px !important;
+  }
+}
+
+/* 平板端优化 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .MuiContainer-root {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  
+  /* 平板端表格优化 */
+  .tablet-hidden {
+    display: none !important;
+  }
+  
+  /* 平板端卡片网格 */
+  .tablet-grid-2 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 16px !important;
+  }
+  
+  .tablet-grid-3 {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 16px !important;
+  }
+}
+
+/* 桌面端优化 */
+@media (min-width: 1025px) {
+  .MuiContainer-root {
+    padding-left: var(--desktop-padding) !important;
+    padding-right: var(--desktop-padding) !important;
+  }
+  
+  .MuiCard-root {
+    border-radius: var(--desktop-border-radius) !important;
+    margin-bottom: var(--desktop-margin) !important;
+  }
+  
+  .MuiButton-root {
+    border-radius: var(--desktop-border-radius) !important;
+  }
+  
+  .MuiTextField-root .MuiInputBase-root {
+    border-radius: var(--desktop-border-radius) !important;
+  }
+  
+  /* 桌面端悬停效果 */
+  .desktop-hover:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+    transition: all 0.3s ease !important;
+  }
+  
+  /* 桌面端表格悬停 */
+  .MuiTableRow-root:hover {
+    background-color: rgba(0, 0, 0, 0.04) !important;
+  }
+}
+
+/* 高分辨率屏幕优化 */
+@media (min-width: 1440px) {
+  .MuiContainer-maxWidthLg {
+    max-width: 1200px !important;
+  }
+  
+  .MuiContainer-maxWidthXl {
+    max-width: 1400px !important;
+  }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+  /* 增大触摸目标 */
+  .MuiIconButton-root {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  
+  .MuiButton-root {
+    min-height: 44px !important;
+  }
+  
+  .MuiMenuItem-root {
+    min-height: 44px !important;
+  }
+  
+  /* 移除悬停效果 */
+  .MuiButton-root:hover {
+    background-color: transparent !important;
+  }
+  
+  .MuiIconButton-root:hover {
+    background-color: transparent !important;
+  }
+}
+
+/* 横屏模式优化 */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* 减少垂直间距 */
+  .MuiToolbar-root {
+    min-height: 48px !important;
+  }
+  
+  .MuiCard-root {
+    margin-bottom: 8px !important;
+  }
+  
+  /* 优化对话框高度 */
+  .MuiDialog-paper {
+    max-height: 90vh !important;
+  }
+}
+
+/* 可访问性优化 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+  .MuiCard-root {
+    border: 1px solid currentColor !important;
+  }
+  
+  .MuiButton-outlined {
+    border-width: 2px !important;
+  }
+  
+  .MuiChip-root {
+    border: 1px solid currentColor !important;
+  }
+}
+
+/* 深色模式优化 */
+@media (prefers-color-scheme: dark) {
+  .mobile-card-item {
+    box-shadow: 0 1px 3px rgba(255, 255, 255, 0.1) !important;
+  }
+  
+  .desktop-hover:hover {
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1) !important;
+  }
+}
+
+/* PWA 全屏模式优化 */
+@media (display-mode: standalone) {
+  /* 为状态栏留出空间 */
+  .pwa-safe-area-top {
+    padding-top: env(safe-area-inset-top) !important;
+  }
+  
+  .pwa-safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+  
+  .pwa-safe-area-left {
+    padding-left: env(safe-area-inset-left) !important;
+  }
+  
+  .pwa-safe-area-right {
+    padding-right: env(safe-area-inset-right) !important;
+  }
+  
+  /* PWA 工具栏优化 */
+  .MuiAppBar-root {
+    padding-top: env(safe-area-inset-top) !important;
+  }
+}
+
+/* 打印样式优化 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .MuiCard-root {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+  }
+  
+  .MuiButton-root {
+    display: none !important;
+  }
+  
+  .MuiFab-root {
+    display: none !important;
+  }
+}
+
+/* 工具类 */
+.responsive-hide-mobile {
+  @media (max-width: 768px) {
+    display: none !important;
+  }
+}
+
+.responsive-hide-tablet {
+  @media (min-width: 769px) and (max-width: 1024px) {
+    display: none !important;
+  }
+}
+
+.responsive-hide-desktop {
+  @media (min-width: 1025px) {
+    display: none !important;
+  }
+}
+
+.responsive-show-mobile {
+  display: none !important;
+  @media (max-width: 768px) {
+    display: block !important;
+  }
+}
+
+.responsive-show-tablet {
+  display: none !important;
+  @media (min-width: 769px) and (max-width: 1024px) {
+    display: block !important;
+  }
+}
+
+.responsive-show-desktop {
+  display: none !important;
+  @media (min-width: 1025px) {
+    display: block !important;
+  }
+}
+
+/* 响应式文本大小 */
+.responsive-text-mobile {
+  @media (max-width: 768px) {
+    font-size: var(--mobile-font-size-medium) !important;
+  }
+}
+
+.responsive-text-small-mobile {
+  @media (max-width: 768px) {
+    font-size: var(--mobile-font-size-small) !important;
+  }
+}
+
+/* 响应式间距 */
+.responsive-padding-mobile {
+  @media (max-width: 768px) {
+    padding: var(--mobile-padding) !important;
+  }
+}
+
+.responsive-margin-mobile {
+  @media (max-width: 768px) {
+    margin: var(--mobile-margin) !important;
+  }
+}
