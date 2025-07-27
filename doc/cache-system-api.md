@@ -99,6 +99,188 @@ const response = await sendMessage({
 // 响应格式
 interface SubscriptionStatusResponse {
   success: boolean;
+  subscriptions: {
+    [table: string]: {
+      active: boolean;
+      lastUpdate: number;
+      errorCount: number;
+    };
+  };
+}
+```
+
+## 债权操作追踪系统 API
+
+### 债权操作记录查询
+
+```typescript
+// 获取债权操作历史
+const operationHistory = await surreal.query(`
+  SELECT * FROM claim_operation_log 
+  WHERE claim_id = $claimId 
+  ORDER BY operation_time DESC 
+  LIMIT 50
+`, { claimId: 'claim:123' });
+
+// 获取操作统计
+const operationStats = await surreal.query(`
+  SELECT 
+    operation_type,
+    count() as operation_count,
+    avg(duration) as avg_duration
+  FROM claim_operation_log 
+  WHERE claim_id = $claimId 
+  GROUP BY operation_type
+`, { claimId: 'claim:123' });
+```
+
+**注意**: 债权操作追踪系统的数据库表结构正在开发中，上述查询需要在表结构创建完成后才能使用。
+
+**当前状态**: 
+- ✅ 服务层已实现：`ClaimOperationService`, `ClaimVersionService`, `ClaimStatusFlowService`, `ClaimAuditService`
+- ✅ 前端组件已实现：`ClaimOperationHistory`, `ClaimVersionComparison`, `ClaimStatusFlowChart`
+- ❌ 数据库表结构待创建：`claim_operation_log`, `claim_version_history`, `claim_status_flow`, `claim_access_log`
+
+### 债权版本历史查询
+
+```typescript
+// 获取版本历史
+const versionHistory = await surreal.query(`
+  SELECT * FROM claim_version_history 
+  WHERE claim_id = $claimId 
+  ORDER BY version_number DESC
+`, { claimId: 'claim:123' });
+
+// 版本对比查询
+const versionDiff = await surreal.query(`
+  SELECT 
+    v1.snapshot_data as from_data,
+    v2.snapshot_data as to_data,
+    v1.version_number as from_version,
+    v2.version_number as to_version
+  FROM claim_version_history v1, claim_version_history v2
+  WHERE v1.claim_id = $claimId AND v2.claim_id = $claimId
+    AND v1.version_number = $fromVersion 
+    AND v2.version_number = $toVersion
+`, { 
+  claimId: 'claim:123', 
+  fromVersion: 1, 
+  toVersion: 2 
+});
+```
+
+### 债权状态流转查询
+
+```typescript
+// 获取状态流转历史
+const statusFlow = await surreal.query(`
+  SELECT 
+    *,
+    from_status.name as from_status_name,
+    to_status.name as to_status_name,
+    operator_id.name as operator_name
+  FROM claim_status_flow 
+  WHERE claim_id = $claimId 
+  ORDER BY transition_time DESC
+`, { claimId: 'claim:123' });
+
+// 状态流转统计
+const statusStats = await surreal.query(`
+  SELECT 
+    to_status.name as status_name,
+    count() as transition_count,
+    avg(duration_in_previous_status) as avg_duration
+  FROM claim_status_flow 
+  WHERE claim_id = $claimId 
+  GROUP BY to_status
+`, { claimId: 'claim:123' });
+```
+
+### 债权访问审计查询
+
+```typescript
+// 获取访问日志
+const accessLog = await surreal.query(`
+  SELECT 
+    *,
+    accessor_id.name as accessor_name
+  FROM claim_access_log 
+  WHERE claim_id = $claimId 
+  ORDER BY access_time DESC 
+  LIMIT 100
+`, { claimId: 'claim:123' });
+
+// 访问统计
+const accessStats = await surreal.query(`
+  SELECT 
+    access_type,
+    count() as access_count,
+    count(DISTINCT accessor_id) as unique_accessors
+  FROM claim_access_log 
+  WHERE claim_id = $claimId 
+  GROUP BY access_type
+`, { claimId: 'claim:123' });
+```
+
+## 债权操作追踪缓存配置
+
+### 缓存策略配置
+
+```typescript
+const claimTrackingCacheConfig = {
+  tables: [
+    'claim_operation_log',
+    'claim_version_history', 
+    'claim_status_flow',
+    'claim_access_log'
+  ],
+  strategy: 'HYBRID',
+  ttl: 300000, // 5分钟
+  preload: true,
+  subscriptions: {
+    'claim_operation_log': {
+      condition: 'claim_id = $current_claim_id',
+      autoRefresh: true,
+      refreshInterval: 30000 // 30秒
+    },
+    'claim_version_history': {
+      condition: 'claim_id = $current_claim_id',
+      autoRefresh: false // 版本历史不需要频繁刷新
+    },
+    'claim_status_flow': {
+      condition: 'claim_id = $current_claim_id',
+      autoRefresh: true,
+      refreshInterval: 60000 // 1分钟
+    },
+    'claim_access_log': {
+      condition: 'claim_id = $current_claim_id',
+      autoRefresh: false // 访问日志按需加载
+    }
+  }
+};
+```
+
+### 预加载债权追踪数据
+
+```typescript
+// 预加载当前债权的追踪数据
+const response = await sendMessage({
+  type: 'preload_cache',
+  payload: {
+    tables: [
+      'claim_operation_log',
+      'claim_version_history',
+      'claim_status_flow'
+    ],
+    userId: 'user:123',
+    caseId: 'case:456',
+    claimId: 'claim:789' // 新增债权ID参数
+  }
+});
+```
+
+interface SubscriptionStatusResponse {
+  success: boolean;
   subscriptionStatus: {
     activeSubscriptions: Array<{
       id: string;

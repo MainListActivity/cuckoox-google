@@ -114,6 +114,9 @@ DEFINE FIELD reviewer_id ON claim TYPE option<record<user>> PERMISSIONS FULL;
 DEFINE FIELD status ON claim TYPE string DEFAULT '草稿' PERMISSIONS FULL;
 DEFINE FIELD submission_time ON claim TYPE datetime VALUE $before OR time::now() PERMISSIONS FULL;
 DEFINE FIELD updated_at ON claim TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
+DEFINE FIELD current_version ON claim TYPE int DEFAULT 1 PERMISSIONS FULL;
+DEFINE FIELD last_operation_time ON claim TYPE datetime VALUE time::now() PERMISSIONS FULL;
+DEFINE FIELD operation_count ON claim TYPE int DEFAULT 0 PERMISSIONS FULL;
 
 DEFINE INDEX claim_case_creditor_idx ON claim FIELDS case_id, creditor_id;
 DEFINE INDEX claim_case_number_idx ON claim FIELDS case_id, claim_number UNIQUE;
@@ -134,6 +137,10 @@ DEFINE INDEX claim_fulltext_description_idx ON claim FIELDS asserted_claim_detai
 -- 优化债权搜索性能的复合索引
 DEFINE INDEX claim_search_optimized_idx ON claim FIELDS case_id, status, created_at;
 DEFINE INDEX claim_creditor_search_idx ON claim FIELDS case_id, creditor_id, status;
+
+-- 版本控制和操作追踪相关索引
+DEFINE INDEX claim_version_idx ON claim FIELDS id, current_version;
+DEFINE INDEX claim_last_operation_idx ON claim FIELDS last_operation_time DESC;
 
 
 -- ------------------------------
@@ -390,6 +397,126 @@ DEFINE FIELD updated_at ON conversation_participant TYPE datetime READONLY VALUE
 DEFINE INDEX conversation_participant_unique_idx ON conversation_participant FIELDS conversation_id, user_id UNIQUE;
 DEFINE INDEX conversation_participant_user_idx ON conversation_participant FIELDS user_id;
 DEFINE INDEX conversation_participant_unread_idx ON conversation_participant FIELDS user_id, unread_count;
+
+-- ------------------------------
+-- TABLE: claim_operation_log
+-- ------------------------------
+
+DEFINE TABLE claim_operation_log TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'read'],
+  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'create'],
+  FOR update NONE,
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD claim_id ON claim_operation_log TYPE record<claim> PERMISSIONS FULL;
+DEFINE FIELD operation_type ON claim_operation_log TYPE string ASSERT $value INSIDE ['create', 'update', 'submit', 'withdraw', 'review', 'approve', 'reject', 'supplement_request', 'delete', 'view'] PERMISSIONS FULL;
+DEFINE FIELD operation_description ON claim_operation_log TYPE string PERMISSIONS FULL;
+DEFINE FIELD operator_id ON claim_operation_log TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD operator_name ON claim_operation_log TYPE string PERMISSIONS FULL;
+DEFINE FIELD operator_role ON claim_operation_log TYPE string PERMISSIONS FULL;
+DEFINE FIELD operation_time ON claim_operation_log TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD ip_address ON claim_operation_log TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD user_agent ON claim_operation_log TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD operation_details ON claim_operation_log TYPE option<object> PERMISSIONS FULL;
+DEFINE FIELD before_data ON claim_operation_log TYPE option<object> PERMISSIONS FULL;
+DEFINE FIELD after_data ON claim_operation_log TYPE option<object> PERMISSIONS FULL;
+DEFINE FIELD changed_fields ON claim_operation_log TYPE option<array<string>> PERMISSIONS FULL;
+DEFINE FIELD operation_result ON claim_operation_log TYPE string DEFAULT 'success' ASSERT $value INSIDE ['success', 'failed', 'partial'] PERMISSIONS FULL;
+DEFINE FIELD error_message ON claim_operation_log TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD related_documents ON claim_operation_log TYPE option<array<record<document>>> PERMISSIONS FULL;
+DEFINE FIELD business_context ON claim_operation_log TYPE option<object> PERMISSIONS FULL;
+
+-- 索引优化
+DEFINE INDEX claim_operation_claim_time_idx ON claim_operation_log FIELDS claim_id, operation_time DESC;
+DEFINE INDEX claim_operation_operator_idx ON claim_operation_log FIELDS operator_id, operation_time DESC;
+DEFINE INDEX claim_operation_type_idx ON claim_operation_log FIELDS operation_type, operation_time DESC;
+DEFINE INDEX claim_operation_result_idx ON claim_operation_log FIELDS operation_result, operation_time DESC;
+
+
+-- ------------------------------
+-- TABLE: claim_version_history
+-- ------------------------------
+
+DEFINE TABLE claim_version_history TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'read'],
+  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'create'],
+  FOR update NONE,
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD claim_id ON claim_version_history TYPE record<claim> PERMISSIONS FULL;
+DEFINE FIELD version_number ON claim_version_history TYPE int PERMISSIONS FULL;
+DEFINE FIELD version_type ON claim_version_history TYPE string ASSERT $value INSIDE ['initial', 'draft_update', 'submission', 'review_update', 'approval', 'rejection'] PERMISSIONS FULL;
+DEFINE FIELD snapshot_data ON claim_version_history TYPE object PERMISSIONS FULL;
+DEFINE FIELD change_summary ON claim_version_history TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD changed_by ON claim_version_history TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD change_reason ON claim_version_history TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD created_at ON claim_version_history TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD related_operation_log_id ON claim_version_history TYPE option<record<claim_operation_log>> PERMISSIONS FULL;
+DEFINE FIELD checksum ON claim_version_history TYPE option<string> PERMISSIONS FULL;
+
+-- 索引优化
+DEFINE INDEX claim_version_claim_version_idx ON claim_version_history FIELDS claim_id, version_number UNIQUE;
+DEFINE INDEX claim_version_claim_time_idx ON claim_version_history FIELDS claim_id, created_at DESC;
+DEFINE INDEX claim_version_type_idx ON claim_version_history FIELDS version_type, created_at DESC;
+
+
+-- ------------------------------
+-- TABLE: claim_status_flow
+-- ------------------------------
+
+DEFINE TABLE claim_status_flow TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'read'],
+  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'create'],
+  FOR update NONE,
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD claim_id ON claim_status_flow TYPE record<claim> PERMISSIONS FULL;
+DEFINE FIELD from_status ON claim_status_flow TYPE option<record<claim_review_status_definition>> PERMISSIONS FULL;
+DEFINE FIELD to_status ON claim_status_flow TYPE record<claim_review_status_definition> PERMISSIONS FULL;
+DEFINE FIELD transition_type ON claim_status_flow TYPE string ASSERT $value INSIDE ['user_action', 'system_action', 'admin_action', 'auto_transition'] PERMISSIONS FULL;
+DEFINE FIELD trigger_reason ON claim_status_flow TYPE string PERMISSIONS FULL;
+DEFINE FIELD transition_time ON claim_status_flow TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD operator_id ON claim_status_flow TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD operator_role ON claim_status_flow TYPE string PERMISSIONS FULL;
+DEFINE FIELD transition_notes ON claim_status_flow TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD review_comments ON claim_status_flow TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD duration_in_previous_status ON claim_status_flow TYPE option<duration> PERMISSIONS FULL;
+DEFINE FIELD related_operation_log_id ON claim_status_flow TYPE option<record<claim_operation_log>> PERMISSIONS FULL;
+
+-- 索引优化
+DEFINE INDEX claim_status_flow_claim_time_idx ON claim_status_flow FIELDS claim_id, transition_time DESC;
+DEFINE INDEX claim_status_flow_status_idx ON claim_status_flow FIELDS to_status, transition_time DESC;
+DEFINE INDEX claim_status_flow_operator_idx ON claim_status_flow FIELDS operator_id, transition_time DESC;
+
+
+-- ------------------------------
+-- TABLE: claim_access_log
+-- ------------------------------
+
+DEFINE TABLE claim_access_log TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'read'],
+  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'create'],
+  FOR update NONE,
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD claim_id ON claim_access_log TYPE record<claim> PERMISSIONS FULL;
+DEFINE FIELD access_type ON claim_access_log TYPE string ASSERT $value INSIDE ['view', 'download', 'export', 'print'] PERMISSIONS FULL;
+DEFINE FIELD accessor_id ON claim_access_log TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD accessor_name ON claim_access_log TYPE string PERMISSIONS FULL;
+DEFINE FIELD accessor_role ON claim_access_log TYPE string PERMISSIONS FULL;
+DEFINE FIELD access_time ON claim_access_log TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD ip_address ON claim_access_log TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD user_agent ON claim_access_log TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD accessed_fields ON claim_access_log TYPE option<array<string>> PERMISSIONS FULL;
+DEFINE FIELD access_duration ON claim_access_log TYPE option<duration> PERMISSIONS FULL;
+DEFINE FIELD access_result ON claim_access_log TYPE string DEFAULT 'success' ASSERT $value INSIDE ['success', 'denied', 'error'] PERMISSIONS FULL;
+DEFINE FIELD denial_reason ON claim_access_log TYPE option<string> PERMISSIONS FULL;
+
+-- 索引优化
+DEFINE INDEX claim_access_claim_time_idx ON claim_access_log FIELDS claim_id, access_time DESC;
+DEFINE INDEX claim_access_accessor_idx ON claim_access_log FIELDS accessor_id, access_time DESC;
+DEFINE INDEX claim_access_type_idx ON claim_access_log FIELDS access_type, access_time DESC;
+
 
 -- ------------------------------
 -- TABLE: message_attachment

@@ -12,6 +12,7 @@
 - **债权人管理**: 债权人信息录入、批量导入和快递单打印功能
 - **债权申报**: 在线债权申报系统，支持富文本编辑和附件上传
 - **债权审核**: 专业的债权审核工具，支持批注和批量操作
+- **债权操作追踪**: 完整的债权生命周期操作记录追踪系统，支持操作历史、版本控制、状态流转管理 🚧 **开发中** (80%完成)
 - **实时数据大屏**: 基于SurrealDB Live Query的实时数据监控和可视化
 - **会议管理**: 债权人会议安排和会议纪要管理
 - **消息中心**: 系统通知和即时消息功能
@@ -285,6 +286,31 @@ VITE_SURREALDB_DB=test
 - **[增强缓存架构](./doc/enhanced-cache-architecture.md)** - 智能缓存系统架构设计
 - **[缓存系统API](./doc/cache-system-api.md)** - 缓存系统接口文档
 - **[集成指南](./doc/integration-guide.md)** - 系统集成和配置指南
+
+### 债权操作追踪系统文档 🚧 **开发中**
+- **[债权操作追踪需求](./.kiro/specs/claim-operation-tracking/requirements.md)** - 债权申报操作记录追踪系统的详细需求分析
+- **[债权操作追踪设计](./.kiro/specs/claim-operation-tracking/design.md)** - 操作记录追踪系统的技术架构设计
+- **[债权操作追踪任务](./.kiro/specs/claim-operation-tracking/tasks.md)** - 系统实施的详细任务分解和进度跟踪
+- **[债权操作追踪架构](./doc/claim-operation-tracking-architecture.md)** - 系统架构和技术实现指南
+- **[债权操作追踪开发状态](./doc/claim-operation-tracking-development-status.md)** - 当前开发进度和实现状态
+
+#### 🎯 核心功能特性
+- **操作历史记录**: 记录债权从创建到最终确认的所有操作，包含操作类型、操作人、时间、数据变更等完整信息
+- **状态流转管理**: 完整记录债权状态的每次变更，包含流转原因、审核意见和流转时长统计
+- **版本控制系统**: 每次重要操作都保存完整的数据快照，支持任意版本间的字段级差异对比
+- **权限审计追踪**: 记录所有用户对债权数据的访问行为，支持敏感操作审计和异常行为检测
+
+#### 📊 当前实现状态
+- **数据库表结构**: 20% 完成 - claim表版本控制字段已添加，4个核心追踪表待实现
+- **核心服务层**: 60% 完成 - 4个核心服务类已实现，现有ClaimService集成待完成
+- **前端组件**: 80% 完成 - ClaimOperationHistory、ClaimVersionComparison、ClaimStatusFlowChart、ClaimAuditLog已实现
+- **系统集成**: 0% 完成 - 缓存系统集成待实现，通知系统和权限系统集成暂缓实施
+
+#### 🔧 技术架构
+- **数据层**: 基于SurrealDB的4个核心追踪表，支持完整的权限控制和查询优化
+- **服务层**: ClaimOperationService、ClaimVersionService、ClaimStatusFlowService、ClaimAuditService
+- **前端层**: React组件支持操作历史展示、版本对比、状态流转可视化
+- **缓存集成**: 与现有智能缓存系统深度集成，提供优化的数据访问性能
 
 ### 完整文档索引
 - **[文档中心](./doc/README.md)** - 所有文档的完整索引和导航

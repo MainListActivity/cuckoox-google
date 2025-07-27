@@ -1,6 +1,16 @@
 import { QuillDelta } from '@/src/components/RichTextEditor';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
 import type { RecordId } from 'surrealdb';
+import ClaimOperationService from './claimOperationService';
+import ClaimVersionService from './claimVersionService';
+import ClaimStatusFlowService from './claimStatusFlowService';
+import ClaimAuditService from './claimAuditService';
+import {
+  OperationType,
+  VersionType,
+  TransitionType,
+  AccessType
+} from '@/src/types/claimTracking';
 
 // 数据库原始数据接口
 export interface RawClaimData {
@@ -71,12 +81,18 @@ export interface ClaimData {
   created_at?: string;
   updated_at?: string;
   created_by?: string;
+  // 版本控制和操作追踪相关字段
+  current_version?: number;
+  last_operation_time?: string;
+  operation_count?: number;
+  has_pending_changes?: boolean;
+  last_sync_version?: number;
 }
 
 export interface CaseData {
-    id: string;
-    name: string;
-    case_number: string;
+  id: string;
+  name: string;
+  case_number: string;
 }
 
 export interface ClaimAttachmentData {
@@ -85,14 +101,22 @@ export interface ClaimAttachmentData {
   last_saved_at: string;
 }
 
- 
+
 class ClaimService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
+  private operationService: ClaimOperationService;
+  private versionService: ClaimVersionService;
+  private statusFlowService: ClaimStatusFlowService;
+  private auditService: ClaimAuditService;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(surrealClient: any) {
     this.client = surrealClient;
+    this.operationService = new ClaimOperationService(surrealClient);
+    this.versionService = new ClaimVersionService(surrealClient);
+    this.statusFlowService = new ClaimStatusFlowService(surrealClient);
+    this.auditService = new ClaimAuditService(surrealClient);
   }
 
   /**
@@ -152,6 +176,18 @@ class ClaimService {
    */
   async getClaimById(claimId: string): Promise<ClaimData | null> {
     try {
+      // 记录访问日志
+      await this.auditService.logAccess({
+        claim_id: claimId,
+        access_type: AccessType.VIEW,
+        accessed_fields: [
+          'id', 'claim_number', 'case_id', 'creditor_id', 'status',
+          'submission_time', 'review_status_id', 'review_time', 'reviewer_id',
+          'review_comments', 'created_at', 'updated_at', 'created_by',
+          'asserted_claim_details', 'approved_claim_details'
+        ]
+      });
+
       const query = `
         SELECT 
           id,
@@ -172,10 +208,10 @@ class ClaimService {
         FROM claim 
         WHERE id = $claimId
       `;
-      
+
       const results = await queryWithAuth(this.client, query, { claimId });
       const rawClaim = results[0]?.[0] as RawClaimData;
-      
+
       return rawClaim ? this.transformRawClaimData(rawClaim) : null;
     } catch (error) {
       console.error('获取债权信息失败:', error);
@@ -190,12 +226,12 @@ class ClaimService {
     try {
       let whereClause = 'creditor_id = $creditorId';
       const params: Record<string, any> = { creditorId };
-      
+
       if (caseId) {
         whereClause += ' AND case_id = $caseId';
         params.caseId = caseId;
       }
-      
+
       const query = `
         SELECT 
           id,
@@ -217,10 +253,10 @@ class ClaimService {
         WHERE ${whereClause}
         ORDER BY created_at DESC
       `;
-      
+
       const results = await queryWithAuth(this.client, query, params);
       const rawClaims = results[0] as RawClaimData[] || [];
-      
+
       return rawClaims.map(rawClaim => this.transformRawClaimData(rawClaim));
     } catch (error) {
       console.error('获取债权列表失败:', error);
@@ -241,21 +277,21 @@ class ClaimService {
         FROM creditor 
         WHERE id = $creditorId
       `;
-      
+
       const results = await queryWithAuth(this.client, query, { creditorId });
       const creditorData = results[0]?.[0];
-      
+
       if (!creditorData) {
         return [];
       }
-      
+
       // 获取该债权人关联的案件
       const caseQuery = `
         SELECT id, name, case_number
         FROM case
         WHERE id = $caseId
       `;
-      
+
       const caseResults = await queryWithAuth(this.client, caseQuery, { caseId: creditorData.id });
       return caseResults[0] || [];
     } catch (error) {
@@ -271,17 +307,17 @@ class ClaimService {
     try {
       // 生成债权编号
       const claimNumber = await this.generateClaimNumber(claimData.case_id);
-      
+
       // 获取待提交状态ID
       const statusQuery = `
         SELECT id FROM claim_review_status_definition 
         WHERE name = '待提交' AND is_active = true
         LIMIT 1
       `;
-      
+
       const statusResults = await queryWithAuth(this.client, statusQuery, {});
       const draftStatus = statusResults[0]?.[0];
-      
+
       const createQuery = `
         CREATE claim SET
           claim_number = $claimNumber,
@@ -293,9 +329,11 @@ class ClaimService {
           submission_time = time::now(),
           created_at = time::now(),
           updated_at = time::now(),
-          created_by = $auth.id
+          created_by = $auth.id,
+          current_version = 1,
+          operation_count = 1
       `;
-      
+
       const params = {
         claimNumber,
         caseId: claimData.case_id,
@@ -303,11 +341,43 @@ class ClaimService {
         reviewStatusId: draftStatus?.id,
         assertedClaimDetails: claimData.asserted_claim_details,
       };
-      
+
       const results = await queryWithAuth(this.client, createQuery, params);
       const rawClaim = results[0]?.[0] as RawClaimData;
-      
-      return this.transformRawClaimData(rawClaim);
+      const transformedClaim = this.transformRawClaimData(rawClaim);
+
+      // 记录操作日志
+      await this.operationService.logOperation({
+        claim_id: rawClaim.id,
+        operation_type: OperationType.CREATE,
+        description: this.operationService.formatOperationDescription(
+          OperationType.CREATE,
+          { claim_number: claimNumber }
+        ),
+        after_data: rawClaim,
+        business_context: {
+          case_id: claimData.case_id,
+          creditor_id: claimData.creditor_id
+        }
+      });
+
+      // 创建初始版本快照
+      await this.versionService.createVersionSnapshot({
+        claim_id: rawClaim.id,
+        version_type: VersionType.INITIAL,
+        change_summary: '创建债权申报',
+        change_reason: '初始创建'
+      });
+
+      // 记录状态流转（初始状态）
+      await this.statusFlowService.recordStatusTransition({
+        claim_id: rawClaim.id,
+        to_status: draftStatus?.id,
+        transition_type: TransitionType.SYSTEM_ACTION,
+        trigger_reason: '创建债权申报，设置为草稿状态'
+      });
+
+      return transformedClaim;
     } catch (error) {
       console.error('创建债权申报失败:', error);
       throw new Error('创建债权申报失败');
@@ -318,23 +388,52 @@ class ClaimService {
    * 更新债权基本信息
    */
   async updateClaimBasicInfo(
-    claimId: string, 
+    claimId: string,
     basicInfo: Partial<ClaimData['asserted_claim_details']>
   ): Promise<ClaimData> {
     try {
+      // 获取更新前的数据
+      const beforeData = await this.getClaimById(claimId);
+
       const updateQuery = `
         UPDATE $claimId SET
           asserted_claim_details = $assertedClaimDetails,
-          updated_at = time::now()
+          updated_at = time::now(),
+          operation_count = operation_count + 1
       `;
-      
+
       const results = await queryWithAuth(this.client, updateQuery, {
         claimId,
         assertedClaimDetails: basicInfo,
       });
-      
+
       const rawClaim = results[0]?.[0] as RawClaimData;
-      return this.transformRawClaimData(rawClaim);
+      const transformedClaim = this.transformRawClaimData(rawClaim);
+
+      // 记录操作日志
+      await this.operationService.logOperation({
+        claim_id: claimId,
+        operation_type: OperationType.UPDATE,
+        description: this.operationService.formatOperationDescription(
+          OperationType.UPDATE,
+          { claim_number: rawClaim.claim_number }
+        ),
+        before_data: beforeData,
+        after_data: rawClaim,
+        business_context: {
+          updated_fields: Object.keys(basicInfo)
+        }
+      });
+
+      // 创建版本快照
+      await this.versionService.createVersionSnapshot({
+        claim_id: claimId,
+        version_type: VersionType.DRAFT_UPDATE,
+        change_summary: '更新债权基本信息',
+        change_reason: '用户修改债权详情'
+      });
+
+      return transformedClaim;
     } catch (error) {
       console.error('更新债权基本信息失败:', error);
       throw new Error('更新债权基本信息失败');
@@ -364,12 +463,12 @@ class ClaimService {
   async submitClaim(claimId: string, attachmentContent?: QuillDelta): Promise<ClaimData> {
     try {
       // 验证必要字段
-      const claim = await this.getClaimById(claimId);
-      if (!claim) {
+      const beforeClaim = await this.getClaimById(claimId);
+      if (!beforeClaim) {
         throw new Error('债权不存在');
       }
 
-      if (!claim.asserted_claim_details.nature || !claim.asserted_claim_details.principal) {
+      if (!beforeClaim.asserted_claim_details.nature || !beforeClaim.asserted_claim_details.principal) {
         throw new Error('请完善债权基本信息');
       }
 
@@ -379,25 +478,62 @@ class ClaimService {
         WHERE name = '待审核' AND is_active = true
         LIMIT 1
       `;
-      
+
       const statusResults = await queryWithAuth(this.client, statusQuery, {});
       const submittedStatus = statusResults[0]?.[0];
-      
+
       const updateQuery = `
         UPDATE $claimId SET
           status = '已提交',
           review_status_id = $reviewStatusId,
           submission_time = time::now(),
-          updated_at = time::now()
+          updated_at = time::now(),
+          operation_count = operation_count + 1
       `;
-      
+
       const results = await queryWithAuth(this.client, updateQuery, {
         claimId,
         reviewStatusId: submittedStatus?.id,
       });
-      
+
       const rawClaim = results[0]?.[0] as RawClaimData;
-      return this.transformRawClaimData(rawClaim);
+      const transformedClaim = this.transformRawClaimData(rawClaim);
+
+      // 记录操作日志
+      const operationLog = await this.operationService.logOperation({
+        claim_id: claimId,
+        operation_type: OperationType.SUBMIT,
+        description: this.operationService.formatOperationDescription(
+          OperationType.SUBMIT,
+          { claim_number: rawClaim.claim_number }
+        ),
+        before_data: beforeClaim,
+        after_data: rawClaim,
+        business_context: {
+          has_attachment: !!attachmentContent
+        }
+      });
+
+      // 创建提交版本快照
+      await this.versionService.createVersionSnapshot({
+        claim_id: claimId,
+        version_type: VersionType.SUBMISSION,
+        change_summary: '提交债权申报',
+        change_reason: '用户提交债权申报进行审核',
+        related_operation_log_id: operationLog.id
+      });
+
+      // 记录状态流转
+      await this.statusFlowService.recordStatusTransition({
+        claim_id: claimId,
+        from_status: beforeClaim.review_status === 'draft' ? 'draft' : beforeClaim.review_status,
+        to_status: submittedStatus?.id,
+        transition_type: TransitionType.USER_ACTION,
+        trigger_reason: '用户提交债权申报',
+        related_operation_log_id: operationLog.id
+      });
+
+      return transformedClaim;
     } catch (error) {
       console.error('提交债权申报失败:', error);
       throw error;
@@ -409,12 +545,12 @@ class ClaimService {
    */
   async withdrawClaim(claimId: string): Promise<ClaimData> {
     try {
-      const claim = await this.getClaimById(claimId);
-      if (!claim) {
+      const beforeClaim = await this.getClaimById(claimId);
+      if (!beforeClaim) {
         throw new Error('债权不存在');
       }
 
-      if (claim.review_status !== 'submitted' && claim.review_status !== 'under_review') {
+      if (beforeClaim.review_status !== 'submitted' && beforeClaim.review_status !== 'under_review') {
         throw new Error('只有已提交或审核中的债权才能撤回');
       }
 
@@ -424,24 +560,61 @@ class ClaimService {
         WHERE name = '待提交' AND is_active = true
         LIMIT 1
       `;
-      
+
       const statusResults = await queryWithAuth(this.client, statusQuery, {});
       const draftStatus = statusResults[0]?.[0];
-      
+
       const updateQuery = `
         UPDATE $claimId SET
           status = '草稿',
           review_status_id = $reviewStatusId,
-          updated_at = time::now()
+          updated_at = time::now(),
+          operation_count = operation_count + 1
       `;
-      
+
       const results = await queryWithAuth(this.client, updateQuery, {
         claimId,
         reviewStatusId: draftStatus?.id,
       });
-      
+
       const rawClaim = results[0]?.[0] as RawClaimData;
-      return this.transformRawClaimData(rawClaim);
+      const transformedClaim = this.transformRawClaimData(rawClaim);
+
+      // 记录操作日志
+      const operationLog = await this.operationService.logOperation({
+        claim_id: claimId,
+        operation_type: OperationType.WITHDRAW,
+        description: this.operationService.formatOperationDescription(
+          OperationType.WITHDRAW,
+          { claim_number: rawClaim.claim_number }
+        ),
+        before_data: beforeClaim,
+        after_data: rawClaim,
+        business_context: {
+          previous_status: beforeClaim.review_status
+        }
+      });
+
+      // 创建版本快照
+      await this.versionService.createVersionSnapshot({
+        claim_id: claimId,
+        version_type: VersionType.DRAFT_UPDATE,
+        change_summary: '撤回债权申报',
+        change_reason: '用户撤回债权申报，重新编辑',
+        related_operation_log_id: operationLog.id
+      });
+
+      // 记录状态流转
+      await this.statusFlowService.recordStatusTransition({
+        claim_id: claimId,
+        from_status: beforeClaim.review_status,
+        to_status: draftStatus?.id,
+        transition_type: TransitionType.USER_ACTION,
+        trigger_reason: '用户撤回债权申报',
+        related_operation_log_id: operationLog.id
+      });
+
+      return transformedClaim;
     } catch (error) {
       console.error('撤回债权申报失败:', error);
       throw error;
@@ -460,13 +633,13 @@ class ClaimService {
         WHERE case_id = $caseId
         GROUP ALL
       `;
-      
+
       const results = await queryWithAuth(this.client, countQuery, { caseId });
       const count = results[0]?.[0]?.total || 0;
-      
+
       const sequence = String(count + 1).padStart(3, '0');
       const year = new Date().getFullYear();
-      
+
       return `CL-${year}-${sequence}`;
     } catch (error) {
       console.error('生成债权编号失败:', error);
@@ -529,6 +702,90 @@ class ClaimService {
       requires_supplement: 'secondary' as const,
     };
     return colorMap[status] || 'default';
+  }
+
+  /**
+   * 获取操作追踪服务实例
+   */
+  getOperationService(): ClaimOperationService {
+    return this.operationService;
+  }
+
+  /**
+   * 获取版本控制服务实例
+   */
+  getVersionService(): ClaimVersionService {
+    return this.versionService;
+  }
+
+  /**
+   * 获取状态流转服务实例
+   */
+  getStatusFlowService(): ClaimStatusFlowService {
+    return this.statusFlowService;
+  }
+
+  /**
+   * 获取审计服务实例
+   */
+  getAuditService(): ClaimAuditService {
+    return this.auditService;
+  }
+
+  /**
+   * 获取债权操作历史
+   */
+  async getClaimOperationHistory(claimId: string, options?: {
+    limit?: number;
+    offset?: number;
+    operation_type?: string;
+  }) {
+    return await this.operationService.getOperationHistory(claimId, options);
+  }
+
+  /**
+   * 获取债权版本历史
+   */
+  async getClaimVersionHistory(claimId: string) {
+    return await this.versionService.getVersionHistory(claimId);
+  }
+
+  /**
+   * 获取债权状态流转历史
+   */
+  async getClaimStatusFlowHistory(claimId: string) {
+    return await this.statusFlowService.getStatusFlowHistory(claimId);
+  }
+
+  /**
+   * 获取债权访问日志
+   */
+  async getClaimAccessLog(claimId: string, options?: {
+    limit?: number;
+    offset?: number;
+  }) {
+    return await this.auditService.getAuditLog({
+      claim_id: claimId,
+      ...options
+    });
+  }
+
+  /**
+   * 比较债权版本
+   */
+  async compareClaimVersions(claimId: string, fromVersion: number, toVersion: number) {
+    return await this.versionService.compareVersions({
+      claimId,
+      fromVersion,
+      toVersion
+    });
+  }
+
+  /**
+   * 获取债权当前状态信息
+   */
+  async getClaimCurrentStatusInfo(claimId: string) {
+    return await this.statusFlowService.getCurrentStatusInfo(claimId);
   }
 }
 
