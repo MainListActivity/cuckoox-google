@@ -65,6 +65,25 @@
   - 品牌色彩体系和动画规范
   - 性能优化和可访问性设计
 
+#### 移动端UI优化
+- **[移动端UI优化需求](../.kiro/specs/mobile-ui-optimization/requirements.md)** - 移动端优化需求分析
+  - 基于实际页面分析的10个核心需求领域
+  - 详细的用户故事和验收标准
+  - 涵盖列表展示、触摸交互、搜索筛选等关键功能
+  - 性能、可访问性和用户体验要求
+
+- **[移动端优化设计](../.kiro/specs/mobile-ui-optimization/design.md)** - 移动端UI优化架构设计
+  - 完整的组件架构和数据模型设计
+  - 手势交互系统和动画设计
+  - 样式设计系统和性能优化策略
+  - 错误处理和测试策略
+
+- **[移动端实施计划](../.kiro/specs/mobile-ui-optimization/tasks.md)** - 移动端优化实施计划
+  - 15个详细任务的分解和优先级
+  - 4个阶段的实施路线图
+  - 成功指标和质量保证标准
+  - 用户体验、技术和业务指标
+
 #### 响应式布局优化
 - **[responsive-optimization-guide.md](./responsive-optimization-guide.md)** - PWA响应式布局优化指南
   - 移动优先设计原则和断点设计

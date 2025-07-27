@@ -1,17 +1,28 @@
 {
   "mcpServers": {
-      "context7": {
-          "command": "bunx",
-          "args": [
-              "-y",
-              "@upstash/context7-mcp"
-          ]
-      },
-      "browsermcp": {
-        "command": "bunx",
-        "args": [
-          "@browsermcp/mcp"
-        ]
-      }
+    "context7": {
+      "command": "bunx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "*"
+      ]
+    },
+    "browsermcp": {
+      "command": "bunx",
+      "args": [
+        "@browsermcp/mcp"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "browser_navigate",
+        "browser_wait",
+        "browser_snapshot",
+        "browser_screenshot"
+      ]
+    }
   }
 }
