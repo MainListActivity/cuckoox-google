@@ -12,7 +12,6 @@ import {
   CreateVersionSnapshotParams
 } from '@/src/types/claimTracking';
 import type { RecordId } from 'surrealdb';
-import { createHash } from 'crypto';
 
 export class ClaimVersionService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -38,7 +37,7 @@ export class ClaimVersionService {
       const nextVersion = await this.getNextVersionNumber(params.claim_id);
 
       // 生成数据校验和
-      const checksum = this.generateChecksum(claimData);
+      const checksum = await this.generateChecksum(claimData);
 
       const query = `
         CREATE claim_version_history SET
@@ -64,7 +63,7 @@ export class ClaimVersionService {
         checksum
       };
 
-      const results = await queryWithAuth(this.client, query, queryParams);
+      const results = await queryWithAuth(this.client, query, queryParams) as unknown[][];
       const versionHistory = results[0]?.[0] as ClaimVersionHistory;
 
       if (!versionHistory) {
@@ -93,7 +92,7 @@ export class ClaimVersionService {
         ORDER BY version_number DESC
       `;
 
-      const results = await queryWithAuth(this.client, query, { claim_id: claimId });
+      const results = await queryWithAuth(this.client, query, { claim_id: claimId }) as unknown[][];
       return results[0] as ClaimVersionHistory[] || [];
     } catch (error) {
       console.error('获取版本历史失败:', error);
@@ -119,7 +118,7 @@ export class ClaimVersionService {
       const results = await queryWithAuth(this.client, query, {
         claim_id: claimId,
         version_number: versionNumber
-      });
+      }) as unknown[][];
 
       return results[0]?.[0] as ClaimVersionHistory || null;
     } catch (error) {
@@ -220,7 +219,7 @@ export class ClaimVersionService {
       }
 
       // 重新计算校验和
-      const calculatedChecksum = this.generateChecksum(versionData.snapshot_data);
+      const calculatedChecksum = await this.generateChecksum(versionData.snapshot_data);
       
       // 比较校验和
       return calculatedChecksum === versionData.checksum;
@@ -260,7 +259,7 @@ export class ClaimVersionService {
 
       const results = await queryWithAuth(this.client, query, {
         version_ids: versionIds
-      });
+      }) as unknown[];
 
       return results.length;
     } catch (error) {
@@ -301,12 +300,12 @@ export class ClaimVersionService {
       `;
 
       const [baseResults, typeResults] = await Promise.all([
-        queryWithAuth(this.client, query, { claim_id: claimId }),
-        queryWithAuth(this.client, typeQuery, { claim_id: claimId })
+        queryWithAuth(this.client, query, { claim_id: claimId }) as Promise<unknown[][]>,
+        queryWithAuth(this.client, typeQuery, { claim_id: claimId }) as Promise<unknown[][]>
       ]);
 
-      const baseStats = baseResults[0]?.[0] || {};
-      const typeStats = typeResults[0] || [];
+      const baseStats = baseResults[0]?.[0] as any || {};
+      const typeStats = typeResults[0] as any[] || [];
 
       const versionsByType: Record<VersionType, number> = {} as Record<VersionType, number>;
       typeStats.forEach((stat: any) => {
@@ -338,7 +337,7 @@ export class ClaimVersionService {
         LIMIT 1
       `;
 
-      const results = await queryWithAuth(this.client, query, { claim_id: claimId });
+      const results = await queryWithAuth(this.client, query, { claim_id: claimId }) as unknown[][];
       return results[0]?.[0] as Record<string, unknown> || null;
     } catch (error) {
       console.error('获取当前债权数据失败:', error);
@@ -358,8 +357,8 @@ export class ClaimVersionService {
         GROUP ALL
       `;
 
-      const results = await queryWithAuth(this.client, query, { claim_id: claimId });
-      const maxVersion = results[0]?.[0]?.max_version || 0;
+      const results = await queryWithAuth(this.client, query, { claim_id: claimId }) as unknown[][];
+      const maxVersion = (results[0]?.[0] as any)?.max_version || 0;
       
       return maxVersion + 1;
     } catch (error) {
@@ -425,20 +424,45 @@ export class ClaimVersionService {
   }
 
   /**
-   * 生成数据校验和
+   * 生成数据校验和 - 使用浏览器兼容的Web Crypto API
    */
-  private generateChecksum(data: Record<string, unknown>): string {
+  private async generateChecksum(data: Record<string, unknown>): Promise<string> {
     try {
       // 创建数据的标准化字符串表示
       const normalizedData = this.normalizeDataForChecksum(data);
       const dataString = JSON.stringify(normalizedData);
       
-      // 使用SHA-256生成校验和
-      return createHash('sha256').update(dataString).digest('hex');
+      // 使用Web Crypto API生成SHA-256哈希
+      const encoder = new TextEncoder();
+      const dataBuffer = encoder.encode(dataString);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+      
+      // 将ArrayBuffer转换为十六进制字符串
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      return hashHex;
     } catch (error) {
       console.error('生成校验和失败:', error);
-      return '';
+      // 如果Web Crypto API失败，使用简单的字符串哈希作为备选
+      return this.simpleStringHash(JSON.stringify(this.normalizeDataForChecksum(data)));
     }
+  }
+
+  /**
+   * 简单字符串哈希函数 - 作为Web Crypto API的备选方案
+   */
+  private simpleStringHash(str: string): string {
+    let hash = 0;
+    if (str.length === 0) return hash.toString();
+    
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // 转换为32位整数
+    }
+    
+    return Math.abs(hash).toString(16);
   }
 
   /**
