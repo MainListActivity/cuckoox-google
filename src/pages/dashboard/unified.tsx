@@ -17,12 +17,29 @@ import {
   Menu,
   MenuItem,
   Chip,
+  SvgIcon,
 } from '@mui/material';
 import { 
   grey, orange, red
 } from '@mui/material/colors';
 import { MoreVert } from '@mui/icons-material';
 import { alpha, useTheme, Theme } from '@mui/material/styles';
+import { 
+  mdiChartLine,
+  mdiTrendingUp,
+  mdiClock,
+  mdiAccountMultiple,
+  mdiCurrencyUsd,
+  mdiCheckCircle,
+  mdiFolderOpen,
+  mdiClipboardCheck,
+  mdiTimerSand,
+} from '@mdi/js';
+
+// Import responsive components
+import ResponsiveStatsCards, { StatCardData } from '@/src/components/common/ResponsiveStatsCards';
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import { PieChart, BarChart, LineChart } from '@mui/x-charts';
 import { 
   FileCopyOutlined as FileCopyIcon, 
@@ -89,6 +106,7 @@ const UnifiedDashboardPage: React.FC = () => {
   const { user, selectedCaseId } = useAuth();
   const { showSuccess } = useSnackbar();
   const theme = useTheme();
+  const { isMobile } = useResponsiveLayout();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   // Menu handlers from index.tsx
@@ -198,6 +216,186 @@ const UnifiedDashboardPage: React.FC = () => {
   // Extract case number from selectedCaseId
   const caseNumber = selectedCaseId ? String(selectedCaseId).replace(/^case:/, '') : '';
 
+  // Prepare stats data for ResponsiveStatsCards
+  const statsData: StatCardData[] = [
+    {
+      id: 'todays_submissions',
+      label: '今日提交笔数',
+      value: liveTodaysSubmissionsCount || 0,
+      icon: mdiClock,
+      color: theme.palette.statOrange?.main || orange[400],
+      bgColor: alpha(theme.palette.statOrange?.main || orange[400], 0.1),
+      loading: isTodaysSubmissionsLoading,
+      showAnimation: isTodaysSubmissionsUpdating,
+    },
+    {
+      id: 'todays_reviewed',
+      label: '今日审核笔数',
+      value: liveTodaysReviewedClaimsCount || 0,
+      icon: mdiClipboardCheck,
+      color: theme.palette.statRed?.main || red[400],
+      bgColor: alpha(theme.palette.statRed?.main || red[400], 0.1),
+      loading: isTodaysReviewedLoading,
+      showAnimation: isTodaysReviewedUpdating,
+    },
+    {
+      id: 'total_claims',
+      label: '当前申请总笔数',
+      value: liveTotalClaims || 0,
+      icon: mdiFolderOpen,
+      color: theme.palette.statBlue?.main || theme.palette.primary.main,
+      bgColor: alpha(theme.palette.statBlue?.main || theme.palette.primary.main, 0.1),
+      loading: isTotalClaimsLoading,
+      showAnimation: isTotalClaimsUpdating,
+    },
+    {
+      id: 'approved_claims',
+      label: '当前已审批总笔数',
+      value: liveApprovedClaimsCount || 0,
+      icon: mdiCheckCircle,
+      color: theme.palette.statGreen?.main || theme.palette.success.main,
+      bgColor: alpha(theme.palette.statGreen?.main || theme.palette.success.main, 0.1),
+      loading: isApprovedClaimsCountLoading,
+      showAnimation: isApprovedClaimsCountUpdating,
+    },
+    {
+      id: 'pending_claims',
+      label: '当前待审总笔数',
+      value: livePendingClaimsCount || 0,
+      icon: mdiTimerSand,
+      color: theme.palette.statYellow?.main || theme.palette.warning.main,
+      bgColor: alpha(theme.palette.statYellow?.main || theme.palette.warning.main, 0.1),
+      loading: isPendingClaimsCountLoading,
+      showAnimation: isPendingClaimsCountUpdating,
+    },
+    {
+      id: 'unique_claimants',
+      label: '当前申请债权人数量',
+      value: liveUniqueClaimantsCount || 0,
+      icon: mdiAccountMultiple,
+      color: theme.palette.statPurple?.main || theme.palette.info.main,
+      bgColor: alpha(theme.palette.statPurple?.main || theme.palette.info.main, 0.1),
+      loading: isUniqueClaimantsCountLoading,
+      showAnimation: isUniqueClaimantsCountUpdating,
+    },
+    {
+      id: 'total_amount',
+      label: '当前申请总金额',
+      value: `¥${formatAmount(liveTotalClaimAmount)}`,
+      icon: mdiCurrencyUsd,
+      color: theme.palette.statBlue?.main || theme.palette.primary.main,
+      bgColor: alpha(theme.palette.statBlue?.main || theme.palette.primary.main, 0.1),
+      loading: isTotalClaimAmountLoading,
+      showAnimation: isTotalClaimAmountUpdating,
+    },
+    {
+      id: 'approved_amount',
+      label: '当前已审批总金额',
+      value: `¥${formatAmount(liveApprovedClaimAmount)}`,
+      icon: mdiTrendingUp,
+      color: theme.palette.statGreen?.main || theme.palette.success.main,
+      bgColor: alpha(theme.palette.statGreen?.main || theme.palette.success.main, 0.1),
+      loading: isApprovedClaimAmountLoading,
+      showAnimation: isApprovedClaimAmountUpdating,
+    },
+    {
+      id: 'pending_amount',
+      label: '当前待审总金额',
+      value: `¥${formatAmount(livePendingClaimAmount)}`,
+      icon: mdiChartLine,
+      color: theme.palette.statYellow?.main || theme.palette.warning.main,
+      bgColor: alpha(theme.palette.statYellow?.main || theme.palette.warning.main, 0.1),
+      loading: isPendingClaimAmountLoading,
+      showAnimation: isPendingClaimAmountUpdating,
+    },
+  ];
+
+  // Mobile vs Desktop rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title="数据大屏"
+        showBackButton={false}
+        fabConfig={{
+          icon: mdiChartLine,
+          action: () => handleRefreshData(),
+          ariaLabel: "刷新数据",
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Statistics Cards - Mobile */}
+          <Box sx={{ mb: 3 }}>
+            <ResponsiveStatsCards
+              stats={statsData}
+              loading={isTotalClaimsLoading || isApprovedClaimsCountLoading || isPendingClaimsCountLoading}
+              variant="compact"
+              columns={{ xs: 2, sm: 2 }}
+              showTrend={false}
+              animationEnabled={true}
+            />
+          </Box>
+
+          {/* Case Info Card - Mobile */}
+          {selectedCaseId && (
+            <Card sx={{ mb: 3, backgroundColor: alpha(theme.palette.primary.main, 0.1) }}>
+              <CardContent sx={{ textAlign: 'center', py: 2 }}>
+                <Typography variant="h6" color="primary" gutterBottom>
+                  当前监控案件
+                </Typography>
+                <Chip
+                  label={`案件编号: ${caseNumber}`}
+                  color="primary"
+                  variant="filled"
+                  size="small"
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Recent Activities Summary - Mobile Only */}
+          <Grid container spacing={2}>
+            <Grid size={12}>
+              <Card sx={contentCardStyle}>
+                <CardContent sx={{ p: 2 }}>
+                  <Typography variant="h6" gutterBottom color="primary" textAlign="center">
+                    最新动态
+                  </Typography>
+                  {isRecentSubmissionsLoading ? (
+                    <Box>
+                      <Skeleton variant="text" height={30} />
+                      <Skeleton variant="text" height={30} />
+                    </Box>
+                  ) : liveRecentSubmissions && liveRecentSubmissions.length > 0 ? (
+                    <List dense>
+                      {liveRecentSubmissions.slice(0, 3).map((item, index) => (
+                        <ListItem key={item.id} disableGutters>
+                          <ListItemIcon sx={{ minWidth: 32 }}>
+                            <FileCopyIcon fontSize="small" color="info" />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={`${item.claimantName} 提交债权`}
+                            secondary={`¥${formatAmount(item.amount)}`}
+                            primaryTypographyProps={{ fontSize: '0.85rem' }}
+                            secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" textAlign="center">
+                      暂无最新提交
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Box>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
   return (
     <Box sx={{ p: 3, backgroundColor: theme.palette.background.default, color: theme.palette.text.primary, minHeight: `calc(100vh - ${appBarHeight})` }}>
       <CssBaseline />
@@ -236,218 +434,17 @@ const UnifiedDashboardPage: React.FC = () => {
         </Box>
       </Box>
 
-      {/* Metric Cards Grid - Row 1 */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Today's Submissions Count */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statOrange'), 
-            borderColor: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || orange[400],
-            transform: isTodaysSubmissionsUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>今日提交笔数</Typography>
-              {isTodaysSubmissionsLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography 
-                  variant="digitalMetric" 
-                  sx={{
-                    ...metricValueStyle(theme, 'statOrange'),
-                    transform: isTodaysSubmissionsUpdating ? 'scale(1.1)' : 'scale(1)',
-                    color: isTodaysSubmissionsUpdating ? theme.palette.warning.light : theme.palette.statOrange?.main || orange[400],
-                  }}
-                >
-                  {liveTodaysSubmissionsCount}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Today's Reviewed Claims Count */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statRed'), 
-            borderColor: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || red[400],
-            transform: isTodaysReviewedUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>今日审核笔数</Typography>
-              {isTodaysReviewedLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statRed'),
-                  transform: isTodaysReviewedUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isTodaysReviewedUpdating ? theme.palette.warning.light : theme.palette.statRed?.main || red[400],
-                }}>
-                  {liveTodaysReviewedClaimsCount}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Total Number of Claims */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statBlue'), 
-            borderColor: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
-            transform: isTotalClaimsUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请总笔数</Typography>
-              {isTotalClaimsLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography 
-                  variant="digitalMetric" 
-                  sx={{
-                    ...metricValueStyle(theme, 'statBlue'),
-                    transform: isTotalClaimsUpdating ? 'scale(1.1)' : 'scale(1)',
-                    color: isTotalClaimsUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
-                  }}
-                >
-                  {liveTotalClaims}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Total Approved Claims */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statGreen'),
-            borderColor: isApprovedClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
-            transform: isApprovedClaimsCountUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前已审批总笔数</Typography>
-              {isApprovedClaimsCountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statGreen'),
-                  transform: isApprovedClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isApprovedClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
-                }}>
-                  {liveApprovedClaimsCount}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-      
-      {/* Metric Cards Grid - Row 2 */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Total Pending Claims */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statYellow'),
-            borderColor: isPendingClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
-            transform: isPendingClaimsCountUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前待审总笔数</Typography>
-              {isPendingClaimsCountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statYellow'),
-                  transform: isPendingClaimsCountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isPendingClaimsCountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
-                }}>
-                  {livePendingClaimsCount}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Number of Unique Claimants */}
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statPurple'),
-            borderColor: isUniqueClaimantsCountUpdating ? theme.palette.warning.light : theme.palette.statPurple.main,
-            transform: isUniqueClaimantsCountUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请债权人数量</Typography>
-              {isUniqueClaimantsCountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statPurple'),
-                  transform: isUniqueClaimantsCountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isUniqueClaimantsCountUpdating ? theme.palette.warning.light : theme.palette.statPurple.main,
-                }}>
-                  {liveUniqueClaimantsCount}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* Amount Cards Grid - Row 3 */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {/* Total Claimed Amount */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statBlue'),
-            borderColor: isTotalClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
-            transform: isTotalClaimAmountUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前申请总金额</Typography>
-              {isTotalClaimAmountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statBlue'),
-                  transform: isTotalClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isTotalClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statBlue.main,
-                }}>
-                  ¥{formatAmount(liveTotalClaimAmount)}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Total Approved Amount */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statGreen'),
-            borderColor: isApprovedClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
-            transform: isApprovedClaimAmountUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前已审批总金额</Typography>
-              {isApprovedClaimAmountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statGreen'),
-                  transform: isApprovedClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isApprovedClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statGreen.main,
-                }}>
-                  ¥{formatAmount(liveApprovedClaimAmount)}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Total Pending Amount */}
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={{
-            ...metricCardStyle(theme, 'statYellow'),
-            borderColor: isPendingClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
-            transform: isPendingClaimAmountUpdating ? 'scale(1.02)' : 'scale(1)',
-          }}>
-            <CardContent sx={metricCardContentStyle}>
-              <Typography variant="h2" gutterBottom sx={metricTitleStyle(theme)}>当前待审总金额</Typography>
-              {isPendingClaimAmountLoading ? <Skeleton variant="text" width="80%" sx={{fontSize: '2.75rem', margin: 'auto'}} /> : (
-                <Typography variant="digitalMetric" sx={{
-                  ...metricValueStyle(theme, 'statYellow'),
-                  transform: isPendingClaimAmountUpdating ? 'scale(1.1)' : 'scale(1)',
-                  color: isPendingClaimAmountUpdating ? theme.palette.warning.light : theme.palette.statYellow.main,
-                }}>
-                  ¥{formatAmount(livePendingClaimAmount)}
-                </Typography>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {/* Statistics Cards - Desktop */}
+      <Box sx={{ mb: 4 }}>
+        <ResponsiveStatsCards
+          stats={statsData}
+          loading={isTotalClaimsLoading || isApprovedClaimsCountLoading || isPendingClaimsCountLoading}
+          variant="detailed"
+          columns={{ xs: 2, sm: 2, md: 3, lg: 4, xl: 5 }}
+          showTrend={false}
+          animationEnabled={true}
+        />
+      </Box>
       
       {/* Chart Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>

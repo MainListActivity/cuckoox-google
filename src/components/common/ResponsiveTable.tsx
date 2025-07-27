@@ -28,6 +28,7 @@ import {
   mdiPencilOutline,
   mdiDeleteOutline,
 } from '@mdi/js';
+import { touchFriendlyIconButtonSx } from '@/src/utils/touchTargetUtils';
 
 export interface ResponsiveTableColumn {
   id: string;
@@ -161,13 +162,13 @@ const ResponsiveTable: React.FC<ResponsiveTableProps> = ({
                 {visibleActions.slice(0, 2).map((action, actionIndex) => (
                   <Tooltip key={actionIndex} title={action.label}>
                     <IconButton
-                      size="small"
                       color={action.color || 'default'}
                       onClick={(e) => {
                         e.stopPropagation();
                         action.onClick(row);
                       }}
                       disabled={action.disabled?.(row)}
+                      sx={touchFriendlyIconButtonSx}
                     >
                       <SvgIcon fontSize="small">
                         <path d={action.icon} />
@@ -177,11 +178,12 @@ const ResponsiveTable: React.FC<ResponsiveTableProps> = ({
                 ))}
                 {(secondaryColumns.length > 0 || visibleActions.length > 2) && (
                   <IconButton
-                    size="small"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleRowExpansion(index);
                     }}
+                    sx={touchFriendlyIconButtonSx}
+                    aria-label={isExpanded ? '收起详情' : '展开详情'}
                   >
                     <SvgIcon fontSize="small">
                       <path d={isExpanded ? mdiChevronUp : mdiChevronDown} />
@@ -215,13 +217,13 @@ const ResponsiveTable: React.FC<ResponsiveTableProps> = ({
                       {visibleActions.slice(2).map((action, actionIndex) => (
                         <Tooltip key={actionIndex} title={action.label}>
                           <IconButton
-                            size="small"
                             color={action.color || 'default'}
                             onClick={(e) => {
                               e.stopPropagation();
                               action.onClick(row);
                             }}
                             disabled={action.disabled?.(row)}
+                            sx={touchFriendlyIconButtonSx}
                           >
                             <SvgIcon fontSize="small">
                               <path d={action.icon} />
@@ -324,6 +326,14 @@ const ResponsiveTable: React.FC<ResponsiveTableProps> = ({
                                 action.onClick(row);
                               }}
                               disabled={action.disabled?.(row)}
+                              sx={{
+                                ...touchFriendlyIconButtonSx,
+                                // 桌面端可以稍微小一些
+                                '@media (min-width: 960px)': {
+                                  minWidth: 40,
+                                  minHeight: 40,
+                                }
+                              }}
                             >
                               <SvgIcon fontSize="small">
                                 <path d={action.icon} />

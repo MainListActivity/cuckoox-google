@@ -1,31 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useSurrealClient, AuthenticationRequiredError } from '@/src/contexts/SurrealProvider';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { RecordId } from 'surrealdb';
 import { useOperationPermissions } from '@/src/hooks/useOperationPermission';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import {
   Box,
-  TextField,
   Typography,
   Button,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
   SvgIcon,
-  Tooltip,
-  IconButton,
-  InputAdornment,
-  Card,
-  CardContent,
-  Grid,
   useTheme,
   alpha,
   Fade,
@@ -33,19 +20,21 @@ import {
   MenuItem,
   Divider,
   Avatar,
-  CircularProgress,
   Alert,
   Skeleton,
+  Chip,
 } from '@mui/material';
+
+// Import responsive components
+import ResponsiveTable, { ResponsiveTableColumn, ResponsiveTableAction } from '@/src/components/common/ResponsiveTable';
+import ResponsiveStatsCards, { StatCardData } from '@/src/components/common/ResponsiveStatsCards';
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import MobileSearchFilter, { FilterOption } from '@/src/components/mobile/MobileSearchFilter';
 import {
   mdiPlusCircleOutline,
   mdiEyeOutline,
   mdiFileDocumentOutline,
   mdiFileEditOutline,
-  mdiCalendarEdit,
-  mdiFilterVariant,
-  mdiMagnify,
-  mdiDotsVertical,
   mdiBriefcaseOutline,
   mdiAccountOutline,
   mdiCalendarClock,
@@ -97,12 +86,14 @@ interface CaseItem {
   acceptance_date: string;
 }
 
+
 const CaseListPage: React.FC = () => {
   const { t } = useTranslation();
   const { showSuccess, showError } = useSnackbar();
   const theme = useTheme();
   const client = useSurrealClient();
   const navigate = useNavigate();
+  const { isMobile } = useResponsiveLayout();
 
   // Check operation permissions
   const { permissions, isLoading: isPermissionsLoading } = useOperationPermissions([
@@ -119,23 +110,46 @@ const CaseListPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 表头单元格的通用样式
-  const tableHeadCellStyle = {
-    fontWeight: 600, 
-    backgroundColor: theme.palette.mode === 'dark' 
-      ? alpha(theme.palette.background.paper, 0.6) 
-      : '#f6f6f6'
-  };
-
   // State for dialogs
   const [modifyStatusOpen, setModifyStatusOpen] = useState(false);
   const [meetingMinutesOpen, setMeetingMinutesOpen] = useState(false);
   const [createCaseOpen, setCreateCaseOpen] = useState(false);
   const [selectedCase, setSelectedCase] = useState<CaseItem | null>(null);
-  const [currentMeetingTitle, setCurrentMeetingTitle] = useState<string>('');
   const [searchValue, setSearchValue] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [_selectedCaseForMenu, setSelectedCaseForMenu] = useState<CaseItem | null>(null);
+
+  // 移动端搜索筛选状态
+  const [filterOptions] = useState<FilterOption[]>([
+    {
+      id: 'status',
+      label: '程序进程',
+      type: 'select',
+      options: [
+        { value: '立案', label: '立案' },
+        { value: '债权申报', label: '债权申报' },
+        { value: '债权人第一次会议', label: '债权人第一次会议' },
+        { value: '终结', label: '终结' },
+      ],
+    },
+    {
+      id: 'procedure',
+      label: '案件程序',
+      type: 'select',
+      options: [
+        { value: '破产清算', label: '破产清算' },
+        { value: '破产和解', label: '破产和解' },
+        { value: '破产重整', label: '破产重整' },
+      ],
+    },
+    {
+      id: 'dateRange',
+      label: '受理时间',
+      type: 'daterange',
+    },
+  ]);
+  const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+  const [filteredCases, setFilteredCases] = useState<CaseItem[]>([]);
 
   // Fetch cases from database
   useEffect(() => {
@@ -221,9 +235,44 @@ const CaseListPage: React.FC = () => {
     fetchCases();
   }, [client, t, showError, navigate]);
 
-  // Statistics
-  const stats = [
+  // 处理搜索和筛选
+  useEffect(() => {
+    let filtered = [...cases];
+
+    // 搜索过滤
+    if (searchValue.trim()) {
+      const searchLower = searchValue.toLowerCase();
+      filtered = filtered.filter(caseItem => 
+        caseItem.case_number.toLowerCase().includes(searchLower) ||
+        caseItem.case_procedure.toLowerCase().includes(searchLower) ||
+        caseItem.case_lead_name.toLowerCase().includes(searchLower) ||
+        caseItem.creator_name.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // 筛选过滤
+    Object.entries(activeFilters).forEach(([key, value]) => {
+      if (value && value !== '') {
+        switch (key) {
+          case 'status':
+            filtered = filtered.filter(caseItem => caseItem.current_stage === value);
+            break;
+          case 'procedure':
+            filtered = filtered.filter(caseItem => caseItem.case_procedure === value);
+            break;
+          default:
+            break;
+        }
+      }
+    });
+
+    setFilteredCases(filtered);
+  }, [cases, searchValue, activeFilters]);
+
+  // Statistics for ResponsiveStatsCards
+  const statsData: StatCardData[] = [
     { 
+      id: 'total',
       label: t('total_cases', '总案件数'), 
       value: cases.length, 
       icon: mdiBriefcaseOutline,
@@ -231,6 +280,7 @@ const CaseListPage: React.FC = () => {
       bgColor: alpha('#00897B', 0.1),
     },
     { 
+      id: 'active',
       label: t('active_cases', '进行中'), 
       value: cases.filter(c => !['结案', '终结'].includes(c.current_stage)).length, 
       icon: mdiProgressClock,
@@ -238,6 +288,7 @@ const CaseListPage: React.FC = () => {
       bgColor: alpha('#00ACC1', 0.1),
     },
     { 
+      id: 'completed',
       label: t('completed_cases', '已完成'), 
       value: cases.filter(c => ['结案', '终结'].includes(c.current_stage)).length, 
       icon: mdiCheckCircle,
@@ -245,6 +296,7 @@ const CaseListPage: React.FC = () => {
       bgColor: alpha('#43A047', 0.1),
     },
     { 
+      id: 'pending',
       label: t('pending_review', '待审核'), 
       value: cases.filter(c => c.current_stage === '债权申报').length, 
       icon: mdiAlertCircle,
@@ -289,6 +341,123 @@ const CaseListPage: React.FC = () => {
     }
   };
 
+
+  // ResponsiveTable 列配置
+  const tableColumns: ResponsiveTableColumn[] = [
+    {
+      id: 'case_number',
+      label: t('case_number', '案件编号'),
+      priority: 'high',
+      format: (value: string) => (
+        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          {value}
+        </Typography>
+      ),
+    },
+    {
+      id: 'case_procedure',
+      label: t('case_procedure', '案件程序'),
+      priority: 'high',
+      format: (value: string) => {
+        const procedureStyle = getProcedureIcon(value);
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SvgIcon sx={{ fontSize: 20, color: procedureStyle.color }}>
+              <path d={procedureStyle.icon} />
+            </SvgIcon>
+            <Typography variant="body2">{value}</Typography>
+          </Box>
+        );
+      },
+    },
+    {
+      id: 'case_lead_name',
+      label: t('case_lead', '案件负责人'),
+      priority: 'medium',
+      format: (value: string) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>
+            {value.charAt(0)}
+          </Avatar>
+          <Typography variant="body2">{value}</Typography>
+        </Box>
+      ),
+    },
+    {
+      id: 'creator_name',
+      label: t('creator', '创建人'),
+      priority: 'low',
+    },
+    {
+      id: 'acceptance_date',
+      label: t('acceptance_date', '受理时间'),
+      priority: 'medium',
+    },
+    {
+      id: 'current_stage',
+      label: t('current_stage', '程序进程'),
+      priority: 'high',
+      format: (value: string) => {
+        const statusStyle = getStatusColor(value);
+        return (
+          <Chip 
+            label={value} 
+            size="small"
+            sx={{
+              backgroundColor: statusStyle.bgColor,
+              color: statusStyle.color,
+              fontWeight: 500,
+              borderRadius: 2,
+            }}
+          />
+        );
+      },
+    },
+  ];
+
+  // ResponsiveTable 操作配置
+  const tableActions: ResponsiveTableAction[] = [
+    {
+      icon: mdiEyeOutline,
+      label: t('view_details', '查看详情'),
+      onClick: (row: CaseItem) => navigate(`/cases/${row.id}`),
+      color: 'primary',
+      disabled: () => !permissions['case_view_detail'],
+    },
+    {
+      icon: mdiFileDocumentOutline,
+      label: t('view_documents', '查看材料'),
+      onClick: (row: CaseItem) => navigate(`/cases/${row.id}`),
+      color: 'info',
+      disabled: () => !permissions['case_view_detail'],
+    },
+    {
+      icon: mdiFileEditOutline,
+      label: t('modify_status', '修改状态'),
+      onClick: (row: CaseItem) => handleOpenModifyStatus(row),
+      color: 'secondary',
+      disabled: () => !permissions['case_modify_status'],
+    },
+  ];
+
+  // 筛选处理函数
+  const handleFilterChange = (filterId: string, value: any) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [filterId]: value,
+    }));
+  };
+
+  const handleClearFilters = () => {
+    setActiveFilters({});
+  };
+
+  const getActiveFilterCount = () => {
+    return Object.values(activeFilters).filter(value => 
+      value !== undefined && value !== null && value !== ''
+    ).length;
+  };
+
   // Handlers
   const handleOpenModifyStatus = (caseItem: CaseItem) => {
     setSelectedCase(caseItem);
@@ -299,25 +468,6 @@ const CaseListPage: React.FC = () => {
     setModifyStatusOpen(false);
   };
 
-  const handleOpenMeetingMinutes = (caseItem: CaseItem) => {
-    setSelectedCase(caseItem);
-    let title = '';
-    // Check if current_stage matches meeting stages
-    if (caseItem.current_stage.includes('债权人') && caseItem.current_stage.includes('会议')) {
-      if (caseItem.current_stage.includes('第一次')) {
-        title = t('first_creditors_meeting_minutes_title', '第一次债权人会议纪要');
-      } else if (caseItem.current_stage.includes('第二次')) {
-        title = t('second_creditors_meeting_minutes_title', '第二次债权人会议纪要');
-      } else {
-        title = t('meeting_minutes_generic_title', '会议纪要');
-      }
-    } else {
-      title = t('meeting_minutes_generic_title', '会议纪要');
-    }
-    setCurrentMeetingTitle(title);
-    setMeetingMinutesOpen(true);
-  };
-
   const handleCloseMeetingMinutes = () => {
     setMeetingMinutesOpen(false);
   };
@@ -326,11 +476,6 @@ const CaseListPage: React.FC = () => {
     console.log('Saving Meeting Minutes:', selectedCase?.id, meetingTitle, minutesDelta.ops);
     showSuccess(t('meeting_minutes_save_success_mock', '会议纪要已（模拟）保存成功！'));
     handleCloseMeetingMinutes();
-  };
-
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, caseItem: CaseItem) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedCaseForMenu(caseItem);
   };
 
   const handleMenuClose = () => {
@@ -428,129 +573,74 @@ const CaseListPage: React.FC = () => {
     }, 500);
   };
 
-  return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Fade in timeout={500}>
-        <Box>
-          <Typography 
-            variant="h4" 
-            component="h1" 
-            sx={{ 
-              fontWeight: 700,
-              color: theme.palette.text.primary,
-              mb: 1,
-            }}
-          >
-            {t('case_management', '案件管理')}
-          </Typography>
-          <Typography 
-            variant="body1" 
-            color="text.secondary" 
-            sx={{ mb: 4 }}
-          >
-            {t('case_management_desc', '管理和跟踪所有破产案件的进展情况')}
-          </Typography>
+  const pageContent = (
+    <Box sx={{ p: isMobile ? 0 : 3 }}>
+      {/* Header - 桌面端显示 */}
+      {!isMobile && (
+        <Fade in timeout={500}>
+          <Box sx={{ mb: 4 }}>
+            <Typography 
+              variant="h4" 
+              component="h1" 
+              sx={{ 
+                fontWeight: 700,
+                color: theme.palette.text.primary,
+                mb: 1,
+              }}
+            >
+              {t('case_management', '案件管理')}
+            </Typography>
+            <Typography 
+              variant="body1" 
+              color="text.secondary"
+            >
+              {t('case_management_desc', '管理和跟踪所有破产案件的进展情况')}
+            </Typography>
+          </Box>
+        </Fade>
+      )}
+
+      {/* Statistics Cards - 使用 ResponsiveStatsCards */}
+      <Fade in timeout={600}>
+        <Box sx={{ mb: isMobile ? 2 : 4 }}>
+          <ResponsiveStatsCards
+            stats={statsData}
+            loading={isLoading}
+            variant={isMobile ? 'compact' : 'default'}
+            columns={{ xs: 2, sm: 2, md: 4, lg: 4, xl: 4 }}
+            showTrend={false}
+          />
         </Box>
       </Fade>
 
-      {/* Statistics Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {stats.map((stat, index) => (
-          <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
-            <Fade in timeout={500 + index * 100}>
-              <Card 
-                sx={{ 
-                  height: '100%',
-                  borderRadius: 3,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                  },
-                }}
-              >
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h3" sx={{ fontWeight: 700, color: stat.color }}>
-                        {stat.value}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {stat.label}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: 2,
-                        backgroundColor: stat.bgColor,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <SvgIcon sx={{ fontSize: 28, color: stat.color }}>
-                        <path d={stat.icon} />
-                      </SvgIcon>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Fade>
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* Actions Bar */}
+      {/* Search and Filter - 使用 MobileSearchFilter */}
       <Fade in timeout={700}>
-        <Paper 
-          sx={{ 
-            p: 2, 
-            mb: 3,
-            borderRadius: 2,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          }}
-        >
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-              <TextField 
-                variant="outlined" 
-                size="small" 
-                placeholder={t('search_cases', '搜索案件...')}
-                value={searchValue}
-                onChange={(e) => setSearchValue(e.target.value)}
-                sx={{ 
-                  minWidth: 300,
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SvgIcon sx={{ color: 'text.secondary' }}>
-                        <path d={mdiMagnify} />
-                      </SvgIcon>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <Button 
-                variant="outlined" 
-                startIcon={<SvgIcon><path d={mdiFilterVariant} /></SvgIcon>}
-                onClick={() => console.log('Filter button clicked')}
-                sx={{ 
-                  borderRadius: 2,
-                  textTransform: 'none',
-                }}
-              >
-                {t('filter', '筛选')}
-              </Button>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ mb: isMobile ? 2 : 3, px: isMobile ? 2 : 0 }}>
+          <MobileSearchFilter
+            searchValue={searchValue}
+            onSearchChange={setSearchValue}
+            searchPlaceholder={t('search_cases', '搜索案件...')}
+            filters={filterOptions}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+            activeFilterCount={getActiveFilterCount()}
+            showSearchBar={true}
+          />
+        </Box>
+      </Fade>
+
+      {/* Actions Bar - 桌面端显示 */}
+      {!isMobile && (
+        <Fade in timeout={750}>
+          <Paper 
+            sx={{ 
+              p: 2, 
+              mb: 3,
+              borderRadius: 2,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            }}
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2 }}>
               <Button
                 variant="outlined"
                 startIcon={<SvgIcon><path d={mdiDownload} /></SvgIcon>}
@@ -584,210 +674,33 @@ const CaseListPage: React.FC = () => {
               </Button>
               ) : null}
             </Box>
-          </Box>
-        </Paper>
-      </Fade>
+          </Paper>
+        </Fade>
+      )}
 
       {/* Error Alert */}
       {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert severity="error" sx={{ mb: 3, mx: isMobile ? 2 : 0 }}>
           {error}
         </Alert>
       )}
 
-      {/* Cases Table */}
-      <Fade in timeout={900}>
-        <Paper 
-          sx={{ 
-            width: '100%', 
-            overflow: 'hidden',
-            borderRadius: 3,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-          }}
-        >
-          {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
-              <CircularProgress />
-              <Typography sx={{ ml: 2 }}>{t('loading_cases', '正在加载案件列表...')}</Typography>
-            </Box>
-          ) : (
-            <TableContainer>
-              <Table stickyHeader aria-label="case list table">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={tableHeadCellStyle}>
-                      {t('case_number', '案件编号')}
-                    </TableCell>
-                    <TableCell sx={tableHeadCellStyle}>
-                      {t('case_procedure', '案件程序')}
-                    </TableCell>
-                    <TableCell sx={tableHeadCellStyle}>
-                      {t('case_lead', '案件负责人')}
-                    </TableCell>
-                    <TableCell sx={tableHeadCellStyle}>
-                      {t('creator', '创建人')}
-                    </TableCell>
-                    <TableCell sx={tableHeadCellStyle}>
-                      {t('acceptance_date', '受理时间')}
-                    </TableCell>
-                    <TableCell sx={tableHeadCellStyle}>
-                      {t('current_stage', '程序进程')}
-                    </TableCell>
-                    <TableCell align="center" sx={tableHeadCellStyle}>
-                      {t('actions', '操作')}
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {cases.length === 0 && !error && (
-                    <TableRow>
-                      <TableCell colSpan={7} align="center">
-                        <Box sx={{ py: 8 }}>
-                          <SvgIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }}>
-                            <path d={mdiBriefcaseOutline} />
-                          </SvgIcon>
-                          <Typography color="text.secondary">
-                            {t('no_cases', '暂无案件数据')}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {cases.map((caseItem) => {
-                  const statusStyle = getStatusColor(caseItem.current_stage);
-                  const procedureStyle = getProcedureIcon(caseItem.case_procedure);
-                  
-                  return (
-                    <TableRow 
-                      hover 
-                      key={caseItem.id}
-                      sx={{
-                        '&:hover': {
-                          backgroundColor: alpha(theme.palette.primary.main, 0.04),
-                        },
-                      }}
-                    >
-                      <TableCell component="th" scope="row">
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {caseItem.case_number}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <SvgIcon sx={{ fontSize: 20, color: procedureStyle.color }}>
-                            <path d={procedureStyle.icon} />
-                          </SvgIcon>
-                          <Typography variant="body2">
-                            {caseItem.case_procedure}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>
-                            {caseItem.case_lead_name.charAt(0)}
-                          </Avatar>
-                          <Typography variant="body2">
-                            {caseItem.case_lead_name}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>{caseItem.creator_name}</TableCell>
-                      <TableCell>{caseItem.acceptance_date}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={caseItem.current_stage} 
-                          size="small"
-                          sx={{
-                            backgroundColor: statusStyle.bgColor,
-                            color: statusStyle.color,
-                            fontWeight: 500,
-                            borderRadius: 2,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell align="center" sx={{whiteSpace: 'nowrap'}}>
-                        {permissions['case_view_detail'] && (
-                        <Tooltip title={t('view_details', '查看详情')}>
-                          <IconButton 
-                            component={Link} 
-                            to={`/cases/${caseItem.id}`} 
-                            size="small" 
-                            sx={{ 
-                              color: '#00897B',
-                              '&:hover': {
-                                backgroundColor: alpha('#00897B', 0.08),
-                              },
-                            }}
-                          >
-                            <SvgIcon fontSize="small"><path d={mdiEyeOutline} /></SvgIcon>
-                          </IconButton>
-                        </Tooltip>
-                        )}
-                        {permissions['case_view_detail'] && (
-                        <Tooltip title={t('view_documents', '查看材料')}>
-                          <IconButton 
-                            component={Link} 
-                            to={`/cases/${caseItem.id}`} 
-                            size="small"
-                            sx={{ 
-                              color: '#00ACC1',
-                              '&:hover': {
-                                backgroundColor: alpha('#00ACC1', 0.08),
-                              },
-                            }}
-                          >
-                            <SvgIcon fontSize="small"><path d={mdiFileDocumentOutline} /></SvgIcon>
-                          </IconButton>
-                        </Tooltip>
-                        )}
-                        {permissions['case_modify_status'] && (
-                        <Tooltip title={t('modify_status', '修改状态')}>
-                          <IconButton 
-                            onClick={() => handleOpenModifyStatus(caseItem)} 
-                            size="small"
-                            sx={{ 
-                              color: '#7B1FA2',
-                              '&:hover': {
-                                backgroundColor: alpha('#7B1FA2', 0.08),
-                              },
-                            }}
-                          >
-                            <SvgIcon fontSize="small"><path d={mdiFileEditOutline} /></SvgIcon>
-                          </IconButton>
-                        </Tooltip>
-                        )}
-                        {caseItem.current_stage === '债权人第一次会议' && permissions['case_edit'] && (
-                          <Tooltip title={t('meeting_minutes', '会议纪要')}>
-                            <IconButton 
-                              onClick={() => handleOpenMeetingMinutes(caseItem)} 
-                              size="small"
-                              sx={{ 
-                                color: '#F57C00',
-                                '&:hover': {
-                                  backgroundColor: alpha('#F57C00', 0.08),
-                                },
-                              }}
-                            >
-                              <SvgIcon fontSize="small"><path d={mdiCalendarEdit} /></SvgIcon>
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        <IconButton 
-                          onClick={(e) => handleMenuClick(e, caseItem)} 
-                          size="small"
-                        >
-                          <SvgIcon fontSize="small"><path d={mdiDotsVertical} /></SvgIcon>
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          )}
-        </Paper>
+      {/* Cases Table/Cards - 使用 ResponsiveTable */}
+      <Fade in timeout={800}>
+        <Box sx={{ px: isMobile ? 2 : 0 }}>
+          <ResponsiveTable
+            columns={tableColumns}
+            data={filteredCases}
+            actions={tableActions}
+            onRowClick={(row: CaseItem) => navigate(`/cases/${row.id}`)}
+            loading={isLoading}
+            emptyMessage={t('no_cases', '暂无案件数据')}
+            stickyHeader={true}
+            size="medium"
+            mobileCardVariant="detailed"
+            showRowNumbers={!isMobile}
+          />
+        </Box>
       </Fade>
 
       {/* More Actions Menu */}
@@ -829,7 +742,7 @@ const CaseListPage: React.FC = () => {
           open={meetingMinutesOpen}
           onClose={handleCloseMeetingMinutes}
           caseInfo={{ caseId: selectedCase.id, caseName: selectedCase.case_number }}
-          meetingTitle={currentMeetingTitle}
+          meetingTitle={t('meeting_minutes_generic_title', '会议纪要')}
           onSave={handleSaveMeetingMinutes}
         />
       )}
@@ -840,6 +753,24 @@ const CaseListPage: React.FC = () => {
       />
     </Box>
   );
+
+  // 移动端使用 MobileOptimizedLayout，桌面端直接显示内容
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title={t('case_management', '案件管理')}
+        subtitle={`${filteredCases.length} ${t('cases', '个案件')}`}
+        showFab={permissions['case_create'] || false}
+        fabIcon={mdiPlusCircleOutline}
+        onFabClick={handleOpenCreateCase}
+        fabLabel={t('create_new_case', '创建新案件')}
+      >
+        {pageContent}
+      </MobileOptimizedLayout>
+    );
+  }
+
+  return pageContent;
 };
 
 export default CaseListPage;

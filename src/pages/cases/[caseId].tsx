@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useSurreal } from '@/src/contexts/SurrealProvider';
 import { RecordId } from 'surrealdb';
 import RichTextEditor from '@/src/components/RichTextEditor';
@@ -18,6 +18,8 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  Card,
+  CardContent,
 } from '@mui/material';
 import GlobalLoader from '@/src/components/GlobalLoader';
 import {
@@ -31,8 +33,14 @@ import {
   mdiCalendar,
   mdiFileDocument,
   mdiPrinter,
+  mdiNoteEditOutline,
 } from '@mdi/js';
 import { NavigateNext, Save, Share, Print, MoreVert } from '@mui/icons-material';
+
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import PageContainer from '@/src/components/PageContainer';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 // Import Dialogs
 import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/ModifyCaseStatusDialog';
@@ -87,8 +95,10 @@ interface ExtensionAreaContent {
 const CaseDetailPage: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { surreal: client, isSuccess: isConnected } = useSurreal();
   const { user, hasRole } = useAuth();
+  const { isMobile } = useResponsiveLayout();
   const [caseDetail, setCaseDetail] = useState<Case | null>(null);
   const [caseLeadName, setCaseLeadName] = useState<string>('');
   const [filingMaterialContent, setFilingMaterialContent] = useState<QuillDelta | string>('');
@@ -535,86 +545,255 @@ const CaseDetailPage: React.FC = () => {
     details: t('case_detail_no_details')
   };
 
-  return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
-      <RichTextEditor
-        defaultValue={filingMaterialContent}
-        onTextChange={handleFilingMaterialChange}
-        readOnly={isReadOnly}
-        placeholder={isReadOnly ? t('case_detail_filing_material_readonly') : t('case_detail_filing_material_empty')}
-        documentId={caseDetail?.filing_material_doc_id?.toString()}
-        userId={user?.id?.toString()}
-        userName={user?.name || user?.email}
-        contextInfo={{
-          title: displayCase.name,
-          subtitle: `${displayCase.case_number} / ${displayCase.case_procedure}`,
-          details: [
-            { label: '案件编号', value: displayCase.case_number, icon: mdiFileDocumentOutline },
-            { label: '负责人', value: displayCase.case_lead_name, icon: mdiAccount },
-            { label: '受理日期', value: displayCase.acceptance_date, icon: mdiCalendar },
-            { label: '当前阶段', value: displayCase.current_stage, icon: mdiGavel },
-          ],
-          avatar: {
-            text: '案',
-            color: '#26A69A' // Teal 300
-          }
-        }}
-        breadcrumbs={
-          <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
-            <Typography color="inherit" sx={{ cursor: 'pointer' }} onClick={() => window.location.href = '/cases'}>案件管理</Typography>
-            <Typography color="text.secondary">{displayCase.case_number}</Typography>
-            <Typography color="text.primary">立案材料</Typography>
-          </Breadcrumbs>
-        }
-        enableAutoSave={true}
-        autoSaveInterval={10000} // 10秒自动保存
-        showSaveButton={true}
-        saveButtonText="保存文档"
-        actions={
-          <>
-            <Button startIcon={<Share />} variant="outlined" size="small">分享</Button>
-            <IconButton
-              size="small"
-              onClick={() => setShowExtensionArea(!showExtensionArea)}
-            >
-              <Print />
-            </IconButton>
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title={displayCase.case_number}
+        showBackButton={true}
+        onBackClick={() => navigate('/cases')}
+        fabConfig={!isReadOnly ? {
+          icon: mdiNoteEditOutline,
+          action: () => setShowExtensionArea(!showExtensionArea),
+          ariaLabel: "编辑案件信息",
+        } : undefined}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Mobile Case Info Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight="600" gutterBottom>
+                {displayCase.name}
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      案件编号
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {displayCase.case_number}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      程序类型
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {displayCase.case_procedure}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      负责人
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {displayCase.case_lead_name}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      受理日期
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {displayCase.acceptance_date}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={12}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      当前阶段
+                    </Typography>
+                    <Chip 
+                      label={displayCase.current_stage} 
+                      size="small" 
+                      color="primary" 
+                      variant="outlined"
+                    />
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Extension Area Tabs */}
+          <Box sx={{ mb: 2 }}>
+            <Grid container spacing={1}>
+              {extensionAreaTabs.map((tab) => (
+                <Grid size={6} key={tab.id}>
+                  <Button
+                    fullWidth
+                    variant={currentExtensionTab === tab.id ? "contained" : "outlined"}
+                    size="small"
+                    startIcon={
+                      <SvgIcon fontSize="small">
+                        <path d={tab.icon} />
+                      </SvgIcon>
+                    }
+                    onClick={() => handleExtensionTabChange(tab.id)}
+                    sx={{ 
+                      minHeight: 44,
+                      fontSize: '0.75rem',
+                      px: 1,
+                    }}
+                  >
+                    {tab.label}
+                  </Button>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+
+          {/* Mobile Extension Content */}
+          <Paper sx={{ mb: 3 }}>
+            {getExtensionContent()}
+          </Paper>
+
+          {/* Mobile Action Buttons */}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {(isAdmin || (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议')) && (
               <Button
                 variant="outlined"
-                color="primary"
                 size="small"
                 startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
                 onClick={handleOpenMeetingMinutes}
               >
-                {t('case_detail_actions_meeting_minutes_button')}
+                会议纪要
               </Button>
             )}
             {(isAdmin || hasRole('case_manager')) && displayCase.current_stage !== t('case_status_closed', '结案') && (
               <Button
                 variant="outlined"
-                color="secondary"
                 size="small"
                 startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
                 onClick={handleOpenModifyStatus}
               >
-                {t('case_detail_actions_change_status_button')}
+                修改状态
               </Button>
             )}
-            <IconButton size="small"><MoreVert /></IconButton>
-          </>
-        }
-        extensionAreaTabs={extensionAreaTabs}
-        extensionAreaContent={{
-          type: extensionAreaContent.type,
-          data: extensionAreaContent.data,
-          renderContent: getExtensionContent
-        }}
-        onExtensionAreaTabChange={handleExtensionTabChange}
-        showExtensionArea={showExtensionArea}
-      />
+          </Box>
+        </Box>
 
-      {/* Dialogs */}
+        {/* Mobile Dialogs */}
+        {caseDetail && (
+          <ModifyCaseStatusDialog
+            open={modifyStatusOpen}
+            onClose={() => setModifyStatusOpen(false)}
+            currentCase={{
+              id: caseDetail.id.toString(),
+              current_status: displayCase.current_stage as CaseStatus,
+            }}
+          />
+        )}
+
+        {caseDetail && (
+          <MeetingMinutesDialog
+            open={meetingMinutesOpen}
+            onClose={() => setMeetingMinutesOpen(false)}
+            caseInfo={{
+              caseId: caseDetail.id.toString(),
+              caseName: displayCase.name,
+            }}
+            meetingTitle={currentMeetingTitle}
+            existingMinutes={{ ops: [] } as any}
+            onSave={handleSaveMeetingMinutes}
+          />
+        )}
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
+  return (
+    <PageContainer>
+      <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+        <RichTextEditor
+          defaultValue={filingMaterialContent}
+          onTextChange={handleFilingMaterialChange}
+          readOnly={isReadOnly}
+          placeholder={isReadOnly ? t('case_detail_filing_material_readonly') : t('case_detail_filing_material_empty')}
+          documentId={caseDetail?.filing_material_doc_id?.toString()}
+          userId={user?.id?.toString()}
+          userName={user?.name || user?.email}
+          contextInfo={{
+            title: displayCase.name,
+            subtitle: `${displayCase.case_number} / ${displayCase.case_procedure}`,
+            details: [
+              { label: '案件编号', value: displayCase.case_number, icon: mdiFileDocumentOutline },
+              { label: '负责人', value: displayCase.case_lead_name, icon: mdiAccount },
+              { label: '受理日期', value: displayCase.acceptance_date, icon: mdiCalendar },
+              { label: '当前阶段', value: displayCase.current_stage, icon: mdiGavel },
+            ],
+            avatar: {
+              text: '案',
+              color: '#26A69A' // Teal 300
+            }
+          }}
+          breadcrumbs={
+            <Breadcrumbs separator={<NavigateNext fontSize="small" />} aria-label="breadcrumb">
+              <Typography color="inherit" sx={{ cursor: 'pointer' }} onClick={() => navigate('/cases')}>案件管理</Typography>
+              <Typography color="text.secondary">{displayCase.case_number}</Typography>
+              <Typography color="text.primary">立案材料</Typography>
+            </Breadcrumbs>
+          }
+          enableAutoSave={true}
+          autoSaveInterval={10000} // 10秒自动保存
+          showSaveButton={true}
+          saveButtonText="保存文档"
+          actions={
+            <>
+              <Button startIcon={<Share />} variant="outlined" size="small">分享</Button>
+              <IconButton
+                size="small"
+                onClick={() => setShowExtensionArea(!showExtensionArea)}
+              >
+                <Print />
+              </IconButton>
+              {(isAdmin || (displayCase.current_stage === '债权人第一次会议' || displayCase.current_stage === '债权人第二次会议')) && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  startIcon={<SvgIcon><path d={mdiBookOpenOutline} /></SvgIcon>}
+                  onClick={handleOpenMeetingMinutes}
+                >
+                  {t('case_detail_actions_meeting_minutes_button')}
+                </Button>
+              )}
+              {(isAdmin || hasRole('case_manager')) && displayCase.current_stage !== t('case_status_closed', '结案') && (
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  size="small"
+                  startIcon={<SvgIcon><path d={mdiSync} /></SvgIcon>}
+                  onClick={handleOpenModifyStatus}
+                >
+                  {t('case_detail_actions_change_status_button')}
+                </Button>
+              )}
+              <IconButton size="small"><MoreVert /></IconButton>
+            </>
+          }
+          extensionAreaTabs={extensionAreaTabs}
+          extensionAreaContent={{
+            type: extensionAreaContent.type,
+            data: extensionAreaContent.data,
+            renderContent: getExtensionContent
+          }}
+          onExtensionAreaTabChange={handleExtensionTabChange}
+          showExtensionArea={showExtensionArea}
+        />
+
+      </Box>
+
+      {/* Desktop Dialogs */}
       {caseDetail && (
         <ModifyCaseStatusDialog
           open={modifyStatusOpen}
@@ -639,7 +818,7 @@ const CaseDetailPage: React.FC = () => {
           onSave={handleSaveMeetingMinutes}
         />
       )}
-    </Box>
+    </PageContainer>
   );
 };
 

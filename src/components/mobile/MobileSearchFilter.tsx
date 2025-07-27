@@ -28,6 +28,7 @@ import {
   mdiChevronUp,
 } from '@mdi/js';
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+import { touchFriendlyIconButtonSx } from '@/src/utils/touchTargetUtils';
 
 export interface FilterOption {
   id: string;
@@ -175,7 +176,11 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
         {/* 抽屉头部 */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Typography variant="h6">筛选条件</Typography>
-          <IconButton onClick={() => setFilterDrawerOpen(false)}>
+          <IconButton 
+            onClick={() => setFilterDrawerOpen(false)}
+            sx={touchFriendlyIconButtonSx}
+            aria-label="关闭"
+          >
             <SvgIcon>
               <path d={mdiClose} />
             </SvgIcon>
@@ -281,6 +286,8 @@ const MobileSearchFilter: React.FC<MobileSearchFilterProps> = ({
                   <IconButton
                     onClick={() => setFilterDrawerOpen(true)}
                     color={activeFilterCount > 0 ? 'primary' : 'default'}
+                    sx={touchFriendlyIconButtonSx}
+                    aria-label="筛选"
                   >
                     <SvgIcon>
                       <path d={mdiFilterVariant} />

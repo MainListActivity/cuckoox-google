@@ -18,6 +18,7 @@ import {
   mdiPlus,
 } from '@mdi/js';
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+import { touchFriendlyIconButtonSx, touchFriendlyFabSx } from '@/src/utils/touchTargetUtils';
 
 interface MobileOptimizedLayoutProps {
   children: React.ReactNode;
@@ -89,7 +90,11 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({
             <IconButton
               edge="start"
               onClick={onBack}
-              sx={{ mr: 1 }}
+              sx={{ 
+                mr: 1,
+                ...touchFriendlyIconButtonSx,
+              }}
+              aria-label="返回"
             >
               <SvgIcon>
                 <path d={mdiArrowLeft} />
@@ -128,6 +133,8 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({
               <IconButton
                 edge="end"
                 onClick={onMenuClick}
+                sx={touchFriendlyIconButtonSx}
+                aria-label="菜单"
               >
                 <SvgIcon>
                   <path d={mdiDotsVertical} />
@@ -164,6 +171,16 @@ const MobileOptimizedLayout: React.FC<MobileOptimizedLayoutProps> = ({
               bottom: 16,
               right: 16,
               zIndex: theme.zIndex.fab,
+              ...touchFriendlyFabSx,
+              // 添加触摸反馈动画
+              transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'scale(1.05)',
+                boxShadow: theme.shadows[8],
+              },
+              '&:active': {
+                transform: 'scale(0.95)',
+              },
             }}
           >
             <SvgIcon>

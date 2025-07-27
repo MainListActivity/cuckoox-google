@@ -23,6 +23,7 @@ import {
   CircularProgress, // Added for loading state
   Alert, // Added for error state
   TablePagination, // Added for pagination
+  LinearProgress,
 } from '@mui/material';
 import { 
   mdiAccountPlusOutline, 
@@ -30,8 +31,15 @@ import {
   mdiPencilOutline, 
   mdiDeleteOutline, 
   mdiMagnify, // Added
-  mdiFileImportOutline
+  mdiFileImportOutline,
+  mdiPlus,
 } from '@mdi/js';
+
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import CreditorMobileCard from '@/src/components/mobile/CreditorMobileCard';
+import PageContainer from '@/src/components/PageContainer';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import PrintWaybillsDialog from './PrintWaybillsDialog'; // MODIFIED PATH
@@ -59,6 +67,7 @@ const CreditorListPage: React.FC = () => {
   const { selectedCaseId, user, hasRole } = useAuth(); // Added user and hasRole
   const client = useSurrealClient(); // Updated to use client
   const navigate = useNavigate(); // Added for navigation
+  const { isMobile } = useResponsiveLayout();
 
   // Determine if the user has management permissions
   // For now, system admin (user?.github_id === '--admin--') or users with 'case_manager' role for the selected case.
@@ -569,29 +578,236 @@ const CreditorListPage: React.FC = () => {
     setSelectedCreditorForClaims(null);
   };
 
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>{t('creditor_list_page_title', '债权人管理')}</Typography>
-      
-      {/* 搜索区域 */}
-      <Box sx={{ mb: 3 }}>
-        <TextField
-          label={t('search_creditors_label', '搜索债权人')}
-          variant="outlined"
-          size="small"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="支持搜索姓名、证件号、联系人、电话、地址等信息"
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SvgIcon fontSize="small"><path d={mdiMagnify} /></SvgIcon>
-              </InputAdornment>
-            ),
-          }}
-          sx={{ minWidth: '400px', maxWidth: '600px' }}
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title="债权人管理"
+        showBackButton={false}
+        fabConfig={canCreate ? {
+          icon: mdiPlus,
+          action: handleOpenAddCreditorDialog,
+          ariaLabel: "添加债权人",
+        } : undefined}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Mobile Search */}
+          <Box sx={{ mb: 2 }}>
+            <TextField
+              label="搜索债权人"
+              variant="outlined"
+              size="small"
+              fullWidth
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="支持搜索姓名、证件号、联系人、电话、地址等信息"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SvgIcon fontSize="small"><path d={mdiMagnify} /></SvgIcon>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+
+          {/* Mobile Action Buttons */}
+          {(canBatchImport || (canPrintWaybill && selectedCreditorIds.length > 0)) && (
+            <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {canBatchImport && (
+                <Button 
+                  variant="outlined" 
+                  size="small"
+                  startIcon={<SvgIcon><path d={mdiFileImportOutline} /></SvgIcon>}
+                  onClick={handleOpenBatchImportDialog}
+                >
+                  批量导入
+                </Button>
+              )}
+              {canPrintWaybill && selectedCreditorIds.length > 0 && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  color="secondary"
+                  startIcon={<SvgIcon><path d={mdiPrinterOutline} /></SvgIcon>}
+                  onClick={handleOpenPrintWaybillsDialog}
+                  disabled={!canManageCreditors || selectedCreditorIds.length === 0}
+                >
+                  打印快递单 ({selectedCreditorIds.length})
+                </Button>
+              )}
+            </Box>
+          )}
+
+          {/* Loading State */}
+          {isLoading && (
+            <Box sx={{ textAlign: 'center', py: 3 }}>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+                正在加载债权人数据...
+              </Typography>
+              <LinearProgress />
+            </Box>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
+              <Typography variant="body2">{error}</Typography>
+            </Paper>
+          )}
+
+          {/* Content */}
+          {!isLoading && !error && (
+            <>
+              {creditors.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    {debouncedSearchTerm ? '没有找到匹配的债权人' : '暂无债权人数据'}
+                  </Typography>
+                  {canCreate && !debouncedSearchTerm && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      点击右下角按钮添加债权人
+                    </Typography>
+                  )}
+                </Box>
+              ) : (
+                <>
+                  {/* Select All */}
+                  {creditors.length > 0 && (
+                    <Box sx={{ mb: 2, px: 1 }}>
+                      <Checkbox
+                        checked={creditors.length > 0 && selectedCreditorIds.length === creditors.length}
+                        indeterminate={selectedCreditorIds.length > 0 && selectedCreditorIds.length < creditors.length}
+                        onChange={handleSelectAllClick}
+                        size="small"
+                      />
+                      <Typography variant="body2" component="span" sx={{ ml: 1 }}>
+                        {selectedCreditorIds.length > 0 
+                          ? `已选择 ${selectedCreditorIds.length} 项`
+                          : '全选'
+                        }
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Mobile Cards */}
+                  <Box>
+                    {creditors.map((creditor) => (
+                      <CreditorMobileCard
+                        key={creditor.id}
+                        creditor={creditor}
+                        isSelected={creditor.id ? isSelected(creditor.id) : false}
+                        onSelectionChange={(creditorId, selected) => {
+                          if (selected) {
+                            setSelectedCreditorIds(prev => [...prev, creditorId]);
+                          } else {
+                            setSelectedCreditorIds(prev => prev.filter(id => id !== creditorId));
+                          }
+                        }}
+                        onEdit={canEdit ? handleOpenEditCreditorDialog : undefined}
+                        onDelete={canDelete ? handleOpenDeleteDialog : undefined}
+                        onViewClaims={handleOpenCreditorClaims}
+                        canEdit={canEdit}
+                        canDelete={canDelete}
+                      />
+                    ))}
+                  </Box>
+
+                  {/* Mobile Pagination */}
+                  {totalCreditors > rowsPerPage && (
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                      <TablePagination
+                        component="div"
+                        count={totalCreditors}
+                        page={page}
+                        rowsPerPage={rowsPerPage}
+                        onPageChange={handleChangePage}
+                        onRowsPerPageChange={handleChangeRowsPerPage}
+                        rowsPerPageOptions={[5, 10, 25]}
+                        labelRowsPerPage="每页:"
+                        labelDisplayedRows={({ from, to, count }) =>
+                          `${from}-${to} / ${count !== -1 ? count : `超过 ${to}`}`
+                        }
+                        sx={{
+                          '.MuiTablePagination-toolbar': {
+                            fontSize: '0.875rem',
+                          },
+                          '.MuiTablePagination-select': {
+                            fontSize: '0.875rem',
+                          },
+                        }}
+                      />
+                    </Box>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </Box>
+
+        {/* Mobile Dialogs */}
+        <PrintWaybillsDialog
+          open={printWaybillsDialogOpen}
+          onClose={() => setPrintWaybillsDialogOpen(false)}
+          selectedCreditors={creditorsToPrint}
         />
-      </Box>
+        <AddCreditorDialog
+          open={addCreditorOpen}
+          onClose={handleCloseAddCreditorDialog}
+          onSave={handleSaveCreditor}
+          existingCreditor={editingCreditor}
+        />
+        <BatchImportCreditorsDialog
+          open={batchImportOpen}
+          onClose={() => setBatchImportOpen(false)}
+          onImport={handleImportCreditors}
+          isImporting={isBatchProcessing}
+        />
+        <ConfirmDeleteDialog
+          open={deleteDialogOpen}
+          onClose={handleCloseDeleteDialog}
+          onConfirm={handleConfirmDelete}
+          title={t('delete_creditor_dialog_title', '确认删除债权人')}
+          contentText={
+            creditorToDelete 
+              ? t('delete_creditor_dialog_content', `您确定要删除债权人 "${creditorToDelete.name}" 吗？此操作不可撤销。`)
+              : ''
+          }
+        />
+        <CreditorClaimsDialog
+          open={claimsDialogOpen}
+          onClose={handleCloseCreditorClaims}
+          creditor={selectedCreditorForClaims}
+        />
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
+  return (
+    <PageContainer>
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h4" component="h1" gutterBottom>{t('creditor_list_page_title', '债权人管理')}</Typography>
+        
+        {/* 搜索区域 */}
+        <Box sx={{ mb: 3 }}>
+          <TextField
+            label={t('search_creditors_label', '搜索债权人')}
+            variant="outlined"
+            size="small"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="支持搜索姓名、证件号、联系人、电话、地址等信息"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SvgIcon fontSize="small"><path d={mdiMagnify} /></SvgIcon>
+                </InputAdornment>
+              ),
+            }}
+            sx={{ minWidth: '400px', maxWidth: '600px' }}
+          />
+        </Box>
 
       {/* 操作按钮区域 */}
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
@@ -775,11 +991,13 @@ const CreditorListPage: React.FC = () => {
           }}
         />
       </Paper>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
-        {t('creditor_list_footer_note_1', '债权人管理页面。当案件处于立案阶段且用户有权限时，将自动进入此菜单。')}
-        {t('creditor_list_footer_note_2', '支持录入债权人信息和打印快递单号。')}
-      </Typography>
-      
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 3 }}>
+          {t('creditor_list_footer_note_1', '债权人管理页面。当案件处于立案阶段且用户有权限时，将自动进入此菜单。')}
+          {t('creditor_list_footer_note_2', '支持录入债权人信息和打印快递单号。')}
+        </Typography>
+      </Box>
+
+      {/* Desktop Dialogs */}
       <PrintWaybillsDialog
         open={printWaybillsDialogOpen}
         onClose={() => setPrintWaybillsDialogOpen(false)}
@@ -813,7 +1031,7 @@ const CreditorListPage: React.FC = () => {
         onClose={handleCloseCreditorClaims}
         creditor={selectedCreditorForClaims}
       />
-    </Box>
+    </PageContainer>
   );
 };
 

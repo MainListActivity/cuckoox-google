@@ -28,7 +28,14 @@ import {
   mdiEye,
   mdiUndo,
   mdiPencil,
+  mdiPlus,
 } from '@mdi/js';
+
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import MyClaimsMobileCard from '@/src/components/mobile/MyClaimsMobileCard';
+import ResponsiveTable from '@/src/components/common/ResponsiveTable';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 // 数据库原始数据接口
 interface RawClaimData {
@@ -135,6 +142,7 @@ const MyClaimsPage: React.FC = () => {
   const { user, selectedCaseId } = useAuth();
   const { hasPermission: canSubmitClaim } = useOperationPermission('claim_submit');
   const { hasPermission: canEditClaim } = useOperationPermission('claim_edit_draft');
+  const { isMobile } = useResponsiveLayout();
   
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -308,16 +316,171 @@ const MyClaimsPage: React.FC = () => {
     }
   };
 
+  // Prepare table columns for ResponsiveTable
+  const tableColumns = [
+    { key: 'claimNumber', label: '债权编号', priority: 'high' as const },
+    { key: 'submissionDate', label: '申报时间', priority: 'medium' as const },
+    { key: 'claimNature', label: '债权性质', priority: 'low' as const },
+    { key: 'totalAmount', label: '主张债权总额', priority: 'high' as const },
+    { key: 'approvedAmount', label: '认定债权总额', priority: 'medium' as const },
+    { key: 'reviewStatus', label: '审核状态', priority: 'high' as const },
+    { key: 'reviewOpinion', label: '审核意见', priority: 'low' as const },
+    { key: 'actions', label: '操作', priority: 'high' as const },
+  ];
+
+  // Transform claims data for ResponsiveTable
+  const tableData = claims.map((claim) => ({
+    id: claim.id,
+    claimNumber: claim.claimNumber,
+    submissionDate: claim.submissionDate,
+    claimNature: claim.claimNature,
+    totalAmount: formatCurrencyDisplay(claim.totalAmount, claim.currency),
+    approvedAmount: claim.approvedAmount !== undefined 
+      ? formatCurrencyDisplay(claim.approvedAmount, claim.currency)
+      : '-',
+    reviewStatus: (
+      <Chip
+        label={claim.reviewStatus}
+        size="small"
+        {...getStatusChipProps(claim.reviewStatus)}
+      />
+    ),
+    reviewOpinion: (
+      <Tooltip title={claim.reviewOpinion || '-'}>
+        <Typography
+          variant="body2"
+          sx={{
+            maxWidth: 200,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {claim.reviewOpinion || '-'}
+        </Typography>
+      </Tooltip>
+    ),
+    actions: (
+      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+        <Tooltip title="查看详情">
+          <IconButton
+            size="small"
+            color="primary"
+            data-testid="view-details-button"
+            onClick={() => navigate(`/my-claims/${claim.id}`)}
+          >
+            <SvgIcon fontSize="small">
+              <path d={mdiEye} />
+            </SvgIcon>
+          </IconButton>
+        </Tooltip>
+        
+        {claim.canWithdraw && (
+          <Tooltip title="撤回">
+            <IconButton
+              size="small"
+              color="warning"
+              data-testid="withdraw-button"
+              onClick={() => handleWithdraw(claim.id, claim)}
+            >
+              <SvgIcon fontSize="small">
+                <path d={mdiUndo} />
+              </SvgIcon>
+            </IconButton>
+          </Tooltip>
+        )}
+        
+        {claim.canEdit && canEditClaim && (
+          <Tooltip title="编辑">
+            <IconButton
+              size="small"
+              color="success"
+              data-testid="edit-button"
+              onClick={() => navigate(`/claims/submit/${claim.id}`)}
+            >
+              <SvgIcon fontSize="small">
+                <path d={mdiPencil} />
+              </SvgIcon>
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
+    ),
+    _original: claim, // Keep original claim data for mobile cards
+  }));
+
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title="我的债权申报"
+        showBackButton={false}
+        fabConfig={canSubmitClaim ? {
+          icon: mdiPlus,
+          action: () => navigate('/claims/submit'),
+          ariaLabel: "发起新的债权申报",
+        } : undefined}
+      >
+        <Box sx={{ p: 2 }}>
+          {isLoading && (
+            <Box sx={{ textAlign: 'center', py: 3 }}>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+                正在加载债权列表...
+              </Typography>
+              <LinearProgress />
+            </Box>
+          )}
+
+          {error && (
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
+              <Typography variant="body2">{error}</Typography>
+            </Paper>
+          )}
+
+          {!isLoading && !error && (
+            <>
+              {claims.length === 0 ? (
+                <Box sx={{ textAlign: 'center', py: 6 }}>
+                  <Typography variant="body1" color="text.secondary">
+                    暂无债权申报记录
+                  </Typography>
+                  {canSubmitClaim && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      点击右下角按钮发起新的债权申报
+                    </Typography>
+                  )}
+                </Box>
+              ) : (
+                <Box>
+                  {claims.map((claim) => (
+                    <MyClaimsMobileCard
+                      key={claim.id}
+                      claim={claim}
+                      onViewDetails={(claimId) => navigate(`/my-claims/${claimId}`)}
+                      onWithdraw={handleWithdraw}
+                      onEdit={(claimId) => navigate(`/claims/submit/${claimId}`)}
+                      formatCurrencyDisplay={formatCurrencyDisplay}
+                      canEditClaim={canEditClaim}
+                    />
+                  ))}
+                </Box>
+              )}
+            </>
+          )}
+        </Box>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
   return (
     <PageContainer>
       <Box sx={{ p: 3 }}>
         <Box sx={{ 
           mb: 3, 
           display: 'flex', 
-          flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2
+          alignItems: 'center',
         }}>
           <Typography variant="h4" component="h1">
             我的债权申报
@@ -327,6 +490,11 @@ const MyClaimsPage: React.FC = () => {
               variant="contained"
               color="primary"
               onClick={() => navigate('/claims/submit')}
+              startIcon={
+                <SvgIcon>
+                  <path d={mdiPlus} />
+                </SvgIcon>
+              }
             >
               发起新的债权申报
             </Button>
@@ -349,118 +517,14 @@ const MyClaimsPage: React.FC = () => {
         )}
 
         {!isLoading && !error && (
-          <TableContainer component={Paper}>
-            <Table sx={{ minWidth: 650 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>债权编号</TableCell>
-                  <TableCell>申报时间</TableCell>
-                  <TableCell>债权性质</TableCell>
-                  <TableCell>主张债权总额</TableCell>
-                  <TableCell>认定债权总额</TableCell>
-                  <TableCell>审核状态</TableCell>
-                  <TableCell>审核意见</TableCell>
-                  <TableCell align="center">操作</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {claims.map((claim) => (
-                  <TableRow
-                    key={claim.id}
-                    sx={{ '&:hover': { backgroundColor: 'action.hover' } }}
-                  >
-                    <TableCell component="th" scope="row">
-                      {claim.claimNumber}
-                    </TableCell>
-                    <TableCell>{claim.submissionDate}</TableCell>
-                    <TableCell>{claim.claimNature}</TableCell>
-                    <TableCell>{formatCurrencyDisplay(claim.totalAmount, claim.currency)}</TableCell>
-                    <TableCell>
-                      {claim.approvedAmount !== undefined 
-                        ? formatCurrencyDisplay(claim.approvedAmount, claim.currency)
-                        : '-'
-                      }
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={claim.reviewStatus}
-                        size="small"
-                        {...getStatusChipProps(claim.reviewStatus)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title={claim.reviewOpinion || '-'}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            maxWidth: 200,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {claim.reviewOpinion || '-'}
-                        </Typography>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                        <Tooltip title="查看详情">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            data-testid="view-details-button"
-                            onClick={() => navigate(`/my-claims/${claim.id}`)}
-                          >
-                            <SvgIcon fontSize="small">
-                              <path d={mdiEye} />
-                            </SvgIcon>
-                          </IconButton>
-                        </Tooltip>
-                        
-                        {claim.canWithdraw && (
-                          <Tooltip title="撤回">
-                            <IconButton
-                              size="small"
-                              color="warning"
-                              data-testid="withdraw-button"
-                              onClick={() => handleWithdraw(claim.id, claim)}
-                            >
-                              <SvgIcon fontSize="small">
-                                <path d={mdiUndo} />
-                              </SvgIcon>
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        
-                        {claim.canEdit && canEditClaim && (
-                          <Tooltip title="编辑">
-                            <IconButton
-                              size="small"
-                              color="success"
-                              data-testid="edit-button"
-                              onClick={() => navigate(`/claims/submit/${claim.id}`)}
-                            >
-                              <SvgIcon fontSize="small">
-                                <path d={mdiPencil} />
-                              </SvgIcon>
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {claims.length === 0 && (
-              <Box sx={{ textAlign: 'center', py: 6 }}>
-                <Typography variant="body1" color="text.secondary">
-                  暂无债权申报记录
-                </Typography>
-              </Box>
-            )}
-          </TableContainer>
+          <ResponsiveTable
+            columns={tableColumns}
+            data={tableData}
+            loading={isLoading}
+            emptyMessage="暂无债权申报记录"
+            searchEnabled={false}
+            stickyHeader={true}
+          />
         )}
       </Box>
     </PageContainer>

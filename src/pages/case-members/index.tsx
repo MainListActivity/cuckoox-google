@@ -26,6 +26,11 @@ import {
   mdiAccountEdit,
 } from '@mdi/js';
 
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import PageContainer from '@/src/components/PageContainer';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+
 // Import the case member management component
 import CaseMemberTab from '@/src/components/case/CaseMemberTab';
 
@@ -43,6 +48,7 @@ const CaseMemberManagementPage: React.FC = () => {
   const theme = useTheme();
   const { client, isConnected } = useSurreal();
   const { selectedCaseId } = useAuth();
+  const { isMobile } = useResponsiveLayout();
 
   // Check operation permissions
   const { permissions, isLoading: isPermissionsLoading } = useOperationPermissions([
@@ -155,35 +161,43 @@ const CaseMemberManagementPage: React.FC = () => {
     fetchCaseData();
   }, [selectedCaseId, isConnected, client, t, showError]);
 
-  // Statistics data
+  // Statistics data for ResponsiveStatsCards
   const statisticsData = [
     {
+      id: 'total_members',
       label: t('total_members', '总成员数'),
       value: stats.totalMembers,
       icon: mdiAccountGroup,
       color: '#00897B',
       bgColor: alpha('#00897B', 0.1),
+      loading: isLoading,
     },
     {
+      id: 'case_owners',
       label: t('case_owners', '案件负责人'),
       value: stats.ownerCount,
       icon: mdiAccountKey,
       color: '#1976D2',
       bgColor: alpha('#1976D2', 0.1),
+      loading: isLoading,
     },
     {
+      id: 'case_members',
       label: t('case_members', '案件成员'),
       value: stats.memberCount,
       icon: mdiAccountMultiple,
       color: '#7B1FA2',
       bgColor: alpha('#7B1FA2', 0.1),
+      loading: isLoading,
     },
     {
+      id: 'active_members',
       label: t('active_members', '活跃成员'),
       value: stats.activeMembers,
       icon: mdiAccountEdit,
       color: '#388E3C',
       bgColor: alpha('#388E3C', 0.1),
+      loading: isLoading,
     },
   ];
 
@@ -236,129 +250,239 @@ const CaseMemberManagementPage: React.FC = () => {
     );
   }
 
-  return (
-    <Box sx={{ p: 3 }}>
-      {/* Header */}
-      <Fade in timeout={500}>
-        <Box>
-          <Typography 
-            variant="h4" 
-            component="h1" 
-            sx={{ 
-              fontWeight: 700,
-              color: theme.palette.text.primary,
-              mb: 1,
-            }}
-          >
-            {t('case_member_management', '案件成员管理')}
-          </Typography>
-          <Typography 
-            variant="body1" 
-            color="text.secondary" 
-            sx={{ mb: 1 }}
-          >
-            {t('case_member_management_desc', '管理和维护案件团队成员的角色和权限')}
-          </Typography>
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title="案件成员管理"
+        showBackButton={false}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Mobile Case Info */}
           {caseInfo && (
-            <Typography 
-              variant="body2" 
-              color="text.secondary" 
-              sx={{ 
-                fontWeight: 500,
-                mb: 4,
-                px: 2,
-                py: 1,
-                bgcolor: alpha(theme.palette.primary.main, 0.08),
-                borderRadius: 1,
-                display: 'inline-block',
-              }}
-            >
-              {t('current_case', '当前案件')}: {caseInfo.case_number} - {caseInfo.case_procedure}
-              {caseInfo.name && ` (${caseInfo.name})`}
-            </Typography>
-          )}
-        </Box>
-      </Fade>
-
-      {/* Statistics Cards */}
-      <Fade in timeout={600}>
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          {statisticsData.map((stat, index) => (
-            <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
-              <Card 
+            <Box sx={{ mb: 3 }}>
+              <Paper 
                 sx={{ 
-                  height: '100%',
-                  borderRadius: 3,
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                  transition: 'all 0.3s ease',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                  },
+                  p: 2, 
+                  borderRadius: 2,
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
                 }}
               >
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box>
-                      <Typography variant="h3" sx={{ fontWeight: 700, color: stat.color }}>
-                        {stat.value}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {stat.label}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 2,
-                        backgroundColor: stat.bgColor,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  当前案件
+                </Typography>
+                <Typography variant="subtitle1" fontWeight="600" color="primary">
+                  {caseInfo.case_number} - {caseInfo.case_procedure}
+                </Typography>
+                {caseInfo.name && (
+                  <Typography variant="body2" color="text.secondary">
+                    {caseInfo.name}
+                  </Typography>
+                )}
+              </Paper>
+            </Box>
+          )}
+
+          {/* Mobile Statistics */}
+          <Box sx={{ mb: 3 }}>
+            <Grid container spacing={2}>
+              {statisticsData.map((stat, index) => (
+                <Grid size={{ xs: 6, sm: 6 }} key={index}>
+                  <Card 
+                    sx={{ 
+                      height: '100%',
+                      borderRadius: 2,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    }}
+                  >
+                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                      <Box sx={{ textAlign: 'center' }}>
+                        <Box
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 1.5,
+                            backgroundColor: stat.bgColor,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            mx: 'auto',
+                            mb: 1.5,
+                          }}
+                        >
+                          <Box
+                            component="svg"
+                            sx={{ fontSize: 18, color: stat.color }}
+                            viewBox="0 0 24 24"
+                            width={18}
+                            height={18}
+                          >
+                            <path d={stat.icon} />
+                          </Box>
+                        </Box>
+                        <Typography variant="h5" sx={{ fontWeight: 700, color: stat.color, mb: 0.5 }}>
+                          {stat.value}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
+                          {stat.label}
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
+
+          {/* Mobile Case Member Management */}
+          <Paper 
+            sx={{ 
+              borderRadius: 2,
+              overflow: 'hidden',
+            }}
+          >
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.default' }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+                案件成员
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                管理当前案件的团队成员，分配角色和权限
+              </Typography>
+            </Box>
+            <CaseMemberTab caseId={selectedCaseId} />
+          </Paper>
+        </Box>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
+  return (
+    <PageContainer>
+      <Box sx={{ p: 3 }}>
+        {/* Header */}
+        <Fade in timeout={500}>
+          <Box>
+            <Typography 
+              variant="h4" 
+              component="h1" 
+              sx={{ 
+                fontWeight: 700,
+                color: theme.palette.text.primary,
+                mb: 1,
+              }}
+            >
+              {t('case_member_management', '案件成员管理')}
+            </Typography>
+            <Typography 
+              variant="body1" 
+              color="text.secondary" 
+              sx={{ mb: 1 }}
+            >
+              {t('case_member_management_desc', '管理和维护案件团队成员的角色和权限')}
+            </Typography>
+            {caseInfo && (
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                sx={{ 
+                  fontWeight: 500,
+                  mb: 4,
+                  px: 2,
+                  py: 1,
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  borderRadius: 1,
+                  display: 'inline-block',
+                }}
+              >
+                {t('current_case', '当前案件')}: {caseInfo.case_number} - {caseInfo.case_procedure}
+                {caseInfo.name && ` (${caseInfo.name})`}
+              </Typography>
+            )}
+          </Box>
+        </Fade>
+
+        {/* Statistics Cards */}
+        <Fade in timeout={600}>
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            {statisticsData.map((stat, index) => (
+              <Grid size={{ xs: 12, sm: 6, md: 3 }} key={index}>
+                <Card 
+                  sx={{ 
+                    height: '100%',
+                    borderRadius: 3,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      transform: 'translateY(-2px)',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    },
+                  }}
+                >
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Box>
+                        <Typography variant="h3" sx={{ fontWeight: 700, color: stat.color }}>
+                          {stat.value}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {stat.label}
+                        </Typography>
+                      </Box>
                       <Box
-                        component="svg"
-                        sx={{ fontSize: 24, color: stat.color }}
-                        viewBox="0 0 24 24"
-                        width={24}
-                        height={24}
+                        sx={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 2,
+                          backgroundColor: stat.bgColor,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
                       >
-                        <path d={stat.icon} />
+                        <Box
+                          component="svg"
+                          sx={{ fontSize: 24, color: stat.color }}
+                          viewBox="0 0 24 24"
+                          width={24}
+                          height={24}
+                        >
+                          <path d={stat.icon} />
+                        </Box>
                       </Box>
                     </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-      </Fade>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </Fade>
 
-      {/* Case Member Management */}
-      <Fade in timeout={800}>
-        <Paper 
-          sx={{ 
-            borderRadius: 3,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            overflow: 'hidden',
-          }}
-        >
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-              {t('case_members', '案件成员')}
-              {caseInfo && ` - ${caseInfo.case_number}`}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('manage_case_members_desc', '管理当前案件的团队成员，分配角色和权限')}
-            </Typography>
-          </Box>
-          <Divider />
-          <CaseMemberTab caseId={selectedCaseId} />
-        </Paper>
-      </Fade>
-    </Box>
+        {/* Case Member Management */}
+        <Fade in timeout={800}>
+          <Paper 
+            sx={{ 
+              borderRadius: 3,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              overflow: 'hidden',
+            }}
+          >
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                {t('case_members', '案件成员')}
+                {caseInfo && ` - ${caseInfo.case_number}`}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('manage_case_members_desc', '管理当前案件的团队成员，分配角色和权限')}
+              </Typography>
+            </Box>
+            <Divider />
+            <CaseMemberTab caseId={selectedCaseId} />
+          </Paper>
+        </Fade>
+      </Box>
+    </PageContainer>
   );
 };
 

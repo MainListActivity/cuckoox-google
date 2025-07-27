@@ -53,6 +53,14 @@ import {
   mdiEyeOutline,
   mdiFileDocumentOutline, // For attachment icon
 } from '@mdi/js';
+
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import ClaimMobileCard from '@/src/components/mobile/ClaimMobileCard';
+import ResponsiveStatsCards, { StatCardData } from '@/src/components/common/ResponsiveStatsCards';
+import MobileSearchFilter from '@/src/components/mobile/MobileSearchFilter';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+
 // Import the new dialog
 import AdminCreateClaimBasicInfoDialog, { AdminBasicClaimData } from '@/src/components/admin/claims/AdminCreateClaimBasicInfoDialog';
 
@@ -187,6 +195,7 @@ const ClaimListPage: React.FC = () => {
   const { selectedCaseId } = useAuth();
   const { hasPermission: canCreateClaim } = useOperationPermission('claim_create_admin');
   const { hasPermission: canBatchReject } = useOperationPermission('claim_batch_reject');
+  const { isMobile } = useResponsiveLayout();
 
   const [claimsData, setClaimsData] = useState<Claim[]>([]);
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -612,6 +621,232 @@ const ClaimListPage: React.FC = () => {
   };
 
 
+  // Prepare stats data for ResponsiveStatsCards
+  const statsData: StatCardData[] = [
+    {
+      id: 'total_claims',
+      label: '债权总数',
+      value: claimsStats.totalClaims,
+      icon: mdiFileDocumentOutline,
+      color: '#1976d2',
+      bgColor: 'rgba(25, 118, 210, 0.1)',
+      loading: false,
+    },
+    {
+      id: 'total_asserted',
+      label: '主张总金额',
+      value: `¥${(claimsStats.totalAssertedAmount / 10000).toFixed(1)}万`,
+      icon: mdiPlusCircleOutline,
+      color: '#ed6c02',
+      bgColor: 'rgba(237, 108, 2, 0.1)',
+      loading: false,
+    },
+    {
+      id: 'total_approved',
+      label: '认定总金额',
+      value: `¥${(claimsStats.totalApprovedAmount / 10000).toFixed(1)}万`,
+      icon: mdiPencilOutline,
+      color: '#2e7d32',
+      bgColor: 'rgba(46, 125, 50, 0.1)',
+      loading: false,
+    },
+    {
+      id: 'review_progress',
+      label: '审核进度',
+      value: `${claimsStats.reviewProgress}%`,
+      icon: mdiEyeOutline,
+      color: '#9c27b0',
+      bgColor: 'rgba(156, 39, 176, 0.1)',
+      loading: false,
+    },
+  ];
+
+  // Mobile selection handling
+  const handleMobileSelectionChange = (claimId: string, selected: boolean) => {
+    if (selected) {
+      setSelected(prev => [...prev, claimId]);
+    } else {
+      setSelected(prev => prev.filter(id => id !== claimId));
+    }
+  };
+
+  // Mobile search and filter options
+  const mobileFilterOptions = [
+    { value: '', label: '所有状态' },
+    { value: '待审核', label: '待审核' },
+    { value: '部分通过', label: '部分通过' },
+    { value: '已驳回', label: '已驳回' },
+    { value: '审核通过', label: '审核通过' },
+  ];
+
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title="债权管理"
+        showBackButton={false}
+        fabConfig={canCreateClaim ? {
+          icon: mdiPlusCircleOutline,
+          action: () => setAdminCreateClaimDialogOpen(true),
+          ariaLabel: "创建债权",
+        } : undefined}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Stats Cards */}
+          <Box sx={{ mb: 3 }}>
+            <ResponsiveStatsCards
+              stats={statsData}
+              loading={false}
+              variant="compact"
+              columns={{ xs: 2, sm: 2 }}
+              showTrend={false}
+              animationEnabled={true}
+            />
+          </Box>
+
+          {/* Search and Filter */}
+          <Box sx={{ mb: 2 }}>
+            <MobileSearchFilter
+              searchValue={searchTerm}
+              onSearchChange={setSearchTerm}
+              searchPlaceholder="搜索债权编号、债权人等..."
+              filterOptions={mobileFilterOptions}
+              selectedFilter={filterStatus}
+              onFilterChange={setFilterStatus}
+              filterLabel="审核状态"
+            />
+          </Box>
+
+          {/* Batch Actions */}
+          {selected.length > 0 && (
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'primary.light', color: 'primary.contrastText' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="body2">
+                  已选择 {selected.length} 项
+                </Typography>
+                {canBatchReject && (
+                  <Button
+                    size="small"
+                    color="inherit"
+                    variant="outlined"
+                    startIcon={<SvgIcon><path d={mdiCloseCircleOutline} /></SvgIcon>}
+                    onClick={handleOpenRejectModal}
+                  >
+                    批量驳回
+                  </Button>
+                )}
+              </Box>
+            </Paper>
+          )}
+
+          {/* Error Display */}
+          {error && (
+            <Paper sx={{ p: 2, mb: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
+              <Typography variant="body2">{error}</Typography>
+            </Paper>
+          )}
+
+          {/* Claims List */}
+          {isLoading ? (
+            <Box sx={{ textAlign: 'center', py: 3 }}>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+                正在加载债权数据...
+              </Typography>
+              <LinearProgress />
+            </Box>
+          ) : filteredClaims.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 6 }}>
+              <Typography variant="body1" color="text.secondary">
+                暂无匹配的债权数据
+              </Typography>
+              {canCreateClaim && (
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  点击右下角按钮创建新债权
+                </Typography>
+              )}
+            </Box>
+          ) : (
+            <Box>
+              {filteredClaims.map((claim) => (
+                <ClaimMobileCard
+                  key={claim.id}
+                  claim={claim}
+                  isSelected={isSelected(claim.id)}
+                  onSelectionChange={handleMobileSelectionChange}
+                  formatCurrency={formatCurrency}
+                  getStatusChipColor={getStatusChipColor}
+                />
+              ))}
+              
+              {/* Mobile Pagination */}
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                <Typography variant="body2" color="text.secondary">
+                  显示 {page * rowsPerPage + 1}-{Math.min((page + 1) * rowsPerPage, totalClaims)} 共 {totalClaims} 条
+                </Typography>
+              </Box>
+              
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                <Button
+                  disabled={page === 0}
+                  onClick={() => setPage(page - 1)}
+                  size="small"
+                >
+                  上一页
+                </Button>
+                <Button
+                  disabled={(page + 1) * rowsPerPage >= totalClaims}
+                  onClick={() => setPage(page + 1)}
+                  size="small"
+                >
+                  下一页
+                </Button>
+              </Box>
+            </Box>
+          )}
+        </Box>
+
+        {/* Dialogs */}
+        <Dialog open={rejectModalOpen} onClose={handleCloseRejectModal} maxWidth="sm" fullWidth>
+          <DialogTitle>批量驳回原因</DialogTitle>
+          <DialogContent>
+            <TextField
+              autoFocus
+              margin="dense"
+              id="rejectionReason"
+              label="驳回原因"
+              type="text"
+              fullWidth
+              variant="outlined"
+              multiline
+              rows={4}
+              value={rejectionReason}
+              onChange={(e) => {
+                setRejectionReason(e.target.value);
+                if (e.target.value.trim()) setRejectReasonError('');
+              }}
+              error={!!rejectReasonError}
+              helperText={rejectReasonError}
+              sx={{mt:1}}
+            />
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseRejectModal}>取消</Button>
+            <Button onClick={handleConfirmBatchReject} variant="contained" color="error">
+              确认驳回 ({selected.length})
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <AdminCreateClaimBasicInfoDialog
+          open={adminCreateClaimDialogOpen}
+          onClose={() => setAdminCreateClaimDialogOpen(false)}
+          onNext={handleAdminCreateClaimNext}
+        />
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
   return (
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" component="h1" gutterBottom>
