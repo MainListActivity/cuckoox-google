@@ -1,10 +1,30 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
+import { defineConfig, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 import fs from 'fs';
 import path from 'path';
+
+// 修复 registerSW.js 添加 type: 'classic' 的插件
+function fixRegisterSW(): Plugin {
+  return {
+    name: 'fix-register-sw',
+    writeBundle() {
+      const registerSWPath = path.resolve(__dirname, 'dist/registerSW.js');
+      if (fs.existsSync(registerSWPath)) {
+        let content = fs.readFileSync(registerSWPath, 'utf-8');
+        // 添加 type: 'classic' 参数
+        content = content.replace(
+          /navigator\.serviceWorker\.register\('\/sw\.js',\s*{\s*scope:\s*'\/'\s*}\)/,
+          "navigator.serviceWorker.register('/sw.js', { scope: '/', type: 'classic' })"
+        );
+        fs.writeFileSync(registerSWPath, content);
+        console.log('✓ 已修复 registerSW.js 添加 type: classic');
+      }
+    }
+  };
+}
 
 export default defineConfig(({ mode }) => {
   // 自定义环境变量加载逻辑
@@ -117,7 +137,8 @@ export default defineConfig(({ mode }) => {
           enabled: true,
           type: 'module'
         }
-      })
+      }),
+      fixRegisterSW()
     ],
     resolve: {
       alias: {
