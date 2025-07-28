@@ -38,6 +38,7 @@ const OnlineMeetingPage = React.lazy(() => import('@/src/pages/meetings'));
 const MessageCenterPage = React.lazy(() => import('@/src/pages/messages'));
 const AdminPage = React.lazy(() => import('@/src/pages/admin/index'));
 const AdminThemePage = React.lazy(() => import('@/src/pages/admin/theme'));
+const AdminPWAMonitorPage = React.lazy(() => import('@/src/pages/admin/pwa-monitor'));
 const NotFoundPage = React.lazy(() => import('@/src/pages/404'));
 const CaseSelectionPage = React.lazy(() => import('@/src/pages/select-case'));
 const OidcCallbackPage = React.lazy(() => import('@/src/pages/oidc-callback'));
@@ -191,6 +192,7 @@ function App() {
                                 <Route path="/admin/create-claim/:tempClaimId/attachments" element={<ProtectedRoute requiredRole="admin"><AdminCreateClaimAttachmentsPage /></ProtectedRoute>} />
                                 {/* End Admin specific claim creation routes */}
                                 <Route path="/admin/theme" element={<ProtectedRoute requiredRole="admin"><AdminThemePage /></ProtectedRoute> as ReactNode} />
+                                <Route path="/admin/pwa-monitor" element={<ProtectedRoute requiredRole="admin"><AdminPWAMonitorPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/admin/manage/permissions" element={<ProtectedRoute requiredRole="admin"><PermissionManagementPage /></ProtectedRoute> as ReactNode} />
                                 <Route path="/admin/case-status-toggler" element={<ProtectedRoute requiredRole="admin"><CaseStatusToggler /></ProtectedRoute> as ReactNode} /> {/* <-- ADDED */}
                                 <Route path="/pdf-parser" element={<ProtectedRoute><PDFParserPage /></ProtectedRoute> as ReactNode} />

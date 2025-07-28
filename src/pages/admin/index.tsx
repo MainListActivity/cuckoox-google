@@ -18,6 +18,7 @@ import {
   mdiCogOutline,
   mdiCog,
   mdiAccountGroup,
+  mdiCellphone,
 } from '@mdi/js'; // Using @mdi/js for path data
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -65,14 +66,25 @@ const AdminPage: React.FC = () => {
               <Typography variant="body2" color="text.secondary" paragraph>
                 {t('admin.systemSettingsDesc', '配置系统参数、主题和其他全局设置')}
               </Typography>
-              <Button 
-                variant="outlined" 
-                fullWidth 
-                onClick={() => navigate('/admin/theme')}
-                sx={isMobile ? { minHeight: '44px' } : {}}
-              >
-                {t('admin.themeSettings', '主题设置')}
-              </Button>
+              <Stack spacing={1}>
+                <Button 
+                  variant="outlined" 
+                  fullWidth 
+                  onClick={() => navigate('/admin/theme')}
+                  sx={isMobile ? { minHeight: '44px' } : {}}
+                >
+                  {t('admin.themeSettings', '主题设置')}
+                </Button>
+                <Button 
+                  variant="outlined" 
+                  fullWidth 
+                  onClick={() => navigate('/admin/pwa-monitor')}
+                  sx={isMobile ? { minHeight: '44px' } : {}}
+                  startIcon={<SvgIcon><path d={mdiCellphone} /></SvgIcon>}
+                >
+                  {t('admin.pwaMonitor', 'PWA监控')}
+                </Button>
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
