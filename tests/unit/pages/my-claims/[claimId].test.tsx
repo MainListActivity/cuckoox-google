@@ -3,8 +3,10 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'; // 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 import i18n from '@/src/i18n'; // Adjusted path
 import SubmittedClaimDetailPage from '@/src/pages/my-claims/[claimId]'; // Adjusted path
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 // Mock useNavigate and useParams
 const mockNavigate = vi.fn();
@@ -31,6 +33,33 @@ vi.mock('@/src/components/claim/ClaimDetailView', () => ({ // Adjusted path for 
   )),
 }));
 
+// Mock useResponsiveLayout hook
+vi.mock('@/src/hooks/useResponsiveLayout', () => ({
+  useResponsiveLayout: vi.fn(() => ({
+    isMobile: false,
+    isTablet: false,
+    isDesktop: true,
+  })),
+}));
+
+// Mock MobileOptimizedLayout
+vi.mock('@/src/components/mobile/MobileOptimizedLayout', () => ({
+  __esModule: true,
+  default: vi.fn(({ children, title, showBackButton, onBackClick }) => (
+    <div data-testid="mobile-optimized-layout">
+      <div data-testid="mobile-header">
+        {showBackButton && (
+          <button onClick={onBackClick} data-testid="mobile-back-button">
+            Back
+          </button>
+        )}
+        <h1>{title}</h1>
+      </div>
+      {children}
+    </div>
+  )),
+}));
+
 describe('SubmittedClaimDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,12 +67,16 @@ describe('SubmittedClaimDetailPage', () => {
     mockClaimId = 'MOCK-CLAIM-ID-123'; 
   });
 
+  const theme = createTheme();
+
   const renderComponent = () => {
     render(
       <BrowserRouter>
-        <I18nextProvider i18n={i18n}>
-          <SubmittedClaimDetailPage />
-        </I18nextProvider>
+        <ThemeProvider theme={theme}>
+          <I18nextProvider i18n={i18n}>
+            <SubmittedClaimDetailPage />
+          </I18nextProvider>
+        </ThemeProvider>
       </BrowserRouter>
     );
   };
@@ -109,5 +142,138 @@ describe('SubmittedClaimDetailPage', () => {
     const backButton = screen.getByRole('button', { name: '返回我的申报列表' });
     fireEvent.click(backButton);
     expect(mockNavigate).toHaveBeenCalledWith('/my-claims');
+  });
+
+  // Mobile Layout Tests
+  describe('Mobile Layout', () => {
+    beforeEach(() => {
+      // Mock mobile device
+      vi.mocked(useResponsiveLayout).mockReturnValue({
+        isMobile: true,
+        isTablet: false,
+        isDesktop: false,
+      });
+    });
+
+    it('renders mobile optimized layout when on mobile device', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('mobile-optimized-layout')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByTestId('mobile-header')).toBeInTheDocument();
+      expect(screen.getByTestId('mobile-back-button')).toBeInTheDocument();
+    });
+
+    it('displays mobile claim detail sections', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText('债权申报详情')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByText('基本信息')).toBeInTheDocument();
+      expect(screen.getByText('金额详情')).toBeInTheDocument();
+      expect(screen.getByText('详细说明及附件')).toBeInTheDocument();
+    });
+
+    it('renders claim status chip with correct status', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText('待审核')).toBeInTheDocument();
+      });
+    });
+
+    it('displays currency amounts in mobile format', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        // Check if currency amounts are displayed (formatted as Chinese Yuan)
+        expect(screen.getByText(/¥10,560/)).toBeInTheDocument();
+        expect(screen.getByText(/¥10,000/)).toBeInTheDocument();
+        expect(screen.getByText(/¥500/)).toBeInTheDocument();
+        expect(screen.getByText(/¥60/)).toBeInTheDocument();
+      });
+    });
+
+    it('renders claim details in mobile card format', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText('债权性质')).toBeInTheDocument();
+        expect(screen.getByText('币种')).toBeInTheDocument();
+        expect(screen.getByText('本金')).toBeInTheDocument();
+        expect(screen.getByText('利息')).toBeInTheDocument();
+        expect(screen.getByText('其他费用')).toBeInTheDocument();
+        expect(screen.getByText('债权总额')).toBeInTheDocument();
+      });
+    });
+
+    it('displays brief description section when available', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText('简要说明')).toBeInTheDocument();
+      });
+    });
+
+    it('renders attachments section in mobile format', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText('详细说明及附件')).toBeInTheDocument();
+        expect(screen.getByText(/以上为申报人提供的详细说明/)).toBeInTheDocument();
+      });
+    });
+
+    it('mobile back button navigates correctly', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('mobile-back-button')).toBeInTheDocument();
+      });
+      
+      const mobileBackButton = screen.getByTestId('mobile-back-button');
+      fireEvent.click(mobileBackButton);
+      expect(mockNavigate).toHaveBeenCalledWith('/my-claims');
+    });
+
+    it('mobile return button navigates correctly', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        const returnButton = screen.getByRole('button', { name: '返回我的申报列表' });
+        expect(returnButton).toBeInTheDocument();
+      });
+      
+      const returnButton = screen.getByRole('button', { name: '返回我的申报列表' });
+      fireEvent.click(returnButton);
+      expect(mockNavigate).toHaveBeenCalledWith('/my-claims');
+    });
+  });
+
+  // Desktop Layout Tests
+  describe('Desktop Layout', () => {
+    beforeEach(() => {
+      // Reset to desktop mode
+      vi.mocked(useResponsiveLayout).mockReturnValue({
+        isMobile: false,
+        isTablet: false,
+        isDesktop: true,
+      });
+    });
+
+    it('renders desktop layout with ClaimDetailView', async () => {
+      renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('mocked-claim-detail-view')).toBeInTheDocument();
+      });
+      
+      // Should not render mobile layout
+      expect(screen.queryByTestId('mobile-optimized-layout')).not.toBeInTheDocument();
+    });
   });
 });

@@ -58,6 +58,23 @@ import ClaimService, { ClaimData, CaseData } from '@/src/services/claimService';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { Delta } from 'quill/core';
 
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+import { 
+  mdiPlus, 
+  mdiChevronDown, 
+  mdiArrowLeft, 
+  mdiArrowRight, 
+  mdiCheck, 
+  mdiUpload,
+  mdiFileDocumentOutline,
+  mdiCurrencyUsd,
+  mdiInformation,
+  mdiClipboardText
+} from '@mdi/js';
+import { SvgIcon, Grid, Divider, Fab, Collapse } from '@mui/material';
+
 // 步骤定义
 const steps = ['填写债权信息', '编辑附件材料', '确认提交'];
 
@@ -104,6 +121,7 @@ const ClaimSubmissionPage: React.FC = () => {
   const { showSuccess, showError } = useSnackbar();
   const { user } = useAuth();
   const { t } = useTranslation();
+  const { isMobile } = useResponsiveLayout();
   const surreal = useSurrealClient();
   const claimService = useMemo(() => new ClaimService(surreal), [surreal]);
 
@@ -278,7 +296,120 @@ const ClaimSubmissionPage: React.FC = () => {
     }
   };
 
-  // 债权列表视图
+  // 债权列表视图 - 移动端
+  if (isListView && isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title="我的债权申报"
+        showBackButton={false}
+        fabConfig={{
+          icon: mdiPlus,
+          action: () => setIsListView(false),
+          ariaLabel: "新增申报",
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          {isLoading ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                加载中...
+              </Typography>
+            </Box>
+          ) : claims.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                暂无债权申报记录
+              </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<SvgIcon><path d={mdiPlus} /></SvgIcon>}
+                onClick={() => setIsListView(false)}
+                sx={{ mt: 2 }}
+              >
+                创建第一个申报
+              </Button>
+            </Box>
+          ) : (
+            claims.map((claim) => (
+              <Card key={claim.id} sx={{ mb: 2, cursor: 'pointer' }} onClick={() => handleEditClaim(claim)}>
+                <CardContent>
+                  {/* Mobile Claim Card Header */}
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="subtitle1" fontWeight="600" gutterBottom>
+                        {claim.claim_number || `债权-${claim.id?.slice(-8)}`}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        申报时间：{claim.created_at ? new Date(claim.created_at).toLocaleDateString('zh-CN') : '-'}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={getStatusText(claim.review_status)}
+                      color={getStatusColor(claim.review_status) as any}
+                      size="small"
+                    />
+                  </Box>
+
+                  {/* Mobile Claim Card Details */}
+                  <Grid container spacing={2}>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          债权性质
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          {claim.asserted_claim_details ? getNatureText(claim.asserted_claim_details.nature) : '-'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          申报金额
+                        </Typography>
+                        <Typography variant="body2" fontWeight="600" color="primary.main">
+                          ¥{claim.asserted_claim_details ? claim.asserted_claim_details.total_asserted_amount.toLocaleString() : '0'}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+
+                  {/* Mobile Action Buttons */}
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2, gap: 1 }}>
+                    <Button
+                      size="small"
+                      startIcon={<Description />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditClaim(claim);
+                      }}
+                    >
+                      查看
+                    </Button>
+                    {claim.review_status === 'rejected' && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Edit />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditClaim(claim);
+                        }}
+                      >
+                        编辑
+                      </Button>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </Box>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // 债权列表视图 - 桌面端
   if (isListView) {
     return (
       <PageContainer>
@@ -349,7 +480,534 @@ const ClaimSubmissionPage: React.FC = () => {
     );
   }
 
-  // 表单视图
+  // 表单视图 - 移动端
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title={editingClaim ? '编辑债权申报' : '新建债权申报'}
+        showBackButton={true}
+        onBackClick={() => setIsListView(true)}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Mobile Progress Indicator */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent sx={{ pb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" fontWeight="600" sx={{ flex: 1 }}>
+                  步骤 {activeStep + 1} / {steps.length}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {Math.round(((activeStep + 1) / steps.length) * 100)}%
+                </Typography>
+              </Box>
+              <Typography variant="body2" color="primary.main" fontWeight="500">
+                {steps[activeStep]}
+              </Typography>
+              <Box sx={{ width: '100%', height: 4, backgroundColor: 'grey.200', borderRadius: 2, mt: 1 }}>
+                <Box
+                  sx={{
+                    width: `${((activeStep + 1) / steps.length) * 100}%`,
+                    height: '100%',
+                    backgroundColor: 'primary.main',
+                    borderRadius: 2,
+                    transition: 'width 0.3s ease',
+                  }}
+                />
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Step 1: Mobile Basic Information Form */}
+          {activeStep === 0 && (
+            <>
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <SvgIcon sx={{ mr: 1, color: 'primary.main' }}>
+                      <path d={mdiInformation} />
+                    </SvgIcon>
+                    <Typography variant="h6" fontWeight="600">
+                      债权基本信息
+                    </Typography>
+                  </Box>
+                  
+                  {isLoading ? (
+                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                      <Typography variant="body2" color="text.secondary">加载中...</Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <FormControl fullWidth required>
+                        <InputLabel id="case-select-label-mobile">关联案件</InputLabel>
+                        <Select
+                          labelId="case-select-label-mobile"
+                          value={formData.case_id}
+                          label="关联案件"
+                          onChange={(e) => handleFormChange('case_id', e.target.value)}
+                          MenuProps={{
+                            PaperProps: {
+                              style: {
+                                maxHeight: 300,
+                              },
+                            },
+                          }}
+                        >
+                          {cases.map((c) => (
+                            <MenuItem key={c.id} value={c.id}>
+                              <Box>
+                                <Typography variant="body2" fontWeight="500">
+                                  {c.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {c.case_number}
+                                </Typography>
+                              </Box>
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <FormControl fullWidth>
+                        <InputLabel id="nature-select-label-mobile">债权性质</InputLabel>
+                        <Select
+                          labelId="nature-select-label-mobile"
+                          value={formData.nature}
+                          label="债权性质"
+                          onChange={(e) => handleFormChange('nature', e.target.value)}
+                        >
+                          {claimNatures.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <FormControl fullWidth>
+                        <InputLabel id="currency-select-label-mobile">币种</InputLabel>
+                        <Select
+                          labelId="currency-select-label-mobile"
+                          value={formData.currency}
+                          label="币种"
+                          onChange={(e) => handleFormChange('currency', e.target.value)}
+                        >
+                          {currencies.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                              {option.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <SvgIcon sx={{ mr: 1, color: 'success.main' }}>
+                      <path d={mdiCurrencyUsd} />
+                    </SvgIcon>
+                    <Typography variant="h6" fontWeight="600">
+                      金额详情
+                    </Typography>
+                  </Box>
+                  
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <TextField
+                      label="本金"
+                      value={formData.principal}
+                      onChange={(e) => handleFormChange('principal', e.target.value)}
+                      required
+                      fullWidth
+                      type="number"
+                      inputProps={{ 
+                        min: 0, 
+                        step: 0.01,
+                        style: { fontSize: 16 } // Prevent zoom on iOS
+                      }}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start">¥</InputAdornment>,
+                      }}
+                    />
+
+                    <TextField
+                      label="利息"
+                      value={formData.interest}
+                      onChange={(e) => handleFormChange('interest', e.target.value)}
+                      fullWidth
+                      type="number"
+                      inputProps={{ 
+                        min: 0, 
+                        step: 0.01,
+                        style: { fontSize: 16 }
+                      }}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start">¥</InputAdornment>,
+                      }}
+                    />
+
+                    <TextField
+                      label="其他费用"
+                      value={formData.otherFees}
+                      onChange={(e) => handleFormChange('otherFees', e.target.value)}
+                      fullWidth
+                      type="number"
+                      inputProps={{ 
+                        min: 0, 
+                        step: 0.01,
+                        style: { fontSize: 16 }
+                      }}
+                      InputProps={{
+                        startAdornment: <InputAdornment position="start">¥</InputAdornment>,
+                      }}
+                    />
+
+                    <Card sx={{ backgroundColor: 'primary.50', border: '1px solid', borderColor: 'primary.200' }}>
+                      <CardContent sx={{ py: 2 }}>
+                        <Typography variant="subtitle2" color="primary.main" gutterBottom>
+                          债权总额
+                        </Typography>
+                        <Typography variant="h5" fontWeight="700" color="primary.main">
+                          ¥{calculateTotal().toLocaleString('zh-CN', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Box>
+                </CardContent>
+              </Card>
+
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <SvgIcon sx={{ mr: 1, color: 'info.main' }}>
+                      <path d={mdiClipboardText} />
+                    </SvgIcon>
+                    <Typography variant="h6" fontWeight="600">
+                      债权说明
+                    </Typography>
+                  </Box>
+                  
+                  <TextField
+                    label="详细说明（可选）"
+                    value={formData.description}
+                    onChange={(e) => handleFormChange('description', e.target.value)}
+                    fullWidth
+                    multiline
+                    rows={4}
+                    placeholder="请描述债权的具体情况、形成原因等..."
+                    inputProps={{ 
+                      style: { fontSize: 16 }
+                    }}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Mobile Navigation Buttons */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleNext}
+                  size="large"
+                  fullWidth
+                  endIcon={<SvgIcon><path d={mdiArrowRight} /></SvgIcon>}
+                  sx={{ minHeight: 48 }}
+                >
+                  下一步
+                </Button>
+              </Box>
+            </>
+          )}
+
+          {/* Step 2: Mobile Attachments */}
+          {activeStep === 1 && (
+            <>
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <SvgIcon sx={{ mr: 1, color: 'primary.main' }}>
+                      <path d={mdiUpload} />
+                    </SvgIcon>
+                    <Typography variant="h6" fontWeight="600">
+                      上传附件材料
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ textAlign: 'center', py: 3, border: '2px dashed', borderColor: 'grey.300', borderRadius: 2, mb: 2 }}>
+                    <SvgIcon sx={{ fontSize: 48, color: 'grey.400', mb: 2 }}>
+                      <path d={mdiUpload} />
+                    </SvgIcon>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      点击上传或拖拽文件到此处
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      startIcon={<CloudUpload />}
+                      sx={{ mt: 1 }}
+                    >
+                      选择文件
+                      <input type="file" hidden multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" />
+                    </Button>
+                  </Box>
+
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+                    支持格式：PDF、Word文档、图片文件，单个文件最大10MB
+                  </Typography>
+
+                  {attachments.length > 0 ? (
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        已上传附件 ({attachments.length})
+                      </Typography>
+                      {attachments.map((file, index) => (
+                        <Card key={index} variant="outlined" sx={{ mb: 1 }}>
+                          <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <SvgIcon sx={{ mr: 1, color: 'text.secondary' }}>
+                                <path d={mdiFileDocumentOutline} />
+                              </SvgIcon>
+                              <Box sx={{ flex: 1 }}>
+                                <Typography variant="body2" fontWeight="500">
+                                  {file.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                                </Typography>
+                              </Box>
+                              <IconButton size="small" color="error">
+                                <Delete />
+                              </IconButton>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Box sx={{ textAlign: 'center', py: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        暂无附件
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Mobile Navigation Buttons */}
+              <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                <Button
+                  onClick={handleBack}
+                  size="large"
+                  sx={{ minHeight: 48, flex: 1 }}
+                  startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>}
+                >
+                  上一步
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleNext}
+                  size="large"
+                  sx={{ minHeight: 48, flex: 2 }}
+                  endIcon={<SvgIcon><path d={mdiArrowRight} /></SvgIcon>}
+                >
+                  下一步
+                </Button>
+              </Box>
+            </>
+          )}
+
+          {/* Step 3: Mobile Confirmation */}
+          {activeStep === 2 && (
+            <>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <Typography variant="body2">
+                  提交后将无法修改，请仔细核对以下信息。
+                </Typography>
+              </Alert>
+
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" fontWeight="600" gutterBottom>
+                    债权基本信息
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          债权性质
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          {claimNatures.find(n => n.value === formData.nature)?.label}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          币种
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          {currencies.find(c => c.value === formData.currency)?.label}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          本金
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          ¥{parseFloat(formData.principal || '0').toLocaleString()}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          利息
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          ¥{parseFloat(formData.interest || '0').toLocaleString()}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          其他费用
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          ¥{parseFloat(formData.otherFees || '0').toLocaleString()}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                    <Grid size={6}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          债权总额
+                        </Typography>
+                        <Typography variant="h6" fontWeight="700" color="primary.main">
+                          ¥{calculateTotal().toLocaleString()}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                  
+                  {formData.description && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        债权说明
+                      </Typography>
+                      <Typography variant="body2" sx={{ mt: 0.5 }}>
+                        {formData.description}
+                      </Typography>
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card sx={{ mb: 3 }}>
+                <CardContent>
+                  <Typography variant="h6" fontWeight="600" gutterBottom>
+                    附件材料
+                  </Typography>
+                  {attachments.length > 0 ? (
+                    attachments.map((file, index) => (
+                      <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <SvgIcon sx={{ mr: 1, color: 'text.secondary' }}>
+                          <path d={mdiFileDocumentOutline} />
+                        </SvgIcon>
+                        <Typography variant="body2">{file.name}</Typography>
+                      </Box>
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      暂无附件
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Mobile Navigation Buttons */}
+              <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                <Button
+                  onClick={handleBack}
+                  size="large"
+                  sx={{ minHeight: 48, flex: 1 }}
+                  startIcon={<SvgIcon><path d={mdiArrowLeft} /></SvgIcon>}
+                >
+                  上一步
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSubmit}
+                  size="large"
+                  sx={{ minHeight: 48, flex: 2 }}
+                  endIcon={<SvgIcon><path d={mdiCheck} /></SvgIcon>}
+                >
+                  确认提交
+                </Button>
+              </Box>
+            </>
+          )}
+        </Box>
+
+        {/* Mobile Confirmation Dialog */}
+        <Dialog 
+          open={openDialog} 
+          onClose={() => setOpenDialog(false)}
+          fullScreen={isMobile}
+          PaperProps={{
+            sx: isMobile ? {} : { minWidth: 400 }
+          }}
+        >
+          <DialogTitle>
+            {isMobile && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <IconButton edge="start" onClick={() => setOpenDialog(false)}>
+                  <ArrowBack />
+                </IconButton>
+                <Typography variant="h6" sx={{ ml: 1 }}>
+                  确认提交
+                </Typography>
+              </Box>
+            )}
+            {!isMobile && '确认提交'}
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" sx={{ py: isMobile ? 2 : 0 }}>
+              您确定要提交此债权申报吗？提交后将无法修改。
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ p: isMobile ? 3 : 1 }}>
+            <Button 
+              onClick={() => setOpenDialog(false)}
+              size={isMobile ? 'large' : 'medium'}
+              sx={isMobile ? { flex: 1, minHeight: 48 } : {}}
+            >
+              取消
+            </Button>
+            <Button 
+              onClick={handleConfirmSubmit} 
+              variant="contained" 
+              color="primary"
+              size={isMobile ? 'large' : 'medium'}
+              sx={isMobile ? { flex: 1, minHeight: 48 } : {}}
+            >
+              确认提交
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // 表单视图 - 桌面端
   return (
     <PageContainer>
       <Box>

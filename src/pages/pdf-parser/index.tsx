@@ -271,9 +271,15 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
 
   // 渲染页面标题
   const renderPageHeader = () => (
-    <Box sx={{ mb: 3 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Typography variant="h4" component="h1">
+    <Box sx={{ mb: isMobile ? 2 : 3 }}>
+      <Stack 
+        direction={isMobile ? "column" : "row"} 
+        justifyContent="space-between" 
+        alignItems={isMobile ? "flex-start" : "center"} 
+        sx={{ mb: 2 }}
+        spacing={isMobile ? 1 : 0}
+      >
+        <Typography variant={isMobile ? "h5" : "h4"} component="h1">
           PDF智能解析工具
         </Typography>
         
@@ -281,17 +287,30 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
           {selectedFile && (
             <Chip
               icon={<PdfIcon />}
-              label={selectedFile.name}
+              label={isMobile ? selectedFile.name.substring(0, 15) + '...' : selectedFile.name}
               variant="outlined"
+              size={isMobile ? "small" : "medium"}
               onDelete={() => {
                 setSelectedFile(null);
                 setCurrentFileUrl('');
                 setSelectedFieldName(null);
               }}
+              sx={isMobile ? { 
+                '& .MuiChip-deleteIcon': { 
+                  minHeight: '24px',
+                  minWidth: '24px'
+                }
+              } : {}}
             />
           )}
           
-          <IconButton onClick={(e) => setMenuAnchor(e.currentTarget)}>
+          <IconButton 
+            onClick={(e) => setMenuAnchor(e.currentTarget)}
+            sx={isMobile ? { 
+              minHeight: '44px',
+              minWidth: '44px'
+            } : {}}
+          >
             <MoreVertIcon />
           </IconButton>
           
@@ -300,7 +319,7 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
             open={Boolean(menuAnchor)}
             onClose={() => setMenuAnchor(null)}
           >
-            <MenuItem>
+            <MenuItem sx={isMobile ? { minHeight: '44px' } : {}}>
               <SettingsIcon sx={{ mr: 1 }} />
               设置
             </MenuItem>
@@ -308,7 +327,11 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
         </Stack>
       </Stack>
       
-      <Typography variant="body1" color="text.secondary">
+      <Typography 
+        variant={isMobile ? "body2" : "body1"} 
+        color="text.secondary"
+        sx={isMobile ? { px: 0 } : {}}
+      >
         上传PDF文档，智能提取合同信息、计算利息、生成报告
       </Typography>
     </Box>
@@ -379,6 +402,13 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
           onChange={handleTabChange}
           variant="scrollable"
           scrollButtons="auto"
+          sx={{
+            '& .MuiTab-root': isMobile ? {
+              minHeight: '48px',
+              minWidth: '90px',
+              fontSize: '0.875rem',
+            } : {},
+          }}
         >
           <Tab icon={<PdfIcon />} label="上传" />
           <Tab icon={<AnalyticsIcon />} label="预览" disabled={!currentFileUrl} />
@@ -489,6 +519,7 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
             onClose={() => setShowPermissionDialog(false)}
             maxWidth="sm"
             fullWidth
+            fullScreen={isMobile}
           >
             <DialogTitle>
               <Box display="flex" alignItems="center" gap={1}>
@@ -525,8 +556,14 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
                 </Box>
               )}
             </DialogContent>
-            <DialogActions>
-              <Button onClick={() => setShowPermissionDialog(false)}>
+            <DialogActions sx={isMobile ? { p: 2, flexDirection: 'column', gap: 1 } : {}}>
+              <Button 
+                onClick={() => setShowPermissionDialog(false)}
+                sx={isMobile ? { 
+                  minHeight: '44px',
+                  width: '100%'
+                } : {}}
+              >
                 我知道了
               </Button>
               <Button
@@ -535,6 +572,10 @@ const PDFParserPage: React.FC<PDFParserPageProps> = ({ caseId }) => {
                   setShowPermissionDialog(false);
                   navigate('/settings/permissions');
                 }}
+                sx={isMobile ? { 
+                  minHeight: '44px',
+                  width: '100%'
+                } : {}}
               >
                 查看权限设置
               </Button>

@@ -5,8 +5,33 @@ import React, { useState, useEffect } from 'react';
 import ClaimDetailView from '@/src/components/claim/ClaimDetailView';
 import { useNavigate, useParams } from 'react-router-dom';
 import PageContainer from '@/src/components/PageContainer';
-import { Box, Button, Typography } from '@mui/material';
+import { 
+  Box, 
+  Button, 
+  Typography, 
+  Card, 
+  CardContent, 
+  Grid, 
+  Chip, 
+  Divider,
+  Paper,
+  useTheme,
+  alpha
+} from '@mui/material';
 import GlobalLoader from '@/src/components/GlobalLoader';
+import { useTranslation } from 'react-i18next';
+
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+import { 
+  mdiFileDocumentOutline, 
+  mdiCurrencyUsd, 
+  mdiCalendar, 
+  mdiInformation,
+  mdiAttachment 
+} from '@mdi/js';
+import { SvgIcon } from '@mui/material';
 
 // Define the structure for ClaimData, matching ClaimDetailView's expected props
 // This interface should ideally be shared if it's used across multiple files.
@@ -53,8 +78,11 @@ const initialPlaceholderClaim: ClaimData = {
 
 
 const SubmittedClaimDetailPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { claimId } = useParams<{ claimId: string }>();
+  const theme = useTheme();
+  const { isMobile } = useResponsiveLayout();
 
   const [claimToView, setClaimToView] = useState<ClaimData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -125,6 +153,222 @@ const SubmittedClaimDetailPage: React.FC = () => {
     );
   }
 
+  // Format currency for display
+  const formatCurrency = (amount: string | number) => {
+    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    return new Intl.NumberFormat('zh-CN', {
+      style: 'currency',
+      currency: 'CNY',
+      minimumFractionDigits: 2,
+    }).format(num);
+  };
+
+  // Get status color for chips
+  const getStatusColor = (status: string): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" => {
+    switch (status) {
+      case '待审核': return 'warning';
+      case '审核通过': return 'success';
+      case '需要补充': return 'info';
+      case '审核不通过': return 'error';
+      default: return 'default';
+    }
+  };
+
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title={`债权详情 - ${claimToView?.id || claimId}`}
+        showBackButton={true}
+        onBackClick={() => navigate('/my-claims')}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Mobile Claim Status Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+                <Typography variant="h6" fontWeight="600">
+                  债权申报详情
+                </Typography>
+                <Chip 
+                  label={claimToView!.reviewStatus} 
+                  color={getStatusColor(claimToView!.reviewStatus)}
+                  size="small"
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                申报编号：{claimToView!.id}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                提交日期：{claimToView!.submissionDate}
+              </Typography>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Basic Information Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <SvgIcon sx={{ mr: 1, color: 'primary.main' }}>
+                  <path d={mdiInformation} />
+                </SvgIcon>
+                <Typography variant="h6" fontWeight="600">
+                  基本信息
+                </Typography>
+              </Box>
+              <Grid container spacing={2}>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      债权性质
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {claimToView!.claimNature}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      币种
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {claimToView!.currency}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Amount Breakdown Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <SvgIcon sx={{ mr: 1, color: 'success.main' }}>
+                  <path d={mdiCurrencyUsd} />
+                </SvgIcon>
+                <Typography variant="h6" fontWeight="600">
+                  金额详情
+                </Typography>
+              </Box>
+              <Grid container spacing={2}>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      本金
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {formatCurrency(claimToView!.principal)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      利息
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {formatCurrency(claimToView!.interest)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      其他费用
+                    </Typography>
+                    <Typography variant="body2" fontWeight="500">
+                      {formatCurrency(claimToView!.otherFees)}
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid size={6}>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      债权总额
+                    </Typography>
+                    <Typography 
+                      variant="h6" 
+                      fontWeight="700" 
+                      color="primary.main"
+                    >
+                      {formatCurrency(claimToView!.totalAmount)}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Brief Description Card */}
+          {claimToView!.briefDescription && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" fontWeight="600" gutterBottom>
+                  简要说明
+                </Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                  {claimToView!.briefDescription}
+                </Typography>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Mobile Attachments and Details Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <SvgIcon sx={{ mr: 1, color: 'info.main' }}>
+                  <path d={mdiAttachment} />
+                </SvgIcon>
+                <Typography variant="h6" fontWeight="600">
+                  详细说明及附件
+                </Typography>
+              </Box>
+              <Paper 
+                sx={{ 
+                  p: 2, 
+                  backgroundColor: alpha(theme.palette.grey[100], 0.5),
+                  border: `1px solid ${alpha(theme.palette.grey[300], 0.5)}`,
+                  borderRadius: 2
+                }}
+              >
+                <Box 
+                  sx={{ 
+                    '& img': { maxWidth: '100%', height: 'auto', borderRadius: 1 },
+                    '& a': { color: 'primary.main', textDecoration: 'underline' },
+                    '& ul': { pl: 2 },
+                    '& p': { mb: 1 },
+                    '& h3': { mb: 1, fontWeight: 600 }
+                  }}
+                  dangerouslySetInnerHTML={{ __html: claimToView!.attachmentsContent }}
+                />
+              </Paper>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                以上为申报人提供的详细说明和上传的附件列表（如有）。
+              </Typography>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Action Button */}
+          <Box sx={{ textAlign: 'center', mb: 2 }}>
+            <Button
+              variant="contained"
+              fullWidth
+              size="large"
+              onClick={() => navigate('/my-claims')}
+              sx={{ minHeight: 48 }}
+            >
+              返回我的申报列表
+            </Button>
+          </Box>
+        </Box>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
   return (
     <PageContainer>
       <Box sx={{ p: 3, maxWidth: '896px', mx: 'auto' }}>

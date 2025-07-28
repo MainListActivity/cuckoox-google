@@ -88,6 +88,7 @@ class SomeService {
 - `src/workers/sw-surreal.ts` - Main Service Worker with caching logic
 - `src/utils/surrealAuth.ts` - Authentication-aware query utilities
 - `src/contexts/AuthContext.tsx` - Authentication state management
+- 系统中有一部分页面需要用户登录之后才能访问，否则会跳转到登录页面的，针对这种查询需要在查询的sql之前添加 当前认证状态的查询 例如查询案件： `return $auth;select * from case;`，返回的数据从返回数组中的索引位置1开始获取，先获取0位置的认证状态，如果没有认证则直接跳转登录页面（项目已封装该功能，在 `dataService.ts的queryWithAuth`中，使用queryWithAuth时 应在泛型中传入正确的类型，例如`queryWithAuth<ExtendedCase[]>(client, query)`）， 在service worker中判断如果命中缓存，则在远程执行`return $auth;`，后面的语句在本地执行
 - `AGENTS.md` & `CLAUDE.md` - Additional AI assistant guidelines
 
 This system prioritizes real-time collaboration, offline functionality, and comprehensive bankruptcy case lifecycle management through its unique Service Worker architecture.

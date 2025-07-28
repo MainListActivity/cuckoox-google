@@ -33,12 +33,24 @@ import {
   SvgIcon,
   IconButton,
   Stack,
+  Card,
+  CardContent,
+  Collapse,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import GlobalLoader from '@/src/components/GlobalLoader';
 import {
   mdiArrowLeft,
   mdiPencilOutline, // For "开始审核" / "修改审核结果" FAB
   mdiCheckDecagramOutline, // For "提交审核" button in modal
+  mdiChevronUp,
+  mdiChevronDown,
+  mdiAccount,
+  mdiCurrencyUsd,
+  mdiInformation,
+  mdiFileDocumentOutline,
+  mdiNoteEdit,
   // mdiCommentTextOutline, // Removed unused import
   // mdiFileDocumentOutline, // Removed unused import
 } from '@mdi/js';
@@ -47,6 +59,10 @@ import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor'; //
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { Delta } from 'quill/core'; // For initializing editor content
 import { useAuth } from '@/src/contexts/AuthContext'; // Added useAuth import
+
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 // Define a type for the claim data structure for better type safety
 interface AssertedDetails {
@@ -136,6 +152,8 @@ const ClaimReviewDetailPage: React.FC = () => {
   // const navigate = useNavigate(); // Removed unused variable
   const { showSuccess, showError } = useSnackbar();
   const { user } = useAuth(); // Get user from AuthContext
+  const theme = useTheme();
+  const { isMobile } = useResponsiveLayout();
 
   // TODO: Fetch actual claim data based on claimIdFromParams
   const [claimData, setClaimData] = useState<ClaimDataType | null>(null);
@@ -155,6 +173,9 @@ const ClaimReviewDetailPage: React.FC = () => {
   const [modalErrors, setModalErrors] = useState<Record<string, string>>({});
 
   const [adminInternalNotes, setAdminInternalNotes] = useState<QuillDelta>(new Delta());
+
+  // Mobile specific states
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -283,7 +304,420 @@ const ClaimReviewDetailPage: React.FC = () => {
   const editorUserId = user?.id ? String(user.id) : "unknown-user";
   const editorUserName = (user as any)?.name || user?.email || "Unknown User";
 
+  // Handle section toggle for mobile
+  const handleSectionToggle = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
+  };
 
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title={`审核 ${claimData?.claim_number || ''}`}
+        showBackButton={true}
+        onBackClick={() => window.history.back()}
+        fabConfig={{
+          icon: mdiPencilOutline,
+          action: handleOpenAuditModal,
+          ariaLabel: "开始审核",
+        }}
+      >
+        <Box sx={{ p: 2 }}>
+          {/* Mobile Status Card */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" fontWeight="600">
+                  债权审核
+                </Typography>
+                <Chip 
+                  label={claimData.audit_status} 
+                  color={getStatusChipColor(claimData.audit_status)}
+                  size="small"
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                申报编号：{claimData.claim_number}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                债权人：{claimData.creditorName} ({claimData.creditorType})
+              </Typography>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Creditor Information */}
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  minHeight: 44
+                }}
+                onClick={() => handleSectionToggle('creditor')}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SvgIcon sx={{ mr: 1, color: 'primary.main' }}>
+                    <path d={mdiAccount} />
+                  </SvgIcon>
+                  <Typography variant="h6" fontWeight="600">
+                    申报信息
+                  </Typography>
+                </Box>
+                <IconButton size="small">
+                  <SvgIcon>
+                    <path d={expandedSection === 'creditor' ? mdiChevronUp : mdiChevronDown} />
+                  </SvgIcon>
+                </IconButton>
+              </Box>
+              <Collapse in={expandedSection === 'creditor'}>
+                <Box sx={{ mt: 2 }}>
+                  <Grid container spacing={2}>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        {claimData.creditorType === '组织' ? '社会信用代码' : '身份证号'}
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {claimData.creditorId}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        提交日期
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {claimData.submissionDate}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        联系人
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {claimData.contact.name}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        联系电话
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {claimData.contact.phone}
+                      </Typography>
+                    </Grid>
+                    {claimData.contact.email && (
+                      <Grid size={12}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          联系邮箱
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          {claimData.contact.email}
+                        </Typography>
+                      </Grid>
+                    )}
+                  </Grid>
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Claim Details */}
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  minHeight: 44
+                }}
+                onClick={() => handleSectionToggle('details')}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SvgIcon sx={{ mr: 1, color: 'success.main' }}>
+                    <path d={mdiCurrencyUsd} />
+                  </SvgIcon>
+                  <Typography variant="h6" fontWeight="600">
+                    债权金额
+                  </Typography>
+                </Box>
+                <IconButton size="small">
+                  <SvgIcon>
+                    <path d={expandedSection === 'details' ? mdiChevronUp : mdiChevronDown} />
+                  </SvgIcon>
+                </IconButton>
+              </Box>
+              <Collapse in={expandedSection === 'details'}>
+                <Box sx={{ mt: 2 }}>
+                  <Grid container spacing={2}>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        债权性质
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {claimData.asserted_details.nature}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        币种
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {claimData.asserted_details.currency}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        主张本金
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {formatCurrencyDisplay(claimData.asserted_details.principal, claimData.asserted_details.currency)}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        主张利息
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {formatCurrencyDisplay(claimData.asserted_details.interest, claimData.asserted_details.currency)}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        其他费用
+                      </Typography>
+                      <Typography variant="body2" fontWeight="500">
+                        {formatCurrencyDisplay(claimData.asserted_details.other, claimData.asserted_details.currency)}
+                      </Typography>
+                    </Grid>
+                    <Grid size={6}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        主张总金额
+                      </Typography>
+                      <Typography 
+                        variant="h6" 
+                        fontWeight="700" 
+                        color="primary.main"
+                      >
+                        {formatCurrencyDisplay(claimData.asserted_details.total, claimData.asserted_details.currency)}
+                      </Typography>
+                    </Grid>
+                  </Grid>
+                  {claimData.asserted_details.briefDescription && (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        简要说明
+                      </Typography>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>
+                        {claimData.asserted_details.briefDescription}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Attachments */}
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  minHeight: 44
+                }}
+                onClick={() => handleSectionToggle('attachments')}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SvgIcon sx={{ mr: 1, color: 'info.main' }}>
+                    <path d={mdiFileDocumentOutline} />
+                  </SvgIcon>
+                  <Typography variant="h6" fontWeight="600">
+                    申报附件
+                  </Typography>
+                </Box>
+                <IconButton size="small">
+                  <SvgIcon>
+                    <path d={expandedSection === 'attachments' ? mdiChevronUp : mdiChevronDown} />
+                  </SvgIcon>
+                </IconButton>
+              </Box>
+              <Collapse in={expandedSection === 'attachments'}>
+                <Box sx={{ mt: 2 }}>
+                  <Paper 
+                    sx={{ 
+                      p: 2, 
+                      backgroundColor: alpha(theme.palette.grey[100], 0.5),
+                      border: `1px solid ${alpha(theme.palette.grey[300], 0.5)}`,
+                      borderRadius: 2,
+                      minHeight: 200
+                    }}
+                  >
+                    <RichTextEditor
+                      value={claimData.asserted_details.attachments_content}
+                      readOnly={true}
+                      documentId={`claim-${claimData.id}-asserted-attachments-readonly-mobile`}
+                      userId={editorUserId}
+                      userName={editorUserName}
+                    />
+                  </Paper>
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Internal Notes */}
+          <Card sx={{ mb: 2 }}>
+            <CardContent>
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  minHeight: 44
+                }}
+                onClick={() => handleSectionToggle('notes')}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SvgIcon sx={{ mr: 1, color: 'warning.main' }}>
+                    <path d={mdiNoteEdit} />
+                  </SvgIcon>
+                  <Typography variant="h6" fontWeight="600">
+                    内部备注
+                  </Typography>
+                </Box>
+                <IconButton size="small">
+                  <SvgIcon>
+                    <path d={expandedSection === 'notes' ? mdiChevronUp : mdiChevronDown} />
+                  </SvgIcon>
+                </IconButton>
+              </Box>
+              <Collapse in={expandedSection === 'notes'}>
+                <Box sx={{ mt: 2 }}>
+                  <Paper 
+                    sx={{ 
+                      p: 1, 
+                      border: `1px solid ${theme.palette.divider}`,
+                      borderRadius: 1,
+                      minHeight: 150
+                    }}
+                  >
+                    <RichTextEditor
+                      value={adminInternalNotes}
+                      onChange={setAdminInternalNotes}
+                      placeholder={t('admin_internal_notes_placeholder', '输入内部审核备注，此内容对债权人不可见...')}
+                      documentId={`claim-${claimData.id}-internal-notes-mobile`}
+                      userId={editorUserId}
+                      userName={editorUserName}
+                    />
+                  </Paper>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                    此备注仅为管理员内部记录，不作为官方审核意见的一部分。
+                  </Typography>
+                </Box>
+              </Collapse>
+            </CardContent>
+          </Card>
+
+          {/* Mobile Audit Status */}
+          {claimData.audit_status !== '待审核' && (
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Box 
+                  sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    minHeight: 44
+                  }}
+                  onClick={() => handleSectionToggle('audit')}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <SvgIcon sx={{ mr: 1, color: 'secondary.main' }}>
+                      <path d={mdiInformation} />
+                    </SvgIcon>
+                    <Typography variant="h6" fontWeight="600">
+                      审核结果
+                    </Typography>
+                  </Box>
+                  <IconButton size="small">
+                    <SvgIcon>
+                      <path d={expandedSection === 'audit' ? mdiChevronUp : mdiChevronDown} />
+                    </SvgIcon>
+                  </IconButton>
+                </Box>
+                <Collapse in={expandedSection === 'audit'}>
+                  <Box sx={{ mt: 2 }}>
+                    <Grid container spacing={2}>
+                      <Grid size={6}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          审核人
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          {claimData.auditor || '-'}
+                        </Typography>
+                      </Grid>
+                      <Grid size={6}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          审核时间
+                        </Typography>
+                        <Typography variant="body2" fontWeight="500">
+                          {claimData.audit_time || '-'}
+                        </Typography>
+                      </Grid>
+                      <Grid size={12}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          审核意见
+                        </Typography>
+                        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>
+                          {claimData.reviewOpinion || '-'}
+                        </Typography>
+                      </Grid>
+                    </Grid>
+                    {claimData.admin_attachments_content && claimData.admin_attachments_content.length() > 0 && (
+                      <Box sx={{ mt: 2 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          管理人补充材料
+                        </Typography>
+                        <Paper 
+                          sx={{ 
+                            p: 1, 
+                            mt: 1,
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 1,
+                            maxHeight: 150,
+                            overflowY: 'auto'
+                          }}
+                        >
+                          <RichTextEditor
+                            value={claimData.admin_attachments_content}
+                            readOnly={true}
+                            documentId={`claim-${claimData.id}-admin-attachments-readonly-mobile`}
+                            userId={editorUserId}
+                            userName={editorUserName}
+                          />
+                        </Paper>
+                      </Box>
+                    )}
+                  </Box>
+                </Collapse>
+              </CardContent>
+            </Card>
+          )}
+        </Box>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
   return (
       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
         <AppBar position="sticky">
@@ -403,8 +837,31 @@ const ClaimReviewDetailPage: React.FC = () => {
         )}
 
         {/* Audit Modal/Form */}
-        <Dialog open={auditModalOpen} onClose={() => setAuditModalOpen(false)} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight: '90vh' } }}>
-          <DialogTitle>{t('fill_review_opinion_and_amount_title', '填写审核意见与认定金额')}</DialogTitle>
+        <Dialog 
+          open={auditModalOpen} 
+          onClose={() => setAuditModalOpen(false)} 
+          maxWidth="md" 
+          fullWidth 
+          fullScreen={isMobile}
+          PaperProps={{ sx: { maxHeight: isMobile ? '100vh' : '90vh' } }}
+        >
+          <DialogTitle>
+            {isMobile && (
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <IconButton 
+                  edge="start" 
+                  onClick={() => setAuditModalOpen(false)}
+                  sx={{ mr: 1 }}
+                >
+                  <SvgIcon><path d={mdiArrowLeft} /></SvgIcon>
+                </IconButton>
+                <Typography variant="h6" component="div">
+                  {t('fill_review_opinion_and_amount_title', '填写审核意见与认定金额')}
+                </Typography>
+              </Box>
+            )}
+            {!isMobile && t('fill_review_opinion_and_amount_title', '填写审核意见与认定金额')}
+          </DialogTitle>
           <DialogContent dividers>
             <Grid container spacing={2} sx={{pt:1}}>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -415,6 +872,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                       value={modalApprovedNature}
                       label={t('approved_claim_nature_label', '审核认定债权性质') + "*"}
                       onChange={e => { setModalApprovedNature(e.target.value); setModalErrors(p => ({...p, modalApprovedNature: ''}));}}
+                      sx={isMobile ? { minHeight: 56 } : {}}
                   >
                     {/* TODO: Fetch from admin config */}
                     <MenuItem value="货款">{t('claim_nature_goods_payment', '货款')}</MenuItem>
@@ -433,6 +891,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                       value={modalAuditStatus}
                       label={t('audit_status_label', '审核状态') + "*"}
                       onChange={e => { setModalAuditStatus(e.target.value as ClaimDataType['audit_status'] | ''); setModalErrors(p => ({...p, modalAuditStatus: ''}));}}
+                      sx={isMobile ? { minHeight: 56 } : {}}
                   >
                     {/* TODO: Fetch from admin config */}
                     <MenuItem value="审核通过">{t('status_approved', '审核通过')}</MenuItem>
@@ -453,6 +912,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                     error={!!modalErrors.modalApprovedPrincipal}
                     helperText={modalErrors.modalApprovedPrincipal}
                     InputProps={{ inputProps: { min: 0 } }}
+                    sx={isMobile ? { '& .MuiOutlinedInput-root': { minHeight: 56 } } : {}}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 4 }}>
@@ -465,6 +925,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                     error={!!modalErrors.modalApprovedInterest}
                     helperText={modalErrors.modalApprovedInterest}
                     InputProps={{ inputProps: { min: 0 } }}
+                    sx={isMobile ? { '& .MuiOutlinedInput-root': { minHeight: 56 } } : {}}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 12, md: 4 }}>
@@ -477,13 +938,14 @@ const ClaimReviewDetailPage: React.FC = () => {
                     error={!!modalErrors.modalApprovedOther}
                     helperText={modalErrors.modalApprovedOther}
                     InputProps={{ inputProps: { min: 0 } }}
+                    sx={isMobile ? { '& .MuiOutlinedInput-root': { minHeight: 56 } } : {}}
                 />
               </Grid>
               <Grid size={12}>
                 <TextField
                     label={t('review_opinion_label', '审核意见/备注')}
                     multiline
-                    rows={4}
+                    rows={isMobile ? 3 : 4}
                     fullWidth
                     value={modalReviewOpinion}
                     onChange={e => { setModalReviewOpinion(e.target.value); setModalErrors(p => ({...p, modalReviewOpinion: ''}));}}
@@ -493,7 +955,7 @@ const ClaimReviewDetailPage: React.FC = () => {
               </Grid>
               <Grid size={12}>
                 <Typography variant="subtitle2" gutterBottom>{t('admin_supplemental_attachments_modal_label', '管理人补充附件材料 (可选)')}</Typography>
-                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 200, p:1 }}>
+                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: isMobile ? 150 : 200, p:1 }}>
                   <RichTextEditor
                       value={modalAdminSupplementalAttachmentsContent}
                       onChange={setModalAdminSupplementalAttachmentsContent}
@@ -504,16 +966,27 @@ const ClaimReviewDetailPage: React.FC = () => {
                 </Box>
               </Grid>
             </Grid>
-            <Box sx={{mt:2, textAlign:'right'}}>
-              <Typography variant="h6" color="error">
+            <Box sx={{mt:2, textAlign: isMobile ? 'center' : 'right'}}>
+              <Typography variant={isMobile ? "h6" : "h6"} color="error" fontWeight="600">
                 {t('approved_total_amount_modal_label', '审核认定债权总额')}: {formatCurrencyDisplay(calculatedModalApprovedTotal, claimData.asserted_details.currency)}
               </Typography>
             </Box>
           </DialogContent>
-          <DialogActions sx={{p: '16px 24px'}}>
-            <Button onClick={() => setAuditModalOpen(false)}>{t('cancel_button', '取消')}</Button>
+          <DialogActions sx={{p: '16px 24px', gap: isMobile ? 1 : 0}}>
+            <Button 
+              onClick={() => setAuditModalOpen(false)}
+              sx={isMobile ? { minHeight: 48, flex: 1 } : {}}
+            >
+              {t('cancel_button', '取消')}
+            </Button>
             {/* // TODO: Access Control - Ensure user has permission to submit/modify a claim review. */}
-            <Button onClick={handleSubmitReview} variant="contained" color="primary" startIcon={<SvgIcon><path d={mdiCheckDecagramOutline}/></SvgIcon>}>
+            <Button 
+              onClick={handleSubmitReview} 
+              variant="contained" 
+              color="primary" 
+              startIcon={<SvgIcon><path d={mdiCheckDecagramOutline}/></SvgIcon>}
+              sx={isMobile ? { minHeight: 48, flex: 2 } : {}}
+            >
               {t('submit_review_button', '提交审核')}
             </Button>
           </DialogActions>

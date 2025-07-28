@@ -14,6 +14,7 @@ import {
     Toolbar,
     Stack,
 } from '@mui/material';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import { useTranslation } from 'react-i18next';
 import RichTextEditor, { QuillDelta } from '@/src/components/RichTextEditor';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
@@ -24,6 +25,7 @@ const AdminCreateClaimAttachmentsPage: React.FC = () => {
     const navigate = useNavigate();
     const { tempClaimId } = useParams<{ tempClaimId: string }>();
     const { showSnackbar } = useSnackbar();
+    const { isMobile } = useResponsiveLayout();
 
     const [editorContent, setEditorContent] = useState<QuillDelta>(new Delta());
 
@@ -57,8 +59,8 @@ const AdminCreateClaimAttachmentsPage: React.FC = () => {
                 </Toolbar>
             </AppBar>
 
-            <Container maxWidth="xl" sx={{ flexGrow: 1, py: 3, display: 'flex', flexDirection: 'column' }}>
-                <Paper elevation={3} sx={{ p: 2, mb: 2 }}>
+            <Container maxWidth="xl" sx={{ flexGrow: 1, py: isMobile ? 2 : 3, display: 'flex', flexDirection: 'column' }}>
+                <Paper elevation={3} sx={{ p: isMobile ? 1.5 : 2, mb: 2 }}>
                     <Typography variant="h5" gutterBottom>
                         {t('admin_claim_id_label', '临时债权 ID')}: {tempClaimId}
                     </Typography>
@@ -79,7 +81,7 @@ const AdminCreateClaimAttachmentsPage: React.FC = () => {
                     </Typography>
                 </Paper>
 
-                <Paper elevation={3} sx={{ p: 2, flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '60vh' }}>
+                <Paper elevation={3} sx={{ p: isMobile ? 1.5 : 2, flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: isMobile ? '50vh' : '60vh' }}>
                     <Typography variant="h6" gutterBottom>
                         {t('detailed_explanation_and_attachments_label', '详细说明及附件上传:')}
                     </Typography>
@@ -93,19 +95,34 @@ const AdminCreateClaimAttachmentsPage: React.FC = () => {
                     </Typography>
                 </Paper>
 
-                <Paper elevation={3} sx={{ p: 2, mt: 2, position: 'sticky', bottom: 0, zIndex: 1000 }}>
-                    <Stack direction="row" spacing={2} justifyContent="flex-end">
+                <Paper elevation={3} sx={{ p: isMobile ? 1.5 : 2, mt: 2, position: 'sticky', bottom: 0, zIndex: 1000 }}>
+                    <Stack 
+                        direction={isMobile ? "column" : "row"} 
+                        spacing={2} 
+                        justifyContent="flex-end"
+                    >
                         <Button
                             variant="outlined"
                             onClick={() => navigate(-1)} // Or navigate(`/admin/create-claim/${tempClaimId}/edit-basic`)
+                            sx={isMobile ? { minHeight: '44px' } : {}}
                         >
                             {t('back_to_edit_basic_info_button', '返回修改基本信息')}
                         </Button>
-                        <Button variant="outlined" color="secondary" onClick={handleSaveDraft}>
+                        <Button 
+                            variant="outlined" 
+                            color="secondary" 
+                            onClick={handleSaveDraft}
+                            sx={isMobile ? { minHeight: '44px' } : {}}
+                        >
                             {t('save_draft_button', '保存草稿')}
                         </Button>
                         {/* // TODO: Access Control - Ensure user has permission to finalize claim creation. */}
-                        <Button variant="contained" color="primary" onClick={handleCompleteAndSubmit}>
+                        <Button 
+                            variant="contained" 
+                            color="primary" 
+                            onClick={handleCompleteAndSubmit}
+                            sx={isMobile ? { minHeight: '44px' } : {}}
+                        >
                             {t('complete_and_submit_claim_button', '完成并提交债权')}
                         </Button>
                     </Stack>

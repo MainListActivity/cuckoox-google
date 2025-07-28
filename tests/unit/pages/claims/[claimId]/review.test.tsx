@@ -9,6 +9,7 @@ import i18n from '@/src/i18n';
 import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 import ClaimReviewDetailPage from '@/src/pages/claims/[claimId]/review';
 import { Delta } from 'quill/core';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 // Mock useNavigate and useParams
 const mockNavigate = vi.fn();
@@ -23,7 +24,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock RichTextEditor
-vi.mock('../../../../../src/components/RichTextEditor', () => ({
+vi.mock('@/src/components/RichTextEditor', () => ({
     __esModule: true,
     default: vi.fn(({ value, onChange, readOnly, placeholder }) => (
         <textarea
@@ -47,8 +48,8 @@ const mockShowError = vi.fn();
 const mockShowInfo = vi.fn();
 const mockShowWarning = vi.fn();
 
-vi.mock('../../../../../src/contexts/SnackbarContext', async () => {
-    const actual = await vi.importActual('../../../../../src/contexts/SnackbarContext');
+vi.mock('@/src/contexts/SnackbarContext', async () => {
+    const actual = await vi.importActual('@/src/contexts/SnackbarContext');
     return {
         ...actual,
         useSnackbar: () => ({
@@ -88,14 +89,55 @@ const mockAuthContextValue = {
     clearNavigateTo: vi.fn(),
 };
 
-vi.mock('../../../../../src/contexts/AuthContext', () => ({
+vi.mock('@/src/contexts/AuthContext', () => ({
     useAuth: () => mockAuthContextValue,
     AuthProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
+// Mock useResponsiveLayout hook
+vi.mock('@/src/hooks/useResponsiveLayout', () => ({
+    useResponsiveLayout: vi.fn(() => ({
+        isMobile: false,
+        isTablet: false,
+        isDesktop: true,
+    })),
+}));
+
+// Mock MobileOptimizedLayout
+vi.mock('@/src/components/mobile/MobileOptimizedLayout', () => ({
+    __esModule: true,
+    default: vi.fn(({ children, title, showBackButton, onBackClick, fabConfig }) => (
+        <div data-testid="mobile-optimized-layout">
+            <div data-testid="mobile-header">
+                {showBackButton && (
+                    <button onClick={onBackClick} data-testid="mobile-back-button">
+                        Back
+                    </button>
+                )}
+                <h1>{title}</h1>
+                {fabConfig && (
+                    <button onClick={fabConfig.action} data-testid="mobile-fab">
+                        {fabConfig.ariaLabel}
+                    </button>
+                )}
+            </div>
+            {children}
+        </div>
+    )),
+}));
+
 describe('ClaimReviewDetailPage', () => {
+    // Mock useResponsiveLayout hook
+    const mockUseResponsiveLayout = vi.mocked(useResponsiveLayout);
+
     beforeEach(() => {
         vi.clearAllMocks();
+        // Reset to desktop mode by default
+        vi.mocked(useResponsiveLayout).mockReturnValue({
+            isMobile: false,
+            isTablet: false,
+            isDesktop: true,
+        });
     });
 
     const renderComponent = () => {
@@ -475,5 +517,206 @@ describe('ClaimReviewDetailPage', () => {
         
         expect(leftPanel).toBeInTheDocument();
         expect(rightPanel).toBeInTheDocument();
+    });
+
+    // Mobile Layout Tests
+    describe('Mobile Layout', () => {
+        beforeEach(() => {
+            // Mock mobile device
+            vi.mocked(useResponsiveLayout).mockReturnValue({
+                isMobile: true,
+                isTablet: false,
+                isDesktop: false,
+            });
+        });
+
+        it('should render mobile optimized layout', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByTestId('mobile-optimized-layout')).toBeInTheDocument();
+            });
+            
+            expect(screen.getByTestId('mobile-header')).toBeInTheDocument();
+            expect(screen.getByTestId('mobile-back-button')).toBeInTheDocument();
+        });
+
+        it('should display mobile status card', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByText('债权审核')).toBeInTheDocument();
+            });
+            
+            expect(screen.getByText(/申报编号：/)).toBeInTheDocument();
+            expect(screen.getByText(/债权人：/)).toBeInTheDocument();
+        });
+
+        it('should display collapsible sections', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByText('申报信息')).toBeInTheDocument();
+            });
+            
+            expect(screen.getByText('债权金额')).toBeInTheDocument();
+            expect(screen.getByText('申报附件')).toBeInTheDocument();
+            expect(screen.getByText('内部备注')).toBeInTheDocument();
+        });
+
+        it('should toggle sections when clicked', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByText('申报信息')).toBeInTheDocument();
+            });
+
+            // Find the creditor section and click it
+            const creditorSection = screen.getByText('申报信息').closest('div');
+            fireEvent.click(creditorSection!);
+
+            // Check if content appears (content should be visible when expanded)
+            await waitFor(() => {
+                expect(screen.getByText('社会信用代码')).toBeInTheDocument();
+            });
+        });
+
+        it('should show mobile FAB button', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByTestId('mobile-fab')).toBeInTheDocument();
+            });
+            
+            expect(screen.getByText('开始审核')).toBeInTheDocument();
+        });
+
+        it('should open full-screen audit modal on mobile', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByTestId('mobile-fab')).toBeInTheDocument();
+            });
+
+            const fabButton = screen.getByTestId('mobile-fab');
+            fireEvent.click(fabButton);
+
+            expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument();
+        });
+
+        it('should display audit results section when claim is not pending', async () => {
+            renderComponent();
+            
+            // First complete an audit to change status
+            await waitFor(() => {
+                expect(screen.getByTestId('mobile-fab')).toBeInTheDocument();
+            });
+
+            const fabButton = screen.getByTestId('mobile-fab');
+            fireEvent.click(fabButton);
+
+            await waitFor(() => {
+                expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument();
+            });
+
+            // Fill form and submit
+            const natureSelect = screen.getByLabelText(/审核认定债权性质/);
+            fireEvent.mouseDown(natureSelect);
+            const serviceFeeOption = await screen.findByRole('option', { name: '服务费' });
+            fireEvent.click(serviceFeeOption);
+
+            const statusSelect = screen.getByLabelText(/审核状态/);
+            fireEvent.mouseDown(statusSelect);
+            const approvedOption = await screen.findByRole('option', { name: '审核通过' });
+            fireEvent.click(approvedOption);
+
+            fireEvent.change(screen.getByLabelText(/审核意见\/备注/), { target: { value: '审核通过' } });
+
+            const confirmSpy = vi.spyOn(window, 'confirm').mockImplementation(() => true);
+            fireEvent.click(screen.getByRole('button', { name: '提交审核' }));
+
+            await waitFor(() => {
+                expect(mockShowSuccess).toHaveBeenCalled();
+            });
+
+            // Now check if audit results section appears
+            await waitFor(() => {
+                expect(screen.getByText('审核结果')).toBeInTheDocument();
+            });
+
+            confirmSpy.mockRestore();
+        });
+
+        it('mobile back button should work correctly', async () => {
+            const mockHistoryBack = vi.fn();
+            vi.stubGlobal('history', { back: mockHistoryBack });
+
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByTestId('mobile-back-button')).toBeInTheDocument();
+            });
+
+            const backButton = screen.getByTestId('mobile-back-button');
+            fireEvent.click(backButton);
+
+            expect(mockHistoryBack).toHaveBeenCalled();
+
+            vi.unstubAllGlobals();
+        });
+    });
+
+    // Desktop Layout Tests
+    describe('Desktop Layout', () => {
+        beforeEach(() => {
+            // Ensure desktop mode
+            vi.mocked(useResponsiveLayout).mockReturnValue({
+                isMobile: false,
+                isTablet: false,
+                isDesktop: true,
+            });
+        });
+
+        it('should render desktop layout with AppBar', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+            });
+
+            // Should not render mobile layout
+            expect(screen.queryByTestId('mobile-optimized-layout')).not.toBeInTheDocument();
+            
+            // Should render desktop elements
+            expect(screen.getByText('债权人申报信息')).toBeInTheDocument();
+            expect(screen.getByText('债权人提交的附件材料')).toBeInTheDocument();
+        });
+
+        it('should display three-column layout on desktop', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`)).toBeInTheDocument();
+            });
+
+            expect(screen.getByText('债权人申报信息')).toBeInTheDocument();
+            expect(screen.getByText('债权人提交的附件材料')).toBeInTheDocument();
+            expect(screen.getByText('管理员内部审核备注')).toBeInTheDocument();
+        });
+
+        it('should show desktop audit modal (not fullscreen)', async () => {
+            renderComponent();
+            
+            await waitFor(() => {
+                expect(screen.getByRole('button', { name: /audit claim/i })).toBeInTheDocument();
+            });
+
+            const fabButton = screen.getByRole('button', { name: /audit claim/i });
+            fireEvent.click(fabButton);
+
+            expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument();
+            // On desktop, the modal should not take full screen
+            // This is handled by the fullScreen={isMobile} prop
+        });
     });
 });

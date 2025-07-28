@@ -25,8 +25,18 @@ import {
   FormControl,
   InputLabel,
   InputAdornment, // Added for search icon
+  Card,
+  CardContent,
+  CardActions,
+  Grid,
+  alpha,
+  useTheme,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search'; // Added search icon
+
+// Import mobile components
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import {
   mdiCalendarPlus,
   mdiInformationOutline,
@@ -69,6 +79,9 @@ const defaultMeetingFormData: MeetingFormData = {
 
 
 const OnlineMeetingPage: React.FC = () => {
+  const theme = useTheme();
+  const { isMobile } = useResponsiveLayout();
+  
   // const [meetings, setMeetings] = useState<MeetingData[]>(initialMockMeetings.map(m => ({...m, duration_minutes: m.duration_minutes || 60, agenda: m.agenda || ''}))); // Replaced by useLiveMeetings
   const [isMeetingFormOpen, setIsMeetingFormOpen] = useState(false);
   const [currentMeeting, setCurrentMeeting] = useState<MeetingData | null>(null); 
@@ -359,6 +372,175 @@ const OnlineMeetingPage: React.FC = () => {
   };
 
 
+  // Mobile meeting card renderer
+  const renderMobileMeetingCard = (meeting: MeetingData) => {
+    const isEditable = (meeting.status === '已安排' || meeting.status === '进行中') && canArrangeMeetings;
+    const isCancellable = meeting.status === '已安排' && canArrangeMeetings;
+
+    return (
+      <Card key={String(meeting.id)} sx={{ mb: 2, cursor: 'pointer' }}>
+        <CardContent sx={{ pb: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+            <Typography variant="h6" fontWeight="600" sx={{ flex: 1, pr: 1 }}>
+              {meeting.title}
+            </Typography>
+            <Chip
+              label={meeting.status}
+              size="small"
+              color={
+                meeting.status === '已结束' ? 'default' :
+                meeting.status === '已安排' ? 'info' :
+                meeting.status === '进行中' ? 'success' :
+                meeting.status === '已取消' ? 'error' :
+                'default'
+              }
+              variant={meeting.status === '已结束' || meeting.status === '已取消' ? 'outlined' : 'filled'}
+            />
+          </Box>
+
+          <Grid container spacing={1} sx={{ mb: 2 }}>
+            <Grid size={6}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                会议类型
+              </Typography>
+              <Typography variant="body2" fontWeight="500">
+                {meeting.type}
+              </Typography>
+            </Grid>
+            <Grid size={6}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                持续时间
+              </Typography>
+              <Typography variant="body2" fontWeight="500">
+                {meeting.duration_minutes || 'N/A'} 分钟
+              </Typography>
+            </Grid>
+            <Grid size={12}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                计划时间
+              </Typography>
+              <Typography variant="body2" fontWeight="500">
+                {new Date(meeting.scheduled_time).toLocaleString()}
+              </Typography>
+            </Grid>
+          </Grid>
+
+          {meeting.attendees && meeting.attendees.length > 0 && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                参会人员
+              </Typography>
+              <Typography variant="body2" fontWeight="500">
+                <SvgIcon sx={{ fontSize: '1rem', mr: 0.5, verticalAlign: 'middle' }}>
+                  <path d={mdiAccountGroupOutline} />
+                </SvgIcon>
+                {meeting.attendees.length} 人参加
+              </Typography>
+            </Box>
+          )}
+
+          {meeting.agenda && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary" display="block">
+                议程
+              </Typography>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden'
+                }}
+              >
+                {meeting.agenda}
+              </Typography>
+            </Box>
+          )}
+        </CardContent>
+
+        <CardActions sx={{ pt: 0, px: 2, pb: 2, flexWrap: 'wrap', gap: 1 }}>
+          {meeting.conference_link && (
+            <Button
+              variant="contained"
+              size="small"
+              color="primary"
+              startIcon={<SvgIcon><path d={mdiPlayCircleOutline} /></SvgIcon>}
+              href={meeting.conference_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ minHeight: '36px' }}
+            >
+              进入会议
+            </Button>
+          )}
+
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<SvgIcon><path d={mdiInformationOutline} /></SvgIcon>}
+            onClick={() => handleOpenMeetingForm(meeting, true)}
+            sx={{ minHeight: '36px' }}
+          >
+            查看详情
+          </Button>
+
+          {isEditable && (
+            <Button
+              variant="outlined"
+              size="small"
+              color="primary"
+              startIcon={<SvgIcon><path d={mdiPencil} /></SvgIcon>}
+              onClick={() => handleOpenMeetingForm(meeting)}
+              sx={{ minHeight: '36px' }}
+            >
+              编辑
+            </Button>
+          )}
+
+          {isCancellable && (
+            <Button
+              variant="outlined"
+              size="small"
+              color="error"
+              startIcon={<SvgIcon><path d={mdiCancel} /></SvgIcon>}
+              onClick={() => handleOpenCancelConfirm(meeting)}
+              sx={{ minHeight: '36px' }}
+            >
+              取消
+            </Button>
+          )}
+
+          {(meeting.minutes_exist || canEditMinutes) && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<SvgIcon><path d={mdiFileDocumentOutline} /></SvgIcon>}
+              onClick={() => handleOpenMinutesDialog(meeting)}
+              sx={{ minHeight: '36px' }}
+            >
+              {meeting.minutes_exist ? '查看纪要' : '添加纪要'}
+            </Button>
+          )}
+
+          {meeting.recording_url && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<SvgIcon><path d={mdiVideoOutline} /></SvgIcon>}
+              href={meeting.recording_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ minHeight: '36px' }}
+            >
+              查看录像
+            </Button>
+          )}
+        </CardActions>
+      </Card>
+    );
+  };
+
   // TODO: Remove initialMockMeetings usage once DB is populated.
   if (isAuthLoading || isCaseStatusLoading) {
     return (
@@ -376,6 +558,138 @@ const OnlineMeetingPage: React.FC = () => {
     );
   }
 
+  // Mobile rendering
+  if (isMobile) {
+    return (
+      <MobileOptimizedLayout
+        title="在线会议"
+        showBackButton={false}
+        fabConfig={canArrangeMeetings ? {
+          icon: <SvgIcon><path d={mdiCalendarPlus} /></SvgIcon>,
+          action: () => handleOpenMeetingForm(),
+          ariaLabel: "安排新会议",
+        } : undefined}
+      >
+        <Box sx={{ p: 0 }}>
+          {/* Mobile search and filters */}
+          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" fontWeight="600">
+                在线会议
+              </Typography>
+              {selectedCaseId && (
+                <Typography variant="caption" color="text.secondary">
+                  案件: {selectedCaseId.replace(/^case:/, '')}
+                </Typography>
+              )}
+            </Box>
+            
+            <TextField
+              fullWidth
+              placeholder="搜索会议名称或类型..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+              inputProps={{ 
+                style: { fontSize: 16 } // Prevent zoom on iOS
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                mb: 2,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '20px',
+                  minHeight: '44px',
+                }
+              }}
+            />
+
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <TextField
+                label="开始日期"
+                type="date"
+                size="small"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
+                sx={{ 
+                  flex: 1,
+                  '& .MuiOutlinedInput-root': {
+                    minHeight: '44px',
+                  }
+                }}
+              />
+              <TextField
+                label="结束日期"
+                type="date"
+                size="small"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
+                sx={{ 
+                  flex: 1,
+                  '& .MuiOutlinedInput-root': {
+                    minHeight: '44px',
+                  }
+                }}
+              />
+            </Box>
+          </Box>
+
+          {/* Mobile meeting list */}
+          <Box sx={{ p: 2 }}>
+            {filteredMeetings.length === 0 ? (
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '50vh',
+                textAlign: 'center'
+              }}>
+                <SvgIcon sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }}>
+                  <path d={mdiCalendarPlus} />
+                </SvgIcon>
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  {searchTerm || startDate || endDate ? "未找到匹配的会议" : "暂无会议记录"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  {searchTerm || startDate || endDate ? "尝试调整搜索条件" : "开始安排第一个会议"}
+                </Typography>
+                {canArrangeMeetings && !searchTerm && !startDate && !endDate && (
+                  <Button
+                    variant="contained"
+                    startIcon={<SvgIcon><path d={mdiCalendarPlus} /></SvgIcon>}
+                    onClick={() => handleOpenMeetingForm()}
+                    sx={{ minHeight: '48px', px: 3 }}
+                  >
+                    安排新会议
+                  </Button>
+                )}
+              </Box>
+            ) : (
+              <>
+                {filteredMeetings.map(renderMobileMeetingCard)}
+              </>
+            )}
+          </Box>
+        </Box>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -529,7 +843,13 @@ const OnlineMeetingPage: React.FC = () => {
       )}
 
       {/* Meeting Form / View Details Dialog */}
-      <Dialog open={isMeetingFormOpen} onClose={handleCloseMeetingForm} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={isMeetingFormOpen} 
+        onClose={handleCloseMeetingForm} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
         <DialogTitle>
           {isViewMode 
             ? '查看会议详情' 
@@ -616,7 +936,16 @@ const OnlineMeetingPage: React.FC = () => {
                 value={formData.title}
                 onChange={handleFormChange}
                 required
-                sx={{mb:2, mt:1}}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
+                sx={{
+                  mb: 2, 
+                  mt: 1,
+                  '& .MuiOutlinedInput-root': isMobile ? {
+                    minHeight: '44px',
+                  } : {}
+                }}
                 disabled={isViewMode}
               />
               <FormControl fullWidth margin="dense" sx={{mb:2}}>
@@ -671,7 +1000,15 @@ const OnlineMeetingPage: React.FC = () => {
                 onChange={handleFormChange}
                 InputLabelProps={{ shrink: true }}
                 required
-                sx={{mb:2}}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
+                sx={{
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': isMobile ? {
+                    minHeight: '44px',
+                  } : {}
+                }}
                 disabled={isViewMode}
               />
               <TextField
@@ -683,8 +1020,16 @@ const OnlineMeetingPage: React.FC = () => {
                 variant="outlined"
                 value={formData.duration_minutes}
                 onChange={handleFormChange}
-                inputProps={{ min: 15 }}
-                sx={{mb:2}}
+                inputProps={{ 
+                  min: 15,
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
+                sx={{
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': isMobile ? {
+                    minHeight: '44px',
+                  } : {}
+                }}
                 disabled={isViewMode}
               />
               <TextField
@@ -696,7 +1041,15 @@ const OnlineMeetingPage: React.FC = () => {
                 variant="outlined"
                 value={formData.conference_link}
                 onChange={handleFormChange}
-                sx={{mb:2}}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
+                sx={{
+                  mb: 2,
+                  '& .MuiOutlinedInput-root': isMobile ? {
+                    minHeight: '44px',
+                  } : {}
+                }}
                 disabled={isViewMode}
               />
               <TextField
@@ -706,10 +1059,18 @@ const OnlineMeetingPage: React.FC = () => {
                 type="text"
                 fullWidth
                 multiline
-                rows={3}
+                rows={isMobile ? 4 : 3}
                 variant="outlined"
                 value={formData.agenda}
                 onChange={handleFormChange}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': isMobile ? {
+                    minHeight: '44px',
+                  } : {}
+                }}
                 disabled={isViewMode}
               />
             </>
@@ -717,11 +1078,31 @@ const OnlineMeetingPage: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{p: '16px 24px'}}>
           {isViewMode ? (
-            <Button onClick={handleCloseMeetingForm} color="primary" variant="contained">关闭</Button>
+            <Button 
+              onClick={handleCloseMeetingForm} 
+              color="primary" 
+              variant="contained"
+              sx={isMobile ? { minHeight: '48px', flex: 1 } : {}}
+            >
+              关闭
+            </Button>
           ) : (
             <>
-              <Button onClick={handleCloseMeetingForm} color="secondary">取消</Button>
-              <Button onClick={handleSaveMeeting} variant="contained" color="primary">保存</Button>
+              <Button 
+                onClick={handleCloseMeetingForm} 
+                color="secondary"
+                sx={isMobile ? { minHeight: '48px', flex: 1, mr: 1 } : {}}
+              >
+                取消
+              </Button>
+              <Button 
+                onClick={handleSaveMeeting} 
+                variant="contained" 
+                color="primary"
+                sx={isMobile ? { minHeight: '48px', flex: 1 } : {}}
+              >
+                保存
+              </Button>
             </>
           )}
         </DialogActions>
@@ -733,6 +1114,9 @@ const OnlineMeetingPage: React.FC = () => {
         onClose={handleCloseCancelConfirm}
         aria-labelledby="cancel-confirm-dialog-title"
         aria-describedby="cancel-confirm-dialog-description"
+        fullScreen={isMobile}
+        maxWidth="sm"
+        fullWidth
       >
         <DialogTitle id="cancel-confirm-dialog-title">确认取消会议</DialogTitle>
         <DialogContent>
@@ -753,7 +1137,8 @@ const OnlineMeetingPage: React.FC = () => {
         open={isMinutesDialogOpen} 
         onClose={handleCloseMinutesDialog} 
         maxWidth="md" 
-        fullWidth 
+        fullWidth
+        fullScreen={isMobile}
       >
         <DialogTitle>会议纪要: {currentMeetingForMinutes?.title || ''}</DialogTitle>
         <DialogContent sx={{minHeight: '50vh', display: 'flex', flexDirection: 'column'}}> 

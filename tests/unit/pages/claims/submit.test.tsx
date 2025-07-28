@@ -74,6 +74,38 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => ({}),
 }));
 
+// Mock useResponsiveLayout
+vi.mock('@/src/hooks/useResponsiveLayout', () => ({
+  useResponsiveLayout: vi.fn(() => ({
+    isMobile: false,
+    isTablet: false,
+    isDesktop: true,
+  })),
+}));
+
+// Mock MobileOptimizedLayout
+vi.mock('@/src/components/mobile/MobileOptimizedLayout', () => ({
+  __esModule: true,
+  default: vi.fn(({ children, title, showBackButton, onBackClick, fabConfig }) => (
+    <div data-testid="mobile-optimized-layout">
+      <div data-testid="mobile-header">
+        {showBackButton && (
+          <button onClick={onBackClick} data-testid="mobile-back-button">
+            Back
+          </button>
+        )}
+        <h1>{title}</h1>
+        {fabConfig && (
+          <button onClick={fabConfig.action} data-testid="mobile-fab">
+            {fabConfig.ariaLabel}
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  )),
+}));
+
 // Mock i18n
 vi.mock('react-i18next', async () => {
   const actual = await vi.importActual('react-i18next');
@@ -142,6 +174,9 @@ const mockCases = [
 ];
 
 vi.mock('@/src/services/claimService');
+
+// Import useResponsiveLayout for mocking
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 describe('ClaimSubmissionPage', () => {
   let mockClaimService: any;
@@ -413,4 +448,145 @@ describe('ClaimSubmissionPage', () => {
     
     // 不再测试整个表单提交流程
   }, 30000);
+
+  // Mobile Layout Tests
+  describe('Mobile Layout', () => {
+    beforeEach(() => {
+      // Mock mobile device
+      vi.mocked(useResponsiveLayout).mockReturnValue({
+        isMobile: true,
+        isTablet: false,
+        isDesktop: false,
+      });
+    });
+
+    it('renders mobile claim list view with cards instead of table', async () => {
+      await renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('mobile-optimized-layout')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByText('我的债权申报')).toBeInTheDocument();
+      expect(screen.getByTestId('mobile-fab')).toBeInTheDocument();
+      expect(screen.getByText('新增申报')).toBeInTheDocument();
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+
+    it('displays mobile empty state when no claims', async () => {
+      // Mock empty claims
+      mockClaimService.getClaimsByCreditor.mockResolvedValue([]);
+      
+      await renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByText('暂无债权申报记录')).toBeInTheDocument();
+      });
+      
+      expect(screen.getByText('创建第一个申报')).toBeInTheDocument();
+    });
+
+    it('navigates to mobile form view when clicking FAB', async () => {
+      await renderComponent();
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('mobile-fab')).toBeInTheDocument();
+      });
+      
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('mobile-fab'));
+      });
+      
+      await waitFor(() => {
+        expect(screen.getByText('新建债权申报')).toBeInTheDocument();
+        expect(screen.getByText('步骤 1 / 3')).toBeInTheDocument();
+      });
+    });
+
+    it('renders mobile progress indicator', async () => {
+      await renderComponent();
+      
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('mobile-fab'));
+      });
+      
+      await waitFor(() => {
+        expect(screen.getByText('步骤 1 / 3')).toBeInTheDocument();
+        expect(screen.getByText('33%')).toBeInTheDocument();
+        expect(screen.getByText('填写债权信息')).toBeInTheDocument();
+      });
+    });
+
+    it('renders mobile form with card sections', async () => {
+      await renderComponent();
+      
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('mobile-fab'));
+      });
+      
+      await waitFor(() => {
+        expect(screen.getByText('债权基本信息')).toBeInTheDocument();
+        expect(screen.getByText('金额详情')).toBeInTheDocument();
+        expect(screen.getByText('债权说明')).toBeInTheDocument();
+      });
+    });
+
+    it('mobile form fields have proper attributes for iOS', async () => {
+      await renderComponent();
+      
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('mobile-fab'));
+      });
+      
+      await waitFor(() => {
+        const principalInput = screen.getByLabelText('本金');
+        expect(principalInput).toHaveAttribute('type', 'number');
+        // Check for iOS zoom prevention
+        expect(principalInput).toHaveStyle('font-size: 16px');
+      });
+    });
+
+    it('displays mobile currency calculator', async () => {
+      await renderComponent();
+      
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('mobile-fab'));
+      });
+      
+      await waitFor(() => {
+        expect(screen.getByText('债权总额')).toBeInTheDocument();
+        // Check for formatted currency display
+        expect(screen.getByText('¥0.00')).toBeInTheDocument();
+      });
+    });
+
+    it('handles mobile back navigation', async () => {
+      await renderComponent();
+      
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('mobile-fab'));
+      });
+      
+      await waitFor(() => {
+        expect(screen.getByTestId('mobile-back-button')).toBeInTheDocument();
+      });
+      
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('mobile-back-button'));
+      });
+      
+      await waitFor(() => {
+        expect(screen.getByText('我的债权申报')).toBeInTheDocument();
+      });
+    });
+
+    afterEach(() => {
+      // Reset to desktop mode
+      vi.mocked(useResponsiveLayout).mockReturnValue({
+        isMobile: false,
+        isTablet: false,
+        isDesktop: true,
+      });
+    });
+  });
 });

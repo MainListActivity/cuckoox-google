@@ -192,9 +192,13 @@ const RegisterPage: React.FC = () => {
                 variant="outlined"
                 margin="normal"
                 placeholder={t('username_placeholder', 'Choose a username')}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
+                    minHeight: isMobile ? '44px' : 'auto',
                   },
                 }}
               />
@@ -210,9 +214,13 @@ const RegisterPage: React.FC = () => {
                 variant="outlined"
                 margin="normal"
                 placeholder={t('name_placeholder', 'Enter your full name')}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
+                    minHeight: isMobile ? '44px' : 'auto',
                   },
                 }}
               />
@@ -227,9 +235,13 @@ const RegisterPage: React.FC = () => {
                 variant="outlined"
                 margin="normal"
                 placeholder={t('email_placeholder', 'Enter your email (optional)')}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
+                    minHeight: isMobile ? '44px' : 'auto',
                   },
                 }}
               />
@@ -245,6 +257,9 @@ const RegisterPage: React.FC = () => {
                 variant="outlined"
                 margin="normal"
                 placeholder={t('password_placeholder', 'Choose a strong password')}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -252,6 +267,7 @@ const RegisterPage: React.FC = () => {
                         onClick={() => setShowPassword(!showPassword)}
                         edge="end"
                         aria-label="toggle password visibility"
+                        sx={isMobile ? { minHeight: '44px', minWidth: '44px' } : {}}
                       >
                         <SvgIcon fontSize="small">
                           <path d={showPassword ? mdiEyeOff : mdiEye} />
@@ -263,6 +279,7 @@ const RegisterPage: React.FC = () => {
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
+                    minHeight: isMobile ? '44px' : 'auto',
                   },
                 }}
               />
@@ -278,6 +295,9 @@ const RegisterPage: React.FC = () => {
                 variant="outlined"
                 margin="normal"
                 placeholder={t('confirm_password_placeholder', 'Re-enter your password')}
+                inputProps={{ 
+                  style: { fontSize: 16 } // Prevent zoom on iOS
+                }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -285,6 +305,7 @@ const RegisterPage: React.FC = () => {
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         edge="end"
                         aria-label="toggle confirm password visibility"
+                        sx={isMobile ? { minHeight: '44px', minWidth: '44px' } : {}}
                       >
                         <SvgIcon fontSize="small">
                           <path d={showConfirmPassword ? mdiEyeOff : mdiEye} />
@@ -296,6 +317,7 @@ const RegisterPage: React.FC = () => {
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
+                    minHeight: isMobile ? '44px' : 'auto',
                   },
                 }}
               />
@@ -311,6 +333,7 @@ const RegisterPage: React.FC = () => {
                   mt: 3, 
                   mb: 2,
                   py: 1.5,
+                  minHeight: isMobile ? '48px' : 'auto',
                   borderRadius: 2,
                   textTransform: 'none',
                   fontSize: '1rem',

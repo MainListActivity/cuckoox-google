@@ -9,6 +9,7 @@ import {
   SvgIcon,
   Stack,
 } from '@mui/material';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import {
   mdiAccountGroupOutline,
   mdiSecurity,
@@ -32,6 +33,7 @@ const adminSections = [
 const AdminPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { isMobile } = useResponsiveLayout();
 
   // TODO: Implement admin functionalities:
   // - User management
@@ -40,10 +42,17 @@ const AdminPage: React.FC = () => {
   // - Audit status management (for claim reviews)
   // - Case stage notification rule configuration
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>系统管理</Typography>
+    <Box sx={{ p: isMobile ? 2 : 3 }}>
+      <Typography 
+        variant={isMobile ? "h5" : "h4"} 
+        component="h1" 
+        gutterBottom
+        sx={{ mb: isMobile ? 2 : 3 }}
+      >
+        系统管理
+      </Typography>
       
-      <Grid container spacing={3}>
+      <Grid container spacing={isMobile ? 2 : 3}>
         <Grid size={{ xs: 12, md: 6, lg: 4 }}>
           <Card sx={{ height: '100%' }}>
             <CardContent>
@@ -56,7 +65,12 @@ const AdminPage: React.FC = () => {
               <Typography variant="body2" color="text.secondary" paragraph>
                 {t('admin.systemSettingsDesc', '配置系统参数、主题和其他全局设置')}
               </Typography>
-              <Button variant="outlined" fullWidth onClick={() => navigate('/admin/theme')}>
+              <Button 
+                variant="outlined" 
+                fullWidth 
+                onClick={() => navigate('/admin/theme')}
+                sx={isMobile ? { minHeight: '44px' } : {}}
+              >
                 {t('admin.themeSettings', '主题设置')}
               </Button>
             </CardContent>
@@ -76,10 +90,20 @@ const AdminPage: React.FC = () => {
                 {t('admin.userManagementDesc', '管理系统用户、角色和权限分配')}
               </Typography>
               <Stack spacing={1}>
-                <Button variant="outlined" fullWidth onClick={() => navigate('/admin/manage/roles')}>
+                <Button 
+                  variant="outlined" 
+                  fullWidth 
+                  onClick={() => navigate('/admin/manage/roles')}
+                  sx={isMobile ? { minHeight: '44px' } : {}}
+                >
                   {t('admin.roleManagement', '角色管理')}
                 </Button>
-                <Button variant="outlined" fullWidth onClick={() => navigate('/admin/manage/permissions')}>
+                <Button 
+                  variant="outlined" 
+                  fullWidth 
+                  onClick={() => navigate('/admin/manage/permissions')}
+                  sx={isMobile ? { minHeight: '44px' } : {}}
+                >
                   {t('admin.permissionManagement', '权限管理')}
                 </Button>
               </Stack>
@@ -104,7 +128,13 @@ const AdminPage: React.FC = () => {
                 </Typography>
               </CardContent>
               <Box sx={{ p: 2, pt: 0 }}>
-                <Button variant="contained" size="medium" color="primary" fullWidth>
+                <Button 
+                  variant="contained" 
+                  size="medium" 
+                  color="primary" 
+                  fullWidth
+                  sx={isMobile ? { minHeight: '44px' } : {}}
+                >
                   {section.buttonText}
                 </Button>
               </Box>

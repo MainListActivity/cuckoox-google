@@ -488,9 +488,14 @@ const LoginPage: React.FC = () => {
                           variant="outlined"
                           margin="normal"
                           placeholder={t('tenant_code_placeholder', 'Enter tenant code')}
+                          inputProps={{
+                            ...params.inputProps,
+                            style: { fontSize: 16 }, // Prevent zoom on iOS
+                          }}
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
+                              minHeight: isMobile ? '44px' : 'auto',
                             },
                           }}
                         />
@@ -546,9 +551,13 @@ const LoginPage: React.FC = () => {
                       ? t('root_admin_username_placeholder', 'Enter root admin username')
                       : t('admin_username_placeholder', 'Enter username')
                     }
+                    inputProps={{ 
+                      style: { fontSize: 16 } // Prevent zoom on iOS
+                    }}
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: 2,
+                        minHeight: isMobile ? '44px' : 'auto',
                       },
                     }}
                   />
@@ -567,6 +576,9 @@ const LoginPage: React.FC = () => {
                     variant="outlined"
                     margin="normal"
                     placeholder={t('admin_password_placeholder', 'Enter admin password')}
+                    inputProps={{ 
+                      style: { fontSize: 16 } // Prevent zoom on iOS
+                    }}
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">
@@ -574,6 +586,7 @@ const LoginPage: React.FC = () => {
                             onClick={() => setShowPassword(!showPassword)}
                             edge="end"
                             aria-label="toggle password visibility"
+                            sx={isMobile ? { minHeight: '44px', minWidth: '44px' } : {}}
                           >
                             <SvgIcon fontSize="small">
                               <path d={showPassword ? mdiEyeOff : mdiEye} />
@@ -585,6 +598,7 @@ const LoginPage: React.FC = () => {
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: 2,
+                        minHeight: isMobile ? '44px' : 'auto',
                       },
                     }}
                   />
@@ -600,6 +614,7 @@ const LoginPage: React.FC = () => {
                       mt: 3, 
                       mb: 2,
                       py: 1.5,
+                      minHeight: isMobile ? '48px' : 'auto',
                       borderRadius: 2,
                       textTransform: 'none',
                       fontSize: '1rem',
@@ -630,6 +645,7 @@ const LoginPage: React.FC = () => {
                       borderRadius: 2,
                       textTransform: 'none',
                       py: 1,
+                      minHeight: isMobile ? '44px' : 'auto',
                     }}
                   >
                     {isRootAdminMode 

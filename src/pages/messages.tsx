@@ -101,7 +101,7 @@ interface ChatMessageDisplay extends ChatBubbleProps {
 
 const MessageCenterPage: React.FC = () => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { isMobile } = useResponsiveLayout();
   const { user, selectedCaseId } = useAuth(); // Get current user and selected case
   const { showSuccess, showError, showWarning, showInfo } = useSnackbar();
   const client = useSurrealClient();
@@ -483,6 +483,452 @@ const MessageCenterPage: React.FC = () => {
     );
   };
 
+  // Mobile rendering
+  if (isMobile) {
+    // Mobile conversation view
+    if (selectedItem) {
+      return (
+        <MobileOptimizedLayout
+          title={selectedItem.itemType === 'conversation'
+            ? (selectedItem.participants?.find((p: any) => p.id !== user?.id)?.name || '对话')
+            : (selectedItem.title || '系统通知')}
+          showBackButton={true}
+          onBackClick={() => setSelectedItem(null)}
+        >
+          <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+            {selectedItem.itemType === 'conversation' ? (
+              // Mobile chat interface
+              <>
+                {/* Mobile chat messages */}
+                <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
+                  {currentConversation.map((msg: ChatMessageDisplay) => (
+                    <Box
+                      key={msg.id}
+                      sx={{
+                        display: 'flex',
+                        flexDirection: msg.isSender ? 'row-reverse' : 'row',
+                        mb: 2,
+                        alignItems: 'flex-end',
+                      }}
+                    >
+                      <Avatar
+                        sx={{
+                          bgcolor: msg.isSender ? 'primary.main' : 'secondary.main',
+                          width: 32,
+                          height: 32,
+                          mr: msg.isSender ? 0 : 1,
+                          ml: msg.isSender ? 1 : 0,
+                          fontSize: '0.875rem'
+                        }}
+                      >
+                        {msg.isSender ? '我' : (msg.senderName?.[0] || '对')}
+                      </Avatar>
+                      <Box
+                        sx={{
+                          maxWidth: '80%',
+                          p: 2,
+                          borderRadius: msg.isSender ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                          bgcolor: msg.isSender ? 'primary.main' : 'background.paper',
+                          color: msg.isSender ? 'primary.contrastText' : 'text.primary',
+                          boxShadow: 1,
+                          mb: 0.5,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ lineHeight: 1.4 }}>
+                          {msg.messageText}
+                        </Typography>
+                        <Typography 
+                          variant="caption" 
+                          color={msg.isSender ? 'inherit' : 'text.secondary'} 
+                          sx={{ 
+                            display: 'block', 
+                            mt: 0.5, 
+                            textAlign: 'right',
+                            opacity: 0.8,
+                            fontSize: '0.7rem'
+                          }}
+                        >
+                          {msg.timestamp}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                  <div ref={chatHistoryEndRef} />
+                </Box>
+
+                {/* Mobile chat input */}
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    borderTop: 1, 
+                    borderColor: 'divider',
+                    backgroundColor: 'background.paper'
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+                    <TextField
+                      fullWidth
+                      placeholder="输入消息..."
+                      value={chatInput}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setChatInput(e.target.value)}
+                      multiline
+                      maxRows={4}
+                      variant="outlined"
+                      size="small"
+                      inputProps={{ 
+                        style: { fontSize: 16 } // Prevent zoom on iOS
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '20px',
+                          minHeight: '44px', // Touch-friendly minimum height
+                        }
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                    />
+                    <IconButton
+                      sx={{
+                        minWidth: '44px',
+                        minHeight: '44px',
+                        bgcolor: 'grey.100',
+                        '&:hover': { bgcolor: 'grey.200' }
+                      }}
+                    >
+                      <AttachFile />
+                    </IconButton>
+                    <IconButton
+                      onClick={handleSendMessage}
+                      disabled={!chatInput.trim()}
+                      sx={{
+                        minWidth: '44px',
+                        minHeight: '44px',
+                        bgcolor: 'primary.main',
+                        color: 'primary.contrastText',
+                        '&:hover': { bgcolor: 'primary.dark' },
+                        '&.Mui-disabled': { 
+                          bgcolor: 'grey.300', 
+                          color: 'grey.500' 
+                        }
+                      }}
+                    >
+                      <Send />
+                    </IconButton>
+                  </Box>
+                </Box>
+              </>
+            ) : (
+              // Mobile notification view
+              <Box sx={{ p: 2, flexGrow: 1, overflow: 'auto' }}>
+                <Card sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                      <Avatar
+                        sx={{
+                          bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                          mr: 2,
+                        }}
+                      >
+                        {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
+                      </Avatar>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="h6" fontWeight="600">
+                          {selectedItem.title}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(selectedItem.created_at).toLocaleString()}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Typography variant="body1" paragraph sx={{ lineHeight: 1.6 }}>
+                      {selectedItem.content}
+                    </Typography>
+                    {selectedItem.priority === 'high' && (
+                      <Alert severity="warning" sx={{ mt: 2 }}>
+                        此消息为重要通知，请及时处理。
+                      </Alert>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Mobile notification actions */}
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    size="large"
+                    startIcon={<MarkEmailRead />}
+                    onClick={handleMarkAsRead}
+                    disabled={selectedItem.is_read}
+                    sx={{ minHeight: '48px' }}
+                  >
+                    标记为已读
+                  </Button>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      size="large"
+                      startIcon={<Archive />}
+                      onClick={handleArchive}
+                      sx={{ minHeight: '48px' }}
+                    >
+                      归档
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      size="large"
+                      color="error"
+                      startIcon={<Delete />}
+                      onClick={handleDelete}
+                      sx={{ minHeight: '48px' }}
+                    >
+                      删除
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </MobileOptimizedLayout>
+      );
+    }
+
+    // Mobile message list view
+    return (
+      <MobileOptimizedLayout
+        title="消息中心"
+        showBackButton={false}
+        fabConfig={{
+          icon: <Add />,
+          action: () => setCreateConversationOpen(true),
+          ariaLabel: "新建对话",
+        }}
+      >
+        <Box sx={{ p: 0 }}>
+          {/* Mobile search and filters */}
+          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" fontWeight="600">
+                消息中心
+              </Typography>
+              <Badge badgeContent={unreadCount} color="error">
+                <Chip label="未读消息" color="primary" variant="outlined" size="small" />
+              </Badge>
+            </Box>
+            <TextField
+              fullWidth
+              placeholder="搜索消息..."
+              value={searchKeyword}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchKeyword(e.target.value)}
+              size="small"
+              inputProps={{ 
+                style: { fontSize: 16 } // Prevent zoom on iOS
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '20px',
+                  minHeight: '44px',
+                }
+              }}
+            />
+            <Tabs
+              value={activeTab}
+              onChange={(e: React.SyntheticEvent, newValue: number) => setActiveTab(newValue)}
+              sx={{ mt: 2 }}
+              variant="fullWidth"
+              textColor="primary"
+              indicatorColor="primary"
+            >
+              <Tab label="全部" />
+              <Tab label="聊天" />
+              <Tab label="通知" />
+            </Tabs>
+          </Box>
+
+          {/* Mobile message list */}
+          <Box sx={{ overflow: 'auto', height: 'calc(100vh - 200px)' }}>
+            {isLoadingConversations || isLoadingNotifications ? (
+              // Mobile loading state
+              <Box sx={{ p: 2 }}>
+                {Array.from(new Array(5)).map((_, index) => (
+                  <Card key={index} sx={{ mb: 2 }}>
+                    <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Skeleton variant="circular" width={48} height={48} sx={{ mr: 2 }} />
+                      <Box sx={{ flex: 1 }}>
+                        <Skeleton width="80%" height={20} sx={{ mb: 1 }} />
+                        <Skeleton width="60%" height={16} />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            ) : filteredDisplayList.length > 0 ? (
+              // Mobile message cards
+              <Box sx={{ p: 2 }}>
+                {filteredDisplayList.map((message) => {
+                  const isNotif = message.itemType === 'notification';
+                  const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage) : undefined;
+                  const primaryText = isNotif ? (notifMsg?.title ?? '通知') : (message as ConversationSummary).last_message_sender_name ?? '会话';
+                  const hasHighPriority = isNotif && notifMsg?.priority === 'high';
+                  const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : 'IM';
+                  
+                  return (
+                    <Card 
+                      key={message.id} 
+                      sx={{ 
+                        mb: 2, 
+                        cursor: 'pointer',
+                        backgroundColor: (message as any).unread ? 'action.hover' : 'transparent',
+                        '&:hover': { backgroundColor: 'action.hover' },
+                        '&:active': { backgroundColor: 'action.selected' },
+                        minHeight: '80px'
+                      }}
+                      onClick={() => handleSelectItem(message)}
+                    >
+                      <CardContent sx={{ display: 'flex', alignItems: 'center', p: 2 }}>
+                        <Badge color="error" variant="dot" invisible={!((message as any).unread)}>
+                          <Avatar 
+                            sx={{ 
+                              bgcolor: theme.palette[messageTypes[avatarColorKey].color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                              width: 48,
+                              height: 48,
+                              mr: 2
+                            }}
+                          >
+                            {typeof (message as any).avatar === 'string' ? (message as any).avatar : messageTypes[avatarColorKey].icon}
+                          </Avatar>
+                        </Badge>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            <Typography 
+                              variant="subtitle2" 
+                              fontWeight={(message as any).unread ? 'bold' : 'normal'}
+                              sx={{ flex: 1 }}
+                              noWrap
+                            >
+                              {primaryText}
+                            </Typography>
+                            {hasHighPriority && (
+                              <Chip label="重要" size="small" color="error" sx={{ height: 20 }} />
+                            )}
+                            {(message as any).hasAttachment && (
+                              <AttachFile fontSize="small" color="action" />
+                            )}
+                          </Box>
+                          <Typography 
+                            variant="body2" 
+                            color="text.secondary" 
+                            sx={{ 
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                              lineHeight: 1.4
+                            }}
+                          >
+                            {isNotif ? notifMsg?.content : (message as ConversationSummary).last_message_snippet}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                            {(message as any).time || new Date(((message as any).updated_at || (message as any).created_at || (message as any).last_message_timestamp)).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <IconButton 
+                          edge="end" 
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => { 
+                            e.stopPropagation(); 
+                            handleMenuOpen(e, message.id); 
+                          }}
+                          sx={{
+                            minWidth: '44px',
+                            minHeight: '44px'
+                          }}
+                        >
+                          <MoreVert />
+                        </IconButton>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </Box>
+            ) : (
+              // Mobile empty state
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                height: '50vh',
+                p: 3,
+                textAlign: 'center'
+              }}>
+                <Message sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  暂无消息
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  开始新的对话或等待其他人联系您
+                </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<Add />}
+                  onClick={() => setCreateConversationOpen(true)}
+                  sx={{ minHeight: '48px', px: 3 }}
+                >
+                  新建对话
+                </Button>
+              </Box>
+            )}
+          </Box>
+        </Box>
+
+        {/* 创建会话对话框 */}
+        <CreateConversationDialog
+          open={createConversationOpen}
+          onClose={() => setCreateConversationOpen(false)}
+          onCreated={handleConversationCreated}
+        />
+
+        {/* 消息操作菜单 */}
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={handleMenuClose}
+        >
+          <MenuItem onClick={handleMarkAsRead}>
+            <MarkEmailRead fontSize="small" sx={{ mr: 1 }} />
+            标记为已读
+          </MenuItem>
+          <MenuItem onClick={handleMarkAsUnread}>
+            <MarkEmailUnread fontSize="small" sx={{ mr: 1 }} />
+            标记为未读
+          </MenuItem>
+          <MenuItem onClick={handleArchive}>
+            <Archive fontSize="small" sx={{ mr: 1 }} />
+            归档
+          </MenuItem>
+          <MenuItem onClick={handleDelete}>
+            <Delete fontSize="small" sx={{ mr: 1 }} />
+            删除
+          </MenuItem>
+        </Menu>
+      </MobileOptimizedLayout>
+    );
+  }
+
+  // Desktop rendering
   return (
     <Box>
       {/* 页面标题 */}
@@ -498,8 +944,8 @@ const MessageCenterPage: React.FC = () => {
       {/* 主内容区域 */}
       <Grid container spacing={2}>
         {/* 左侧消息列表 */}
-        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isMobile && selectedItem ? 'none' : 'block' }}>
-          <Paper sx={{ height: isMobile ? 'calc(100vh - 140px)' : '70vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
             {/* 搜索框和过滤器 */}
             <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <TextField
@@ -584,17 +1030,12 @@ const MessageCenterPage: React.FC = () => {
         </Grid>
 
         {/* 右侧消息详情 */}
-        <Grid size={{ xs: 12, md: 8 }} sx={{ display: isMobile && !selectedItem ? 'none' : 'block' }}>
-          <Paper sx={{ height: isMobile ? '100vh' : '70vh', display: 'flex', flexDirection: 'column' }}>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
             {selectedItem ? (
               <>
                 {/* 消息详情头部 */}
                 <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
-                  {isMobile && (
-                    <IconButton edge="start" onClick={() => setSelectedItem(null)} sx={{ mr: 1 }}>
-                      <ArrowBack />
-                    </IconButton>
-                  )}
                   <Typography variant="h6" noWrap>
                     {selectedItem.itemType === 'conversation'
                       ? (selectedItem.participants?.find((p: any) => p.id !== user?.id)?.name || '对话')

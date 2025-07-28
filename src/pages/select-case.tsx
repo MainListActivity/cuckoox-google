@@ -9,6 +9,7 @@ import { RecordId } from 'surrealdb';
 import GlobalLoader from '@/src/components/GlobalLoader';
 import PageContainer from '@/src/components/PageContainer';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import { 
   Box, 
   Paper, 
@@ -46,6 +47,7 @@ interface ExtendedCase extends Case {
 const CaseSelectionPage: React.FC = () => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const { isMobile } = useResponsiveLayout();
   const { showError } = useSnackbar();
   const { 
     user, 
@@ -191,7 +193,10 @@ const CaseSelectionPage: React.FC = () => {
             <Typography variant="body1">{error}</Typography>
             <Button 
               onClick={() => window.location.reload()} 
-              sx={{ mt: 2 }}
+              sx={{ 
+                mt: 2,
+                minHeight: isMobile ? '44px' : 'auto',
+              }}
               variant="outlined"
               size="small"
             >
@@ -220,18 +225,35 @@ const CaseSelectionPage: React.FC = () => {
           <Paper 
             elevation={6} 
             sx={{ 
-              p: { xs: 4, sm: 6, md: 8 }, 
+              p: isMobile ? 2 : { xs: 4, sm: 6, md: 8 }, 
               width: '100%', 
-              maxWidth: 800,
+              maxWidth: isMobile ? '100%' : 800,
+              mx: isMobile ? 1 : 'auto',
               textAlign: 'center',
-              borderRadius: 3,
+              borderRadius: isMobile ? 2 : 3,
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
-              <SvgIcon sx={{ fontSize: 48, color: 'primary.main', mr: 2 }}>
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              mb: 2,
+              flexDirection: isMobile ? 'column' : 'row',
+              gap: isMobile ? 1 : 0,
+            }}>
+              <SvgIcon sx={{ 
+                fontSize: isMobile ? 36 : 48, 
+                color: 'primary.main', 
+                mr: isMobile ? 0 : 2 
+              }}>
                 <path d={mdiBriefcaseOutline} />
               </SvgIcon>
-              <Typography variant="h3" component="h1" color="primary" fontWeight={700}>
+              <Typography 
+                variant={isMobile ? "h4" : "h3"} 
+                component="h1" 
+                color="primary" 
+                fontWeight={700}
+              >
                 {t('case_selection_title', '选择案件')}
               </Typography>
             </Box>
@@ -271,23 +293,53 @@ const CaseSelectionPage: React.FC = () => {
                         border: isSelected ? 2 : 1,
                         borderColor: isSelected ? 'primary.main' : 'divider',
                         backgroundColor: isSelected ? alpha(theme.palette.primary.main, 0.04) : 'background.paper',
+                        minHeight: isMobile ? '44px' : 'auto',
                         '&:hover': {
-                          transform: 'translateY(-2px)',
+                          transform: isMobile ? 'none' : 'translateY(-2px)',
                           boxShadow: 4,
                           borderColor: 'primary.main',
                         },
+                        '&:active': isMobile ? {
+                          transform: 'scale(0.98)',
+                          transition: 'transform 0.1s ease',
+                        } : {},
                       }}
                       onClick={() => handleCaseSelect(caseItem)}
                     >
-                      <CardContent sx={{ p: 3 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box sx={{ textAlign: 'left', flex: 1 }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                              <Typography variant="h6" component="div" fontWeight={600}>
+                      <CardContent sx={{ 
+                        p: isMobile ? 2 : 3,
+                        '&:last-child': { pb: isMobile ? 2 : 3 }
+                      }}>
+                        <Box sx={{ 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: isMobile ? 'flex-start' : 'flex-start',
+                          flexDirection: isMobile ? 'column' : 'row',
+                          gap: isMobile ? 2 : 0,
+                        }}>
+                          <Box sx={{ textAlign: 'left', flex: 1, width: '100%' }}>
+                            <Box sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              mb: 1,
+                              justifyContent: isMobile ? 'space-between' : 'flex-start',
+                              width: '100%'
+                            }}>
+                              <Typography 
+                                variant={isMobile ? "subtitle1" : "h6"} 
+                                component="div" 
+                                fontWeight={600}
+                                sx={{ flex: isMobile ? 1 : 'none' }}
+                              >
                                 {caseItem.name}
                               </Typography>
                               {isSelected && (
-                                <SvgIcon sx={{ ml: 1, color: 'primary.main' }} data-testid="selected-check-icon">
+                                <SvgIcon sx={{ 
+                                  ml: 1, 
+                                  color: 'primary.main',
+                                  minWidth: '24px',
+                                  minHeight: '24px'
+                                }} data-testid="selected-check-icon">
                                   <path d={mdiCheckCircle} />
                                 </SvgIcon>
                               )}
@@ -299,9 +351,15 @@ const CaseSelectionPage: React.FC = () => {
                               </Typography>
                             )}
                             
-                            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mt: 2 }}>
+                            <Box sx={{ 
+                              display: 'flex', 
+                              gap: isMobile ? 1 : 2, 
+                              flexWrap: 'wrap', 
+                              mt: 2,
+                              flexDirection: isMobile ? 'column' : 'row'
+                            }}>
                               {caseItem.case_procedure && (
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '24px' }}>
                                   <SvgIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }}>
                                     <path d={mdiBriefcaseOutline} />
                                   </SvgIcon>
@@ -312,7 +370,7 @@ const CaseSelectionPage: React.FC = () => {
                               )}
                               
                               {caseItem.case_manager_name && (
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '24px' }}>
                                   <SvgIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }}>
                                     <path d={mdiAccountTie} />
                                   </SvgIcon>
@@ -323,7 +381,7 @@ const CaseSelectionPage: React.FC = () => {
                               )}
                               
                               {caseItem.acceptance_date && (
-                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', minHeight: '24px' }}>
                                   <SvgIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.secondary' }}>
                                     <path d={mdiCalendarClock} />
                                   </SvgIcon>
@@ -344,7 +402,10 @@ const CaseSelectionPage: React.FC = () => {
                                 color: statusStyle.color,
                                 fontWeight: 500,
                                 borderRadius: 2,
-                                ml: 2,
+                                alignSelf: isMobile ? 'flex-start' : 'flex-start',
+                                ml: isMobile ? 0 : 2,
+                                mt: isMobile ? 0 : 0,
+                                minHeight: isMobile ? '28px' : 'auto',
                               }}
                             />
                           )}
