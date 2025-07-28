@@ -6,25 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 import fs from 'fs';
 import path from 'path';
 
-// 修复 registerSW.js 添加 type: 'classic' 的插件
-function fixRegisterSW(): Plugin {
-  return {
-    name: 'fix-register-sw',
-    writeBundle() {
-      const registerSWPath = path.resolve(__dirname, 'dist/registerSW.js');
-      if (fs.existsSync(registerSWPath)) {
-        let content = fs.readFileSync(registerSWPath, 'utf-8');
-        // 添加 type: 'classic' 参数
-        content = content.replace(
-          /navigator\.serviceWorker\.register\('\/sw\.js',\s*{\s*scope:\s*'\/'\s*}\)/,
-          "navigator.serviceWorker.register('/sw.js', { scope: '/', type: 'classic' })"
-        );
-        fs.writeFileSync(registerSWPath, content);
-        console.log('✓ 已修复 registerSW.js 添加 type: classic');
-      }
-    }
-  };
-}
+// 注：之前的 fixRegisterSW 插件已移除，因为使用 injectManifest 模式时不需要修改 registerSW.js
 
 export default defineConfig(({ mode }) => {
   // 自定义环境变量加载逻辑
@@ -69,35 +51,14 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        strategies: 'generateSW',
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-                }
-              }
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'gstatic-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-                }
-              }
-            }
-          ]
-        },
+        strategies: 'injectManifest',
+        srcDir:'src/workers',
+        filename:'sw-surreal.ts',
         includeAssets: ['assets/logo/*.svg', 'favicon.ico'],
+        injectManifest: {
+          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB
+          globIgnores: ['**/index_bg.wasm'] // 忽略WASM文件，不缓存
+        },
         manifest: {
           name: 'CuckooX 破产案件管理系统',
           short_name: 'CuckooX',
@@ -137,8 +98,7 @@ export default defineConfig(({ mode }) => {
           enabled: true,
           type: 'module'
         }
-      }),
-      fixRegisterSW()
+      })
     ],
     resolve: {
       alias: {
@@ -155,7 +115,19 @@ export default defineConfig(({ mode }) => {
       }, {} as Record<string, string>)
     },
     build: {
-      target: 'esnext'
+      target: 'esnext',
+      rollupOptions: {
+        external: [
+          // 将SurrealDB WASM作为外部依赖，不打包
+          /@surrealdb\/wasm.*\.wasm$/,
+        ],
+        output: {
+          paths: {
+            // 将WASM文件指向CDN
+            '@surrealdb/wasm/dist/surreal/index_bg.wasm': 'https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/index_bg.wasm'
+          }
+        }
+      }
     },
     optimizeDeps: {
       include: ['@mui/material', '@mui/icons-material'],

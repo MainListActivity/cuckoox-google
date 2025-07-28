@@ -595,11 +595,8 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     }
 
     try {
-      // Register the service worker with update checking
-      const registration = await navigator.serviceWorker.register(`/sw/sw-surreal.js`, {
-        type: 'module',
-        updateViaCache: 'none' // 强制跳过 HTTP 缓存检查更新
-      });
+      // 等待 workbox 注册的 Service Worker 就绪
+      const registration = await navigator.serviceWorker.ready;
 
       // 设置更新检查
       setupServiceWorkerUpdateHandling(registration);
@@ -624,7 +621,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
 
       return sw;
     } catch (error) {
-      console.error('SurrealProvider: Service Worker registration failed:', error);
+      console.error('SurrealProvider: Service Worker access failed:', error);
       throw error;
     }
   }, [serviceWorker, setupServiceWorkerUpdateHandling, waitForServiceWorkerWithRetry]);

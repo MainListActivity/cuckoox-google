@@ -1,10 +1,17 @@
 /// <reference lib="WebWorker" />
 // Extend the global scope to include ServiceWorker-specific types
-declare const self: ServiceWorkerGlobalScope;
+declare const self: ServiceWorkerGlobalScope & {
+  __WB_MANIFEST: any;
+};
 
 // Service Worker 版本号
 const SW_VERSION = 'v1.0.1';
 const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
+
+// Workbox 预缓存支持
+import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
+import { registerRoute } from 'workbox-routing';
+import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 
 // 导入静态资源缓存管理器
 import { StaticResourceCacheManager } from './static-resource-cache-manager.js';
@@ -34,6 +41,28 @@ let pwaPerformanceManager: PWAPerformanceManager | null = null;
 
 // PWA安全管理器实例
 let pwaSecurityManager: PWASecurityManager | null = null;
+
+// Workbox 预缓存和路由设置
+const manifest = self.__WB_MANIFEST;
+if (manifest) {
+  precacheAndRoute(manifest);
+}
+cleanupOutdatedCaches();
+
+// 设置字体缓存策略 (来自原有的 workbox 配置)
+registerRoute(
+  /^https:\/\/fonts\.googleapis\.com\/.*/i,
+  new CacheFirst({
+    cacheName: 'google-fonts-cache',
+  })
+);
+
+registerRoute(
+  /^https:\/\/fonts\.gstatic\.com\/.*/i,
+  new CacheFirst({
+    cacheName: 'gstatic-fonts-cache',
+  })
+);
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
