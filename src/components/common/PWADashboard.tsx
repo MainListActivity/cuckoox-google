@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState,  } from 'react';
 import {
   Box,
   Grid,
@@ -207,14 +207,14 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
               <Chip
                 label={getStatusText(pwaOverallStatus.grade)}
                 color={getStatusColor(pwaOverallStatus.grade) as 'success' | 'warning' | 'error' | 'default'}
-                size="large"
+                size="medium"
                 icon={<Icon path={mdiInformation} size={0.8} />}
               />
             </Stack>
 
             {/* 快速状态指示器 */}
             <Grid container spacing={2}>
-              <Grid item xs={6} sm={3}>
+              <Grid size={{ xs: 6, sm: 3 }}>
                 <Box textAlign="center">
                   <Chip
                     label={isInstalled ? '已安装' : '未安装'}
@@ -227,7 +227,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={6} sm={3}>
+              <Grid size={{ xs: 6, sm: 3 }}>
                 <Box textAlign="center">
                   <Chip
                     label={isOnline ? '在线' : '离线'}
@@ -240,7 +240,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={6} sm={3}>
+              <Grid size={{ xs: 6, sm: 3 }}>
                 <Box textAlign="center">
                   <Chip
                     label={performanceGrades.overall}
@@ -253,7 +253,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={6} sm={3}>
+              <Grid size={{ xs: 6, sm: 3 }}>
                 <Box textAlign="center">
                   <Chip
                     label={pushSubscribed ? '已启用' : '未启用'}
@@ -396,7 +396,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
                 安全功能在后台自动运行，包括数据加密、自动锁定等。
               </Alert>
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
@@ -408,7 +408,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
@@ -430,7 +430,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
               数据同步功能基于SurrealDB Live Query实现，在网络恢复时自动同步。
             </Alert>
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="h6" gutterBottom>
@@ -442,7 +442,7 @@ export const PWADashboard: React.FC<PWADashboardProps> = ({
                   </CardContent>
                 </Card>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined">
                   <CardContent>
                     <Typography variant="h6" gutterBottom>

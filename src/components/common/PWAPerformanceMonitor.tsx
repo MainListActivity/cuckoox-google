@@ -285,7 +285,7 @@ export const PWAPerformanceMonitor: React.FC<PWAPerformanceMonitorProps> = ({
 
           {/* 核心性能指标 */}
           <Grid container spacing={2}>
-            <Grid item xs={6} sm={3}>
+            <Grid size={{ xs: 6, sm: 3 }}>
               <Box textAlign="center">
                 <Stack alignItems="center" spacing={1}>
                   <Chip
@@ -304,7 +304,7 @@ export const PWAPerformanceMonitor: React.FC<PWAPerformanceMonitorProps> = ({
               </Box>
             </Grid>
 
-            <Grid item xs={6} sm={3}>
+            <Grid size={{ xs: 6, sm: 3 }}>
               <Box textAlign="center">
                 <Stack alignItems="center" spacing={1}>
                   <Chip
@@ -323,7 +323,7 @@ export const PWAPerformanceMonitor: React.FC<PWAPerformanceMonitorProps> = ({
               </Box>
             </Grid>
 
-            <Grid item xs={6} sm={3}>
+            <Grid size={{ xs: 6, sm: 3 }}>
               <Box textAlign="center">
                 <Stack alignItems="center" spacing={1}>
                   <Chip
@@ -342,7 +342,7 @@ export const PWAPerformanceMonitor: React.FC<PWAPerformanceMonitorProps> = ({
               </Box>
             </Grid>
 
-            <Grid item xs={6} sm={3}>
+            <Grid size={{ xs: 6, sm: 3 }}>
               <Box textAlign="center">
                 <Stack alignItems="center" spacing={1}>
                   <Chip

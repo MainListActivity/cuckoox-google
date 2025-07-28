@@ -233,7 +233,7 @@ const RootAdminPage: React.FC = () => {
 
       <Grid container spacing={4}>
         {/* 租户管理 */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -322,7 +322,7 @@ const RootAdminPage: React.FC = () => {
         </Grid>
 
         {/* Root管理员管理 */}
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>

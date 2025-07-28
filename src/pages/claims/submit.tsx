@@ -352,7 +352,7 @@ const ClaimSubmissionPage: React.FC = () => {
 
                   {/* Mobile Claim Card Details */}
                   <Grid container spacing={2}>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           债权性质
@@ -362,7 +362,7 @@ const ClaimSubmissionPage: React.FC = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           申报金额
@@ -486,7 +486,7 @@ const ClaimSubmissionPage: React.FC = () => {
       <MobileOptimizedLayout
         title={editingClaim ? '编辑债权申报' : '新建债权申报'}
         showBackButton={true}
-        onBackClick={() => setIsListView(true)}
+        onBack={() => setIsListView(true)}
       >
         <Box sx={{ p: 2 }}>
           {/* Mobile Progress Indicator */}
@@ -835,7 +835,7 @@ const ClaimSubmissionPage: React.FC = () => {
                     债权基本信息
                   </Typography>
                   <Grid container spacing={2}>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           债权性质
@@ -845,7 +845,7 @@ const ClaimSubmissionPage: React.FC = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           币种
@@ -855,7 +855,7 @@ const ClaimSubmissionPage: React.FC = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           本金
@@ -865,7 +865,7 @@ const ClaimSubmissionPage: React.FC = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           利息
@@ -875,7 +875,7 @@ const ClaimSubmissionPage: React.FC = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           其他费用
@@ -885,7 +885,7 @@ const ClaimSubmissionPage: React.FC = () => {
                         </Typography>
                       </Box>
                     </Grid>
-                    <Grid size={6}>
+                    <Grid size={{ xs: 6 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block">
                           债权总额

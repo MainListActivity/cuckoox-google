@@ -315,7 +315,7 @@ const ClaimReviewDetailPage: React.FC = () => {
       <MobileOptimizedLayout
         title={`审核 ${claimData?.claim_number || ''}`}
         showBackButton={true}
-        onBackClick={() => window.history.back()}
+        onBack={() => window.history.back()}
         fabConfig={{
           icon: mdiPencilOutline,
           action: handleOpenAuditModal,
@@ -682,7 +682,7 @@ const ClaimReviewDetailPage: React.FC = () => {
                         </Typography>
                       </Grid>
                     </Grid>
-                    {claimData.admin_attachments_content && claimData.admin_attachments_content.length() > 0 && (
+                    {claimData.admin_attachments_content && claimData.admin_attachments_content.ops && claimData.admin_attachments_content.ops.length > 0 && (
                       <Box sx={{ mt: 2 }}>
                         <Typography variant="caption" color="text.secondary" display="block">
                           管理人补充材料
