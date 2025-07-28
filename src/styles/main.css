@@ -1,3 +1,11 @@
+/* Include responsive styles first */
+@import './responsive.css';
+
+/* Include Tailwind CSS base styles, components, and utilities */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* Light mode colors (default) */
 :root {
   --color-primary: #009688;        /* Teal 500 */
@@ -41,14 +49,6 @@
   --color-border-dark: #616161;    /* Grey 700 */
   --color-divider: rgba(255, 255, 255, 0.12);
 }
-
-/* Include Tailwind CSS base styles, components, and utilities */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Include responsive styles */
-@import './responsive.css';
 
 /* Global styles */
 body {

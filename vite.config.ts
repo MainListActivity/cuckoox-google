@@ -49,39 +49,18 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          runtimeCaching: [
-            {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-                }
-              }
-            },
-            {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'gstatic-fonts-cache',
-                expiration: {
-                  maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-                }
-              }
-            }
-          ]
+        strategies: 'injectManifest',
+        injectManifest: {
+          swSrc: 'public/sw.js',
+          swDest: 'sw.js',
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}']
         },
         includeAssets: ['assets/logo/*.svg', 'favicon.ico'],
         manifest: {
           name: 'CuckooX 破产案件管理系统',
           short_name: 'CuckooX',
           description: '企业破产案件管理系统 - 提供完整的破产案件生命周期管理',
-          theme_color: '#1976d2',
+          theme_color: '#009688',
           background_color: '#ffffff',
           display: 'standalone',
           orientation: 'portrait-primary',
@@ -151,7 +130,10 @@ export default defineConfig(({ mode }) => {
       fs: {
         strict: false
       },
-      allowedHosts: ['dev.cuckoox.cn', 'dc.cuckoox.cn']
+      allowedHosts: ['dev.cuckoox.cn', 'dc.cuckoox.cn', 'code.cuckoox.cn']
+    },
+    preview:{
+      port: 5173
     },
     test: { // Vitest configuration
       globals: true,

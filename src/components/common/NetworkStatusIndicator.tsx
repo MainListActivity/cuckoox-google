@@ -17,7 +17,7 @@ import {
   mdiSignalCellular1,
   mdiSignalCellular2,
   mdiSignalCellular3,
-  mdiSignalCellularOff,
+  mdiSignalCellularOutline,
   mdiSpeedometer,
   mdiCloudOffOutline,
   mdiRefresh
@@ -136,7 +136,7 @@ export const NetworkStatusIndicator: React.FC<NetworkStatusIndicatorProps> = ({
     if (quality >= 75) return mdiSignalCellular3;
     if (quality >= 50) return mdiSignalCellular2;
     if (quality >= 25) return mdiSignalCellular1;
-    return mdiSignalCellularOff;
+    return mdiSignalCellularOutline;
   };
 
   // 获取状态颜色
