@@ -1,0 +1,27 @@
+# Cloudflare Pages 重定向和缓存配置
+
+# Service Worker缓存控制 - 防止缓存导致的更新问题
+/sw-surreal.js /sw-surreal.js 200
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+  ETag: strong
+
+/registerSW.js /registerSW.js 200
+  Cache-Control: no-cache, no-store, must-revalidate
+  Pragma: no-cache
+  Expires: 0
+
+# Manifest文件缓存控制
+/manifest.json /manifest.json 200
+  Cache-Control: public, max-age=86400
+  
+/manifest.webmanifest /manifest.webmanifest 200
+  Cache-Control: public, max-age=86400
+
+# 静态资源缓存优化
+/assets/* /assets/:splat 200
+  Cache-Control: public, max-age=31536000, immutable
+
+# SPA路由支持 - 必须放在最后
+/* /index.html 200
