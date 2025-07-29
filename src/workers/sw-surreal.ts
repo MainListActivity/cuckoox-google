@@ -336,27 +336,53 @@ const eventHandlers = {
     }
   },
 
-  fetch: async (event: FetchEvent) => {
-    // 首先尝试性能管理器处理
-    if (pwaPerformanceManager) {
-      const performanceResponse = await pwaPerformanceManager.handleRequest(event.request);
-      if (performanceResponse) {
-        event.respondWith(Promise.resolve(performanceResponse));
-        return;
-      }
-    }
-
-    // 然后尝试静态缓存管理器处理
-    if (staticCacheManager) {
-      const cachedResponse = await staticCacheManager.handleFetch(event.request);
-      if (cachedResponse) {
-        event.respondWith(Promise.resolve(cachedResponse));
-        return;
-      }
+  fetch: (event: FetchEvent) => {
+    const url = new URL(event.request.url);
+    
+    // 只处理需要特殊处理的请求，让 Workbox 处理其他请求
+    // 跳过 Google Fonts 请求（已被 Workbox 处理）
+    if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+      return; // 让 Workbox 处理
     }
     
-    // 如果都没有处理这个请求，则继续正常处理
-    // 这里可以添加其他的 fetch 处理逻辑
+    // 跳过扩展程序相关请求
+    if (url.protocol === 'chrome-extension:' || url.protocol === 'moz-extension:') {
+      return;
+    }
+    
+    // 只处理需要缓存管理的请求
+    const shouldHandle = pwaPerformanceManager || staticCacheManager;
+    if (!shouldHandle) {
+      return; // 让浏览器处理默认行为
+    }
+
+    // 必须同步调用 event.respondWith()，因此将异步操作包装在 Promise 中
+    event.respondWith((async () => {
+      try {
+        // 首先尝试性能管理器处理
+        if (pwaPerformanceManager) {
+          const performanceResponse = await pwaPerformanceManager.handleRequest(event.request);
+          if (performanceResponse) {
+            return performanceResponse;
+          }
+        }
+
+        // 然后尝试静态缓存管理器处理
+        if (staticCacheManager) {
+          const cachedResponse = await staticCacheManager.handleFetch(event.request);
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+        }
+        
+        // 如果都没有处理这个请求，则使用默认的网络请求
+        return fetch(event.request);
+      } catch (error) {
+        console.error('ServiceWorker fetch error:', error);
+        // 发生错误时，尝试使用网络请求作为后备
+        return fetch(event.request);
+      }
+    })());
   },
 
   message: async (event: ExtendableMessageEvent) => {
