@@ -6,6 +6,32 @@ import { fileURLToPath, URL } from 'node:url';
 import fs from 'fs';
 import path from 'path';
 
+// 将import手动添加到文件开头 - 在所有插件处理完成后执行
+function prependImportToSwSurreal(): Plugin<unknown> {
+  return {
+    name: `prepend-import-to-sw-surreal`,
+    enforce: 'post', // 确保在所有其他插件之后执行
+    generateBundle: {
+      order: 'post', // 在最后阶段执行
+      handler(options, bundle) {
+        // 找到 sw-surreal.js 文件
+        const swSurrealFile = Object.keys(bundle).find(key => 
+          key.includes('sw-surreal.js') || key === 'sw-surreal.js'
+        );
+        
+        if (swSurrealFile && bundle[swSurrealFile]) {
+          const file = bundle[swSurrealFile];
+          if (file.type === 'chunk') {
+            // 强制在文件开头添加 import 语句，不管是否已存在
+            file.code = `import '/sw/wasm-shim.js';\n${file.code}`;
+            console.log(`Added import statement to ${swSurrealFile} (post-processing)`);
+          }
+        }
+      }
+    }
+  }
+}
+
 // 注：之前的 fixRegisterSW 插件已移除，因为使用 injectManifest 模式时不需要修改 registerSW.js
 
 export default defineConfig(({ mode }) => {
@@ -52,8 +78,8 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         strategies: 'injectManifest',
-        srcDir:'src/workers',
-        filename:'sw-surreal.ts',
+        srcDir:'dist/sw',
+        filename:'sw-surreal.js',
         includeAssets: ['assets/logo/*.svg', 'favicon.ico'],
         injectManifest: {
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB
@@ -98,7 +124,8 @@ export default defineConfig(({ mode }) => {
           enabled: true,
           type: 'module'
         }
-      })
+      }),
+      prependImportToSwSurreal(),
     ],
     resolve: {
       alias: {

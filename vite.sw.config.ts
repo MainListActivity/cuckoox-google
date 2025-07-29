@@ -2,6 +2,7 @@ import { defineConfig, Plugin } from 'vite'
 import path from 'path'
 import topLevelAwait from 'vite-plugin-top-level-await'
 
+// 已废弃，待后续移除
 // 将import手动添加到文件开头 - 在所有插件处理完成后执行
 function prependImportToSwSurreal(): Plugin<unknown> {
   return {

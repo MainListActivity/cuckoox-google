@@ -29,7 +29,8 @@ class PWAManager {
   private initializeWorkbox() {
     if ('serviceWorker' in navigator) {
       // 使用 Vite PWA 插件生成的 service worker
-      this.workbox = new Workbox('/sw-surreal.js', {
+      const url = import.meta.env.DEV ? '/dev-sw.js?dev-sw' : '/sw-surreal.js';
+      this.workbox = new Workbox(url, {
         scope: '/',
         type: 'module'
       });

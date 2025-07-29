@@ -20,6 +20,7 @@ import { PWAPushManager, type NotificationPayload } from './pwa-push-manager.js'
 import { PWACollaborationEnhancer, type CollaborationEvent } from './pwa-collaboration-enhancer.js';
 import { PWAPerformanceManager, type PWAPerformanceConfig } from './pwa-performance-manager.js';
 import { PWASecurityManager, type PWASecurityConfig } from './pwa-security-manager.js';
+import './wasm-shim.js';
 
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);

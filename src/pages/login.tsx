@@ -108,9 +108,9 @@ const LoginPage: React.FC = () => {
     checkRealAuthStatus();
     
     // 每隔500ms检查一次认证状态，确保及时捕获变化
-    const interval = setInterval(checkRealAuthStatus, 500);
+    // const interval = setInterval(checkRealAuthStatus, 500);
     
-    return () => clearInterval(interval);
+    // return () => clearInterval(interval);
   }, [serviceWorkerComm]);
 
   // 监听认证状态变化，防止在清除状态过程中的错误重定向
