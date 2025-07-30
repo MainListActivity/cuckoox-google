@@ -141,6 +141,141 @@ const operationStats = await surreal.query(`
 - ✅ 前端组件已实现：`ClaimOperationHistory`, `ClaimVersionComparison`, `ClaimStatusFlowChart`
 - ❌ 数据库表结构待创建：`claim_operation_log`, `claim_version_history`, `claim_status_flow`, `claim_access_log`
 
+## WebRTC消息中心系统 API
+
+### 群组消息查询
+
+```typescript
+// 获取群组消息历史
+const groupMessages = await surreal.query(`
+  SELECT 
+    *,
+    sender_id.name as sender_name,
+    sender_id.avatar as sender_avatar,
+    mentioned_users.*.name as mentioned_user_names
+  FROM message 
+  WHERE group_id = $groupId 
+  ORDER BY created_at DESC 
+  LIMIT 50
+`, { groupId: 'message_group:123' });
+
+// 获取群组成员列表
+const groupMembers = await surreal.query(`
+  SELECT 
+    out.* as user_info,
+    role,
+    joined_at,
+    last_read_at,
+    is_muted,
+    nickname
+  FROM has_group_member 
+  WHERE in = $groupId
+  ORDER BY joined_at ASC
+`, { groupId: 'message_group:123' });
+```
+
+### 群组管理操作
+
+```typescript
+// 创建群组
+const newGroup = await surreal.query(`
+  CREATE message_group SET
+    group_name = $name,
+    group_description = $description,
+    group_type = $type,
+    case_id = $caseId,
+    created_by = $auth.id,
+    created_at = time::now()
+`, {
+  name: '案件讨论组',
+  description: '案件相关讨论',
+  type: 'case_related',
+  caseId: 'case:123'
+});
+
+// 添加群组成员
+const addMember = await surreal.query(`
+  RELATE $groupId->has_group_member->$userId SET
+    role = $role,
+    joined_at = time::now(),
+    is_muted = false
+`, {
+  groupId: 'message_group:123',
+  userId: 'user:456',
+  role: 'member'
+});
+```
+
+### WebRTC通话功能
+
+```typescript
+// 发起私聊语音通话
+const startVoiceCall = async (targetUserId: string) => {
+  const callId = await callManager.startPrivateCall(targetUserId, 'audio');
+  return callId;
+};
+
+// 发起群组视频通话
+const startGroupVideoCall = async (groupId: string) => {
+  const callId = await callManager.startGroupCall(groupId, 'video');
+  return callId;
+};
+
+// 获取通话记录
+const callHistory = await surreal.query(`
+  SELECT 
+    *,
+    initiator.name as initiator_name,
+    participants.*.name as participant_names
+  FROM call_record 
+  WHERE group_id = $groupId OR participants CONTAINS $userId
+  ORDER BY start_time DESC 
+  LIMIT 20
+`, { groupId: 'message_group:123', userId: 'user:456' });
+```
+
+### WebRTC信令消息
+
+```typescript
+// 发送WebRTC信令消息
+const sendSignal = await surreal.query(`
+  CREATE webrtc_signal SET
+    signal_type = $signalType,
+    from_user = $auth.id,
+    to_user = $targetUserId,
+    group_id = $groupId,
+    signal_data = $signalData,
+    call_id = $callId,
+    created_at = time::now()
+`, {
+  signalType: 'offer',
+  targetUserId: 'user:456',
+  groupId: 'message_group:123',
+  signalData: { sdp: '...', type: 'offer' },
+  callId: 'call_123'
+});
+
+// 获取未处理的信令消息
+const pendingSignals = await surreal.query(`
+  SELECT * FROM webrtc_signal 
+  WHERE to_user = $auth.id 
+    AND processed = false 
+  ORDER BY created_at ASC
+`);
+```
+
+**当前状态**:
+- ✅ **需求分析**: 100% 完成 - 7个核心需求领域，包含完整的用户故事和验收标准
+- ✅ **技术设计**: 100% 完成 - 完整的架构设计、组件接口、数据模型设计
+- ✅ **任务分解**: 100% 完成 - 12个主要任务模块，40+个具体实施任务
+- ✅ **数据库设计**: 100% 完成 - `message_group`, `has_group_member`, `message_read_status`, `call_record`, `webrtc_signal`
+- ❌ **数据库实现**: 0% 完成 - 需要在surreal_schemas.surql中添加表结构
+- ❌ **WebRTC核心服务**: 0% 完成 - `WebRTCManager`, `CallManager`, `MediaFileHandler`, `SignalingService`待实现
+- ❌ **群组管理服务**: 0% 完成 - `GroupManager`待实现
+- ❌ **界面组件**: 0% 完成 - 所有WebRTC相关界面组件待实现
+
+**详细开发状态**: 查看 [WebRTC消息中心开发状态文档](./webrtc-message-center-development-status.md)
+
 ### 债权版本历史查询
 
 ```typescript
