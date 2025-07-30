@@ -21,6 +21,9 @@ import { PWACollaborationEnhancer, type CollaborationEvent } from './pwa-collabo
 import { PWAPerformanceManager, type PWAPerformanceConfig } from './pwa-performance-manager.js';
 import { PWASecurityManager, type PWASecurityConfig } from './pwa-security-manager.js';
 
+// 导入新的连接管理器
+import { SurrealDBConnectionManager } from './surreal-connection-manager.js';
+
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);
 
@@ -41,6 +44,9 @@ let pwaPerformanceManager: PWAPerformanceManager | null = null;
 
 // PWA安全管理器实例
 let pwaSecurityManager: PWASecurityManager | null = null;
+
+// 🌟 新的统一连接管理器实例
+let connectionManager: SurrealDBConnectionManager | null = null;
 
 // Workbox 预缓存和路由设置
 const manifest = self.__WB_MANIFEST;
@@ -70,13 +76,14 @@ const eventHandlers = {
     event.waitUntil(
       Promise.all([
         self.skipWaiting(),
-        // 延迟加载 precacheSurrealDBWasm 以避免循环依赖
+        // 🔧 新的连接管理器预初始化和 WASM 缓存
         new Promise(resolve => {
           setTimeout(async () => {
             try {
               await precacheSurrealDBWasm();
+              console.log('ServiceWorker: WASM precached');
             } catch (e) {
-              console.warn("Failed to precache WASM:", e);
+              console.warn("ServiceWorker: Failed to precache WASM:", e);
             }
             resolve(void 0);
           }, 0);
@@ -94,62 +101,34 @@ const eventHandlers = {
         cleanupOldCaches()
       ]).then(async () => {
         try {
-          // 初始化本地 SurrealDB
-          await initializeLocalSurrealDB();
-          // 初始化 TokenManager
-          await initializeTokenManager();
-          // 初始化 DataCacheManager
-          await initializeDataCacheManager();
-          // 初始化 EnhancedQueryHandler
-          await initializeEnhancedQueryHandler();
-          // 初始化 PageAwareSubscriptionManager
-          await initializePageAwareSubscriptionManager();
-          // 初始化 OfflineManager
-          await initializeOfflineManager();
-          // 初始化 ConnectionRecoveryManager
-          await initializeConnectionRecoveryManager();
-          // 初始化 DataConsistencyManager
-          await initializeDataConsistencyManager();
-
-          // 初始化静态资源缓存管理器
-          await initializeStaticCacheManager();
-
-          // 初始化网络状态管理器
-          await initializeNetworkStateManager();
-
-          // 初始化PWA协作增强器
-          await initializePWACollaborationEnhancer();
-
-          // 初始化PWA性能管理器
-          await initializePWAPerformanceManager();
-
-          // 初始化PWA安全管理器
-          await initializePWASecurityManager();
-
-
-          // 尝试恢复连接配置
-          const restoredConfig = await restoreConnectionConfig();
-          if (restoredConfig) {
-            connectionConfig = restoredConfig;
-            console.log('ServiceWorker: Connection config restored during activation');
-
-            // 尝试自动重连
-            try {
-              const connectionState = await ensureConnection();
-              if (connectionState.isConnected) {
-                console.log('ServiceWorker: Auto-reconnection successful after activation');
-              } else {
-                console.warn('ServiceWorker: Auto-reconnection failed after activation:', connectionState.error);
-              }
-            } catch (reconnectError) {
-              console.warn('ServiceWorker: Auto-reconnection failed after activation:', reconnectError);
-            }
+          // 🚀 使用新的连接管理器统一初始化
+          console.log('ServiceWorker: Initializing new connection manager...');
+          
+          // 获取连接管理器实例（单例模式）
+          connectionManager = await SurrealDBConnectionManager.getInstance();
+          
+          // 🔄 尝试恢复连接状态
+          const restoredSuccessfully = await connectionManager.restoreState();
+          if (restoredSuccessfully) {
+            console.log('ServiceWorker: Connection state restored successfully');
           }
 
-          // Service Worker 激活后，主动同步 localStorage 中的 token
-          await syncTokensFromLocalStorage();
+          // 🎯 初始化依赖组件（使用新管理器提供的数据库实例）
+          await initializeAllDependentComponents();
+
+          // 🧹 清理工作
+          console.log('ServiceWorker: Activation completed successfully');
+          
         } catch (e) {
-          console.error("Failed during activation:", e);
+          console.error("ServiceWorker: Activation failed:", e);
+          
+          // 🔄 如果新管理器失败，回退到旧的初始化逻辑
+          console.log('ServiceWorker: Falling back to legacy initialization...');
+          try {
+            await legacyInitialization();
+          } catch (fallbackError) {
+            console.error("ServiceWorker: Fallback initialization also failed:", fallbackError);
+          }
         }
       })
     );
@@ -157,62 +136,25 @@ const eventHandlers = {
 
   beforeunload: async () => {
     try {
-      stopReconnection();
-      stopConnectionHealthCheck();
-      stopAuthStateRefresh();
-      clearAuthStateCache();
-      notifyConnectionStateChange();
-
-      // 关闭 TokenManager
-      if (tokenManager) {
-        await tokenManager.close();
-        tokenManager = null;
+      console.log('ServiceWorker: Graceful shutdown initiated');
+      
+      // 🌟 使用新的连接管理器进行优雅关闭
+      if (connectionManager) {
+        await connectionManager.gracefulShutdown();
+        connectionManager = null;
+        console.log('ServiceWorker: Connection manager shutdown completed');
+      } else {
+        // 🔄 回退到旧的清理逻辑
+        console.log('ServiceWorker: Using legacy cleanup...');
+        await legacyCleanup();
       }
-
-
-      // 关闭 DataCacheManager
-      if (dataCacheManager) {
-        await dataCacheManager.close();
-        dataCacheManager = null;
-      }
-
-      // 关闭 PageAwareSubscriptionManager
-      if (pageAwareSubscriptionManager) {
-        await pageAwareSubscriptionManager.close();
-        pageAwareSubscriptionManager = null;
-      }
-
-      // 关闭 OfflineManager
-      if (offlineManager) {
-        await offlineManager.close();
-        offlineManager = null;
-      }
-
-      // 关闭 ConnectionRecoveryManager
-      if (connectionRecoveryManager) {
-        await connectionRecoveryManager.close();
-        connectionRecoveryManager = null;
-      }
-
-      // 关闭 DataConsistencyManager
-      if (dataConsistencyManager) {
-        await dataConsistencyManager.close();
-        dataConsistencyManager = null;
-      }
-
-      // 关闭 EnhancedQueryHandler
-      if (enhancedQueryHandler) {
-        await enhancedQueryHandler.cleanup();
-        enhancedQueryHandler = null;
-      }
-
-      // 关闭本地数据库
-      if (localDb) {
-        await localDb.close();
-        localDb = null;
-      }
+      
+      // 🧹 清理其他组件
+      await cleanupAllComponents();
+      
+      console.log('ServiceWorker: Graceful shutdown completed');
     } catch (e) {
-      console.error("Failed during cleanup:", e);
+      console.error("ServiceWorker: Shutdown error:", e);
     }
   },
 
@@ -4741,6 +4683,357 @@ async function clearOfflineQueue(syncKey: string): Promise<void> {
   } catch (error) {
     console.error('ServiceWorker: Error clearing offline queue:', error);
     throw error;
+  }
+}
+
+// === 新的连接管理器集成辅助函数 ===
+
+/**
+ * 🎯 初始化所有依赖组件
+ * 使用新的连接管理器提供的数据库实例
+ */
+async function initializeAllDependentComponents(): Promise<void> {
+  if (!connectionManager) {
+    throw new Error('Connection manager not initialized');
+  }
+  
+  try {
+    console.log('ServiceWorker: Initializing all dependent components...');
+    
+    // 🔗 获取统一的数据库引用
+    const remoteDb = connectionManager.getRemoteDb();
+    const localDb = connectionManager.getLocalDb();
+    
+    if (!localDb) {
+      throw new Error('Local database not available from connection manager');
+    }
+    
+    // 📊 按依赖顺序初始化组件
+    const initializationSteps = [
+      // 基础组件
+      () => initializeTokenManagerWithDb(localDb),
+      () => initializeDataCacheManagerWithDb(localDb, remoteDb),
+      
+      // 高级组件
+      () => initializeEnhancedQueryHandlerWithDb(localDb, remoteDb),
+      () => initializePageAwareSubscriptionManager(),
+      () => initializeOfflineManagerWithDb(localDb, remoteDb),
+      
+      // 管理组件
+      () => initializeConnectionRecoveryManager(),
+      () => initializeDataConsistencyManagerWithDb(localDb, remoteDb),
+      
+      // PWA 组件
+      () => initializeStaticCacheManager(),
+      () => initializeNetworkStateManager(),
+      () => initializePWACollaborationEnhancer(),
+      () => initializePWAPerformanceManager(),
+      () => initializePWASecurityManager()
+    ];
+    
+    // 🔄 按顺序初始化，确保依赖关系正确
+    for (const step of initializationSteps) {
+      await step();
+    }
+    
+    console.log('ServiceWorker: All components initialized successfully');
+    
+  } catch (error) {
+    console.error('ServiceWorker: Component initialization failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 初始化 TokenManager（使用新的数据库引用）
+ */
+async function initializeTokenManagerWithDb(localDb: any): Promise<void> {
+  if (tokenManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing TokenManager with new db reference...');
+    
+    const { TokenManager } = await import('./token-manager.js');
+    tokenManager = new TokenManager({
+      apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8082',
+      broadcastToAllClients: broadcastToAllClients,
+    });
+
+    await tokenManager.initialize(localDb);
+    console.log('ServiceWorker: TokenManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize TokenManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 初始化 DataCacheManager（使用新的数据库引用）
+ */
+async function initializeDataCacheManagerWithDb(localDb: any, remoteDb: any): Promise<void> {
+  if (dataCacheManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing DataCacheManager with new db references...');
+    
+    const { DataCacheManager } = await import('./data-cache-manager.js');
+    dataCacheManager = new DataCacheManager({
+      localDb: localDb,
+      remoteDb: remoteDb,
+      broadcastToAllClients: broadcastToAllClients,
+    });
+
+    await dataCacheManager.initialize();
+    console.log('ServiceWorker: DataCacheManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize DataCacheManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 初始化 EnhancedQueryHandler（使用新的数据库引用）
+ */
+async function initializeEnhancedQueryHandlerWithDb(localDb: any, remoteDb: any): Promise<void> {
+  if (enhancedQueryHandler) return;
+
+  try {
+    console.log('ServiceWorker: Initializing EnhancedQueryHandler with new db references...');
+    
+    // 确保依赖组件已初始化
+    if (!dataCacheManager) {
+      throw new Error('DataCacheManager must be initialized first');
+    }
+
+    const { EnhancedQueryHandler } = await import('./enhanced-query-handler.js');
+    enhancedQueryHandler = new EnhancedQueryHandler(
+      localDb,
+      dataCacheManager,
+      broadcastToAllClients,
+      remoteDb
+    );
+
+    console.log('ServiceWorker: EnhancedQueryHandler initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize EnhancedQueryHandler:', error);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 初始化 OfflineManager（使用新的数据库引用）
+ */
+async function initializeOfflineManagerWithDb(localDb: any, remoteDb: any): Promise<void> {
+  if (offlineManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing OfflineManager with new db references...');
+    
+    const { OfflineManager } = await import('./offline-manager.js');
+    offlineManager = new OfflineManager({
+      localDb: localDb,
+      remoteDb: remoteDb,
+      broadcastToAllClients
+    });
+
+    console.log('ServiceWorker: OfflineManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize OfflineManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 初始化 DataConsistencyManager（使用新的数据库引用）
+ */
+async function initializeDataConsistencyManagerWithDb(localDb: any, remoteDb: any): Promise<void> {
+  if (dataConsistencyManager) return;
+
+  try {
+    console.log('ServiceWorker: Initializing DataConsistencyManager with new db references...');
+    
+    const { DataConsistencyManager } = await import('./data-consistency-manager.js');
+    dataConsistencyManager = new DataConsistencyManager({
+      localDb: localDb,
+      remoteDb: remoteDb,
+      broadcastToAllClients
+    });
+
+    console.log('ServiceWorker: DataConsistencyManager initialized successfully');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to initialize DataConsistencyManager:', error);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 回退到旧的初始化逻辑
+ */
+async function legacyInitialization(): Promise<void> {
+  console.log('ServiceWorker: Starting legacy initialization...');
+  
+  try {
+    // 初始化本地 SurrealDB
+    await initializeLocalSurrealDB();
+    // 初始化 TokenManager
+    await initializeTokenManager();
+    // 初始化 DataCacheManager
+    await initializeDataCacheManager();
+    // 初始化 EnhancedQueryHandler
+    await initializeEnhancedQueryHandler();
+    // 初始化 PageAwareSubscriptionManager
+    await initializePageAwareSubscriptionManager();
+    // 初始化 OfflineManager
+    await initializeOfflineManager();
+    // 初始化 ConnectionRecoveryManager
+    await initializeConnectionRecoveryManager();
+    // 初始化 DataConsistencyManager
+    await initializeDataConsistencyManager();
+
+    // 初始化静态资源缓存管理器
+    await initializeStaticCacheManager();
+
+    // 初始化网络状态管理器
+    await initializeNetworkStateManager();
+
+    // 初始化PWA协作增强器
+    await initializePWACollaborationEnhancer();
+
+    // 初始化PWA性能管理器
+    await initializePWAPerformanceManager();
+
+    // 初始化PWA安全管理器
+    await initializePWASecurityManager();
+
+    // 尝试恢复连接配置
+    const restoredConfig = await restoreConnectionConfig();
+    if (restoredConfig) {
+      connectionConfig = restoredConfig;
+      console.log('ServiceWorker: Connection config restored during activation');
+
+      // 尝试自动重连
+      try {
+        const connectionState = await ensureConnection();
+        if (connectionState.isConnected) {
+          console.log('ServiceWorker: Auto-reconnection successful after activation');
+        } else {
+          console.warn('ServiceWorker: Auto-reconnection failed after activation:', connectionState.error);
+        }
+      } catch (reconnectError) {
+        console.warn('ServiceWorker: Auto-reconnection failed after activation:', reconnectError);
+      }
+    }
+
+    // Service Worker 激活后，主动同步 localStorage 中的 token
+    await syncTokensFromLocalStorage();
+    
+    console.log('ServiceWorker: Legacy initialization completed');
+  } catch (error) {
+    console.error('ServiceWorker: Legacy initialization failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * 🔄 回退到旧的清理逻辑
+ */
+async function legacyCleanup(): Promise<void> {
+  try {
+    stopReconnection();
+    stopConnectionHealthCheck();
+    stopAuthStateRefresh();
+    clearAuthStateCache();
+    notifyConnectionStateChange();
+
+    // 关闭 TokenManager
+    if (tokenManager) {
+      await tokenManager.close();
+      tokenManager = null;
+    }
+
+    // 关闭 DataCacheManager
+    if (dataCacheManager) {
+      await dataCacheManager.close();
+      dataCacheManager = null;
+    }
+
+    // 关闭 PageAwareSubscriptionManager
+    if (pageAwareSubscriptionManager) {
+      await pageAwareSubscriptionManager.close();
+      pageAwareSubscriptionManager = null;
+    }
+
+    // 关闭 OfflineManager
+    if (offlineManager) {
+      await offlineManager.close();
+      offlineManager = null;
+    }
+
+    // 关闭 ConnectionRecoveryManager
+    if (connectionRecoveryManager) {
+      await connectionRecoveryManager.close();
+      connectionRecoveryManager = null;
+    }
+
+    // 关闭 DataConsistencyManager
+    if (dataConsistencyManager) {
+      await dataConsistencyManager.close();
+      dataConsistencyManager = null;
+    }
+
+    // 关闭 EnhancedQueryHandler
+    if (enhancedQueryHandler) {
+      await enhancedQueryHandler.cleanup();
+      enhancedQueryHandler = null;
+    }
+
+    // 关闭本地数据库
+    if (localDb) {
+      await localDb.close();
+      localDb = null;
+    }
+    
+    console.log('ServiceWorker: Legacy cleanup completed');
+  } catch (error) {
+    console.error('ServiceWorker: Legacy cleanup failed:', error);
+  }
+}
+
+/**
+ * 🧹 清理所有组件
+ */
+async function cleanupAllComponents(): Promise<void> {
+  try {
+    // 清理静态缓存管理器
+    if (staticCacheManager) {
+      staticCacheManager = null;
+    }
+
+    // 清理网络状态管理器
+    if (networkStateManager) {
+      networkStateManager = null;
+    }
+
+    // 清理PWA组件
+    if (pwaPushManager) {
+      pwaPushManager = null;
+    }
+
+    if (pwaCollaborationEnhancer) {
+      pwaCollaborationEnhancer = null;
+    }
+
+    if (pwaPerformanceManager) {
+      pwaPerformanceManager = null;
+    }
+
+    if (pwaSecurityManager) {
+      pwaSecurityManager = null;
+    }
+    
+    console.log('ServiceWorker: All components cleaned up');
+  } catch (error) {
+    console.error('ServiceWorker: Component cleanup failed:', error);
   }
 }
 

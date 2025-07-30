@@ -322,6 +322,12 @@ export class PWAPerformanceManager {
 
   private async handleAppShellRequest(request: Request): Promise<Response | null> {
     try {
+      // POST请求不能被缓存，直接转发到网络
+      if (request.method !== 'GET') {
+        console.log('PWAPerformanceManager: Non-GET request, bypassing cache:', request.method, request.url);
+        return fetch(request.clone());
+      }
+
       const cache = await caches.open(this.config.appShell.shellCacheName);
       
       // 首先尝试从缓存获取
@@ -333,11 +339,11 @@ export class PWAPerformanceManager {
 
       // 缓存未命中，从网络获取
       console.log('PWAPerformanceManager: App Shell cache miss, fetching from network:', request.url);
-      const networkResponse = await fetch(request);
+      const networkResponse = await fetch(request.clone());
       
       if (networkResponse.ok) {
-        // 缓存响应
-        await cache.put(request, networkResponse.clone());
+        // 只缓存GET请求的响应
+        await cache.put(request.clone(), networkResponse.clone());
       }
 
       return networkResponse;
