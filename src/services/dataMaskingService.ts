@@ -549,26 +549,50 @@ class DataMaskingService {
   /**
    * 深度克隆对象
    */
-  private deepClone(obj: any): any {
+  private deepClone(obj: any, visited = new WeakMap()): any {
+    // 处理基本类型和null
     if (obj === null || typeof obj !== 'object') {
       return obj;
     }
 
+    // 检查循环引用
+    if (visited.has(obj)) {
+      return visited.get(obj);
+    }
+
+    // 处理Date对象
     if (obj instanceof Date) {
       return new Date(obj.getTime());
     }
 
+    // 处理RecordId对象
     if (obj instanceof RecordId) {
       return new RecordId(obj.tb, obj.id);
     }
 
+    // 处理数组
     if (Array.isArray(obj)) {
-      return obj.map(item => this.deepClone(item));
+      const clonedArray: any[] = [];
+      visited.set(obj, clonedArray);
+      for (let i = 0; i < obj.length; i++) {
+        clonedArray[i] = this.deepClone(obj[i], visited);
+      }
+      return clonedArray;
     }
 
+    // 处理对象
     const cloned: any = {};
+    visited.set(obj, cloned);
+
+    // 只复制可枚举的自有属性
     for (const [key, value] of Object.entries(obj)) {
-      cloned[key] = this.deepClone(value);
+      try {
+        cloned[key] = this.deepClone(value, visited);
+      } catch (error) {
+        console.warn(`Failed to clone property ${key}:`, error);
+        // 对于无法克隆的属性，使用原始值
+        cloned[key] = value;
+      }
     }
 
     return cloned;

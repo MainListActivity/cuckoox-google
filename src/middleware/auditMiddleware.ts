@@ -10,7 +10,6 @@ import {
   RiskLevel
 } from '../services/claimTrackingAuditService';
 import { 
-  claimTrackingPermissionService,
   type TrackingPermissionType,
   type PermissionContext
 } from '../services/claimTrackingPermissionService';
@@ -78,13 +77,48 @@ class AuditMiddleware {
    * 获取客户端信息
    */
   private getClientInfo(): { ipAddress: string; userAgent: string; sessionId?: string } {
-    // 在浏览器环境中获取客户端信息
-    const ipAddress = 'client'; // 实际项目中可能需要从服务器获取真实IP
-    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown';
-    const sessionId = typeof window !== 'undefined' ? 
-      sessionStorage.getItem('session_id') || undefined : undefined;
+    try {
+      // 在浏览器环境中获取客户端信息
+      let ipAddress = 'unknown';
+      let userAgent = 'unknown';
+      let sessionId: string | undefined;
 
-    return { ipAddress, userAgent, sessionId };
+      // 获取用户代理信息
+      if (typeof navigator !== 'undefined') {
+        userAgent = navigator.userAgent;
+      }
+
+      // 尝试从各种来源获取IP地址信息
+      if (typeof window !== 'undefined') {
+        // 从URL参数或其他来源获取IP（如果服务器提供）
+        const urlParams = new URLSearchParams(window.location.search);
+        const clientIp = urlParams.get('client_ip');
+        if (clientIp) {
+          ipAddress = clientIp;
+        } else {
+          // 使用占位符，实际应该从服务器端获取
+          ipAddress = 'client-browser';
+        }
+
+        // 获取会话ID
+        try {
+          sessionId = sessionStorage.getItem('session_id') || 
+                     localStorage.getItem('session_id') || 
+                     undefined;
+        } catch (storageError) {
+          console.warn('Failed to access session storage:', storageError);
+        }
+      }
+
+      return { ipAddress, userAgent, sessionId };
+    } catch (error) {
+      console.warn('Failed to get client info:', error);
+      return { 
+        ipAddress: 'unknown', 
+        userAgent: 'unknown', 
+        sessionId: undefined 
+      };
+    }
   }
 
   /**
@@ -144,26 +178,26 @@ class AuditMiddleware {
       }
 
       // 记录审计事件
-      await claimTrackingAuditService.recordAccess(
-        context.user.id,
-        resourceType,
-        resourceId || 'unknown',
-        action,
-        result.success ? 'success' : 'failure',
-        {
-          caseId: context.caseId,
-          claimId: context.claimId,
-          ipAddress: context.ipAddress,
-          userAgent: context.userAgent,
-          sessionId: context.sessionId,
-          requestPath: context.requestPath,
-          requestMethod: context.requestMethod,
-          requestParams: context.requestParams,
-          responseStatus: result.success ? 200 : 500,
-          processingTime: result.processingTime,
-          errorMessage: result.error?.message
-        }
-      );
+      await claimTrackingAuditService.recordAuditEvent({
+        event_type: eventType,
+        user_id: context.user.id,
+        resource_type: resourceType,
+        resource_id: resourceId || 'unknown',
+        action: action,
+        result: result.success ? 'success' : 'failure',
+        risk_level: RiskLevel.LOW, // 默认低风险，会被服务内部重新计算
+        case_id: context.caseId,
+        claim_id: context.claimId,
+        ip_address: context.ipAddress || 'unknown',
+        user_agent: context.userAgent || 'unknown',
+        session_id: context.sessionId,
+        request_path: context.requestPath,
+        request_method: context.requestMethod,
+        request_params: context.requestParams,
+        response_status: result.success ? 200 : 500,
+        processing_time: result.processingTime,
+        error_message: result.error?.message
+      });
 
     } catch (error) {
       console.error('Failed to audit data access:', error);
@@ -419,12 +453,16 @@ class AuditMiddleware {
     context: RequestContext,
     operationType: string,
     targetResource: string,
-    targetId: string | undefined,
+    targetId: string,
     operation: () => Promise<T>,
     additionalData?: Record<string, any>
   ): Promise<T> {
     const startTime = Date.now();
-    let result: OperationResult;
+    let result: OperationResult = {
+      success: false,
+      error: new Error('Operation not completed'),
+      processingTime: 0
+    };
     let operationResult: T;
     
     try {
@@ -464,7 +502,11 @@ class AuditMiddleware {
     operation: () => Promise<T>
   ): Promise<T> {
     const startTime = Date.now();
-    let result: OperationResult;
+    let result: OperationResult = {
+      success: false,
+      error: new Error('Operation not completed'),
+      processingTime: 0
+    };
     let operationResult: T;
     
     try {

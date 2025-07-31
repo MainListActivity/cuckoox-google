@@ -9,7 +9,6 @@ import type { SurrealWorkerAPI } from '../contexts/SurrealProvider';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
 import { dataMaskingService } from './dataMaskingService';
 import { 
-  claimTrackingPermissionService, 
   type TrackingPermissionType,
   type PermissionContext 
 } from './claimTrackingPermissionService';
@@ -402,56 +401,63 @@ class ClaimTrackingAuditService {
     event: AuditEvent,
     timeWindow: Date
   ): Promise<AnomalyDetectionResult | null> {
-    const conditions = rule.conditions;
-    let query = `
-      SELECT count() AS event_count FROM claim_audit_event 
-      WHERE user_id = $userId 
-        AND created_at >= $timeWindow
-    `;
-    
-    const params: any = {
-      userId: event.user_id,
-      timeWindow
-    };
-
-    if (conditions.event_type) {
-      query += ` AND event_type = $eventType`;
-      params.eventType = conditions.event_type;
-    }
-
-    if (conditions.result) {
-      query += ` AND result = $result`;
-      params.result = conditions.result;
-    }
-
-    if (conditions.resource_type) {
-      query += ` AND resource_type = $resourceType`;
-      params.resourceType = conditions.resource_type;
-    }
-
-    const [results] = await queryWithAuth<Array<{ event_count: number }>[]>(client, query, params);
-    const eventCount = results?.[0]?.event_count || 0;
-
-    if (eventCount >= rule.alert_threshold) {
-      // 获取相关证据事件
-      const evidenceQuery = query.replace('SELECT count() AS event_count', 'SELECT *') + ' ORDER BY created_at DESC LIMIT 20';
-      const [evidence] = await queryWithAuth<AuditEvent[][]>(client, evidenceQuery, params);
-
-      return {
-        rule_id: rule.id,
-        rule_name: rule.name,
-        risk_level: rule.risk_level,
-        score: Math.min(100, (eventCount / rule.alert_threshold) * 50),
-        triggered_at: new Date(),
-        user_id: event.user_id,
-        event_count: eventCount,
-        description: `检测到用户在${rule.time_window}分钟内${conditions.event_type || '执行操作'}${eventCount}次，超出阈值${rule.alert_threshold}`,
-        recommended_action: this.getRecommendedAction(rule.risk_level),
-        evidence: evidence || []
+    try {
+      const conditions = rule.conditions;
+      let query = `
+        SELECT count() AS event_count FROM claim_audit_event 
+        WHERE user_id = $userId 
+          AND created_at >= $timeWindow
+      `;
+      
+      const params: any = {
+        userId: event.user_id,
+        timeWindow
       };
-    }
 
-    return null;
+      if (conditions.event_type) {
+        query += ` AND event_type = $eventType`;
+        params.eventType = conditions.event_type;
+      }
+
+      if (conditions.result) {
+        query += ` AND result = $result`;
+        params.result = conditions.result;
+      }
+
+      if (conditions.resource_type) {
+        query += ` AND resource_type = $resourceType`;
+        params.resourceType = conditions.resource_type;
+      }
+
+      const results = await queryWithAuth<Array<{ event_count: number }>>(client, query, params);
+      const countResult = Array.isArray(results) && results.length > 0 ? results[0] : null;
+      const eventCount = countResult?.event_count || 0;
+
+      if (eventCount >= rule.alert_threshold) {
+        // 获取相关证据事件
+        const evidenceQuery = query.replace('SELECT count() AS event_count', 'SELECT *') + ' ORDER BY created_at DESC LIMIT 20';
+        const evidenceResults = await queryWithAuth<AuditEvent[]>(client, evidenceQuery, params);
+        const evidence = Array.isArray(evidenceResults) ? evidenceResults : [];
+
+        return {
+          rule_id: rule.id,
+          rule_name: rule.name,
+          risk_level: rule.risk_level,
+          score: Math.min(100, (eventCount / rule.alert_threshold) * 50),
+          triggered_at: new Date(),
+          user_id: event.user_id,
+          event_count: eventCount,
+          description: `检测到用户在${rule.time_window}分钟内${conditions.event_type || '执行操作'}${eventCount}次，超出阈值${rule.alert_threshold}`,
+          recommended_action: this.getRecommendedAction(rule.risk_level),
+          evidence
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Error in checkFrequencyRule for rule ${rule.id}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -463,78 +469,84 @@ class ClaimTrackingAuditService {
     event: AuditEvent,
     timeWindow: Date
   ): Promise<AnomalyDetectionResult | null> {
-    const conditions = rule.conditions;
-    
-    if (rule.id === 'suspicious_ip_pattern') {
-      const query = `
-        SELECT ip_address, count() AS event_count 
-        FROM claim_audit_event 
-        WHERE user_id = $userId 
-          AND created_at >= $timeWindow
-        GROUP BY ip_address
-      `;
+    try {
+      const conditions = rule.conditions;
+      
+      if (rule.id === 'suspicious_ip_pattern') {
+        const query = `
+          SELECT ip_address, count() AS event_count 
+          FROM claim_audit_event 
+          WHERE user_id = $userId 
+            AND created_at >= $timeWindow
+          GROUP BY ip_address
+        `;
 
-      const [results] = await queryWithAuth<Array<{ ip_address: string; event_count: number }>[]>(
-        client, query, { userId: event.user_id, timeWindow }
-      );
+        const results = await queryWithAuth<Array<{ ip_address: string; event_count: number }>>(
+          client, query, { userId: event.user_id, timeWindow }
+        );
 
-      const uniqueIps = results?.length || 0;
-      const validIps = results?.filter(r => r.event_count >= conditions.min_events_per_ip).length || 0;
+        const ipResults = Array.isArray(results) ? results : [];
+        const uniqueIps = ipResults.length;
+        const validIps = ipResults.filter(r => r.event_count >= (conditions.min_events_per_ip || 1)).length;
 
-      if (uniqueIps >= conditions.unique_ips_threshold && validIps >= 3) {
-        return {
-          rule_id: rule.id,
-          rule_name: rule.name,
-          risk_level: rule.risk_level,
-          score: Math.min(100, (uniqueIps / conditions.unique_ips_threshold) * 60),
-          triggered_at: new Date(),
-          user_id: event.user_id,
-          event_count: uniqueIps,
-          description: `检测到用户在${rule.time_window}分钟内从${uniqueIps}个不同IP地址访问系统`,
-          recommended_action: this.getRecommendedAction(rule.risk_level),
-          evidence: []
-        };
+        if (uniqueIps >= (conditions.unique_ips_threshold || 5) && validIps >= 3) {
+          return {
+            rule_id: rule.id,
+            rule_name: rule.name,
+            risk_level: rule.risk_level,
+            score: Math.min(100, (uniqueIps / (conditions.unique_ips_threshold || 5)) * 60),
+            triggered_at: new Date(),
+            user_id: event.user_id,
+            event_count: uniqueIps,
+            description: `检测到用户在${rule.time_window}分钟内从${uniqueIps}个不同IP地址访问系统`,
+            recommended_action: this.getRecommendedAction(rule.risk_level),
+            evidence: []
+          };
+        }
       }
-    }
 
-    return null;
+      return null;
+    } catch (error) {
+      console.error(`Error in checkPatternRule for rule ${rule.id}:`, error);
+      return null;
+    }
   }
 
   /**
    * 检查时间规则
    */
   private async checkTimeRule(
-    client: SurrealWorkerAPI,
+    _client: SurrealWorkerAPI,
     rule: AnomalyRule,
     event: AuditEvent
   ): Promise<AnomalyDetectionResult | null> {
-    const conditions = rule.conditions;
-    
-    if (rule.id === 'off_hours_access' && event.event_type === AuditEventType.SENSITIVE_ACCESS) {
-      const now = new Date();
-      const hour = now.getHours();
-      const dayOfWeek = now.getDay();
-
-      const isWorkHours = hour >= conditions.work_hours_start && hour < conditions.work_hours_end;
-      const isWorkDay = conditions.work_days.includes(dayOfWeek);
-
-      if (!isWorkHours || !isWorkDay) {
-        return {
-          rule_id: rule.id,
-          rule_name: rule.name,
-          risk_level: rule.risk_level,
-          score: 70,
-          triggered_at: new Date(),
-          user_id: event.user_id,
-          event_count: 1,
-          description: `检测到用户在非工作时间（${hour}:00）访问敏感数据`,
-          recommended_action: this.getRecommendedAction(rule.risk_level),
-          evidence: [event]
-        };
+    try {
+      // 时间规则检查不需要查询数据库，主要基于事件时间戳
+      if (rule.id === 'off_hours_access' && event.event_type === AuditEventType.SENSITIVE_ACCESS) {
+        const hour = new Date(event.created_at).getHours();
+        const isWorkingHours = hour >= 9 && hour <= 18;
+        
+        if (!isWorkingHours) {
+          return {
+            rule_id: rule.id,
+            rule_name: rule.name,
+            risk_level: rule.risk_level,
+            score: 40,
+            triggered_at: new Date(),
+            user_id: event.user_id,
+            event_count: 1,
+            description: `检测到用户在非工作时间（${hour}:00）访问敏感数据`,
+            recommended_action: this.getRecommendedAction(rule.risk_level),
+            evidence: [event]
+          };
+        }
       }
-    }
 
-    return null;
+      return null;
+    } catch (error) {
+      console.error(`Error in checkTimeRule for rule ${rule.id}:`, error);
+      return null;
+    }
   }
 
   /**
@@ -546,8 +558,56 @@ class ClaimTrackingAuditService {
     event: AuditEvent,
     timeWindow: Date
   ): Promise<AnomalyDetectionResult | null> {
-    // 简化实现，可根据具体需求扩展
-    return null;
+    try {
+      const conditions = rule.conditions;
+      
+      // 查询指定时间窗口内的事件数量
+      let query = `
+        SELECT count() AS event_count FROM claim_audit_event 
+        WHERE user_id = $userId 
+          AND created_at >= $timeWindow
+      `;
+      
+      const params: any = {
+        userId: event.user_id,
+        timeWindow
+      };
+
+      // 添加条件过滤
+      if (conditions.resource_type) {
+        query += ` AND resource_type = $resourceType`;
+        params.resourceType = conditions.resource_type;
+      }
+
+      if (conditions.event_type) {
+        query += ` AND event_type = $eventType`;
+        params.eventType = conditions.event_type;
+      }
+
+      const results = await queryWithAuth<Array<{ event_count: number }>>(client, query, params);
+      const countResult = Array.isArray(results) && results.length > 0 ? results[0] : null;
+      const eventCount = countResult?.event_count || 0;
+
+      if (eventCount >= rule.alert_threshold) {
+        return {
+          rule_id: rule.id,
+          rule_name: rule.name,
+          risk_level: rule.risk_level,
+          score: Math.min(100, (eventCount / rule.alert_threshold) * 70),
+          triggered_at: new Date(),
+          user_id: event.user_id,
+          event_count: eventCount,
+          description: `检测到用户在${rule.time_window}分钟内的操作次数（${eventCount}次）超出阈值（${rule.alert_threshold}次）`,
+          recommended_action: this.getRecommendedAction(rule.risk_level),
+          evidence: []
+        };
+      }
+
+      return null;
+    } catch (error) {
+      console.error(`Error in checkThresholdRule for rule ${rule.id}:`, error);
+      return null;
+    }
   }
 
   /**

@@ -172,13 +172,14 @@ class ClaimTrackingPermissionService {
       const client = await this.getClient();
       
       // 检查用户是否有管理员全局角色
-      const [adminRoles] = await queryWithAuth<Array<{ role_name: string }>[]>(client,
+      const adminRoles = await queryWithAuth<Array<{ role_name: string }>>(client,
         `SELECT out.name AS role_name FROM $userId->has_role 
          WHERE out.name CONTAINS 'admin'`,
         { userId }
       );
 
-      return adminRoles && adminRoles.length > 0;
+      const roles = Array.isArray(adminRoles) ? adminRoles : [];
+      return roles.length > 0;
     } catch (error) {
       console.error('Error checking system admin status:', error);
       return false;
@@ -231,7 +232,7 @@ class ClaimTrackingPermissionService {
   ): Promise<TrackingPermissionResult> {
     try {
       // 检查用户是否有债权操作日志的读取权限
-      const [permissions] = await queryWithAuth<Array<{ can_execute: boolean }>[]>(client,
+      const permissions = await queryWithAuth<Array<{ can_execute: boolean }>>(client,
         `SELECT can_execute FROM $userId->has_role->role->can_execute_operation->operation_metadata 
          WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'read'
          ${context.caseId ? `
@@ -241,7 +242,8 @@ class ClaimTrackingPermissionService {
         { userId: context.userId, caseId: context.caseId }
       );
 
-      const hasReadPermission = permissions && permissions.some(p => p.can_execute);
+      const permissionsList = Array.isArray(permissions) ? permissions : [];
+      const hasReadPermission = permissionsList.some(p => p.can_execute);
 
       if (!hasReadPermission) {
         return {
@@ -286,7 +288,7 @@ class ClaimTrackingPermissionService {
   ): Promise<TrackingPermissionResult> {
     try {
       // 版本历史权限相对宽松，主要检查是否有债权读取权限
-      const [permissions] = await queryWithAuth<Array<{ can_execute: boolean }>[]>(client,
+      const permissions = await queryWithAuth<Array<{ can_execute: boolean }>>(client,
         `SELECT can_execute FROM $userId->has_role->role->can_execute_operation->operation_metadata 
          WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'read'
          ${context.caseId ? `
@@ -296,7 +298,8 @@ class ClaimTrackingPermissionService {
         { userId: context.userId, caseId: context.caseId }
       );
 
-      const hasReadPermission = permissions && permissions.some(p => p.can_execute);
+      const permissionsList = Array.isArray(permissions) ? permissions : [];
+      const hasReadPermission = permissionsList.some(p => p.can_execute);
 
       return {
         hasPermission: hasReadPermission,

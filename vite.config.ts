@@ -13,7 +13,7 @@ function prependImportToSwSurreal(): Plugin<unknown> {
     enforce: 'post', // 确保在所有其他插件之后执行
     generateBundle: {
       order: 'post', // 在最后阶段执行
-      handler(options, bundle) {
+      handler(_options, bundle) {
         // 找到 sw-surreal.js 文件
         const swSurrealFile = Object.keys(bundle).find(key => 
           key.includes('sw-surreal.js') || key === 'sw-surreal.js'

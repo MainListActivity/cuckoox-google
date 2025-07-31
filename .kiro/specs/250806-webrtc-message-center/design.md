@@ -120,24 +120,65 @@ interface WebRTCManager {
 ```typescript
 interface MediaFileHandler {
   // P2P文件传输
-  sendFile(file: File, targetUserId: string): Promise<void>;
-  receiveFile(senderId: string): Promise<File>;
+  sendFile(file: File, targetUserId: string): Promise<string>;
+  receiveFile(senderId: string, transferId: string): Promise<File>;
   
   // 文件分片传输
   splitFileToChunks(file: File, chunkSize: number): ArrayBuffer[];
   reassembleFile(chunks: ArrayBuffer[], metadata: FileMetadata): File;
   
+  // 断点续传
+  resumeFileTransfer(transferId: string): Promise<void>;
+  pauseFileTransfer(transferId: string): Promise<void>;
+  cancelFileTransfer(transferId: string): Promise<void>;
+  getTransferProgress(transferId: string): Promise<TransferProgress>;
+  
   // 文件预处理
   compressImage(file: File, quality: number): Promise<File>;
+  compressVideo(file: File, quality: 'low' | 'medium' | 'high'): Promise<File>;
   generateThumbnail(file: File): Promise<string>;
-  validateFileType(file: File): boolean;
+  extractMetadata(file: File): Promise<FileMetadata>;
+  validateFileType(file: File, allowedTypes: string[]): boolean;
+  validateFileSize(file: File, maxSize: number): boolean;
   
   // 文件预览
   createPreviewUrl(file: File): string;
   revokePreviewUrl(url: string): void;
+  generatePreviewThumbnail(file: File, size: {width: number, height: number}): Promise<string>;
   
-  // 传输进度
-  onTransferProgress(callback: (progress: TransferProgress) => void): void;
+  // 传输进度和状态
+  onTransferProgress(transferId: string, callback: (progress: TransferProgress) => void): void;
+  onTransferComplete(transferId: string, callback: (file: File) => void): void;
+  onTransferError(transferId: string, callback: (error: TransferError) => void): void;
+  
+  // 缓存管理
+  cacheFile(file: File, cacheKey: string): Promise<void>;
+  getCachedFile(cacheKey: string): Promise<File | null>;
+  clearFileCache(pattern?: string): Promise<void>;
+  
+  // 多文件处理
+  sendMultipleFiles(files: File[], targetUserId: string): Promise<string[]>;
+  createFilePackage(files: File[], packageName: string): Promise<File>;
+  extractFilePackage(packageFile: File): Promise<File[]>;
+}
+
+interface TransferProgress {
+  transferId: string;
+  fileName: string;
+  totalSize: number;
+  transferredSize: number;
+  percentage: number;
+  speed: number; // bytes per second
+  estimatedTimeRemaining: number; // seconds
+  status: 'preparing' | 'transferring' | 'paused' | 'completed' | 'failed' | 'cancelled';
+}
+
+interface TransferError {
+  transferId: string;
+  errorCode: string;
+  errorMessage: string;
+  canRetry: boolean;
+  retryAfter?: number; // seconds
 }
 ```
 
@@ -149,6 +190,7 @@ interface GroupManager {
   createGroup(name: string, description?: string, caseId?: string): Promise<string>;
   updateGroup(groupId: string, updates: Partial<GroupInfo>): Promise<void>;
   deleteGroup(groupId: string): Promise<void>;
+  searchGroups(keyword: string, type?: 'normal' | 'case_related' | 'department'): Promise<GroupInfo[]>;
   
   // 成员管理（使用关联表）
   addMembers(groupId: string, userIds: string[]): Promise<void>;
@@ -156,17 +198,25 @@ interface GroupManager {
   updateMemberRole(groupId: string, userId: string, role: 'owner' | 'admin' | 'member'): Promise<void>;
   updateMemberNickname(groupId: string, userId: string, nickname: string): Promise<void>;
   muteMember(groupId: string, userId: string, isMuted: boolean): Promise<void>;
+  transferOwnership(groupId: string, newOwnerId: string): Promise<void>;
   
   // 群组信息查询（基于关联表查询）
   getGroupInfo(groupId: string): Promise<GroupInfo>;
   getGroupMembers(groupId: string): Promise<GroupMember[]>;
   getUserGroups(userId: string): Promise<GroupInfo[]>;
+  checkMemberPermission(groupId: string, userId: string, action: string): Promise<boolean>;
   
   // 群组消息管理
   markMessageAsRead(messageId: string, userId: string, groupId: string): Promise<void>;
+  markAllMessagesAsRead(groupId: string, userId: string): Promise<void>;
   getUnreadCount(groupId: string, userId: string): Promise<number>;
   pinMessage(messageId: string, groupId: string): Promise<void>;
   unpinMessage(messageId: string, groupId: string): Promise<void>;
+  getPinnedMessages(groupId: string): Promise<Message[]>;
+  
+  // 批量操作
+  batchAddMembers(operations: Array<{groupId: string, userIds: string[]}>): Promise<void>;
+  batchUpdateReadStatus(groupId: string, userId: string, messageIds: string[]): Promise<void>;
 }
 
 interface GroupInfo {
@@ -217,16 +267,60 @@ interface CallManager {
   toggleMute(callId: string): void;
   toggleVideo(callId: string): void;
   switchCamera(callId: string): void;
+  adjustVolume(callId: string, volume: number): void;
   
   // 会议功能
   createConference(participants: string[], groupId?: string): Promise<string>;
   inviteToConference(conferenceId: string, userId: string): void;
   recordConference(conferenceId: string): void;
+  stopRecording(conferenceId: string): void;
   
   // 群组会议特有功能
   muteAllParticipants(callId: string): void;
   kickParticipant(callId: string, userId: string): void;
   transferCallOwnership(callId: string, newOwnerId: string): void;
+  setParticipantPermissions(callId: string, userId: string, permissions: CallPermissions): void;
+  
+  // 通话质量管理
+  getCallQuality(callId: string): Promise<CallQualityMetrics>;
+  adjustQualitySettings(callId: string, settings: QualitySettings): void;
+  enableAdaptiveQuality(callId: string, enabled: boolean): void;
+  
+  // 网络适应性
+  handleNetworkChange(callId: string, networkQuality: NetworkQuality): void;
+  attemptReconnection(callId: string): Promise<boolean>;
+  switchToAudioOnly(callId: string): void;
+  
+  // 事件监听
+  onCallStateChange(callback: (callId: string, state: CallState) => void): void;
+  onQualityChange(callback: (callId: string, quality: CallQualityMetrics) => void): void;
+  onNetworkIssue(callback: (callId: string, issue: NetworkIssue) => void): void;
+}
+
+interface CallPermissions {
+  canMute: boolean;
+  canUnmute: boolean;
+  canKick: boolean;
+  canInvite: boolean;
+  canRecord: boolean;
+  canShareScreen: boolean;
+}
+
+interface CallQualityMetrics {
+  bandwidth: number;
+  latency: number;
+  packetLoss: number;
+  jitter: number;
+  audioQuality: number; // 0-100
+  videoQuality: number; // 0-100
+  connectionState: 'excellent' | 'good' | 'fair' | 'poor' | 'disconnected';
+}
+
+interface NetworkIssue {
+  type: 'high_latency' | 'packet_loss' | 'low_bandwidth' | 'connection_unstable';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  timestamp: string;
+  suggestedAction?: string;
 }
 ```
 
@@ -235,24 +329,60 @@ interface CallManager {
 ```typescript
 interface MessageService {
   // 发送消息
-  sendPrivateMessage(targetUserId: string, content: string, type?: MessageType): Promise<void>;
-  sendGroupMessage(groupId: string, content: string, type?: MessageType): Promise<void>;
+  sendPrivateMessage(targetUserId: string, content: string, type?: MessageType): Promise<string>;
+  sendGroupMessage(groupId: string, content: string, type?: MessageType): Promise<string>;
   
   // 文件消息
-  sendPrivateFile(targetUserId: string, file: File): Promise<void>;
-  sendGroupFile(groupId: string, file: File): Promise<void>;
+  sendPrivateFile(targetUserId: string, file: File): Promise<string>;
+  sendGroupFile(groupId: string, file: File): Promise<string>;
+  
+  // 消息操作
+  editMessage(messageId: string, newContent: string): Promise<void>;
+  recallMessage(messageId: string, reason?: string): Promise<void>;
+  forwardMessage(messageId: string, targetId: string, targetType: 'user' | 'group'): Promise<string>;
   
   // 消息查询
   getPrivateMessages(userId: string, limit?: number, offset?: number): Promise<Message[]>;
   getGroupMessages(groupId: string, limit?: number, offset?: number): Promise<Message[]>;
+  searchMessages(query: string, filters?: MessageSearchFilters): Promise<Message[]>;
+  getMessageHistory(targetId: string, targetType: 'user' | 'group', beforeMessageId?: string): Promise<Message[]>;
   
   // 消息状态
   markAsRead(messageId: string, groupId?: string): Promise<void>;
+  markMultipleAsRead(messageIds: string[], groupId?: string): Promise<void>;
   deleteMessage(messageId: string): Promise<void>;
+  getMessageReadStatus(messageId: string): Promise<MessageReadStatus>;
   
   // @提及功能
-  mentionUsers(groupId: string, userIds: string[], content: string): Promise<void>;
+  mentionUsers(groupId: string, userIds: string[], content: string): Promise<string>;
   getMentions(userId: string): Promise<Message[]>;
+  clearMentions(userId: string, messageIds: string[]): Promise<void>;
+  
+  // 草稿功能
+  saveDraft(targetId: string, targetType: 'user' | 'group', content: string): Promise<void>;
+  getDraft(targetId: string, targetType: 'user' | 'group'): Promise<string | null>;
+  clearDraft(targetId: string, targetType: 'user' | 'group'): Promise<void>;
+}
+
+interface MessageSearchFilters {
+  messageType?: MessageType;
+  dateFrom?: string;
+  dateTo?: string;
+  sender?: string;
+  hasAttachment?: boolean;
+  targetType?: 'user' | 'group';
+  targetId?: string;
+}
+
+interface MessageReadStatus {
+  totalRecipients: number;
+  readCount: number;
+  unreadCount: number;
+  readByUsers: Array<{
+    userId: string;
+    userName: string;
+    readAt: string;
+  }>;
 }
 
 enum MessageType {
@@ -327,21 +457,38 @@ DEFINE FIELD updated_at ON message_group TYPE datetime VALUE time::now();
 DEFINE FIELD is_active ON message_group TYPE bool DEFAULT true;
 DEFINE FIELD max_members ON message_group TYPE int DEFAULT 100; -- 最大成员数限制
 
--- 群组成员关系表（使用关联表）
+-- 群组成员关系表（使用关联表，简化权限控制）
 DEFINE TABLE has_group_member TYPE RELATION IN message_group OUT user SCHEMAFULL PERMISSIONS 
-  FOR select WHERE $auth.id = out OR $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'read'],
-  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'create'],
-  FOR update WHERE $auth.id = out OR $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'update'],
-  FOR delete WHERE $auth.id = out OR $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'delete'];
+  FOR select WHERE ($auth.id = out) OR 
+                  ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role IN ['owner', 'admin'])) OR
+                  ($auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'read']),
+  FOR create WHERE ($auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'create']) OR
+                  ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role IN ['owner', 'admin'])),
+  FOR update WHERE ($auth.id = out) OR 
+                  ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role IN ['owner', 'admin'])) OR
+                  ($auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'update']),
+  FOR delete WHERE ($auth.id = out) OR 
+                  ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role = 'owner')) OR
+                  ($auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_group_member' AND operation_type = 'delete']);
 
-DEFINE FIELD role ON has_group_member TYPE string DEFAULT 'member' ASSERT $value INSIDE ['owner', 'admin', 'member'] PERMISSIONS FULL;
+DEFINE FIELD role ON has_group_member TYPE string DEFAULT 'member' ASSERT $value INSIDE ['owner', 'admin', 'member'] PERMISSIONS 
+  FOR select FULL,
+  FOR create FULL,
+  FOR update WHERE ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role IN ['owner', 'admin'])),
+  FOR delete WHERE ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role = 'owner'));
+
 DEFINE FIELD joined_at ON has_group_member TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
-DEFINE FIELD last_read_at ON has_group_member TYPE option<datetime> PERMISSIONS FULL; -- 最后阅读时间
-DEFINE FIELD is_muted ON has_group_member TYPE bool DEFAULT false PERMISSIONS FULL; -- 是否静音
-DEFINE FIELD nickname ON has_group_member TYPE option<string> PERMISSIONS FULL; -- 群内昵称
+DEFINE FIELD last_read_at ON has_group_member TYPE option<datetime> PERMISSIONS 
+  FOR select, update WHERE ($auth.id = out) OR ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role IN ['owner', 'admin']));
+DEFINE FIELD is_muted ON has_group_member TYPE bool DEFAULT false PERMISSIONS 
+  FOR select, update WHERE ($auth.id = out) OR ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role IN ['owner', 'admin']));
+DEFINE FIELD nickname ON has_group_member TYPE option<string> PERMISSIONS 
+  FOR select FULL,
+  FOR update WHERE ($auth.id = out) OR ($auth.id IN (SELECT out FROM has_group_member WHERE in = $parent.in AND role IN ['owner', 'admin']));
 
 -- 群组成员关系索引
 DEFINE INDEX group_member_unique ON has_group_member COLUMNS in, out UNIQUE;
+DEFINE INDEX group_member_role_idx ON has_group_member COLUMNS in, role;
 ```
 
 ### 消息表扩展
@@ -349,14 +496,24 @@ DEFINE INDEX group_member_unique ON has_group_member COLUMNS in, out UNIQUE;
 ```sql
 -- 扩展现有message表，支持群组消息和多种消息类型
 -- 在现有message表基础上增加字段
-DEFINE FIELD message_type ON message TYPE string DEFAULT 'text'; -- 'text', 'image', 'video', 'audio', 'call_request', 'call_end'
+DEFINE FIELD message_type ON message TYPE string DEFAULT 'text' ASSERT $value INSIDE ['text', 'image', 'video', 'audio', 'file', 'call_request', 'call_end', 'system']; 
 DEFINE FIELD file_metadata ON message TYPE option<object>; -- 文件元数据
 DEFINE FIELD call_metadata ON message TYPE option<object>; -- 通话元数据
-DEFINE FIELD target_type ON message TYPE string DEFAULT 'user'; -- 'user', 'group' - 消息目标类型
-DEFINE FIELD group_id ON message TYPE option<record<message_group>>; -- 群组消息时的群组ID
+DEFINE FIELD target_type ON message TYPE string DEFAULT 'user' ASSERT $value INSIDE ['user', 'group']; -- 消息目标类型
+DEFINE FIELD target_id ON message TYPE record; -- 统一的目标ID字段，可以是用户或群组
+DEFINE FIELD group_id ON message TYPE option<record<message_group>>; -- 群组消息时的群组ID（冗余字段用于快速查询）
 DEFINE FIELD reply_to ON message TYPE option<record<message>>; -- 回复的消息ID
 DEFINE FIELD is_pinned ON message TYPE bool DEFAULT false; -- 是否置顶（群组消息）
 DEFINE FIELD mentioned_users ON message TYPE option<array<record<user>>>; -- @提及的用户
+DEFINE FIELD is_recalled ON message TYPE bool DEFAULT false; -- 是否已撤回
+DEFINE FIELD recalled_at ON message TYPE option<datetime>; -- 撤回时间
+DEFINE FIELD edit_history ON message TYPE option<array<object>>; -- 编辑历史
+
+-- 消息表索引优化
+DEFINE INDEX message_target_idx ON message COLUMNS target_type, target_id, created_at;
+DEFINE INDEX message_group_idx ON message COLUMNS group_id, created_at;
+DEFINE INDEX message_type_idx ON message COLUMNS message_type;
+DEFINE INDEX message_mentioned_idx ON message COLUMNS mentioned_users;
 
 -- 文件元数据结构示例
 -- {
@@ -381,30 +538,50 @@ DEFINE FIELD mentioned_users ON message TYPE option<array<record<user>>>; -- @�
 -- 通话记录表
 DEFINE TABLE call_record SCHEMAFULL;
 DEFINE FIELD call_id ON call_record TYPE string;
-DEFINE FIELD call_type ON call_record TYPE string; -- 'audio', 'video', 'conference'
-DEFINE FIELD call_context ON call_record TYPE string; -- 'private', 'group' - 通话上下文
+DEFINE FIELD call_type ON call_record TYPE string ASSERT $value INSIDE ['audio', 'video', 'conference']; 
+DEFINE FIELD call_context ON call_record TYPE string ASSERT $value INSIDE ['private', 'group']; -- 通话上下文
 DEFINE FIELD group_id ON call_record TYPE option<record<message_group>>; -- 群组通话时的群组ID
 DEFINE FIELD initiator ON call_record TYPE record<user>;
 DEFINE FIELD participants ON call_record TYPE array<record<user>>;
-DEFINE FIELD start_time ON call_record TYPE datetime;
+DEFINE FIELD start_time ON call_record TYPE datetime DEFAULT time::now();
 DEFINE FIELD end_time ON call_record TYPE option<datetime>;
 DEFINE FIELD duration ON call_record TYPE option<int>; -- 通话时长(秒)
-DEFINE FIELD status ON call_record TYPE string; -- 'completed', 'missed', 'rejected'
+DEFINE FIELD status ON call_record TYPE string ASSERT $value INSIDE ['completed', 'missed', 'rejected', 'failed']; 
 DEFINE FIELD recording_url ON call_record TYPE option<string>;
 DEFINE FIELD case_id ON call_record TYPE option<record<case>>;
+DEFINE FIELD quality_metrics ON call_record TYPE option<object>; -- 通话质量指标
+DEFINE FIELD created_at ON call_record TYPE datetime DEFAULT time::now();
+
+-- 通话记录索引
+DEFINE INDEX call_record_call_id ON call_record COLUMNS call_id UNIQUE;
+DEFINE INDEX call_record_initiator_idx ON call_record COLUMNS initiator, start_time;
+DEFINE INDEX call_record_group_idx ON call_record COLUMNS group_id, start_time;
+DEFINE INDEX call_record_case_idx ON call_record COLUMNS case_id, start_time;
 
 -- WebRTC信令消息表
 DEFINE TABLE webrtc_signal SCHEMAFULL;
-DEFINE FIELD signal_type ON webrtc_signal TYPE string;
+DEFINE FIELD signal_type ON webrtc_signal TYPE string ASSERT $value INSIDE ['offer', 'answer', 'ice-candidate', 'call-request', 'call-accept', 'call-reject', 'call-end', 'conference-invite', 'group-call-request', 'group-call-join', 'group-call-leave'];
 DEFINE FIELD from_user ON webrtc_signal TYPE record<user>;
 DEFINE FIELD to_user ON webrtc_signal TYPE option<record<user>>; -- 私聊时的目标用户
 DEFINE FIELD group_id ON webrtc_signal TYPE option<record<message_group>>; -- 群组通话时的群组ID
 DEFINE FIELD signal_data ON webrtc_signal TYPE object;
 DEFINE FIELD call_id ON webrtc_signal TYPE option<string>;
 DEFINE FIELD created_at ON webrtc_signal TYPE datetime DEFAULT time::now();
+DEFINE FIELD expires_at ON webrtc_signal TYPE datetime VALUE (time::now() + 1h); -- 信令消息1小时后过期
 DEFINE FIELD processed ON webrtc_signal TYPE bool DEFAULT false;
 
--- 群组消息已读状态表
+-- WebRTC信令索引
+DEFINE INDEX webrtc_signal_to_user_idx ON webrtc_signal COLUMNS to_user, created_at;
+DEFINE INDEX webrtc_signal_group_idx ON webrtc_signal COLUMNS group_id, created_at;
+DEFINE INDEX webrtc_signal_call_idx ON webrtc_signal COLUMNS call_id;
+DEFINE INDEX webrtc_signal_expires_idx ON webrtc_signal COLUMNS expires_at; -- 用于清理过期信令
+DEFINE FIELD group_id ON webrtc_signal TYPE option<record<message_group>>; -- 群组通话时的群组ID
+DEFINE FIELD signal_data ON webrtc_signal TYPE object;
+DEFINE FIELD call_id ON webrtc_signal TYPE option<string>;
+DEFINE FIELD created_at ON webrtc_signal TYPE datetime DEFAULT time::now();
+DEFINE FIELD processed ON webrtc_signal TYPE bool DEFAULT false;
+
+-- 群组消息已读状态表（优化版本）
 DEFINE TABLE message_read_status SCHEMAFULL;
 DEFINE FIELD message_id ON message_read_status TYPE record<message>;
 DEFINE FIELD user_id ON message_read_status TYPE record<user>;
@@ -413,6 +590,18 @@ DEFINE FIELD group_id ON message_read_status TYPE record<message_group>;
 
 -- 群组消息已读状态索引
 DEFINE INDEX message_read_unique ON message_read_status COLUMNS message_id, user_id UNIQUE;
+DEFINE INDEX message_read_group_user_idx ON message_read_status COLUMNS group_id, user_id, read_at;
+
+-- 群组最后已读位置表（性能优化）
+DEFINE TABLE group_read_position SCHEMAFULL;
+DEFINE FIELD group_id ON group_read_position TYPE record<message_group>;
+DEFINE FIELD user_id ON group_read_position TYPE record<user>;
+DEFINE FIELD last_read_message_id ON group_read_position TYPE option<record<message>>;
+DEFINE FIELD last_read_time ON group_read_position TYPE datetime DEFAULT time::now();
+DEFINE FIELD unread_count ON group_read_position TYPE int DEFAULT 0;
+
+-- 群组已读位置唯一索引
+DEFINE INDEX group_read_position_unique ON group_read_position COLUMNS group_id, user_id UNIQUE;
 ```
 
 ### 用户在线状态表
@@ -591,13 +780,68 @@ interface AudioCallInterfaceProps {
   onInviteMore?: () => void;
 }
 
-// 视频通话界面（支持群组和私聊）
+// 视频通话界面（支持群组和私聊，移动端优化）
 interface VideoCallInterfaceProps {
   callId: string;
   callType: 'private' | 'group';
   localStream: MediaStream;
   remoteStreams: Map<string, MediaStream>;
   participants: User[];
+  isOwner?: boolean;
+  isMobile?: boolean; // 移动端适配
+  onToggleVideo: () => void;
+  onToggleMute: () => void;
+  onSwitchCamera: () => void;
+  onShareScreen: () => void;
+  onEndCall: () => void;
+  
+  // 群组视频通话特有功能
+  onMuteAll?: () => void;
+  onKickParticipant?: (userId: string) => void;
+  onInviteMore?: () => void;
+  onSwitchLayout?: (layout: 'grid' | 'speaker' | 'gallery' | 'pip') => void; // 增加画中画模式
+  
+  // 移动端特有功能
+  onMinimize?: () => void;
+  onMaximize?: () => void;
+  enablePictureInPicture?: boolean;
+  supportedOrientations?: ('portrait' | 'landscape')[];
+}
+
+// 移动端优化组件
+interface MobileOptimizedChatProps {
+  chatType: 'private' | 'group';
+  targetId: string;
+  isFullScreen?: boolean;
+  keyboardHeight?: number;
+  onKeyboardShow?: (height: number) => void;
+  onKeyboardHide?: () => void;
+  enableHapticFeedback?: boolean;
+  supportSwipeGestures?: boolean;
+  
+  // 移动端手势支持
+  onSwipeLeft?: () => void;
+  onSwipeRight?: () => void;
+  onLongPress?: (messageId: string) => void;
+  onDoubleTap?: (messageId: string) => void;
+}
+
+// 移动端文件选择组件
+interface MobileFilePickerProps {
+  onFileSelect: (files: File[]) => void;
+  supportedTypes: string[];
+  maxFileSize: number;
+  allowMultiple?: boolean;
+  enableCamera?: boolean;
+  enableGallery?: boolean;
+  enableDocument?: boolean;
+  showCompressionOptions?: boolean;
+  
+  // 移动端特有功能
+  enableImageEditing?: boolean;
+  enableVideoTrimming?: boolean;
+  supportLivePhoto?: boolean;
+}
   isOwner?: boolean;
   onToggleVideo: () => void;
   onToggleMute: () => void;
@@ -640,26 +884,80 @@ interface ErrorHandler {
 interface NetworkAdaptation {
   // 网络质量检测
   measureNetworkQuality(): Promise<NetworkQuality>;
+  startNetworkMonitoring(callId: string): void;
+  stopNetworkMonitoring(callId: string): void;
   
   // 自适应码率
-  adjustBitrate(quality: NetworkQuality): void;
+  adjustBitrate(quality: NetworkQuality, mediaType: 'audio' | 'video'): void;
+  enableAutoBitrate(callId: string, enabled: boolean): void;
+  setMinMaxBitrate(callId: string, min: number, max: number): void;
   
-  // 连接降级
+  // 连接降级策略
   fallbackToAudio(): void;
+  reducVideoQuality(level: 'low' | 'medium'): void;
+  enableDataSaver(enabled: boolean): void;
   
   // 重连机制
   attemptReconnection(maxAttempts: number): Promise<boolean>;
+  setReconnectionStrategy(strategy: ReconnectionStrategy): void;
   
-  // P2P文件传输重试
+  // P2P文件传输适应性
   retryFileTransfer(fileId: string, maxRetries: number): Promise<boolean>;
+  adjustChunkSize(networkQuality: NetworkQuality): number;
+  enableProgressiveDownload(transferId: string): void;
+  
+  // 移动网络优化
+  detectConnectionType(): Promise<ConnectionType>;
+  optimizeForMobile(enabled: boolean): void;
+  setDataUsageLimit(limitMB: number): void;
+  getDataUsageStats(): Promise<DataUsageStats>;
+  
+  // 网络状态监听
+  onNetworkChange(callback: (change: NetworkChange) => void): void;
+  onConnectionStateChange(callback: (state: ConnectionState) => void): void;
+  onBandwidthChange(callback: (bandwidth: number) => void): void;
 }
 
 interface NetworkQuality {
   bandwidth: number; // kbps
   latency: number; // ms
-  packetLoss: number; // percentage
+  packetLoss: number; // percentage (0-100)
   jitter: number; // ms
-  quality: 'excellent' | 'good' | 'fair' | 'poor';
+  quality: 'excellent' | 'good' | 'fair' | 'poor' | 'critical';
+  connectionType: ConnectionType;
+  isStable: boolean;
+  timestamp: string;
+}
+
+interface ReconnectionStrategy {
+  maxAttempts: number;
+  initialDelay: number; // ms
+  maxDelay: number; // ms
+  backoffMultiplier: number;
+  jitterEnabled: boolean;
+}
+
+interface ConnectionType {
+  type: 'wifi' | '4g' | '3g' | '2g' | 'ethernet' | 'unknown';
+  effectiveType: 'slow-2g' | '2g' | '3g' | '4g';
+  downlink: number; // Mbps
+  rtt: number; // ms
+}
+
+interface DataUsageStats {
+  totalUsed: number; // MB
+  audioUsage: number; // MB
+  videoUsage: number; // MB
+  fileTransferUsage: number; // MB
+  period: 'today' | 'week' | 'month';
+  lastReset: string;
+}
+
+interface NetworkChange {
+  previousState: NetworkQuality;
+  currentState: NetworkQuality;
+  changeType: 'improvement' | 'degradation' | 'connection_type_change';
+  suggestedActions: string[];
 }
 ```
 
@@ -747,9 +1045,10 @@ INSERT INTO system_config {
     // P2P文件传输限制
     max_file_size: 104857600, // 100MB in bytes
     file_chunk_size: 65536,   // 64KB in bytes
-    supported_image_types: ['jpg', 'png', 'gif', 'webp'],
-    supported_video_types: ['mp4', 'webm', 'mov'],
-    supported_audio_types: ['mp3', 'wav', 'ogg'],
+    supported_image_types: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'],
+    supported_video_types: ['mp4', 'webm', 'mov', 'avi', 'wmv'],
+    supported_audio_types: ['mp3', 'wav', 'ogg', 'aac', 'm4a'],
+    supported_document_types: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'],
     
     // 功能开关
     enable_voice_call: true,
@@ -758,26 +1057,85 @@ INSERT INTO system_config {
     enable_file_transfer: true,
     enable_group_chat: true,
     enable_group_call: true,
+    enable_message_recall: true,
+    enable_message_edit: true,
     max_conference_participants: 8,
     max_group_members: 100,
     
     // 超时设置
     file_transfer_timeout: 300000, // 5分钟
     call_timeout: 30000,          // 30秒
+    signal_expiry: 3600000,       // 信令1小时过期
+    message_recall_timeout: 120,  // 消息撤回时限(秒)
+    
+    // 网络质量阈值
+    network_quality_thresholds: {
+      excellent: { bandwidth: 2000, latency: 50, packet_loss: 0.1 },
+      good: { bandwidth: 1000, latency: 100, packet_loss: 0.5 },
+      fair: { bandwidth: 500, latency: 200, packet_loss: 1.0 },
+      poor: { bandwidth: 200, latency: 300, packet_loss: 2.0 }
+    },
     
     // 质量设置
     video_quality: {
       low: { width: 320, height: 240, framerate: 15, bitrate: 150000 },
       medium: { width: 640, height: 480, framerate: 24, bitrate: 500000 },
-      high: { width: 1280, height: 720, framerate: 30, bitrate: 1000000 }
+      high: { width: 1280, height: 720, framerate: 30, bitrate: 1000000 },
+      ultra: { width: 1920, height: 1080, framerate: 30, bitrate: 2000000 }
     },
     audio_quality: {
       low: { bitrate: 32000, sampleRate: 16000 },
       medium: { bitrate: 64000, sampleRate: 44100 },
       high: { bitrate: 128000, sampleRate: 48000 }
+    },
+    
+    // 数据清理配置
+    cleanup_config: {
+      signal_retention_hours: 24,        // 信令消息保留24小时
+      call_record_retention_days: 365,   // 通话记录保留1年
+      file_cache_retention_days: 30,     // 文件缓存保留30天
+      read_status_retention_days: 90     // 已读状态保留90天
+    },
+    
+    // 性能优化配置
+    performance_config: {
+      message_batch_size: 50,            // 消息批量加载大小
+      max_concurrent_transfers: 3,       // 最大并发文件传输数
+      chunk_upload_concurrency: 2,      // 分片上传并发数
+      enable_message_pagination: true,  // 启用消息分页
+      cache_message_count: 100          // 本地缓存消息数量
     }
   },
   description: 'WebRTC功能配置项'
+};
+
+-- 添加数据清理定时任务配置
+INSERT INTO system_config {
+  config_key: 'cleanup_schedule',
+  config_value: {
+    enabled: true,
+    schedules: [
+      {
+        name: 'clean_expired_signals',
+        cron: '0 */6 * * *', // 每6小时清理一次过期信令
+        query: 'DELETE webrtc_signal WHERE expires_at < time::now()',
+        enabled: true
+      },
+      {
+        name: 'clean_old_call_records',
+        cron: '0 2 * * *', // 每天凌晨2点清理
+        query: 'DELETE call_record WHERE start_time < (time::now() - 365d)',
+        enabled: true
+      },
+      {
+        name: 'optimize_read_status',
+        cron: '0 3 * * 0', // 每周日凌晨3点优化已读状态
+        query: 'DELETE message_read_status WHERE read_at < (time::now() - 90d)',
+        enabled: true
+      }
+    ]
+  },
+  description: '数据清理定时任务配置'
 };
 ```
 
@@ -879,6 +1237,9 @@ WHERE in = $group_id AND out = $user_id;
 ### 配置同步机制
 
 ```typescript
+### 配置同步机制
+
+```typescript
 // 页面加载时自动获取并缓存配置
 class RTCConfigManager {
   private config: RTCConfig | null = null;
@@ -924,3 +1285,135 @@ class RTCConfigManager {
     );
   }
 }
+```
+
+## 移动端性能优化
+
+### 资源管理策略
+
+```typescript
+interface MobileOptimization {
+  // 内存管理
+  enableMemoryOptimization(): void;
+  clearUnusedResources(): void;
+  optimizeImageLoading(): void;
+  
+  // 电池优化
+  enableBatterySaver(enabled: boolean): void;
+  reduceCPUUsage(): void;
+  optimizeNetworkUsage(): void;
+  
+  // 存储优化
+  compressLocalStorage(): void;
+  cleanupTempFiles(): void;
+  manageCacheSize(maxSizeMB: number): void;
+  
+  // 渲染优化
+  enableVirtualScrolling(): void;
+  optimizeAnimations(): void;
+  reduceDOMUpdates(): void;
+}
+
+// 移动端网络策略
+interface MobileNetworkStrategy {
+  // 数据节省模式
+  enableDataSaver(enabled: boolean): void;
+  compressImages(quality: number): void;
+  disableAutoVideoDownload(): void;
+  
+  // 智能预加载
+  preloadNearbyMessages(): void;
+  prefetchUserProfiles(): void;
+  cacheFrequentlyUsedFiles(): void;
+  
+  // 离线支持
+  enableOfflineMode(): void;
+  syncWhenOnline(): void;
+  queueOfflineOperations(): void;
+}
+```
+
+### 性能监控
+
+```typescript
+interface PerformanceMonitor {
+  // 性能指标收集
+  trackMemoryUsage(): void;
+  trackNetworkUsage(): void;
+  trackBatteryUsage(): void;
+  trackRenderPerformance(): void;
+  
+  // 异常监控
+  monitorCrashes(): void;
+  monitorANRs(): void; // Android Not Responding
+  monitorMemoryLeaks(): void;
+  
+  // 用户体验指标
+  trackLoadTimes(): void;
+  trackUserInteractions(): void;
+  trackErrorRates(): void;
+}
+```
+
+## 测试策略补充
+
+### 移动端专项测试
+
+- **多设备兼容性**: iPhone、Android各版本测试
+- **网络环境测试**: 2G/3G/4G/5G/WiFi场景
+- **电池性能测试**: 长时间通话对电池消耗影响
+- **内存压力测试**: 大群组聊天的内存使用情况
+- **离线功能测试**: 网络中断后的数据同步
+
+### 压力测试场景
+
+- **100人大群组**: 消息发送、已读状态、成员管理性能
+- **高并发通话**: 多个群组同时进行视频会议
+- **大文件传输**: 100MB文件在各种网络环境下的传输
+- **长时间运行**: 应用24小时持续运行的稳定性
+
+### 自动化测试覆盖
+
+```typescript
+// E2E测试用例示例
+describe('群组视频通话', () => {
+  test('创建群组并发起8人视频会议', async () => {
+    // 创建群组
+    const groupId = await createGroup('测试群组', participants);
+    
+    // 发起群组视频通话
+    const callId = await startGroupCall(groupId, 'video');
+    
+    // 验证所有成员收到邀请
+    await verifyAllParticipantsInvited(participants);
+    
+    // 验证通话质量
+    await monitorCallQuality(callId, 30000); // 30秒
+    
+    // 结束通话
+    await endCall(callId);
+    
+    // 验证通话记录
+    const record = await getCallRecord(callId);
+    expect(record.status).toBe('completed');
+  });
+});
+```
+
+## 安全考虑补充
+
+### 数据加密
+
+- **端到端加密**: 群组消息和文件传输
+- **密钥管理**: 每个群组独立密钥
+- **身份验证**: 防止中间人攻击
+- **数据完整性**: 消息篡改检测
+
+### 隐私保护增强
+
+- **敏感数据处理**: 通话录音、文件内容扫描
+- **用户同意机制**: 明确的权限申请流程
+- **数据最小化**: 只收集必要的用户数据
+- **审计追踪**: 敏感操作的完整日志记录
+
+这些修复和增强确保了WebRTC消息中心模块的设计更加完善、安全和高性能。
