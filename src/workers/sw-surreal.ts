@@ -2602,6 +2602,64 @@ function startConnectionHealthCheck() {
 }
 
 /**
+ * 彻底重建数据库实例
+ * 当检测到db.status状态不一致或多次重连失败时调用
+ */
+async function recreateDatabaseInstance(): Promise<void> {
+  console.log('ServiceWorker: Starting database instance recreation...');
+  
+  try {
+    // 停止所有连接相关的活动
+    stopConnectionHealthCheck();
+    stopReconnection();
+    
+    // 彻底关闭并销毁现有的数据库实例
+    if (db) {
+      try {
+        console.log('ServiceWorker: Closing existing database instance for recreation...');
+        await db.close();
+        console.log('ServiceWorker: Database instance closed successfully');
+      } catch (closeError) {
+        console.warn('ServiceWorker: Error closing database during recreation:', closeError);
+      }
+    }
+    
+    // 清除数据库实例引用，强制重新创建
+    db = null as any;
+    
+    // 重置所有连接状态
+    isConnected = false;
+    isReconnecting = false;
+    connecting = false;
+    
+    console.log('ServiceWorker: [连接状态变更] 数据库对象完全重建 - 所有状态已重置', {
+      timestamp: new Date().toISOString(),
+      reason: '内部数据库重建',
+      resetStates: {
+        isConnected: false,
+        isReconnecting: false,
+        connecting: false,
+        db: null
+      }
+    });
+    
+    // 重新初始化数据库实例
+    await initializeSurreal();
+    console.log('ServiceWorker: New database instance created successfully');
+    
+    // 如果有连接配置，立即尝试连接
+    if (connectionConfig) {
+      await connectWithTimeout();
+      console.log('ServiceWorker: Database recreated and reconnected successfully');
+    }
+    
+  } catch (error) {
+    console.error('ServiceWorker: Failed to recreate database instance:', error);
+    throw error;
+  }
+}
+
+/**
  * 计算重连延迟（指数退避，但有最大值限制）
  */
 function calculateReconnectDelay(): number {
@@ -2653,6 +2711,33 @@ async function performReconnection() {
 
   reconnectAttempts++;
   console.log(`ServiceWorker: Attempting reconnection #${reconnectAttempts} to ${connectionConfig.endpoint}`);
+
+  // 智能检测：当重连次数达到一定阈值时，考虑重建数据库对象
+  const shouldRecreateDatabase = reconnectAttempts >= 3 && (
+    !db || 
+    (db?.status === ConnectionStatus.Disconnected && isConnected === true) || // 状态不一致
+    (db?.status === ConnectionStatus.Connected && isConnected === false) ||   // 状态不一致
+    db?.status === ConnectionStatus.Error
+  );
+  
+  if (shouldRecreateDatabase) {
+    console.log('ServiceWorker: Detected connection state inconsistency or multiple failures, recreating database object...');
+    try {
+      // 彻底重建数据库对象
+      await recreateDatabaseInstance();
+      // 重连成功后重置计数器
+      reconnectAttempts = 0;
+      isReconnecting = false;
+      console.log('ServiceWorker: Database recreation and reconnection successful');
+      notifyConnectionStateChange();
+      startConnectionHealthCheck();
+      await resubscribeAllLiveQueries();
+      return;
+    } catch (recreateError) {
+      console.error('ServiceWorker: Database recreation failed:', recreateError);
+      // 如果重建失败，继续尝试常规重连
+    }
+  }
 
   try {
     // 清理当前连接

@@ -6,7 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 import fs from 'fs';
 import path from 'path';
 
-// 将import手动添加到文件开头 - 在所有插件处理完成后执行
+// 将import手动添加到文件开头 - 在所有插件处理完成后执行（仅在需要时）
 function prependImportToSwSurreal(): Plugin<unknown> {
   return {
     name: `prepend-import-to-sw-surreal`,
@@ -22,9 +22,15 @@ function prependImportToSwSurreal(): Plugin<unknown> {
         if (swSurrealFile && bundle[swSurrealFile]) {
           const file = bundle[swSurrealFile];
           if (file.type === 'chunk') {
-            // 强制在文件开头添加 import 语句，不管是否已存在
-            file.code = `import '/sw/wasm-shim.js';\n${file.code}`;
-            console.log(`Added import statement to ${swSurrealFile} (post-processing)`);
+            const importStatement = `import '/sw/wasm-shim.js';`;
+            
+            // 检查是否已经包含该import语句，避免重复添加
+            if (!file.code.includes(importStatement)) {
+              file.code = `${importStatement}\n${file.code}`;
+              console.log(`Added import statement to ${swSurrealFile} (post-processing)`);
+            } else {
+              console.log(`Import statement already exists in ${swSurrealFile}, skipping`);
+            }
           }
         }
       }

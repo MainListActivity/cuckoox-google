@@ -1,5 +1,6 @@
 import { defineConfig, Plugin } from 'vite'
 import path from 'path'
+import { fileURLToPath, URL } from 'node:url';
 import topLevelAwait from 'vite-plugin-top-level-await'
 
 // 已废弃，待后续移除
@@ -63,6 +64,11 @@ export default defineConfig({
     }),
     prependImportToSwSurreal(), // 这个插件会在最后执行 (enforce: 'post')
   ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('.', import.meta.url)),
+      }
+    },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
     'import.meta.url': '"https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/"',

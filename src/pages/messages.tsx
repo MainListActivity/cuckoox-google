@@ -79,6 +79,8 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { messageService } from '@/src/services/messageService';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
 import { RecordId } from 'surrealdb';
 import { idToStr } from '@/src/utils/id';
 

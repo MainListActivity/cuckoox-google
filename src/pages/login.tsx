@@ -96,8 +96,16 @@ const LoginPage: React.FC = () => {
       try {
         if (serviceWorkerComm) {
           const response = await serviceWorkerComm.sendMessage('get_connection_state', {});
-          setRealAuthStatus(response?.isAuthenticated || false);
-          console.log('LoginPage: Real auth status from Service Worker:', response?.isAuthenticated);
+          const newAuthStatus = response?.isAuthenticated || false;
+          
+          // 只在状态真正变化时才更新和记录日志
+          setRealAuthStatus(prev => {
+            if (prev !== newAuthStatus) {
+              console.log('LoginPage: Auth status changed from', prev, 'to', newAuthStatus);
+              return newAuthStatus;
+            }
+            return prev;
+          });
         }
       } catch (error) {
         console.error('LoginPage: Error checking real auth status:', error);
@@ -105,12 +113,10 @@ const LoginPage: React.FC = () => {
       }
     };
 
-    checkRealAuthStatus();
-    
-    // 每隔500ms检查一次认证状态，确保及时捕获变化
-    // const interval = setInterval(checkRealAuthStatus, 500);
-    
-    // return () => clearInterval(interval);
+    // 只在serviceWorkerComm可用时检查一次
+    if (serviceWorkerComm) {
+      checkRealAuthStatus();
+    }
   }, [serviceWorkerComm]);
 
   // 监听认证状态变化，防止在清除状态过程中的错误重定向

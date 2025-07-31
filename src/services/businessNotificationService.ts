@@ -1,7 +1,7 @@
 import { RecordId } from 'surrealdb';
 import { useSurrealClientSingleton } from '../contexts/SurrealProvider';
 import type { SurrealWorkerAPI } from '../contexts/SurrealProvider';
-import { queryWithAuth } from '@/src/utils/surrealAuth';
+import { queryWithAuth } from '../utils/surrealAuth';
 import { messageService } from './messageService';
 
 interface ClaimData {

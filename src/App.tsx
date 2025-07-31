@@ -1,7 +1,6 @@
 import React, {Suspense, ReactNode, useEffect} from 'react';
 import {Routes, Route, Navigate, useLocation, useNavigate} from 'react-router-dom';
 import {useAuth} from '@/src/contexts/AuthContext';
-import {useSurrealContext} from '@/src/contexts/SurrealProvider';
 import {useTranslation} from 'react-i18next';
 import DebugPanel from '@/src/components/DebugPanel';
 // Remove MUI ThemeProvider, use our own from ThemeContext
@@ -14,7 +13,6 @@ import { LayoutProvider } from '@/src/contexts/LayoutContext'; // Import LayoutP
 import Layout from '@/src/components/Layout';
 import ProtectedRoute from '@/src/components/ProtectedRoute';
 import GlobalLoader from '@/src/components/GlobalLoader'; // ADDED
-import GlobalError from '@/src/components/GlobalError'; // ADDED
 import { RecordId } from 'surrealdb';
 
 // Lazy load pages for better performance
@@ -54,7 +52,6 @@ const PDFParserPage = React.lazy(() => import('@/src/pages/pdf-parser/index'));
 
 
 function App() {
-    const {isConnected, isConnecting, error: surrealError} = useSurrealContext();
     const {t} = useTranslation();
     const auth = useAuth();
     const location = useLocation();
@@ -90,35 +87,7 @@ function App() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [auth.isLoggedIn, auth.userCases, auth.selectCase, auth.selectedCaseId, location.search, location.pathname, navigate]); // Explicitly excluding 'auth' and 'location.state' to prevent unnecessary re-renders
 
-    // Handle SurrealDB connection status
-    if (isConnecting) {
-        return <GlobalLoader message={t('loader.connectingMessage', 'Connecting to database...')}/>;
-    }
-
-    // Use auth.isLoggedIn in the condition for rendering LoginPage
-    if (surrealError) {
-        return (
-            <GlobalError
-                title={t('error.globalTitle', 'Application Error')}
-                message={surrealError.message || t('error.unknownDbError', 'An unknown database error occurred.')}
-            />
-        );
-    }
-
-    // Potentially handle disconnected state differently, e.g., show a specific message or loader
-    if (!isConnected && !surrealError) { // No initial connection error, but now disconnected
-        return <GlobalLoader
-            message={t('error.disconnectedMessage', 'Database connection lost. Attempting to reconnect...')}/>;
-        // Or use GlobalError:
-        // return (
-        //   <GlobalError
-        //     title={t('error.disconnectedTitle', 'Disconnected')}
-        //     message={t('error.disconnectedMessage', 'Database connection lost. Attempting to reconnect...')}
-        //   />
-        // );
-    }
-
-    // If connected, proceed with the rest of the application logic
+    // SurrealDB connection issues are handled transparently by Service Worker
 
     // Define routes that don't need the main layout (e.g., Login, OidcCallback, Register, Root Admin)
     if (location.pathname === '/login' || location.pathname === '/oidc-callback' || location.pathname === '/register' || location.pathname === '/root-admin' || location.pathname === '/root-admin/login') {

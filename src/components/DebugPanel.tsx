@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Box, Typography, Button, Paper, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import { mdiChevronDown, mdiRefresh, mdiConsole } from '@mdi/js';
 import Icon from '@mdi/react';
@@ -6,16 +6,18 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useSurreal } from '@/src/contexts/SurrealProvider';
 import authService from '@/src/services/authService';
 
-// 性能监控 Hook - 修复无限循环问题
+// 性能监控 Hook - 优化版本，避免无限循环
 const useRenderCounter = (componentName: string) => {
   const renderCount = useRef(0);
   const lastRenderTime = useRef(Date.now());
   const renderTimes = useRef<number[]>([]);
+  const lastWarnTime = useRef(0);
   
-  // 直接在组件渲染时更新计数器，不使用 useEffect
+  // 安全地更新计数器
   renderCount.current += 1;
   const now = Date.now();
-  renderTimes.current.push(now - lastRenderTime.current);
+  const timeSinceLastRender = now - lastRenderTime.current;
+  renderTimes.current.push(timeSinceLastRender);
   lastRenderTime.current = now;
   
   // 保留最近10次渲染时间
@@ -23,10 +25,14 @@ const useRenderCounter = (componentName: string) => {
     renderTimes.current.shift();
   }
   
-  // 检测可能的死循环（1秒内超过10次渲染）
+  // 只在必要时检测循环，并限制警告频率
   const recentRenders = renderTimes.current.filter(time => time < 100);
   if (recentRenders.length >= 5) {
-    console.warn(`🔄 Potential infinite loop detected in ${componentName}: ${recentRenders.length} renders in quick succession`);
+    // 限制警告频率：至少间隔5秒才输出一次警告
+    if (now - lastWarnTime.current > 5000) {
+      console.warn(`🔄 Potential infinite loop detected in ${componentName}: ${recentRenders.length} renders in quick succession`);
+      lastWarnTime.current = now;
+    }
   }
   
   return {
@@ -38,12 +44,26 @@ const useRenderCounter = (componentName: string) => {
   };
 };
 
-// 调试面板组件
-const DebugPanel: React.FC = () => {
+// 调试面板组件 - 使用React.memo优化
+const DebugPanel: React.FC = React.memo(() => {
   const [isVisible, setIsVisible] = useState(false);
   const auth = useAuth();
   const surreal = useSurreal();
   const renderStats = useRenderCounter('DebugPanel');
+
+  // 缓存经常使用的状态值，避免在渲染时频繁访问上下文
+  const authState = useMemo(() => ({
+    isLoggedIn: auth.isLoggedIn,
+    isLoading: auth.isLoading,
+    userName: auth.user?.name,
+    selectedCaseId: auth.selectedCaseId?.toString()
+  }), [auth.isLoggedIn, auth.isLoading, auth.user?.name, auth.selectedCaseId]);
+
+  const surrealState = useMemo(() => ({
+    isConnecting: surreal.isConnecting,
+    isConnected: surreal.isConnected,
+    errorMessage: surreal.error?.message
+  }), [surreal.isConnecting, surreal.isConnected, surreal.error?.message]);
   
   // 监控 localStorage 变化
   const [localStorageItems, setLocalStorageItems] = useState<{[key: string]: string}>({});
@@ -121,15 +141,15 @@ const DebugPanel: React.FC = () => {
       });
     }
     console.log('Auth State:', {
-      isLoggedIn: auth.isLoggedIn,
-      user: auth.user?.name,
-      isLoading: auth.isLoading,
-      selectedCase: auth.selectedCaseId?.toString()
+      isLoggedIn: authState.isLoggedIn,
+      user: authState.userName,
+      isLoading: authState.isLoading,
+      selectedCase: authState.selectedCaseId
     });
     console.log('Surreal State:', {
-      isConnecting: surreal.isConnecting,
-      isConnected: surreal.isConnected,
-      error: surreal.error?.message
+      isConnecting: surrealState.isConnecting,
+      isConnected: surrealState.isConnected,
+      error: surrealState.errorMessage
     });
     console.groupEnd();
   };
@@ -213,10 +233,10 @@ const DebugPanel: React.FC = () => {
         </AccordionSummary>
         <AccordionDetails>
           <Typography variant="body2">
-            Logged In: {auth.isLoggedIn ? '✅' : '❌'}<br/>
-            Loading: {auth.isLoading ? '⏳' : '✅'}<br/>
-            User: {auth.user?.name || 'None'}<br/>
-            Case: {auth.selectedCaseId?.toString() || 'None'}
+            Logged In: {authState.isLoggedIn ? '✅' : '❌'}<br/>
+            Loading: {authState.isLoading ? '⏳' : '✅'}<br/>
+            User: {authState.userName || 'None'}<br/>
+            Case: {authState.selectedCaseId || 'None'}
           </Typography>
         </AccordionDetails>
       </Accordion>
@@ -228,10 +248,10 @@ const DebugPanel: React.FC = () => {
         </AccordionSummary>
         <AccordionDetails>
           <Typography variant="body2">
-            Connecting: {surreal.isConnecting ? '⏳' : '✅'}<br/>
-            Connected: {surreal.isConnected ? '✅' : '❌'}<br/>
-            Error: {surreal.error ? '❌' : '✅'}<br/>
-            Message: {surreal.error?.message || 'None'}
+            Connecting: {surrealState.isConnecting ? '⏳' : '✅'}<br/>
+            Connected: {surrealState.isConnected ? '✅' : '❌'}<br/>
+            Error: {surrealState.errorMessage ? '❌' : '✅'}<br/>
+            Message: {surrealState.errorMessage || 'None'}
           </Typography>
         </AccordionDetails>
       </Accordion>
@@ -293,6 +313,9 @@ const DebugPanel: React.FC = () => {
       </Typography>
     </Paper>
   );
-};
+});
+
+// 设置displayName方便调试
+DebugPanel.displayName = 'DebugPanel';
 
 export default DebugPanel; 

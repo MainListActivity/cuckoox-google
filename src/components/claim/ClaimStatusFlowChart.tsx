@@ -4,13 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Timeline,
-  TimelineItem,
-  TimelineSeparator,
-  TimelineConnector,
-  TimelineContent,
-  TimelineDot,
-  TimelineOppositeContent,
   Chip,
   Stack,
   IconButton,
@@ -28,6 +21,14 @@ import {
   Paper,
   Divider
 } from '@mui/material';
+import {
+  Timeline,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineConnector,
+  TimelineContent,
+  TimelineDot,
+  TimelineOppositeContent,} from '@mui/lab';
 import {
   mdiCheckCircleOutline,
   mdiCloseCircleOutline,

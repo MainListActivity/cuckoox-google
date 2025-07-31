@@ -119,7 +119,6 @@ export interface SurrealWorkerAPI {
     reconnectAttempts: number;
     endpoint?: string;
   }>;
-  forceReconnect(): Promise<void>;
 }
 
 interface PendingMessage {
@@ -149,8 +148,7 @@ export interface SurrealContextValue {
   // Additional compatibility properties
   isSuccess?: boolean;
 
-  // Connection management (internal use)
-  reconnect: () => Promise<void>;
+  // Connection management delegated to Service Worker
 
   // Service Worker communication interface
   sendServiceWorkerMessage: (type: string, payload?: any) => Promise<any>;
@@ -848,113 +846,88 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         return await sendMessage('get_connection_state');
       },
 
-      async forceReconnect() {
-        await sendMessage('force_reconnect');
-      }
     };
   }, [sendMessage]);
 
   const [internalClient, setInternalClient] = useState<SurrealWorkerAPI | null>(null);
 
   /**
-   * 连接到 SurrealDB
+   * 单次连接尝试（不包含重试逻辑）
    */
-  const connect = useCallback(async () => {
+  const connectOnce = useCallback(async (): Promise<void> => {
+    // 防止重复连接
+    if (internalClient || isConnected) {
+      return;
+    }
+
     if (externalClient) {
       setInternalClient(externalClient);
       setConnected(true);
       return;
     }
 
-    if (isConnected && internalClient) return;
+    // 首先初始化 ServiceWorker，确保其正常加载
+    await initialize();
 
-    setConnecting(true);
-    setError(null);
+    // 创建内置客户端
+    const client = createInternalClient();
+    setInternalClient(client);
+    setConnected(true);
 
-    try {
-      // 首先初始化 ServiceWorker，确保其正常加载
-      await initialize();
+    // Inject client into authService for dependency injection
+    authService.setSurrealClient(client);
 
-      // 创建内置客户端
-      const client = createInternalClient();
+    // Setup Service Worker communication interfaces
+    const serviceWorkerComm = {
+      sendMessage: (type: string, payload?: any) => sendMessage(type, payload),
+      isAvailable: () => isServiceWorkerAvailable(),
+      waitForReady: () => waitForServiceWorkerReady(),
+    };
 
-      // 使用 service worker 客户端，Service Worker 将使用其内部存储的 token
-      const tenantCode = localStorage.getItem('tenant_code');
-      const database = tenantCode || 'test';
-
-      const connected = await client.connect({
-        endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-        namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
-        database: database,
-        // Service Worker 将使用其内部存储的 token，不需要同步 localStorage
-      });
-
-      if (connected) {
-        setInternalClient(client);
-        setConnected(true);
-
-        // Inject client into authService for dependency injection
-        authService.setSurrealClient(client);
-
-        // Setup Service Worker communication interfaces
-        const serviceWorkerComm = {
-          sendMessage: (type: string, payload?: any) => sendMessage(type, payload),
-          isAvailable: () => isServiceWorkerAvailable(),
-          waitForReady: () => waitForServiceWorkerReady(),
-        };
-
-
-        // Setup client getter for services that need it
-        const clientGetter = async () => {
-          if (!client) {
-            throw new Error('SurrealDB client not available');
-          }
-          return client;
-        };
-
-        // Import and setup services dynamically to avoid circular dependencies
-        try {
-          const { messageService } = await import('@/src/services/messageService');
-          messageService.setClientGetter(clientGetter);
-
-          const { businessNotificationService } = await import('@/src/services/businessNotificationService');
-          businessNotificationService.setClientGetter(clientGetter);
-
-          const { caseReminderService } = await import('@/src/services/caseReminderService');
-          caseReminderService.setClientGetter(clientGetter);
-
-          const { bidirectionalSyncService } = await import('@/src/services/bidirectionalSyncService');
-          bidirectionalSyncService.setServiceWorkerComm(serviceWorkerComm);
-
-          const { pageDataCacheService } = await import('@/src/services/pageDataCacheService');
-          pageDataCacheService.setServiceWorkerComm(serviceWorkerComm);
-
-          const { incrementalSyncService } = await import('@/src/services/incrementalSyncService');
-          incrementalSyncService.setServiceWorkerComm(serviceWorkerComm);
-        } catch (error) {
-          console.warn('SurrealProvider: Some services could not be initialized:', error);
-        }
-      } else {
-        throw new Error('Failed to connect to database');
+    // Setup client getter for services that need it
+    const clientGetter = async () => {
+      if (!client) {
+        throw new Error('SurrealDB client not available');
       }
+      return client;
+    };
 
-    } catch (e) {
-      console.error('SurrealProvider: 连接失败:', e);
-      setError(e as Error);
-      setConnected(false);
-    } finally {
-      setConnecting(false);
+    // Import and setup services dynamically to avoid circular dependencies
+    try {
+      const { messageService } = await import('@/src/services/messageService');
+      messageService.setClientGetter(clientGetter);
+
+      const { businessNotificationService } = await import('@/src/services/businessNotificationService');
+      businessNotificationService.setClientGetter(clientGetter);
+
+      const { caseReminderService } = await import('@/src/services/caseReminderService');
+      caseReminderService.setClientGetter(clientGetter);
+
+      const { bidirectionalSyncService } = await import('@/src/services/bidirectionalSyncService');
+      bidirectionalSyncService.setServiceWorkerComm(serviceWorkerComm);
+
+      const { pageDataCacheService } = await import('@/src/services/pageDataCacheService');
+      pageDataCacheService.setServiceWorkerComm(serviceWorkerComm);
+
+      const { incrementalSyncService } = await import('@/src/services/incrementalSyncService');
+      incrementalSyncService.setServiceWorkerComm(serviceWorkerComm);
+    } catch (error) {
+      console.warn('SurrealProvider: Some services could not be initialized:', error);
     }
-  }, [externalClient, isConnected, internalClient, initialize, createInternalClient, sendMessage]);
+
+  }, [externalClient, initialize, createInternalClient, sendMessage]);
 
   /**
-   * 重新连接
+   * 手动重连（委托给Service Worker）
    */
   const reconnect = useCallback(async () => {
-    setConnected(false);
-    setInternalClient(null);
-    await connect();
-  }, [connect]);
+    console.log('SurrealProvider: 手动重连委托给Service Worker');
+    try {
+      await sendMessage('force_reconnect');
+    } catch (error) {
+      console.error('SurrealProvider: 手动重连失败:', error);
+    }
+  }, [sendMessage]);
 
   /**
    * Service Worker 通信方法
@@ -1046,9 +1019,9 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   // Auto-connect on mount
   useEffect(() => {
     if (autoConnect) {
-      connect();
+      connectOnce();
     }
-  }, [autoConnect, connect]);
+  }, [autoConnect, connectOnce]);
 
   // Setup message handler on mount
   useEffect(() => {
@@ -1121,11 +1094,11 @@ export const useSurrealContext = useSurreal; // Alias for backward compatibility
 // Service Worker communication hooks
 export const useServiceWorkerComm = () => {
   const ctx = useSurreal();
-  return {
+  return useMemo(() => ({
     sendMessage: ctx.sendServiceWorkerMessage,
     isAvailable: ctx.isServiceWorkerAvailable,
     waitForReady: ctx.waitForServiceWorkerReady,
-  };
+  }), [ctx.sendServiceWorkerMessage, ctx.isServiceWorkerAvailable, ctx.waitForServiceWorkerReady]);
 };
 
 // 租户代码检查 hook

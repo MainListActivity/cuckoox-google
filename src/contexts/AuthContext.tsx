@@ -88,6 +88,10 @@ export interface AuthContextType {
   useUserRoles: () => { roles: string[]; isLoading: boolean; error: string | null };
   useClearPermissionCache: () => { clearUserPermissions: (caseId?: string) => Promise<void>; clearAllPermissions: () => Promise<void> };
   useSyncPermissions: () => { syncPermissions: (userData: unknown) => Promise<void> };
+  
+  // Permission preloading methods to avoid render loop issues
+  preloadOperationPermission: (operationId: string) => Promise<void>;
+  preloadOperationPermissions: (operationIds: string[]) => Promise<void>;
 
   // Test-only methods (only available in test environment)
   __TEST_setCurrentUserCaseRoles?: (roles: Role[]) => void;
@@ -221,7 +225,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user, client, selectedCaseId]);
 
-  // 权限 hooks 实现
+  // 权限 hooks 实现 - 修复无限循环问题
   const useOperationPermission = useCallback((operationId: string): PermissionCheckResult => {
     if (!user || !client) {
       return { hasPermission: false, isLoading: false, error: null };
@@ -237,17 +241,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       : false;
     const isLoading = permissionsLoading[operationId] || false;
 
-    // 如果权限不在缓存中且不在加载状态，则异步加载
-    if (operationPermissionsCache[operationId] === undefined && !isLoading) {
-      loadOperationPermission(operationId);
-    }
-
     return {
       hasPermission,
       isLoading,
       error: null
     };
-  }, [operationPermissionsCache, permissionsLoading, user, client, loadOperationPermission]);
+  }, [operationPermissionsCache, permissionsLoading, user, client]);
+
+  // 添加权限预加载方法
+  const preloadOperationPermission = useCallback(async (operationId: string): Promise<void> => {
+    if (!user || !client || user.github_id === '--admin--') {
+      return;
+    }
+
+    // 如果权限已在缓存中或正在加载，不需要重复加载
+    if (operationPermissionsCache[operationId] !== undefined || permissionsLoading[operationId]) {
+      return;
+    }
+
+    try {
+      await loadOperationPermission(operationId);
+    } catch (error) {
+      console.error('Error preloading operation permission:', error);
+    }
+  }, [user, client, operationPermissionsCache, permissionsLoading, loadOperationPermission]);
 
   const useOperationPermissions = useCallback((operationIds: string[]) => {
     if (!user || !client) {
@@ -279,20 +296,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
 
-    // 检查是否有未缓存的权限需要加载
-    const uncachedIds = operationIds.filter(id =>
-      operationPermissionsCache[id] === undefined && !permissionsLoading[id]
-    );
-    if (uncachedIds.length > 0) {
-      loadOperationPermissions(uncachedIds);
-    }
-
     return {
       permissions,
       isLoading,
       error: null
     };
-  }, [operationPermissionsCache, permissionsLoading, user, client, loadOperationPermissions]);
+  }, [operationPermissionsCache, permissionsLoading, user, client]);
+
+  // 添加批量权限预加载方法
+  const preloadOperationPermissions = useCallback(async (operationIds: string[]): Promise<void> => {
+    if (!user || !client || user.github_id === '--admin--') {
+      return;
+    }
+
+    // 检查是否有未缓存的权限需要加载
+    const uncachedIds = operationIds.filter(id =>
+      operationPermissionsCache[id] === undefined && !permissionsLoading[id]
+    );
+    
+    if (uncachedIds.length > 0) {
+      try {
+        await loadOperationPermissions(uncachedIds);
+      } catch (error) {
+        console.error('Error preloading operation permissions:', error);
+      }
+    }
+  }, [user, client, operationPermissionsCache, permissionsLoading, loadOperationPermissions]);
 
   const useMenuPermission = useCallback((menuId: string): PermissionCheckResult => {
     // 先检查当前已加载的菜单项中是否包含该菜单
@@ -870,6 +899,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       useUserRoles,
       useClearPermissionCache,
       useSyncPermissions,
+      // Permission preloading methods to avoid render loop issues
+      preloadOperationPermission,
+      preloadOperationPermissions,
       __TEST_setCurrentUserCaseRoles,
       __TEST_setSelectedCaseId,
       __TEST_setUserCases // Expose test-only methods
