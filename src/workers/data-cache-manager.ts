@@ -39,7 +39,11 @@ export const AUTO_SYNC_TABLES = [
     'has_member',
     'menu_metadata',
     'operation_button',
-    'user_personal_data'
+    'user_personal_data',
+    'claim_operation_log',
+    'claim_version_history',
+    'claim_status_flow',
+    'claim_access_log'
 ] as const;
 
 export type AutoSyncTable = typeof AUTO_SYNC_TABLES[number];

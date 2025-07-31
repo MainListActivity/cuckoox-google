@@ -342,10 +342,27 @@ DEFINE FIELD archived_at ON message TYPE option<datetime> PERMISSIONS FULL;
 DEFINE FIELD created_at ON message TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
 DEFINE FIELD updated_at ON message TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
 
+-- WebRTC消息中心扩展字段
+DEFINE FIELD message_type ON message TYPE string DEFAULT 'text' ASSERT $value INSIDE ['text', 'image', 'video', 'audio', 'file', 'call_request', 'call_end'] PERMISSIONS FULL;
+DEFINE FIELD file_metadata ON message TYPE option<object> PERMISSIONS FULL;
+DEFINE FIELD call_metadata ON message TYPE option<object> PERMISSIONS FULL;
+DEFINE FIELD target_type ON message TYPE string DEFAULT 'user' ASSERT $value INSIDE ['user', 'group'] PERMISSIONS FULL;
+DEFINE FIELD group_id ON message TYPE option<record<message_group>> PERMISSIONS FULL;
+DEFINE FIELD reply_to ON message TYPE option<record<message>> PERMISSIONS FULL;
+DEFINE FIELD is_pinned ON message TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD mentioned_users ON message TYPE option<array<record<user>>> PERMISSIONS FULL;
+
 DEFINE INDEX message_conversation_created_idx ON message FIELDS conversation_id, created_at DESC;
 DEFINE INDEX message_case_created_idx ON message FIELDS case_id, created_at DESC;
 DEFINE INDEX message_target_user_idx ON message FIELDS target_user_id, is_read, created_at DESC;
 DEFINE INDEX message_sender_idx ON message FIELDS sender_id, created_at DESC;
+
+-- WebRTC消息中心相关索引
+DEFINE INDEX message_group_idx ON message FIELDS group_id, created_at DESC;
+DEFINE INDEX message_target_type_idx ON message FIELDS target_type, created_at DESC;
+DEFINE INDEX message_type_idx ON message FIELDS message_type, created_at DESC;
+DEFINE INDEX message_pinned_idx ON message FIELDS group_id, is_pinned, created_at DESC;
+DEFINE INDEX message_reply_idx ON message FIELDS reply_to;
 
 -- ------------------------------
 -- TABLE: conversation
@@ -395,6 +412,54 @@ DEFINE FIELD created_at ON conversation_participant TYPE datetime DEFAULT time::
 DEFINE FIELD updated_at ON conversation_participant TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
 
 DEFINE INDEX conversation_participant_unique_idx ON conversation_participant FIELDS conversation_id, user_id UNIQUE;
+
+-- ------------------------------
+-- TABLE: message_group (WebRTC群组功能)
+-- ------------------------------
+
+DEFINE TABLE message_group TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.id) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id,
+  FOR update WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.id AND role = 'owner') OR $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD group_name ON message_group TYPE string PERMISSIONS FULL;
+DEFINE FIELD group_description ON message_group TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD group_avatar ON message_group TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD group_type ON message_group TYPE string DEFAULT 'normal' ASSERT $value INSIDE ['normal', 'case_related', 'department'] PERMISSIONS FULL;
+DEFINE FIELD case_id ON message_group TYPE option<record<case>> PERMISSIONS FULL;
+DEFINE FIELD created_by ON message_group TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD created_at ON message_group TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
+DEFINE FIELD updated_at ON message_group TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
+DEFINE FIELD is_active ON message_group TYPE bool DEFAULT true PERMISSIONS FULL;
+DEFINE FIELD max_members ON message_group TYPE int DEFAULT 100 PERMISSIONS FULL;
+
+DEFINE INDEX message_group_case_idx ON message_group FIELDS case_id;
+DEFINE INDEX message_group_type_idx ON message_group FIELDS group_type;
+
+-- ------------------------------
+-- TABLE: group_member (WebRTC群组成员)
+-- ------------------------------
+
+DEFINE TABLE group_member TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR update WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD group_id ON group_member TYPE record<message_group> PERMISSIONS FULL;
+DEFINE FIELD user_id ON group_member TYPE record<user> PERMISSIONS FULL;
+DEFINE FIELD role ON group_member TYPE string DEFAULT 'member' ASSERT $value INSIDE ['owner', 'admin', 'member'] PERMISSIONS FULL;
+DEFINE FIELD joined_at ON group_member TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
+DEFINE FIELD last_read_at ON group_member TYPE option<datetime> PERMISSIONS FULL;
+DEFINE FIELD is_muted ON group_member TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD nickname ON group_member TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD created_at ON group_member TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
+DEFINE FIELD updated_at ON group_member TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
+
+DEFINE INDEX group_member_unique ON group_member FIELDS group_id, user_id UNIQUE;
+DEFINE INDEX group_member_user_idx ON group_member FIELDS user_id;
+DEFINE INDEX group_member_group_role_idx ON group_member FIELDS group_id, role;ant FIELDS conversation_id, user_id UNIQUE;
 DEFINE INDEX conversation_participant_user_idx ON conversation_participant FIELDS user_id;
 DEFINE INDEX conversation_participant_unread_idx ON conversation_participant FIELDS user_id, unread_count;
 

@@ -10,6 +10,7 @@ import { DataCacheManager } from './data-cache-manager';
 import { PerformanceMonitor } from './performance-monitor';
 import { CacheDebugger } from './cache-debugger';
 import { CacheLogger, LogCategory } from './cache-logger';
+import { ClaimTrackingSync } from './claim-tracking-sync';
 import type { Surreal } from 'surrealdb';
 import type { QueryParams, UnknownData } from '../types/surreal';
 
@@ -36,6 +37,7 @@ export class EnhancedQueryHandler {
   private performanceMonitor: PerformanceMonitor;
   private cacheDebugger: CacheDebugger;
   private cacheLogger: CacheLogger;
+  private claimTrackingSync: ClaimTrackingSync;
   private localDb: Surreal;
   private remoteDb?: Surreal;
 
@@ -70,11 +72,17 @@ export class EnhancedQueryHandler {
       broadcastToAllClients,
       this.remoteDb
     );
+    this.claimTrackingSync = new ClaimTrackingSync(
+      this.localDb,
+      this.dataCacheManager,
+      broadcastToAllClients,
+      this.remoteDb
+    );
 
     // 记录系统启动日志
     this.cacheLogger.info(LogCategory.SYSTEM, 'Enhanced query handler initialized', {
       hasRemoteDb: !!this.remoteDb,
-      components: ['QueryRouter', 'CacheExecutor', 'SubscriptionManager', 'PerformanceMonitor', 'CacheDebugger']
+      components: ['QueryRouter', 'CacheExecutor', 'SubscriptionManager', 'PerformanceMonitor', 'CacheDebugger', 'ClaimTrackingSync']
     }, 'EnhancedQueryHandler');
   }
 
@@ -211,6 +219,9 @@ export class EnhancedQueryHandler {
 
       // 广播数据变更事件
       await this.broadcastMutationEvent(analysis, result, userId, caseId);
+
+      // 处理债权追踪相关的数据变更
+      await this.handleClaimTrackingMutation(analysis, result, sql, params, userId);
 
       const executionTime = Date.now() - startTime;
       
@@ -674,5 +685,87 @@ export class EnhancedQueryHandler {
    */
   getSubscriptionManager(): SubscriptionManager {
     return this.subscriptionManager;
+  }
+
+  /**
+   * 处理债权追踪相关的数据变更
+   */
+  private async handleClaimTrackingMutation(
+    analysis: any,
+    result: UnknownData[],
+    sql: string,
+    params?: QueryParams,
+    userId?: string
+  ): Promise<void> {
+    try {
+      // 检查是否涉及债权追踪相关的表
+      const trackingTables = ['claim_operation_log', 'claim_version_history', 'claim_status_flow', 'claim_access_log'];
+      const affectedTrackingTables = analysis.tables.filter((table: string) => trackingTables.includes(table));
+
+      if (affectedTrackingTables.length === 0) return;
+
+      this.cacheLogger.info(LogCategory.SYSTEM, 'Processing claim tracking mutation', {
+        affectedTables: affectedTrackingTables,
+        queryType: analysis.queryType,
+        userId
+      }, 'EnhancedQueryHandler');
+
+      // 处理每个受影响的追踪表
+      for (const table of affectedTrackingTables) {
+        await this.processTrackingTableMutation(table, result, sql, params, userId);
+      }
+
+    } catch (error) {
+      this.cacheLogger.error(LogCategory.SYSTEM, 'Failed to handle claim tracking mutation', error as Error, {
+        affectedTables: analysis.tables,
+        userId
+      }, 'EnhancedQueryHandler');
+    }
+  }
+
+  /**
+   * 处理特定追踪表的数据变更
+   */
+  private async processTrackingTableMutation(
+    table: string,
+    result: UnknownData[],
+    sql: string,
+    params?: QueryParams,
+    userId?: string
+  ): Promise<void> {
+    try {
+      // 从结果中提取数据
+      const data = Array.isArray(result[0]) ? result[0][0] : result[0];
+      if (!data) return;
+
+      // 根据表类型调用相应的处理方法
+      switch (table) {
+        case 'claim_operation_log':
+          await this.claimTrackingSync.handleClaimOperationUpdate(data);
+          break;
+        case 'claim_status_flow':
+          await this.claimTrackingSync.handleStatusTransition(data);
+          break;
+        case 'claim_version_history':
+          await this.claimTrackingSync.handleVersionUpdate(data);
+          break;
+        case 'claim_access_log':
+          await this.claimTrackingSync.handleAccessLog(data);
+          break;
+      }
+
+    } catch (error) {
+      this.cacheLogger.error(LogCategory.SYSTEM, 'Failed to process tracking table mutation', error as Error, {
+        table,
+        userId
+      }, 'EnhancedQueryHandler');
+    }
+  }
+
+  /**
+   * 获取债权追踪同步管理器
+   */
+  getClaimTrackingSync(): ClaimTrackingSync {
+    return this.claimTrackingSync;
   }
 }

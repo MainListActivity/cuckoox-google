@@ -423,6 +423,331 @@ class BusinessNotificationService {
       throw error;
     }
   }
+
+  // ===== 债权追踪相关通知方法 =====
+
+  /**
+   * 发送债权操作通知
+   */
+  async notifyClaimOperation(
+    claimId: RecordId | string,
+    operationType: string,
+    operatorId: RecordId | string,
+    description?: string
+  ) {
+    try {
+      const client = await this.getClient();
+      
+      // 获取债权详细信息
+      const claim = await queryWithAuth<ClaimData[]>(client,
+        `SELECT id, claim_number, case_id, created_by, creditor_id FROM claim WHERE id = $claimId`,
+        { claimId }
+      );
+      
+      if (!Array.isArray(claim) || claim.length === 0) {
+        console.error(`Claim not found: ${claimId}`);
+        return;
+      }
+      const claimData = claim[0];
+      
+      // 获取操作人信息
+      const [operatorResult] = await client.query<Array<{ display_name: string }>[]>(
+        `SELECT display_name FROM user WHERE id = $operatorId`,
+        { operatorId }
+      );
+      const operatorName = operatorResult?.[0]?.display_name || '系统';
+      
+      let title = '';
+      let content = '';
+      let priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' = 'NORMAL';
+      
+      switch (operationType) {
+        case 'submit':
+          title = `债权申报提交通知 - ${claimData.claim_number}`;
+          content = `债权人提交了新的债权申报，请及时审核。\n\n债权编号：${claimData.claim_number}\n提交人：${operatorName}`;
+          priority = 'HIGH';
+          break;
+        case 'review':
+          title = `债权审核通知 - ${claimData.claim_number}`;
+          content = `债权申报已开始审核。\n\n债权编号：${claimData.claim_number}\n审核人：${operatorName}`;
+          break;
+        case 'supplement_request':
+          title = `补充材料要求 - ${claimData.claim_number}`;
+          content = `您的债权申报需要补充材料，请尽快完善。\n\n债权编号：${claimData.claim_number}\n审核人：${operatorName}`;
+          priority = 'HIGH';
+          break;
+        default:
+          title = `债权操作通知 - ${claimData.claim_number}`;
+          content = `债权申报发生了新的操作。\n\n债权编号：${claimData.claim_number}\n操作类型：${operationType}\n操作人：${operatorName}`;
+      }
+      
+      if (description) {
+        content += `\n\n备注：${description}`;
+      }
+      
+      // 根据操作类型确定通知对象
+      const recipients: (RecordId | string)[] = [];
+      
+      if (['submit'].includes(operationType)) {
+        // 提交类操作：通知案件负责人和审核人员
+        const [caseMembers] = await client.query<Array<{ user_id: RecordId | string }>[]>(
+          'SELECT out AS user_id FROM has_member WHERE in = $case_id',
+          { case_id: claimData.case_id }
+        );
+        if (caseMembers) {
+          recipients.push(...caseMembers.map(m => m.user_id));
+        }
+      } else if (['review', 'approve', 'reject', 'supplement_request'].includes(operationType)) {
+        // 审核类操作：通知债权人
+        recipients.push(claimData.created_by);
+      }
+      
+      // 发送通知
+      for (const recipientId of recipients) {
+        if (String(recipientId) !== String(operatorId)) { // 不通知操作者自己
+          await messageService.sendNotification({
+            type: 'BUSINESS_NOTIFICATION',
+            target_user_id: recipientId,
+            case_id: claimData.case_id,
+            title: title,
+            content: content,
+            priority: priority,
+            action_link: `/claims/${String(claimId).split(':')[1]}`,
+            sender_name: '债权管理系统'
+          });
+        }
+      }
+      
+      console.log(`Sent claim operation notification for operation ${operationType} on claim ${claimData.claim_number}`);
+    } catch (error) {
+      console.error('Error sending claim operation notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 发送债权状态变更通知
+   */
+  async notifyClaimStatusChange(
+    claimId: RecordId | string,
+    fromStatus: string,
+    toStatus: string,
+    operatorId: RecordId | string,
+    transitionNotes?: string
+  ) {
+    try {
+      const client = await this.getClient();
+      
+      // 获取债权详细信息
+      const claim = await queryWithAuth<ClaimData[]>(client,
+        `SELECT id, claim_number, case_id, created_by FROM claim WHERE id = $claimId`,
+        { claimId }
+      );
+      
+      if (!Array.isArray(claim) || claim.length === 0) {
+        console.error(`Claim not found: ${claimId}`);
+        return;
+      }
+      const claimData = claim[0];
+      
+      const title = `债权状态变更通知 - ${claimData.claim_number}`;
+      let content = `您的债权申报状态已更新：\n\n` +
+        `债权编号：${claimData.claim_number}\n` +
+        `原状态：${fromStatus}\n` +
+        `新状态：${toStatus}`;
+      
+      if (transitionNotes) {
+        content += `\n\n说明：${transitionNotes}`;
+      }
+      
+      let priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' = 'NORMAL';
+      
+      // 根据状态变更类型调整优先级
+      if (['审核通过', '审核不通过', '需要补充'].includes(toStatus)) {
+        priority = 'HIGH';
+      }
+      
+      // 通知债权人
+      await messageService.sendNotification({
+        type: 'BUSINESS_NOTIFICATION',
+        target_user_id: claimData.created_by,
+        case_id: claimData.case_id,
+        title: title,
+        content: content,
+        priority: priority,
+        action_link: `/my-claims/${String(claimId).split(':')[1]}`,
+        sender_name: '债权管理系统'
+      });
+      
+      console.log(`Sent claim status change notification from ${fromStatus} to ${toStatus} for claim ${claimData.claim_number}`);
+    } catch (error) {
+      console.error('Error sending claim status change notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 发送债权审核超时提醒
+   */
+  async notifyClaimReviewTimeout(
+    claimId: RecordId | string,
+    submissionDate: string,
+    timeoutDays: number = 7
+  ) {
+    try {
+      const client = await this.getClient();
+      
+      // 获取债权详细信息
+      const claim = await queryWithAuth<ClaimData[]>(client,
+        `SELECT id, claim_number, case_id, created_by FROM claim WHERE id = $claimId`,
+        { claimId }
+      );
+      
+      if (!Array.isArray(claim) || claim.length === 0) {
+        console.error(`Claim not found: ${claimId}`);
+        return;
+      }
+      const claimData = claim[0];
+      
+      const title = `债权审核超时提醒 - ${claimData.claim_number}`;
+      const content = `以下债权申报已超过${timeoutDays}天未审核，请尽快处理：\n\n` +
+        `债权编号：${claimData.claim_number}\n` +
+        `提交日期：${new Date(submissionDate).toLocaleDateString('zh-CN')}\n` +
+        `等待天数：${Math.ceil((Date.now() - new Date(submissionDate).getTime()) / (1000 * 60 * 60 * 24))}天`;
+      
+      // 获取案件成员（审核人员）
+      const [caseMembers] = await client.query<Array<{ user_id: RecordId | string }>[]>(
+        'SELECT out AS user_id FROM has_member WHERE in = $case_id',
+        { case_id: claimData.case_id }
+      );
+      
+      if (caseMembers && caseMembers.length > 0) {
+        for (const member of caseMembers) {
+          await messageService.sendNotification({
+            type: 'BUSINESS_NOTIFICATION',
+            target_user_id: member.user_id,
+            case_id: claimData.case_id,
+            title: title,
+            content: content,
+            priority: 'URGENT',
+            action_link: `/claims/${String(claimId).split(':')[1]}/review`,
+            sender_name: '债权管理系统'
+          });
+        }
+        
+        console.log(`Sent timeout reminder for claim ${claimData.claim_number} to ${caseMembers.length} reviewers`);
+      }
+    } catch (error) {
+      console.error('Error sending claim review timeout notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 发送债权版本变更通知
+   */
+  async notifyClaimVersionUpdate(
+    claimId: RecordId | string,
+    versionNumber: number,
+    changeSummary?: string,
+    changedBy?: RecordId | string
+  ) {
+    try {
+      const client = await this.getClient();
+      
+      // 获取债权详细信息
+      const claim = await queryWithAuth<ClaimData[]>(client,
+        `SELECT id, claim_number, case_id, created_by FROM claim WHERE id = $claimId`,
+        { claimId }
+      );
+      
+      if (!Array.isArray(claim) || claim.length === 0) {
+        console.error(`Claim not found: ${claimId}`);
+        return;
+      }
+      const claimData = claim[0];
+      
+      const title = `债权信息变更通知 - ${claimData.claim_number}`;
+      let content = `债权申报信息已更新：\n\n` +
+        `债权编号：${claimData.claim_number}\n` +
+        `版本号：V${versionNumber}`;
+      
+      if (changeSummary) {
+        content += `\n变更内容：${changeSummary}`;
+      }
+      
+      // 通知相关人员
+      const recipients: (RecordId | string)[] = [claimData.created_by];
+      
+      // 获取案件成员
+      const [caseMembers] = await client.query<Array<{ user_id: RecordId | string }>[]>(
+        'SELECT out AS user_id FROM has_member WHERE in = $case_id',
+        { case_id: claimData.case_id }
+      );
+      if (caseMembers) {
+        recipients.push(...caseMembers.map(m => m.user_id));
+      }
+      
+      // 发送通知（去重）
+      const uniqueRecipients = [...new Set(recipients.map(r => String(r)))];
+      for (const recipientId of uniqueRecipients) {
+        if (!changedBy || String(recipientId) !== String(changedBy)) { // 不通知操作者自己
+          await messageService.sendNotification({
+            type: 'BUSINESS_NOTIFICATION',
+            target_user_id: recipientId,
+            case_id: claimData.case_id,
+            title: title,
+            content: content,
+            priority: 'NORMAL',
+            action_link: `/claims/${String(claimId).split(':')[1]}`,
+            sender_name: '债权管理系统'
+          });
+        }
+      }
+      
+      console.log(`Sent claim version update notification for claim ${claimData.claim_number} version ${versionNumber}`);
+    } catch (error) {
+      console.error('Error sending claim version update notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 批量发送超时提醒
+   */
+  async sendBatchTimeoutReminders(timeoutDays: number = 7) {
+    try {
+      const client = await this.getClient();
+      
+      // 查找超时未审核的债权
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - timeoutDays);
+      
+      const [timeoutClaims] = await client.query<Array<{
+        id: RecordId | string;
+        claim_number: string;
+        created_at: string;
+      }>[]>(
+        `SELECT id, claim_number, created_at FROM claim 
+         WHERE review_status_id.name = '待审核' 
+         AND created_at < $cutoffDate`,
+        { cutoffDate: cutoffDate.toISOString() }
+      );
+      
+      if (timeoutClaims && timeoutClaims.length > 0) {
+        console.log(`Found ${timeoutClaims.length} timeout claims, sending reminders...`);
+        
+        for (const claim of timeoutClaims) {
+          await this.notifyClaimReviewTimeout(claim.id, claim.created_at, timeoutDays);
+        }
+        
+        console.log(`Sent timeout reminders for ${timeoutClaims.length} claims`);
+      }
+    } catch (error) {
+      console.error('Error sending batch timeout reminders:', error);
+      throw error;
+    }
+  }
 }
 
 export const businessNotificationService = new BusinessNotificationService();

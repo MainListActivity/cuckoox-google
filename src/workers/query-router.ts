@@ -136,6 +136,52 @@ export class QueryRouter {
         priority: 10
       });
     });
+
+    // 债权追踪相关表 - 中等到高变化频率，需要及时同步
+    const claimTrackingTables = [
+      {
+        table: 'claim_operation_log',
+        strategy: CacheStrategy.HYBRID,
+        consistency: ConsistencyLevel.STRONG,
+        ttl: 10 * 60 * 1000, // 10分钟
+        priority: 8
+      },
+      {
+        table: 'claim_version_history',
+        strategy: CacheStrategy.LOCAL_FIRST,
+        consistency: ConsistencyLevel.EVENTUAL,
+        ttl: 30 * 60 * 1000, // 30分钟
+        priority: 7
+      },
+      {
+        table: 'claim_status_flow',
+        strategy: CacheStrategy.HYBRID,
+        consistency: ConsistencyLevel.STRONG,
+        ttl: 15 * 60 * 1000, // 15分钟
+        priority: 8
+      },
+      {
+        table: 'claim_access_log',
+        strategy: CacheStrategy.REMOTE_FIRST,
+        consistency: ConsistencyLevel.STRONG,
+        ttl: 5 * 60 * 1000, // 5分钟
+        priority: 9
+      }
+    ];
+
+    claimTrackingTables.forEach(config => {
+      this.tableProfiles.set(config.table, {
+        table: config.table,
+        defaultStrategy: config.strategy,
+        consistencyRequirement: config.consistency,
+        avgQueryFrequency: 0.5,
+        dataVolatility: 'medium',
+        accessPattern: 'read_heavy',
+        maxCacheSize: 3000,
+        defaultTTL: config.ttl,
+        priority: config.priority
+      });
+    });
   }
 
   /**
