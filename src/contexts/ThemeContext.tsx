@@ -4,26 +4,11 @@ import { getAppTheme } from '@/src/theme'; // Corrected path
 import { grey } from '@mui/material/colors';
 
 // 1. Define Context Types
-export interface ThemeMeta {
-  name: string;
-}
-
-export interface CurrentTheme extends MuiTheme {
-  name: string;
-  colors?: Record<string, string>;
-}
-
 export interface ThemeContextType {
   themeMode: 'light' | 'dark';
   toggleThemeMode: () => void;
   /** MUI theme instance for the active mode */
   muiTheme: MuiTheme;
-  /** List of themes that can be selected in the UI */
-  availableThemes: ThemeMeta[];
-  /** Convenience object that merges name with muiTheme */
-  currentTheme: CurrentTheme;
-  /** Switch active theme by its name */
-  setCurrentThemeByName: (name: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -108,15 +93,6 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
   // Memoize the MUI theme object to prevent unnecessary re-renders
   const muiTheme = useMemo(() => getAppTheme(themeMode), [themeMode]);
 
-  const availableThemes: ThemeMeta[] = useMemo(() => [
-    { name: 'dark' },
-    { name: 'light' },
-  ], []);
-
-  const currentTheme: CurrentTheme = useMemo(() => (
-    { ...muiTheme, name: themeMode }
-  ) as CurrentTheme, [muiTheme, themeMode]);
-
   useEffect(() => {
     const theme = muiTheme as MuiTheme;
     updateCssVariables(theme);
@@ -130,20 +106,11 @@ export const CustomThemeProvider: React.FC<CustomThemeProviderProps> = ({ childr
     setThemeMode(prev => (prev === 'light' ? 'dark' : 'light'));
   };
 
-  const setCurrentThemeByName = (name: string) => {
-    if (name === 'light' || name === 'dark') {
-      setThemeMode(name);
-    }
-  };
-
   const contextValue: ThemeContextType = useMemo(() => ({
     themeMode,
     toggleThemeMode,
     muiTheme,
-    availableThemes,
-    currentTheme,
-    setCurrentThemeByName,
-  }), [themeMode, muiTheme, availableThemes, currentTheme]);
+  }), [themeMode, muiTheme]);
 
 
   return (

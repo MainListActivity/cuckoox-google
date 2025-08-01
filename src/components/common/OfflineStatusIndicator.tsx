@@ -96,6 +96,19 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
 
+  const handleSync = useCallback(async () => {
+    if (!onSync || !isOnline) return;
+    
+    setIsSyncing(true);
+    try {
+      await onSync();
+      setLastSyncTime(new Date());
+    } catch (error) {
+      console.error('Sync failed:', error);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [onSync, isOnline]);
   // 监听网络状态变化
   useEffect(() => {
     if (isOffline && !wasOffline) {
@@ -131,19 +144,6 @@ export const OfflineStatusIndicator: React.FC<OfflineStatusProps> = ({
     }
   };
 
-  const handleSync = useCallback(async () => {
-    if (!onSync || !isOnline) return;
-    
-    setIsSyncing(true);
-    try {
-      await onSync();
-      setLastSyncTime(new Date());
-    } catch (error) {
-      console.error('Sync failed:', error);
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [onSync, isOnline]);
 
   const getNetworkIcon = () => {
     if (isOffline) return mdiWifiOff;

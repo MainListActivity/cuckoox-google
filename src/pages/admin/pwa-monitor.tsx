@@ -32,7 +32,7 @@ const AdminPWAMonitorPage: React.FC = () => {
   const { user } = useAuth();
 
   // 检查管理员权限
-  const isAdmin = user?.github_id === '--admin--' || user?.is_admin;
+  const isAdmin = user?.github_id === '--admin--';
 
   if (!isAdmin) {
     return (
@@ -136,9 +136,9 @@ const AdminPWAMonitorPage: React.FC = () => {
         }}
       >
         <PWADashboard
-          vapidPublicKey={process.env.VITE_VAPID_PUBLIC_KEY || ''}
-          serverEndpoint={process.env.VITE_API_BASE_URL || ''}
-          userId={user?.id}
+          vapidPublicKey={import.meta.env.VITE_VAPID_PUBLIC_KEY || ''}
+          serverEndpoint={import.meta.env.VITE_API_BASE_URL || ''}
+          userId={user?.id?.toString()}
           showAdvancedSettings={true}
         />
       </Paper>
