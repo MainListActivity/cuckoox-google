@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render } from '../../utils/testUtils';
 import CaseMemberTab from '@/src/components/case/CaseMemberTab';
 import { AuthContext, AppUser, AuthContextType } from '@/src/contexts/AuthContext';
 import { CaseMember } from '@/src/types/caseMember';
@@ -97,11 +98,13 @@ const renderWithAuth = (ui: React.ReactElement, authContextValue: Partial<AuthCo
     ...authContextValue,
   };
   
-  return render(
-    <AuthContext.Provider value={fullAuthContextValue}> 
-      {ui}
-    </AuthContext.Provider>
-  );
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <AuthContext.Provider value={fullAuthContextValue}> 
+        {children}
+      </AuthContext.Provider>
+    )
+  });
 };
 
 describe('CaseMemberTab', () => {

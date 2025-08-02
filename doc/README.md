@@ -242,6 +242,26 @@
   - 代码风格指南
   - 最佳实践
 
+#### 测试规范
+- **[testing-guide.md](./testing-guide.md)** - 测试指南和最佳实践
+  - 单元测试、集成测试、E2E测试策略
+  - 测试配置优化和性能调优
+  - 测试文件优化历程和最佳实践
+  - Mock配置和测试工具使用
+  - 测试调试和故障排除指南
+
+- **[test-configuration-changelog.md](./test-configuration-changelog.md)** - 测试配置变更日志
+  - Vite测试配置优化记录
+  - 测试文件管理优化完成记录
+  - 性能改进效果和未来计划
+  - 开发者注意事项和CI/CD集成
+
+- **[../docs/test-migration-completion.md](../docs/test-migration-completion.md)** - 测试文件迁移完成报告
+  - 从修复版本到原始版本的完整迁移过程
+  - 技术改进和质量保证措施
+  - 规范建立和文档更新记录
+  - 项目测试架构成熟的重要里程碑
+
 ## 🚧 当前开发状态
 
 ### 增强缓存系统 - 核心架构重构进行中

@@ -28,6 +28,7 @@
 - **Unit Tests**: Vitest + Testing Library
 - **E2E Tests**: Playwright
 - **Test Environment**: jsdom
+- **单元测试**: 非必要不能新增重复的单元测试文件，请在原来的测试文件中修改，如果必须创建新的测试文件，需要确保测试用例的完善，在测试通过后需要覆盖原来的测试文件
 
 ## Common Commands
 

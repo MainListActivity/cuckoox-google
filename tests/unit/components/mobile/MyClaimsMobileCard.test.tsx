@@ -1,14 +1,10 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { render } from '../../utils/testUtils';
 import MyClaimsMobileCard, { Claim } from '@/src/components/mobile/MyClaimsMobileCard';
 
-const theme = createTheme();
-
-const MockWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <ThemeProvider theme={theme}>{children}</ThemeProvider>
-);
+// Remove MockWrapper as we now use testUtils
 
 describe('MyClaimsMobileCard', () => {
   const mockClaim: Claim = {
@@ -38,13 +34,11 @@ describe('MyClaimsMobileCard', () => {
 
   it('should render claim information correctly', () => {
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={mockClaim}
-          {...mockHandlers}
-          canEditClaim={true}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={mockClaim}
+        {...mockHandlers}
+        canEditClaim={true}
+      />
     );
 
     expect(screen.getByText('CL-2024-001')).toBeInTheDocument();
@@ -62,13 +56,11 @@ describe('MyClaimsMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={claimWithApproval}
-          {...mockHandlers}
-          canEditClaim={true}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={claimWithApproval}
+        {...mockHandlers}
+        canEditClaim={true}
+      />
     );
 
     // Need to expand to see approved amount
@@ -80,13 +72,11 @@ describe('MyClaimsMobileCard', () => {
 
   it('should handle view details action', () => {
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={mockClaim}
-          {...mockHandlers}
-          canEditClaim={true}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={mockClaim}
+        {...mockHandlers}
+        canEditClaim={true}
+      />
     );
 
     const viewButton = screen.getByTestId('view-details-button');
@@ -97,13 +87,11 @@ describe('MyClaimsMobileCard', () => {
 
   it('should handle withdraw action when allowed', () => {
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={mockClaim}
-          {...mockHandlers}
-          canEditClaim={true}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={mockClaim}
+        {...mockHandlers}
+        canEditClaim={true}
+      />
     );
 
     const withdrawButton = screen.getByTestId('withdraw-button');
@@ -119,13 +107,11 @@ describe('MyClaimsMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={claimNoWithdraw}
-          {...mockHandlers}
-          canEditClaim={true}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={claimNoWithdraw}
+        {...mockHandlers}
+        canEditClaim={true}
+      />
     );
 
     expect(screen.queryByTestId('withdraw-button')).not.toBeInTheDocument();
@@ -138,13 +124,11 @@ describe('MyClaimsMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={editableClaim}
-          {...mockHandlers}
-          canEditClaim={true}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={editableClaim}
+        {...mockHandlers}
+        canEditClaim={true}
+      />
     );
 
     const editButton = screen.getByTestId('edit-button');
@@ -155,13 +139,11 @@ describe('MyClaimsMobileCard', () => {
 
   it('should not show edit button when not allowed', () => {
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={mockClaim}
-          {...mockHandlers}
-          canEditClaim={false}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={mockClaim}
+        {...mockHandlers}
+        canEditClaim={false}
+      />
     );
 
     expect(screen.queryByTestId('edit-button')).not.toBeInTheDocument();
@@ -169,13 +151,11 @@ describe('MyClaimsMobileCard', () => {
 
   it('should expand and collapse details', async () => {
     render(
-      <MockWrapper>
-        <MyClaimsMobileCard
-          claim={mockClaim}
-          {...mockHandlers}
-          canEditClaim={true}
-        />
-      </MockWrapper>
+      <MyClaimsMobileCard
+        claim={mockClaim}
+        {...mockHandlers}
+        canEditClaim={true}
+      />
     );
 
     // Find expand button
@@ -214,13 +194,11 @@ describe('MyClaimsMobileCard', () => {
       };
 
       const { unmount } = render(
-        <MockWrapper>
-          <MyClaimsMobileCard
-            claim={claimWithStatus}
-            {...mockHandlers}
-            canEditClaim={true}
-          />
-        </MockWrapper>
+        <MyClaimsMobileCard
+          claim={claimWithStatus}
+          {...mockHandlers}
+          canEditClaim={true}
+        />
       );
 
       expect(screen.getByText(status)).toBeInTheDocument();

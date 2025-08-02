@@ -9,6 +9,7 @@ import {
   touchFriendlyIconButtonSx,
   touchFriendlyFabSx,
   touchGestureConfig,
+  mobileOptimizedTouchSx,
 } from '@/src/utils/touchTargetUtils';
 
 describe('touchTargetUtils', () => {
@@ -157,6 +158,25 @@ describe('touchTargetUtils', () => {
     it('应该处理极大尺寸', () => {
       expect(validateTouchTarget(1000, 1000)).toBe(true);
       expect(validateTouchTarget(44, 1000)).toBe(true);
+    });
+  });
+
+  describe('mobileOptimizedTouchSx', () => {
+    it('应该返回一个函数', () => {
+      expect(typeof mobileOptimizedTouchSx).toBe('function');
+    });
+
+    it('应该接受theme参数并返回样式对象', () => {
+      const mockTheme = {
+        breakpoints: {
+          down: (key: string) => `@media (max-width: ${key === 'md' ? '959px' : '600px'})`,
+          up: (key: string) => `@media (min-width: ${key === 'md' ? '960px' : '600px'})`,
+        },
+      } as any;
+
+      const result = mobileOptimizedTouchSx(mockTheme);
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('object');
     });
   });
 });

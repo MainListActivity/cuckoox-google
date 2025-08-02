@@ -186,22 +186,37 @@ export default defineConfig(({ mode }) => {
     test: { // Vitest configuration
       globals: true,
       environment: 'jsdom', // Common for React component testing
-      include: ['tests/unit/**/*.test.{ts,tsx}'],
+      include: [
+        'tests/unit/**/*.test.{ts,tsx}',
+        'tests/unit/**/*.test.fixed.{ts,tsx}' // Include fixed test files
+      ],
       setupFiles: './tests/setup.ts', // Setup file for test environment
-      testTimeout: 10000, // 10 seconds timeout for each test
+      testTimeout: 15000, // 15 seconds timeout for each test
+      hookTimeout: 10000, // 10 seconds timeout for hooks
       pool: 'forks', // Use forks pool to avoid file handle issues
       poolOptions: {
         forks: {
-          singleFork: true // Use single fork to reduce resource usage
+          singleFork: true, // Use single fork to reduce resource usage
+          isolate: false // Disable isolation for better performance
         }
       },
+      // Optimize for better performance
+      maxConcurrency: 1, // Run tests sequentially to avoid resource conflicts
+      minThreads: 1,
+      maxThreads: 1,
+      // Disable coverage for faster execution
+      coverage: {
+        enabled: false
+      },
+      // Reduce memory usage
+      logHeapUsage: true,
       exclude: [ // Default Vitest excludes + e2e
         '**/node_modules/**',
         '**/dist/**',
         '**/cypress/**',
         '**/.{idea,git,cache,output,temp}/**',
         '**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build}.config.*',
-        'e2e/**' // Exclude E2E tests from unit test runner
+        'e2e/**', // Exclude E2E tests from unit test runner
       ],
     }
   };

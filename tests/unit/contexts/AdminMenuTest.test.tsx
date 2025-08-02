@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { waitFor, act } from '@testing-library/react';
+import { render } from '../utils/testUtils';
 import { AuthProvider, useAuth } from '@/src/contexts/AuthContext';
 import { SurrealProvider } from '@/src/contexts/SurrealProvider';
 import { vi, describe, beforeEach, it, expect, afterEach } from 'vitest';
@@ -50,17 +50,9 @@ const TestComponent = ({ onMount }: { onMount?: (auth: any) => void }) => {
 };
 
 describe('Admin Menu Permissions', () => {
-  let queryClient: QueryClient;
-
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
   });
 
   afterEach(() => {
@@ -83,18 +75,9 @@ describe('Admin Menu Permissions', () => {
     let authContext: any;
 
     const { getByTestId } = render(
-      <QueryClientProvider client={queryClient}>
-        <SurrealProvider 
-          client={mockSurrealClient as any}
-          endpoint="http://localhost:8000"
-          namespace="test"
-          database="test"
-        >
-          <AuthProvider>
-            <TestComponent onMount={(auth) => { authContext = auth; }} />
-          </AuthProvider>
-        </SurrealProvider>
-      </QueryClientProvider>
+      <AuthProvider>
+        <TestComponent onMount={(auth) => { authContext = auth; }} />
+      </AuthProvider>
     );
 
     // Wait for initial render
@@ -177,18 +160,9 @@ describe('Admin Menu Permissions', () => {
     let authContext: any;
 
     const { getByTestId, queryByTestId } = render(
-      <QueryClientProvider client={queryClient}>
-        <SurrealProvider 
-          client={mockSurrealClient as any}
-          endpoint="http://localhost:8000"
-          namespace="test"
-          database="test"
-        >
-          <AuthProvider>
-            <TestComponent onMount={(auth) => { authContext = auth; }} />
-          </AuthProvider>
-        </SurrealProvider>
-      </QueryClientProvider>
+      <AuthProvider>
+        <TestComponent onMount={(auth) => { authContext = auth; }} />
+      </AuthProvider>
     );
 
     // Wait for initial render

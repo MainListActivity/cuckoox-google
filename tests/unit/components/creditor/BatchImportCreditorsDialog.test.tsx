@@ -1,8 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n'; // Adjust path
+import { render } from '../../utils/testUtils';
 import BatchImportCreditorsDialog from '@/src/pages/creditors/BatchImportCreditorsDialog'; // 修正路径
 
 const mockOnClose = vi.fn();
@@ -15,14 +14,12 @@ describe('BatchImportCreditorsDialog', () => {
 
   const renderDialog = (open = true, isImporting = false) => {
     render(
-      <I18nextProvider i18n={i18n}>
-        <BatchImportCreditorsDialog
-          open={open}
-          onClose={mockOnClose}
-          onImport={mockOnImport}
-          isImporting={isImporting}
-        />
-      </I18nextProvider>
+      <BatchImportCreditorsDialog
+        open={open}
+        onClose={mockOnClose}
+        onImport={mockOnImport}
+        isImporting={isImporting}
+      />
     );
   };
 

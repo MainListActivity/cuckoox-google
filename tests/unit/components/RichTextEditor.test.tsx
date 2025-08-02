@@ -1,8 +1,7 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ThemeProvider } from '@mui/material/styles';
-import { createTheme } from '@mui/material/styles';
+import { render } from '../utils/testUtils';
 import RichTextEditor from '@/src/components/RichTextEditor';
 import { Delta } from 'quill/core';
 import {mdiAccount, mdiCalendar, mdiFileDocument, mdiInformation} from "@mdi/js";
@@ -126,14 +125,7 @@ vi.mock('quill', () => {
   };
 });
 
-const renderWithTheme = (component: React.ReactElement) => {
-  const theme = createTheme();
-  return render(
-    <ThemeProvider theme={theme}>
-      {component}
-    </ThemeProvider>
-  );
-};
+// Remove renderWithTheme as we now use testUtils
 
 describe('RichTextEditor', () => {
   // 创建稳定的 props 引用，避免每次渲染时创建新对象
@@ -171,7 +163,7 @@ describe('RichTextEditor', () => {
   });
 
   it('renders editor with basic props', async () => {
-    renderWithTheme(
+    render(
       <RichTextEditor
         extensionAreaTabs={stableExtensionAreaTabs}
         showExtensionArea={false}
@@ -214,7 +206,7 @@ describe('RichTextEditor', () => {
       ]
     };
 
-    renderWithTheme(
+    render(
       <RichTextEditor
         defaultValue={stableMockDelta}
         onTextChange={mockOnTextChange}
@@ -231,7 +223,7 @@ describe('RichTextEditor', () => {
   });
 
   it('handles read-only mode', async () => {
-    renderWithTheme(
+    render(
       <RichTextEditor
         defaultValue={stableMockDelta}
         onTextChange={mockOnTextChange}
@@ -246,7 +238,7 @@ describe('RichTextEditor', () => {
   it('renders built-in save button when onSave is provided', async () => {
     const mockOnSave = vi.fn();
 
-    renderWithTheme(
+    render(
       <RichTextEditor
         defaultValue={stableMockDelta}
         onSave={mockOnSave}
@@ -262,7 +254,7 @@ describe('RichTextEditor', () => {
   it('shows saving status when isSaving is true', async () => {
     const mockOnSave = vi.fn();
 
-    renderWithTheme(
+    render(
       <RichTextEditor
         defaultValue={stableMockDelta}
         onSave={mockOnSave}
@@ -278,7 +270,7 @@ describe('RichTextEditor', () => {
   it('displays custom save button text', async () => {
     const mockOnSave = vi.fn();
 
-    renderWithTheme(
+    render(
       <RichTextEditor
         defaultValue={stableMockDelta}
         onSave={mockOnSave}

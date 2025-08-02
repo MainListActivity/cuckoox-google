@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { render } from '../../utils/testUtils';
 import CaseMobileCard, { CaseData, CaseAction } from '@/src/components/mobile/CaseMobileCard';
 
 // Mock useResponsiveLayout hook
@@ -15,11 +15,7 @@ vi.mock('@/src/hooks/useResponsiveLayout', () => ({
   }),
 }));
 
-const theme = createTheme();
-
-const MockWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <ThemeProvider theme={theme}>{children}</ThemeProvider>
-);
+// Remove MockWrapper as we now use testUtils
 
 describe('CaseMobileCard', () => {
   const mockCaseData: CaseData = {
@@ -57,9 +53,7 @@ describe('CaseMobileCard', () => {
 
   it('应该正确渲染案件基本信息', () => {
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} />
     );
 
     // 检查案件编号
@@ -79,7 +73,6 @@ describe('CaseMobileCard', () => {
     const { rerender } = render(
       <MockWrapper>
         <CaseMobileCard case={{ ...mockCaseData, status: '立案' }} />
-      </MockWrapper>
     );
 
     let statusChip = screen.getByText('立案');
@@ -89,7 +82,6 @@ describe('CaseMobileCard', () => {
     rerender(
       <MockWrapper>
         <CaseMobileCard case={{ ...mockCaseData, status: '进行中' }} />
-      </MockWrapper>
     );
     
     statusChip = screen.getByText('进行中');
@@ -98,9 +90,7 @@ describe('CaseMobileCard', () => {
 
   it('应该正确处理展开/收起功能', async () => {
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} expandable={true} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} expandable={true} />
     );
 
     // 初始状态下，详细信息应该是隐藏的
@@ -130,9 +120,7 @@ describe('CaseMobileCard', () => {
     const mockOnCardClick = vi.fn();
     
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} onCardClick={mockOnCardClick} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} onCardClick={mockOnCardClick} />
     );
 
     // 卡片不是一个button元素，而是一个可点击的Card，通过包含案件编号的元素来找到并点击
@@ -148,9 +136,7 @@ describe('CaseMobileCard', () => {
 
   it('应该正确处理操作按钮点击', () => {
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} actions={mockActions} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} actions={mockActions} />
     );
 
     const viewButton = screen.getByLabelText('查看');
@@ -161,9 +147,7 @@ describe('CaseMobileCard', () => {
 
   it('应该在紧凑模式下正确渲染', () => {
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} compact={true} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} compact={true} />
     );
 
     // 在紧凑模式下，某些信息可能不显示
@@ -173,9 +157,7 @@ describe('CaseMobileCard', () => {
 
   it('应该正确显示序号', () => {
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} showIndex={true} index={5} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} showIndex={true} index={5} />
     );
 
     expect(screen.getByText('#6')).toBeInTheDocument();
@@ -188,9 +170,7 @@ describe('CaseMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <CaseMobileCard case={todayCase} />
-      </MockWrapper>
+      <CaseMobileCard case={todayCase} />
     );
 
     expect(screen.getByText('今天')).toBeInTheDocument();
@@ -198,9 +178,7 @@ describe('CaseMobileCard', () => {
 
   it('应该在没有操作时隐藏操作区域', () => {
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} showActions={false} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} showActions={false} />
     );
 
     // 不应该显示操作按钮区域
@@ -217,9 +195,7 @@ describe('CaseMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <CaseMobileCard case={minimalCase} />
-      </MockWrapper>
+      <CaseMobileCard case={minimalCase} />
     );
 
     expect(screen.getByText(/BK-2025-789/)).toBeInTheDocument();
@@ -231,13 +207,11 @@ describe('CaseMobileCard', () => {
     const mockOnCardClick = vi.fn();
     
     render(
-      <MockWrapper>
-        <CaseMobileCard 
-          case={mockCaseData} 
-          actions={mockActions}
-          onCardClick={mockOnCardClick}
-        />
-      </MockWrapper>
+      <CaseMobileCard 
+        case={mockCaseData} 
+        actions={mockActions}
+        onCardClick={mockOnCardClick}
+      />
     );
 
     const actionButton = screen.getByLabelText('查看');
@@ -252,13 +226,11 @@ describe('CaseMobileCard', () => {
     const mockOnCardClick = vi.fn();
     
     render(
-      <MockWrapper>
-        <CaseMobileCard 
-          case={mockCaseData} 
-          onCardClick={mockOnCardClick}
-          expandable={true}
-        />
-      </MockWrapper>
+      <CaseMobileCard 
+        case={mockCaseData} 
+        onCardClick={mockOnCardClick}
+        expandable={true}
+      />
     );
 
     const expandButton = screen.getByLabelText(/展开详情/);
@@ -278,9 +250,7 @@ describe('CaseMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <CaseMobileCard case={mockCaseData} actions={[disabledAction]} />
-      </MockWrapper>
+      <CaseMobileCard case={mockCaseData} actions={[disabledAction]} />
     );
 
     const deleteButton = screen.getByLabelText('删除');
