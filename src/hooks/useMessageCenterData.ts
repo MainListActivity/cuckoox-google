@@ -127,20 +127,20 @@ export function useConversationsList(userId: RecordId | null): {
       // Simplified Live Query: Re-fetch all conversations on any change in 'conversation' or 'message' table.
       // This is not optimal but serves as a basic starting point.
       const setupLiveQueries = async () => {
-        const _liveConversationQuery = `LIVE SELECT * FROM conversation WHERE $userId IN participants;`; // Simplified
-        const liveMessageQuery = `LIVE SELECT * FROM message;`; // Very broad, just for triggering re-fetch
+        // FIXED: Remove parameters from LIVE SELECT (not supported by SurrealDB)
+        const liveMessageQuery = `LIVE SELECT * FROM message;`; // Monitor all message changes
 
         try {
           // Kill previous if any
           if (liveQueryIdRef.current) await client.kill(liveQueryIdRef.current);
 
-          // For simplicity, we'll use one live query ID, re-fetching on either event.
-          // A more robust solution might involve multiple live queries or more specific backend events.
-          const qid = (await client.query<[Uuid]>(liveMessageQuery, {userId}))[0]; // Or use conversation query
+          // Set up live query without parameters
+          const qid = (await client.query<[Uuid]>(liveMessageQuery))[0];
           if (qid) {
             liveQueryIdRef.current = qid;
-            client.subscribeLive(qid, () => {
-              // console.log('Live event received, re-fetching conversations for user:', userId);
+            client.subscribeLive(qid, (action, data) => {
+              // Re-fetch conversations on any message change
+              // This is broader than ideal but ensures we catch all relevant changes
               fetchConversations(userId);
             });
           }
@@ -242,22 +242,30 @@ export function useSystemNotifications(userId: RecordId | null, caseId?: RecordI
     if (userId && client && isConnected) {
       fetchNotifications(userId, caseId); // Pass caseId here
 
-      const liveQuery = `LIVE SELECT * FROM message WHERE 
-        (type = 'CASE_ROBOT_REMINDER' AND (case_id = $caseId OR $caseId = NONE)) OR 
-        (type = 'BUSINESS_NOTIFICATION' AND target_user_id = $userId);`;
+      // FIXED: LIVE SELECT without parameters (SurrealDB limitation)
+      const liveQuery = `LIVE SELECT * FROM message;`;
       
       const setupLiveQuery = async () => {
         try {
           if (liveQueryIdRef.current) await client.kill(liveQueryIdRef.current);
-          const params: { userId: RecordId; caseId?: RecordId | null } = { userId: userId };
-          if (caseId !== undefined) params.caseId = caseId;
 
-          const qid = (await client.query<[Uuid]>(liveQuery, params))[0];
+          const qid = (await client.query<[Uuid]>(liveQuery))[0];
           if (qid) {
             liveQueryIdRef.current = qid;
-            client.subscribeLive(qid, () => {
-              // console.log('Live event for notifications, re-fetching for user:', userId, 'case:', caseId);
-              fetchNotifications(userId, caseId); // Pass caseId here too
+            client.subscribeLive(qid, (action, data) => {
+              // Filter relevant message changes on client side
+              if (data && typeof data === 'object' && 'type' in data) {
+                const isRelevant = 
+                  (data.type === 'CASE_ROBOT_REMINDER' && (!caseId || data.case_id === caseId)) ||
+                  (data.type === 'BUSINESS_NOTIFICATION' && data.target_user_id === userId);
+                
+                if (isRelevant) {
+                  fetchNotifications(userId, caseId);
+                }
+              } else {
+                // Fallback: refresh on any message change to be safe
+                fetchNotifications(userId, caseId);
+              }
             });
           }
         } catch (e) {
