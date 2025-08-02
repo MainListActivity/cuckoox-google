@@ -67,15 +67,37 @@ export function useLiveMeetings(caseId: string | null): Meeting[] {
         setMeetingsList(sortMeetings(initialMeetings));
         setError(null);
 
-        // Step 2: Set up the live query
-        const liveQueryResult = await client.query<[Uuid]>('LIVE SELECT * FROM meeting WHERE case_id = $caseId;', { caseId });
+        // Step 2: Set up the live query for entire meeting table (no parameters allowed)
+        const liveQueryResult = await client.query<[Uuid]>('LIVE SELECT * FROM meeting;');
         if (!isMounted || !liveQueryResult || !liveQueryResult[0]) return;
         liveQueryId = liveQueryResult[0];
         if (!isMounted) return;
 
-        // Step 3: Subscribe to live events
+        // Step 3: Subscribe to live events with case filtering
         client.subscribeLive<Meeting>(liveQueryId, (action, result) => {
           if (!isMounted || result === "killed" || result === "disconnected") return;
+
+          // Filter for relevant case_id changes
+          if (result && typeof result === 'object' && 'case_id' in result) {
+            const recordCaseId = result.case_id;
+            if (recordCaseId?.toString() !== caseId && String(recordCaseId) !== String(caseId)) {
+              return; // Ignore changes for different cases
+            }
+          } else {
+            // If no case_id info, refresh data to be safe
+            const refetchData = async () => {
+              try {
+                const queryResult = await client.query<[Meeting[]]>('SELECT * FROM meeting WHERE case_id = $caseId', { caseId });
+                if (isMounted && queryResult && queryResult[0]) {
+                  setMeetingsList(sortMeetings(queryResult[0]));
+                }
+              } catch (err) {
+                console.error('Error refetching meetings data:', err);
+              }
+            };
+            refetchData();
+            return;
+          }
 
           setMeetingsList(prevMeetings => {
             const meetingIdStr = result.id.toString();
