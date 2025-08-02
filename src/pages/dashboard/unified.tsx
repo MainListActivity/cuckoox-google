@@ -154,43 +154,43 @@ const UnifiedDashboardPage: React.FC = () => {
   };
 
   // Live Data Hooks & Visual Cue States
-  const { data: liveTotalClaims, isLoading: isTotalClaimsLoading } = useLiveClaimCountForCase(selectedCaseId);
+  const { data: liveTotalClaims, isLoading: isTotalClaimsLoading } = useLiveClaimCountForCase(selectedCaseId ? String(selectedCaseId) : null);
   const [isTotalClaimsUpdating] = useIsUpdatingState(liveTotalClaims);
 
-  const { data: liveApprovedClaimsCount, isLoading: isApprovedClaimsCountLoading } = useLiveApprovedClaimsCount(selectedCaseId);
+  const { data: liveApprovedClaimsCount, isLoading: isApprovedClaimsCountLoading } = useLiveApprovedClaimsCount(selectedCaseId ? String(selectedCaseId) : null);
   const [isApprovedClaimsCountUpdating] = useIsUpdatingState(liveApprovedClaimsCount);
 
-  const { data: livePendingClaimsCount, isLoading: isPendingClaimsCountLoading } = useLivePendingClaimsCount(selectedCaseId);
+  const { data: livePendingClaimsCount, isLoading: isPendingClaimsCountLoading } = useLivePendingClaimsCount(selectedCaseId ? String(selectedCaseId) : null);
   const [isPendingClaimsCountUpdating] = useIsUpdatingState(livePendingClaimsCount);
 
-  const { data: liveUniqueClaimantsCount, isLoading: isUniqueClaimantsCountLoading } = useLiveUniqueClaimantsCount(selectedCaseId);
+  const { data: liveUniqueClaimantsCount, isLoading: isUniqueClaimantsCountLoading } = useLiveUniqueClaimantsCount(selectedCaseId ? String(selectedCaseId) : null);
   const [isUniqueClaimantsCountUpdating] = useIsUpdatingState(liveUniqueClaimantsCount);
 
-  const { data: liveTodaysSubmissionsCount, isLoading: isTodaysSubmissionsLoading } = useLiveTodaysSubmissionsCount(selectedCaseId);
+  const { data: liveTodaysSubmissionsCount, isLoading: isTodaysSubmissionsLoading } = useLiveTodaysSubmissionsCount(selectedCaseId ? String(selectedCaseId) : null);
   const [isTodaysSubmissionsUpdating] = useIsUpdatingState(liveTodaysSubmissionsCount);
 
-  const { data: liveTodaysReviewedClaimsCount, isLoading: isTodaysReviewedLoading } = useLiveTodaysReviewedClaimsCount(selectedCaseId);
+  const { data: liveTodaysReviewedClaimsCount, isLoading: isTodaysReviewedLoading } = useLiveTodaysReviewedClaimsCount(selectedCaseId ? String(selectedCaseId) : null);
   const [isTodaysReviewedUpdating] = useIsUpdatingState(liveTodaysReviewedClaimsCount);
   
-  const { data: liveTotalClaimAmount, isLoading: isTotalClaimAmountLoading } = useLiveTotalClaimAmount(selectedCaseId);
+  const { data: liveTotalClaimAmount, isLoading: isTotalClaimAmountLoading } = useLiveTotalClaimAmount(selectedCaseId ? String(selectedCaseId) : null);
   const [isTotalClaimAmountUpdating] = useIsUpdatingState(liveTotalClaimAmount);
 
-  const { data: liveApprovedClaimAmount, isLoading: isApprovedClaimAmountLoading } = useLiveApprovedClaimAmount(selectedCaseId);
+  const { data: liveApprovedClaimAmount, isLoading: isApprovedClaimAmountLoading } = useLiveApprovedClaimAmount(selectedCaseId ? String(selectedCaseId) : null);
   const [isApprovedClaimAmountUpdating] = useIsUpdatingState(liveApprovedClaimAmount);
 
-  const { data: livePendingClaimAmount, isLoading: isPendingClaimAmountLoading } = useLivePendingClaimAmount(selectedCaseId);
+  const { data: livePendingClaimAmount, isLoading: isPendingClaimAmountLoading } = useLivePendingClaimAmount(selectedCaseId ? String(selectedCaseId) : null);
   const [isPendingClaimAmountUpdating] = useIsUpdatingState(livePendingClaimAmount);
 
   // Live Data for Charts
-  const { data: liveClaimsByStatusData, isLoading: isClaimsByStatusLoading } = useLiveClaimsByStatusChartData(selectedCaseId);
-  const { data: liveUsersOnlineByRoleData, isLoading: isUsersOnlineLoading } = useLiveUsersOnlineByRoleChartData(selectedCaseId);
-  const { data: liveDailyClaimsTrendData, isLoading: isDailyClaimsTrendLoading } = useLiveDailyClaimsTrendChartData(selectedCaseId);
-  const { data: liveClaimsByNatureData, isLoading: isClaimsByNatureLoading } = useLiveClaimsByNatureChartData(selectedCaseId);
+  const { data: liveClaimsByStatusData, isLoading: isClaimsByStatusLoading } = useLiveClaimsByStatusChartData(selectedCaseId ? String(selectedCaseId) : null);
+  const { data: liveUsersOnlineByRoleData, isLoading: isUsersOnlineLoading } = useLiveUsersOnlineByRoleChartData(selectedCaseId ? String(selectedCaseId) : null);
+  const { data: liveDailyClaimsTrendData, isLoading: isDailyClaimsTrendLoading } = useLiveDailyClaimsTrendChartData(selectedCaseId ? String(selectedCaseId) : null);
+  const { data: liveClaimsByNatureData, isLoading: isClaimsByNatureLoading } = useLiveClaimsByNatureChartData(selectedCaseId ? String(selectedCaseId) : null);
 
   // Live Data for Dynamic Lists
   const listLimit = 5; 
-  const { data: liveRecentSubmissions, isLoading: isRecentSubmissionsLoading } = useLiveRecentSubmissions(selectedCaseId, listLimit);
-  const { data: liveRecentReviewActions, isLoading: isRecentReviewsLoading } = useLiveRecentReviewActions(selectedCaseId, listLimit);
+  const { data: liveRecentSubmissions, isLoading: isRecentSubmissionsLoading } = useLiveRecentSubmissions(selectedCaseId ? String(selectedCaseId) : null, listLimit);
+  const { data: liveRecentReviewActions, isLoading: isRecentReviewsLoading } = useLiveRecentReviewActions(selectedCaseId ? String(selectedCaseId) : null, listLimit);
 
   // Constants
   const appBarHeight = '64px';

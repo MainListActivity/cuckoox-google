@@ -3,6 +3,9 @@
 This is a **React 19 + TypeScript + SurrealDB** legal case management system for bankruptcy proceedings with PWA capabilities and a sophisticated Service Worker-based data caching architecture.
 
 Always respond in Chinese-simplified.
+
+执行任务过程中如果没有特别要求，则将结果文档按类别存储在 `docs/` 下的子目录中。
+
 ## Architecture Overview
 
 ### Service Worker-First Data Architecture

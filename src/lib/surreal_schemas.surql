@@ -902,6 +902,120 @@ FOR $op_id IN ['claim_list_view', 'claim_review'] {
     RELATE role:claim_reviewer->can_execute_operation->$operation SET can_execute = true, assigned_at = time::now();
 };
 
+-- ------------------------------
+-- WebRTC 相关表结构
+-- ------------------------------
+
+-- 通话记录表
+DEFINE TABLE call_record TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE $auth.id IN participants OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id,
+  FOR update WHERE $auth.id = initiator OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD call_id ON call_record TYPE string PERMISSIONS FULL;
+DEFINE FIELD call_type ON call_record TYPE string ASSERT $value INSIDE ['audio', 'video', 'conference'] PERMISSIONS FULL;
+DEFINE FIELD call_context ON call_record TYPE string ASSERT $value INSIDE ['private', 'group'] PERMISSIONS FULL;
+DEFINE FIELD group_id ON call_record TYPE option<record<message_group>> PERMISSIONS FULL;
+DEFINE FIELD initiator ON call_record TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD participants ON call_record TYPE array<record<user>> PERMISSIONS FULL;
+DEFINE FIELD start_time ON call_record TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
+DEFINE FIELD end_time ON call_record TYPE option<datetime> PERMISSIONS FULL;
+DEFINE FIELD duration ON call_record TYPE option<int> PERMISSIONS FULL;
+DEFINE FIELD status ON call_record TYPE string ASSERT $value INSIDE ['completed', 'missed', 'rejected', 'failed'] PERMISSIONS FULL;
+DEFINE FIELD recording_url ON call_record TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD case_id ON call_record TYPE option<record<case>> PERMISSIONS FULL;
+DEFINE FIELD quality_metrics ON call_record TYPE option<object> PERMISSIONS FULL;
+DEFINE FIELD created_at ON call_record TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD updated_at ON call_record TYPE datetime READONLY VALUE time::now() PERMISSIONS FULL;
+
+DEFINE INDEX call_record_call_id ON call_record FIELDS call_id UNIQUE;
+DEFINE INDEX call_record_initiator_idx ON call_record FIELDS initiator, start_time DESC;
+DEFINE INDEX call_record_group_idx ON call_record FIELDS group_id, start_time DESC;
+DEFINE INDEX call_record_case_idx ON call_record FIELDS case_id, start_time DESC;
+
+-- WebRTC信令消息表
+DEFINE TABLE webrtc_signal TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE from_user = $auth.id OR to_user = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id,
+  FOR update WHERE from_user = $auth.id,
+  FOR delete WHERE from_user = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD signal_type ON webrtc_signal TYPE string ASSERT $value INSIDE ['offer', 'answer', 'ice-candidate', 'call-request', 'call-accept', 'call-reject', 'call-end', 'conference-invite', 'group-call-request', 'group-call-join', 'group-call-leave'] PERMISSIONS FULL;
+DEFINE FIELD from_user ON webrtc_signal TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD to_user ON webrtc_signal TYPE option<record<user>> PERMISSIONS FULL;
+DEFINE FIELD group_id ON webrtc_signal TYPE option<record<message_group>> PERMISSIONS FULL;
+DEFINE FIELD signal_data ON webrtc_signal TYPE object PERMISSIONS FULL;
+DEFINE FIELD call_id ON webrtc_signal TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD created_at ON webrtc_signal TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD expires_at ON webrtc_signal TYPE datetime VALUE (time::now() + 1h) PERMISSIONS FULL;
+DEFINE FIELD processed ON webrtc_signal TYPE bool DEFAULT false PERMISSIONS FULL;
+
+DEFINE INDEX webrtc_signal_to_user_idx ON webrtc_signal FIELDS to_user, created_at DESC;
+DEFINE INDEX webrtc_signal_group_idx ON webrtc_signal FIELDS group_id, created_at DESC;
+DEFINE INDEX webrtc_signal_call_idx ON webrtc_signal FIELDS call_id;
+DEFINE INDEX webrtc_signal_expires_idx ON webrtc_signal FIELDS expires_at;
+
+-- 用户WebRTC状态表
+DEFINE TABLE user_webrtc_status TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create, update WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD user_id ON user_webrtc_status TYPE record<user> PERMISSIONS FULL;
+DEFINE FIELD is_online ON user_webrtc_status TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD supports_video ON user_webrtc_status TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD supports_audio ON user_webrtc_status TYPE bool DEFAULT false PERMISSIONS FULL;
+DEFINE FIELD current_call_id ON user_webrtc_status TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD last_seen ON user_webrtc_status TYPE datetime VALUE time::now() PERMISSIONS FULL;
+DEFINE FIELD device_info ON user_webrtc_status TYPE object PERMISSIONS FULL;
+DEFINE FIELD created_at ON user_webrtc_status TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD updated_at ON user_webrtc_status TYPE datetime READONLY VALUE time::now() PERMISSIONS FULL;
+
+DEFINE INDEX user_webrtc_status_user_idx ON user_webrtc_status FIELDS user_id UNIQUE;
+DEFINE INDEX user_webrtc_status_online_idx ON user_webrtc_status FIELDS is_online, last_seen DESC;
+
+-- 系统配置表
+DEFINE TABLE system_config TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select FULL,
+  FOR create, update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD config_key ON system_config TYPE string PERMISSIONS FULL;
+DEFINE FIELD config_value ON system_config TYPE object PERMISSIONS FULL;
+DEFINE FIELD description ON system_config TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD created_at ON system_config TYPE datetime DEFAULT time::now() READONLY PERMISSIONS FULL;
+DEFINE FIELD updated_at ON system_config TYPE datetime READONLY VALUE time::now() PERMISSIONS FULL;
+
+DEFINE INDEX system_config_key_idx ON system_config FIELDS config_key UNIQUE;
+
+-- 群组消息已读状态表  
+DEFINE TABLE message_read_status TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create, update WHERE user_id = $auth.id,
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD message_id ON message_read_status TYPE record<message> PERMISSIONS FULL;
+DEFINE FIELD user_id ON message_read_status TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD read_at ON message_read_status TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
+DEFINE FIELD group_id ON message_read_status TYPE record<message_group> PERMISSIONS FULL;
+
+DEFINE INDEX message_read_unique ON message_read_status FIELDS message_id, user_id UNIQUE;
+DEFINE INDEX message_read_group_user_idx ON message_read_status FIELDS group_id, user_id, read_at DESC;
+
+-- 群组最后已读位置表（性能优化）
+DEFINE TABLE group_read_position TYPE NORMAL SCHEMAFULL PERMISSIONS 
+  FOR select WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create, update WHERE user_id = $auth.id,
+  FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
+
+DEFINE FIELD group_id ON group_read_position TYPE record<message_group> PERMISSIONS FULL;
+DEFINE FIELD user_id ON group_read_position TYPE record<user> DEFAULT $auth.id PERMISSIONS FULL;
+DEFINE FIELD last_read_message_id ON group_read_position TYPE option<record<message>> PERMISSIONS FULL;
+DEFINE FIELD last_read_time ON group_read_position TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
+DEFINE FIELD unread_count ON group_read_position TYPE int DEFAULT 0 PERMISSIONS FULL;
+
+DEFINE INDEX group_read_position_unique ON group_read_position FIELDS group_id, user_id UNIQUE;
+
 -- 给admin用户赋予admin角色（全局角色）
 RELATE user:admin->has_role->role:admin SET assigned_at = time::now();
 
@@ -914,3 +1028,112 @@ INSERT INTO notification_rule (procedure_phase, trigger_condition, message_templ
 ('裁定重整', '裁定重整时间+6月-当前时间 <= 5天', '距离提交重整计划截止时间还有 {{days}} 天，超时未提交将宣告破产清算', 'DAILY', '10:00', true, time::now(), time::now()),
 ('延迟提交重整计划', '延迟提交重整计划时间+3月-当前时间 <= 5天', '距离提交重整计划截止时间还有 {{days}} 天，超时未提交将宣告破产清算', 'DAILY', '10:00', true, time::now(), time::now()),
 ('债权人第二次会议', '提交重整计划时间+15日-当前时间 <= 3天', '距离第二次债权人会议通知截止时间还有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now());
+
+-- ------------------------------
+-- WebRTC 配置数据初始化
+-- ------------------------------
+
+-- 插入WebRTC默认配置
+INSERT INTO system_config {
+  config_key: 'rtc',
+  config_value: {
+    // WebRTC服务器配置
+    stun_servers: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
+    
+    // P2P文件传输限制
+    max_file_size: 104857600, // 100MB
+    file_chunk_size: 65536,   // 64KB
+    supported_image_types: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'],
+    supported_video_types: ['mp4', 'webm', 'mov', 'avi', 'wmv'],
+    supported_audio_types: ['mp3', 'wav', 'ogg', 'aac', 'm4a'],
+    supported_document_types: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'],
+    
+    // 功能开关
+    enable_voice_call: true,
+    enable_video_call: true,
+    enable_screen_share: true,
+    enable_file_transfer: true,
+    enable_group_chat: true,
+    enable_group_call: true,
+    enable_message_recall: true,
+    enable_message_edit: true,
+    max_conference_participants: 8,
+    max_group_members: 100,
+    
+    // 超时设置
+    file_transfer_timeout: 300000, // 5分钟
+    call_timeout: 30000,          // 30秒
+    signal_expiry: 3600000,       // 信令1小时过期
+    message_recall_timeout: 120,  // 消息撤回时限(秒)
+    
+    // 网络质量阈值
+    network_quality_thresholds: {
+      excellent: { bandwidth: 2000, latency: 50, packet_loss: 0.1 },
+      good: { bandwidth: 1000, latency: 100, packet_loss: 0.5 },
+      fair: { bandwidth: 500, latency: 200, packet_loss: 1.0 },
+      poor: { bandwidth: 200, latency: 300, packet_loss: 2.0 }
+    },
+    
+    // 质量设置
+    video_quality: {
+      low: { width: 320, height: 240, framerate: 15, bitrate: 150000 },
+      medium: { width: 640, height: 480, framerate: 24, bitrate: 500000 },
+      high: { width: 1280, height: 720, framerate: 30, bitrate: 1000000 },
+      ultra: { width: 1920, height: 1080, framerate: 30, bitrate: 2000000 }
+    },
+    audio_quality: {
+      low: { bitrate: 32000, sampleRate: 16000 },
+      medium: { bitrate: 64000, sampleRate: 44100 },
+      high: { bitrate: 128000, sampleRate: 48000 }
+    },
+    
+    // 数据清理配置
+    cleanup_config: {
+      signal_retention_hours: 24,        // 信令消息保留24小时
+      call_record_retention_days: 365,   // 通话记录保留1年
+      file_cache_retention_days: 30,     // 文件缓存保留30天
+      read_status_retention_days: 90     // 已读状态保留90天
+    },
+    
+    // 性能优化配置
+    performance_config: {
+      message_batch_size: 50,            // 消息批量加载大小
+      max_concurrent_transfers: 3,       // 最大并发文件传输数
+      chunk_upload_concurrency: 2,      // 分片上传并发数
+      enable_message_pagination: true,  // 启用消息分页
+      cache_message_count: 100          // 本地缓存消息数量
+    }
+  },
+  description: 'WebRTC功能配置项',
+  created_at: time::now()
+};
+
+-- 添加数据清理定时任务配置
+INSERT INTO system_config {
+  config_key: 'cleanup_schedule',
+  config_value: {
+    enabled: true,
+    schedules: [
+      {
+        name: 'clean_expired_signals',
+        cron: '0 */6 * * *', // 每6小时清理一次过期信令
+        query: 'DELETE webrtc_signal WHERE expires_at < time::now()',
+        enabled: true
+      },
+      {
+        name: 'clean_old_call_records',
+        cron: '0 2 * * *', // 每天凌晨2点清理
+        query: 'DELETE call_record WHERE start_time < (time::now() - 365d)',
+        enabled: true
+      },
+      {
+        name: 'optimize_read_status',
+        cron: '0 3 * * 0', // 每周日凌晨3点优化已读状态
+        query: 'DELETE message_read_status WHERE read_at < (time::now() - 90d)',
+        enabled: true
+      }
+    ]
+  },
+  description: '数据清理定时任务配置',
+  created_at: time::now()
+};
