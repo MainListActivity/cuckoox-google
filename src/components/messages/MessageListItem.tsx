@@ -15,13 +15,15 @@ import {
 } from '@mui/material';
 // Import DisplayListItem and related types from where MessageCenterPage imports them
 // Assuming DisplayListItem is now part of types/message.ts or passed correctly
-import { DisplayListItem, ConversationSummary, Message, IMMessage, BusinessNotificationMessage } from '@/src/types/message'; 
+import { DisplayListItem, ConversationSummary, Message, IMMessage, BusinessNotificationMessage, ConferenceInviteMessage } from '@/src/types/message'; 
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'; 
 import GroupIcon from '@mui/icons-material/Group'; 
-import PersonIcon from '@mui/icons-material/Person'; 
+import PersonIcon from '@mui/icons-material/Person';
+import VideoCallIcon from '@mui/icons-material/VideoCall';
+import CallIcon from '@mui/icons-material/Call'; 
 import { mdiEmailOpenOutline } from '@mdi/js'; // Icon for Mark as Unread
 
 // Define the props for the component
@@ -96,6 +98,13 @@ const MessageListItem: React.FC<MessageListItemProps> = ({ itemData, onSelectIte
       if(bnMsg.severity === 'error') chipColor = 'error';
       else if(bnMsg.severity === 'success') chipColor = 'success';
       // info and warning are already handled or default
+    } else if (notification.type === 'CONFERENCE_INVITE') {
+      const confMsg = notification as ConferenceInviteMessage;
+      icon = confMsg.call_type === 'video' ? <VideoCallIcon /> : <CallIcon />;
+      chipLabel = '会议邀请';
+      chipColor = confMsg.invitation_status === 'pending' ? 'primary' : 
+                 confMsg.invitation_status === 'accepted' ? 'success' : 
+                 confMsg.invitation_status === 'declined' ? 'error' : 'default';
     } else { // Fallback for other Message types if any, or old IMs if they were passed
       icon = <ChatBubbleOutlineIcon />;
       chipLabel = notification.type; // Display the raw type
