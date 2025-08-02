@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import webrtcManager from '../../../src/services/webrtcManager';
 import rtcConfigManager from '../../../src/services/rtcConfigManager';
+import signalingService from '../../../src/services/signalingService';
 
 // Mock dependencies
 vi.mock('../../../src/services/rtcConfigManager');
 vi.mock('../../../src/services/signalingService');
 
 const mockRtcConfigManager = vi.mocked(rtcConfigManager);
+const mockSignalingService = vi.mocked(signalingService);
 
 // Mock WebRTC APIs
 const mockRTCPeerConnection = {
@@ -47,9 +49,23 @@ const mockMediaStream = {
   removeEventListener: vi.fn(),
 };
 
+const mockMediaDevices = {
+  getUserMedia: vi.fn(),
+  getDisplayMedia: vi.fn(),
+  enumerateDevices: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  ondevicechange: null,
+};
+
 // Mock global WebRTC APIs
 global.RTCPeerConnection = vi.fn(() => mockRTCPeerConnection) as any;
 global.MediaStream = vi.fn(() => mockMediaStream) as any;
+
+Object.defineProperty(navigator, 'mediaDevices', {
+  writable: true,
+  value: mockMediaDevices,
+});
 
 describe('WebRTCManager', () => {
   const mockConfig = {
@@ -275,63 +291,6 @@ describe('WebRTCManager', () => {
     });
   });
 });
-import rtcConfigManager from '../../../src/services/rtcConfigManager';
-
-// Mock dependencies
-vi.mock('../../../src/services/rtcConfigManager');
-vi.mock('../../../src/services/signalingService');
-
-const mockRtcConfigManager = vi.mocked(rtcConfigManager);
-
-// Mock WebRTC APIs
-const mockRTCPeerConnection = {
-  localDescription: null,
-  remoteDescription: null,
-  signalingState: 'stable',
-  iceConnectionState: 'new',
-  iceGatheringState: 'new',
-  connectionState: 'new',
-  createOffer: vi.fn(),
-  createAnswer: vi.fn(),
-  setLocalDescription: vi.fn(),
-  setRemoteDescription: vi.fn(),
-  addIceCandidate: vi.fn(),
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  close: vi.fn(),
-  createDataChannel: vi.fn(),
-  getStats: vi.fn(),
-  restartIce: vi.fn(),
-  addTrack: vi.fn(),
-  removeTrack: vi.fn(),
-  getSenders: vi.fn(() => []),
-  getReceivers: vi.fn(() => []),
-  getTransceivers: vi.fn(() => []),
-};
-
-const mockMediaStream = {
-  id: 'mock-stream-id',
-  active: true,
-  getTracks: vi.fn(() => []),
-  getAudioTracks: vi.fn(() => []),
-  getVideoTracks: vi.fn(() => []),
-  addTrack: vi.fn(),
-  removeTrack: vi.fn(),
-  clone: vi.fn(),
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-};
-
-// Mock global WebRTC APIs
-global.RTCPeerConnection = vi.fn(() => mockRTCPeerConnection) as any;
-global.MediaStream = vi.fn(() => mockMediaStream) as any;
-
-describe('WebRTCManager', () => {
-  const mockConfig = {
-    stun_servers: ['stun:stun.l.google.com:19302'],
-    max_file_size: 100 * 1024 * 1024,
-    file_chunk_size: 16384,
-    supported_image_types: ['image/jpeg', 'image/png'],
     supported_video_types: ['video/mp4', 'video/webm'],
     supported_audio_types: ['audio/mp3', 'audio/wav'],
     supported_document_types: ['application/pdf'],
