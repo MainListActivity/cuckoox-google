@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render } from '../utils/testUtils';
 import LoginPage from '@/src/pages/login';
 import { AppUser } from '@/src/contexts/AuthContext';
 import { RecordId } from 'surrealdb';

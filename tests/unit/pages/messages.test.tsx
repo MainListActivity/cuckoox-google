@@ -1,11 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { BrowserRouter } from 'react-router-dom';
-import { I18nextProvider } from 'react-i18next';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import i18n from '@/src/i18n';
-import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
+import { render } from '../utils/testUtils';
 import MessageCenterPage from '@/src/pages/messages';
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
@@ -211,20 +207,8 @@ describe('MessageCenterPage', () => {
     vi.clearAllTimers();
   });
 
-  const theme = createTheme();
-
   const renderComponent = () => {
-    render(
-      <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          <I18nextProvider i18n={i18n}>
-            <SnackbarProvider>
-              <MessageCenterPage />
-            </SnackbarProvider>
-          </I18nextProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    );
+    render(<MessageCenterPage />);
   };
 
   // Desktop Layout Tests

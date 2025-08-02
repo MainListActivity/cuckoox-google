@@ -1,6 +1,6 @@
-import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render } from '../utils/testUtils';
 import Turnstile from '@/src/components/Turnstile';
 
 // Mock window.turnstile
@@ -21,10 +21,10 @@ describe('Turnstile Component', () => {
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
-    
+
     // Mock window.turnstile
     (window as any).turnstile = mockTurnstile;
-    
+
     // Mock render to return a widget ID
     mockTurnstile.render.mockReturnValue('widget-123');
   });
@@ -37,7 +37,7 @@ describe('Turnstile Component', () => {
   it('renders loading state initially', () => {
     // Temporarily remove window.turnstile to test loading state
     delete (window as any).turnstile;
-    
+
     render(
       <Turnstile
         siteKey={testSiteKey}
@@ -239,13 +239,13 @@ describe('Turnstile Component', () => {
 
     // Get the Turnstile container div
     const turnstileContainer = container.querySelector('.MuiBox-root') as any;
-    
+
     // The reset method should be available
     expect(turnstileContainer.reset).toBeDefined();
-    
+
     // Call reset
     turnstileContainer.reset();
-    
+
     expect(mockTurnstile.reset).toHaveBeenCalledWith('widget-123');
   });
 }); 

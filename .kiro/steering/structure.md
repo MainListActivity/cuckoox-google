@@ -1,5 +1,7 @@
 # Project Structure
 
+执行任务过程中如果没有特别要求，则将结果文档按类别存储在 `docs/` 下的子目录中。
+
 ## Root Directory Organization
 
 ```

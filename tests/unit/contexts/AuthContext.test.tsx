@@ -1,6 +1,7 @@
 import React from 'react';
-import { render, act, waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
+import { render } from '../utils/testUtils';
 import { AuthProvider, useAuth, Case, Role, AppUser } from '@/src/contexts/AuthContext';
 import authService from '@/src/services/authService';
 import { menuService } from '@/src/services/menuService';

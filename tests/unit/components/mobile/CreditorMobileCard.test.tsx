@@ -1,14 +1,10 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { render } from '../../utils/testUtils';
 import CreditorMobileCard, { Creditor } from '@/src/components/mobile/CreditorMobileCard';
 
-const theme = createTheme();
-
-const MockWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <ThemeProvider theme={theme}>{children}</ThemeProvider>
-);
+// Remove MockWrapper as we now use testUtils
 
 describe('CreditorMobileCard', () => {
   const mockCreditor: Creditor = {
@@ -39,15 +35,13 @@ describe('CreditorMobileCard', () => {
 
   it('should render creditor information correctly', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     expect(screen.getByText('测试债权人')).toBeInTheDocument();
@@ -67,15 +61,13 @@ describe('CreditorMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={orgCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={orgCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     expect(screen.getByText('组织')).toBeInTheDocument();
@@ -84,15 +76,13 @@ describe('CreditorMobileCard', () => {
 
   it('should handle selection change', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     const checkbox = screen.getByRole('checkbox');
@@ -103,15 +93,13 @@ describe('CreditorMobileCard', () => {
 
   it('should show selected state correctly', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={true}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={true}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     const checkbox = screen.getByRole('checkbox');
@@ -120,15 +108,13 @@ describe('CreditorMobileCard', () => {
 
   it('should handle edit action when permitted', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={false}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={false}
+      />
     );
 
     const editButton = screen.getByLabelText('编辑债权人');
@@ -139,15 +125,13 @@ describe('CreditorMobileCard', () => {
 
   it('should not show edit button when not permitted', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={false}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={false}
+        canDelete={true}
+      />
     );
 
     expect(screen.queryByLabelText('编辑债权人')).not.toBeInTheDocument();
@@ -155,15 +139,13 @@ describe('CreditorMobileCard', () => {
 
   it('should handle delete action when permitted', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={false}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={false}
+        canDelete={true}
+      />
     );
 
     const deleteButton = screen.getByLabelText('删除债权人');
@@ -174,15 +156,13 @@ describe('CreditorMobileCard', () => {
 
   it('should not show delete button when not permitted', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={false}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={false}
+      />
     );
 
     expect(screen.queryByLabelText('删除债权人')).not.toBeInTheDocument();
@@ -190,15 +170,13 @@ describe('CreditorMobileCard', () => {
 
   it('should handle view claims action when creditor has claims', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     // Find the claims summary section and click on it
@@ -220,15 +198,13 @@ describe('CreditorMobileCard', () => {
     };
 
     const { container } = render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={creditorNoClaims}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={creditorNoClaims}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     const claimsCount = screen.getByText('0');
@@ -243,15 +219,13 @@ describe('CreditorMobileCard', () => {
 
   it('should expand and collapse details', () => {
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={mockCreditor}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={mockCreditor}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     // Find expand button
@@ -284,15 +258,13 @@ describe('CreditorMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={creditorLargeAmount}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={creditorLargeAmount}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     expect(screen.getByText('¥1,234,567.89')).toBeInTheDocument();
@@ -307,15 +279,13 @@ describe('CreditorMobileCard', () => {
     };
 
     render(
-      <MockWrapper>
-        <CreditorMobileCard
-          creditor={creditorMinimalInfo}
-          isSelected={false}
-          {...mockHandlers}
-          canEdit={true}
-          canDelete={true}
-        />
-      </MockWrapper>
+      <CreditorMobileCard
+        creditor={creditorMinimalInfo}
+        isSelected={false}
+        {...mockHandlers}
+        canEdit={true}
+        canDelete={true}
+      />
     );
 
     // Should still render main information

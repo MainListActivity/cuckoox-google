@@ -1,8 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n'; // Adjust path
+import { render } from '../../utils/testUtils';
 import PrintWaybillsDialog from '@/src/pages/creditors/PrintWaybillsDialog'; // 修正路径
 import { Creditor } from '@/src/pages/creditors/types'; // 修正路径和导入方式
 
@@ -33,15 +32,11 @@ describe('PrintWaybillsDialog', () => {
 
   const renderDialog = (open = true, selectedCreditors: Creditor[] = mockCreditors) => {
     render(
-      <I18nextProvider i18n={i18n}>
-        <div> {/* Use simple div instead of SnackbarProvider since it's mocked */}
-          <PrintWaybillsDialog
-            open={open}
-            onClose={mockOnClose}
-            selectedCreditors={selectedCreditors}
-          />
-        </div>
-      </I18nextProvider>
+      <PrintWaybillsDialog
+        open={open}
+        onClose={mockOnClose}
+        selectedCreditors={selectedCreditors}
+      />
     );
   };
 
