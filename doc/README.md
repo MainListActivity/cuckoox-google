@@ -170,12 +170,46 @@
   - 风险评估和成功指标
   - 项目时间线和资源分配
 
+#### 破产企业主体管理系统 🚧 **设计完成**
+- **[破产企业主体管理需求](../.kiro/specs/bankruptcy-entity-management/requirements.md)** - 破产企业主体管理系统需求分析
+  - 7个核心需求领域的详细分析
+  - PDF智能识别、企业主体创建、关联关系管理
+  - 冲突检测处理、身份验证、权限控制
+  - 识别准确性监控和用户体验优化
+
+- **[破产企业主体管理设计](../.kiro/specs/bankruptcy-entity-management/design.md)** - 企业主体管理技术架构设计
+  - 完整的数据库表结构和关系设计
+  - PDF解析服务扩展和智能识别流程
+  - 企业主体服务和前端组件架构
+  - 安全考虑和测试策略
+
+- **[破产企业主体管理任务](../.kiro/specs/bankruptcy-entity-management/tasks.md)** - 系统实施任务分解
+  - 18个主要任务模块的详细分解
+  - 数据库表结构、PDF解析服务、企业主体服务实现
+  - 前端组件、权限控制、错误处理
+  - 集成测试和端到端测试
+
+- **[破产企业主体管理架构](./bankruptcy-entity-management-architecture.md)** - 系统架构和技术实现指南
+  - 完整的系统架构设计和数据流分析
+  - 数据库设计和关系表结构详解
+  - 服务层和前端组件的详细架构
+  - 智能缓存集成和性能优化方案
+  - 安全架构、错误处理和测试策略
+
 #### 组件文档
 - **[components/](./components/)** - 组件文档目录
   - **[GlobalLoader.md](./components/GlobalLoader.md)** - 全局加载组件文档
     - 统一加载体验设计
     - 响应式和深色模式支持
     - API接口和使用示例
+
+#### PDF智能识别系统 🚧 **设计完成**
+- **[PDF智能识别使用指南](./pdf-intelligent-recognition-guide.md)** - PDF智能识别系统完整使用指南
+  - 系统概述和核心特性介绍
+  - 支持的文档类型和使用流程
+  - 技术架构和数据结构设计
+  - 准确性保障机制和性能监控
+  - 安全考虑和最佳实践指南
 
 #### 多租户系统
 - **多租户数据库隔离**: 已集成到增强缓存系统中
@@ -243,6 +277,8 @@
 4. 查看 [surrealdb-fulltext-search-guide.md](./surrealdb-fulltext-search-guide.md) 学习全文检索功能
 5. 了解 [claim-operation-tracking-architecture.md](./claim-operation-tracking-architecture.md) 债权操作追踪系统
 6. 查看 [WebRTC消息中心设计](../.kiro/specs/250806-webrtc-message-center/design.md) 了解WebRTC功能架构
+7. 了解 [破产企业主体管理设计](../.kiro/specs/bankruptcy-entity-management/design.md) 了解PDF智能识别和企业主体管理
+8. 查看 [破产企业主体管理架构](./bankruptcy-entity-management-architecture.md) 了解完整的技术架构和实现方案
 
 ### 开发者指南
 1. 查看 [规范.md](./规范.md) 了解开发规范

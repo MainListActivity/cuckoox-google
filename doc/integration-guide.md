@@ -412,6 +412,106 @@ const searchResult = await enhancedQueryHandler.handleQuery(`
 - **混合检索**: 结合本地缓存和远程数据库，提供最全面的搜索结果
 - **增量索引**: 实时更新本地全文检索索引，确保搜索结果的时效性
 
+## PDF智能识别系统集成
+
+### 缓存策略配置
+PDF智能识别系统的相关数据表需要特殊的缓存策略配置：
+
+```typescript
+// 破产企业主体表 - 读取频繁，变更较少
+await surrealService.sendMessage('configure_table_cache', {
+  table: 'bankruptcy_entity',
+  config: {
+    defaultStrategy: 'LOCAL_FIRST',
+    dataVolatility: 'low',
+    accessPattern: 'read_heavy',
+    defaultTTL: 2 * 60 * 60 * 1000 // 2小时
+  }
+});
+
+// 企业案件关联关系表 - 关系查询频繁
+await surrealService.sendMessage('configure_table_cache', {
+  table: 'has_bankruptcy_entity',
+  config: {
+    defaultStrategy: 'HYBRID',
+    dataVolatility: 'medium',
+    accessPattern: 'read_heavy',
+    defaultTTL: 60 * 60 * 1000 // 1小时
+  }
+});
+
+// 债权企业关联关系表 - 实时性要求较高
+await surrealService.sendMessage('configure_table_cache', {
+  table: 'claim_bankruptcy_entity',
+  config: {
+    defaultStrategy: 'REMOTE_FIRST',
+    dataVolatility: 'medium',
+    accessPattern: 'balanced',
+    defaultTTL: 30 * 60 * 1000 // 30分钟
+  }
+});
+```
+
+### 关系查询优化
+破产企业主体管理系统大量使用SurrealDB的关系查询语法，智能缓存系统对此进行了特殊优化：
+
+```typescript
+// 查询案件关联的企业 - 支持关系查询缓存
+const caseEntities = await enhancedQueryHandler.handleQuery(`
+  SELECT *, ->has_bankruptcy_entity.* as relation_info 
+  FROM case:${caseId}->has_bankruptcy_entity->bankruptcy_entity
+  ORDER BY relation_info.is_primary DESC, relation_info.associated_at ASC
+`, {}, userId, caseId);
+
+// 查询企业关联的债权 - 反向关系查询缓存
+const entityClaims = await enhancedQueryHandler.handleQuery(`
+  SELECT *, <-claim_bankruptcy_entity.* as relation_info 
+  FROM bankruptcy_entity:${entityId}<-claim_bankruptcy_entity<-claim
+  ORDER BY relation_info.associated_at DESC
+`, {}, userId, caseId);
+```
+
+### PDF识别结果缓存
+PDF识别结果会被缓存以提升重复访问的性能：
+
+```typescript
+// PDF识别结果缓存配置
+await surrealService.sendMessage('configure_table_cache', {
+  table: 'document',
+  config: {
+    defaultStrategy: 'LOCAL_FIRST',
+    dataVolatility: 'low',
+    accessPattern: 'read_heavy',
+    defaultTTL: 4 * 60 * 60 * 1000, // 4小时
+    // 特殊配置：PDF识别结果的缓存键包含文档内容哈希
+    customCacheKey: (query, vars) => {
+      if (vars?.document_id && vars?.recognition_data) {
+        return `pdf_recognition_${vars.document_id}_${vars.content_hash}`;
+      }
+      return null;
+    }
+  }
+});
+```
+
+### 企业信息全文检索集成
+破产企业主体管理系统集成了全文检索功能，支持企业信息的智能搜索：
+
+```typescript
+// 企业信息全文检索 - 支持缓存优化
+const searchEntities = await enhancedQueryHandler.handleQuery(`
+  SELECT *,
+    search::highlight("**", "**", 0) AS highlighted_name,
+    search::highlight("##", "##", 1) AS highlighted_address,
+    search::score(0) + search::score(1) AS relevance_score
+  FROM bankruptcy_entity
+  WHERE name @0@ $keyword
+     OR registered_address @1@ $keyword
+  ORDER BY relevance_score DESC
+  LIMIT 20
+`, { keyword: searchTerm }, userId, caseId);
+```
+
 ## 故障排除
 
 ### 常见问题
