@@ -10,14 +10,12 @@ import {
 vi.mock('@/src/contexts/SurrealProvider', () => surrealProviderMock);
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { render } from '../utils/testUtils';
 import CaseSelectionPage from '@/src/pages/select-case';
 import { AuthContext, AuthContextType, AppUser, Case } from '@/src/contexts/AuthContext';
 import { SurrealContextValue } from '@/src/contexts/SurrealProvider';
-import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 import { RecordId } from 'surrealdb';
 
 // Mock i18n
@@ -92,26 +90,9 @@ const mockCases: Case[] = [
 let mockAuthContextValue: AuthContextType;
 let mockSurrealContextValue: SurrealContextValue;
 
-// Create a default theme for testing
-const testTheme = createTheme();
-
 // Utility function to render with providers
 const renderWithProviders = (ui: React.ReactElement) => {
-  return render(
-    <ThemeProvider theme={testTheme}>
-      <MemoryRouter initialEntries={['/select-case']}>
-        <AuthContext.Provider value={mockAuthContextValue}>
-          <SnackbarProvider>
-            <Routes>
-              <Route path="/select-case" element={ui} />
-              <Route path="/login" element={<div>Login Page Mock</div>} />
-              <Route path="/dashboard" element={<div>Dashboard Page Mock</div>} />
-            </Routes>
-          </SnackbarProvider>
-        </AuthContext.Provider>
-      </MemoryRouter>
-    </ThemeProvider>
-  );
+  return render(ui, { initialEntries: ['/select-case'] });
 };
 
 describe('CaseSelectionPage', () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { render } from '../../utils/testUtils';
 import AudioCallInterface from '@/src/components/call/AudioCallInterface';
 import callManager, { CallSession, CallState, MediaState } from '@/src/services/callManager';
 
@@ -84,12 +84,7 @@ const createMockCallSession = (overrides: Partial<CallSession> = {}): CallSessio
 
 // Helper to render component with theme
 const renderWithTheme = (component: React.ReactElement) => {
-  const theme = createTheme();
-  return render(
-    <ThemeProvider theme={theme}>
-      {component}
-    </ThemeProvider>
-  );
+  return render(component);
 };
 
 describe('AudioCallInterface', () => {
@@ -430,11 +425,7 @@ describe('AudioCallInterface', () => {
       const connectedCallSession = createMockCallSession({ state: 'connected' });
       mockCallManager.getCallSession.mockReturnValue(connectedCallSession);
       
-      rerender(
-        <ThemeProvider theme={createTheme()}>
-          <AudioCallInterface {...defaultProps} />
-        </ThemeProvider>
-      );
+      rerender(<AudioCallInterface {...defaultProps} />);
 
       // Assert
       expect(screen.getByText('通话中')).toBeInTheDocument();

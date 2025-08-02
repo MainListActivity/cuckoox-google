@@ -485,39 +485,132 @@ git config --global http.proxy socks5://127.0.0.1:7891
 
 git config --global --unset http.proxy
 
-## E2E Testing
+## Testing
 
-This project uses [Playwright](https://playwright.dev/) for End-to-End (E2E) testing. Playwright allows for testing user interactions and application behavior in real browser environments.
+本项目采用多层次的测试策略，确保代码质量和系统稳定性。
 
-### Setup
+### 单元测试 (Unit Testing)
 
-If you haven't already, or if you're setting up the project on a new machine, you may need to install the browser binaries required by Playwright:
+使用 [Vitest](https://vitest.dev/) 和 [Testing Library](https://testing-library.com/) 进行单元测试。
+
+#### 测试配置优化
+
+项目已针对测试性能和稳定性进行了优化配置：
+
+- **测试超时**: 15秒测试超时，10秒钩子超时
+- **并发控制**: 单线程顺序执行，避免资源冲突
+- **内存优化**: 禁用覆盖率收集，启用堆内存使用日志
+- **文件隔离**: 使用forks池，禁用隔离以提升性能
+
+#### 运行单元测试
+
+```bash
+# 运行所有单元测试
+bun run test
+
+# 运行测试并显示UI界面
+bun run test:ui
+
+# 运行测试一次（CI模式）
+bun run test:run
+
+# 运行特定测试文件
+bun run test -- AddCaseMemberDialog
+```
+
+#### 测试文件结构
+
+```
+tests/
+├── unit/                   # 单元测试
+│   ├── components/         # 组件测试
+│   ├── contexts/           # Context测试
+│   ├── hooks/              # Hook测试
+│   ├── pages/              # 页面测试
+│   ├── services/           # 服务测试
+│   ├── utils/              # 工具函数测试
+│   └── workers/            # Worker测试
+├── integration/            # 集成测试
+├── setup.ts               # 测试环境配置
+└── jest-dom.d.ts          # Jest DOM类型定义
+```
+
+#### 测试文件管理
+
+项目遵循严格的测试文件管理规范：
+
+- **避免重复**: 非必要不创建重复的单元测试文件，优先在原有测试文件中修改
+- **质量保证**: 所有测试文件都经过完整的类型检查和功能验证
+- **持续改进**: 测试文件持续优化以适应代码变更和新功能需求
+
+**测试覆盖范围**:
+- `tests/unit/services/` - 业务服务层测试，包括CallManager、权限管理等
+- `tests/unit/pages/` - 页面组件测试，包括债权列表、案件管理等
+- `tests/unit/components/` - UI组件测试，包括对话框、表单等
+
+#### 测试环境配置
+
+测试环境已配置完整的Mock支持：
+
+- **浏览器API**: matchMedia、ResizeObserver、IntersectionObserver
+- **Service Worker**: 完整的Service Worker API模拟
+- **WebRTC**: RTCPeerConnection和相关API模拟
+- **文件API**: URL.createObjectURL和文件处理API
+- **React生态**: React Router、i18next、MUI组件
+
+#### 测试最佳实践
+
+1. **组件测试**: 使用Testing Library的用户中心测试方法
+2. **异步测试**: 使用waitFor处理异步操作
+3. **Mock管理**: 在beforeEach中清理Mock状态
+4. **类型安全**: 使用TypeScript确保测试代码的类型安全
+5. **测试隔离**: 每个测试独立运行，避免状态污染
+6. **测试文件管理**: 遵循单一测试文件原则，避免重复测试文件，在原有测试文件中进行修改和完善
+
+### E2E测试 (End-to-End Testing)
+
+使用 [Playwright](https://playwright.dev/) 进行端到端测试，模拟真实用户交互。
+
+#### 设置
+
+首次设置或在新机器上需要安装浏览器二进制文件：
 
 ```bash
 bunx playwright install --with-deps
 ```
-This command downloads the necessary browser executables (Chromium, Firefox, WebKit) and installs any required system dependencies.
 
-### Running E2E Tests
-
-To run the E2E tests, use the following bun script:
+#### 运行E2E测试
 
 ```bash
 bun run test:e2e
 ```
-(If using pbun, use `pbun test:e2e`)
 
-This command will execute all test files located in the `e2e/` directory using the Playwright test runner.
+#### 测试报告
 
-### Test Reports
-
-After the tests complete, an HTML report will be generated in the `playwright-report` directory. You can open the `index.html` file in this directory to view a detailed report of the test execution:
+测试完成后，HTML报告将生成在`playwright-report`目录：
 
 ```bash
 bunx playwright show-report
 ```
-Alternatively, you can directly open `playwright-report/index.html` in your browser.
 
-### Test Location
+#### 测试位置
 
-E2E test files are located in the `e2e/` directory at the root of the project. The example test file `e2e/auth.e2e.test.ts` demonstrates the basic structure of a Playwright test.
+E2E测试文件位于项目根目录的`e2e/`目录中。
+
+### 测试性能优化
+
+项目测试配置已针对性能进行优化：
+
+- **单线程执行**: 避免并发测试导致的资源竞争
+- **内存管理**: 启用堆内存使用监控，及时发现内存泄漏
+- **超时控制**: 合理的超时设置平衡测试稳定性和执行速度
+- **Mock优化**: 轻量级Mock实现，减少测试开销
+
+### 持续集成
+
+测试配置已优化用于CI/CD环境：
+
+- 禁用覆盖率收集以提升执行速度
+- 单fork模式减少资源使用
+- 合理的超时设置适应CI环境
+- 完整的Mock支持确保测试环境一致性

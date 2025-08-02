@@ -1,8 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n'; // Adjust path if your i18n setup is elsewhere
+import { render } from '../../utils/testUtils';
 import AddCreditorDialog from '@/src/pages/creditors/AddCreditorDialog'; // 修正路径
 import { Creditor, CreditorFormData } from '@/src/pages/creditors/types'; // 修正路径和导入方式
 
@@ -26,14 +25,12 @@ describe('AddCreditorDialog', () => {
 
   const renderDialog = (open = true, existingCreditor: Creditor | null = null) => {
     render(
-      <I18nextProvider i18n={i18n}>
-        <AddCreditorDialog
-          open={open}
-          onClose={mockOnClose}
-          onSave={mockOnSave}
-          existingCreditor={existingCreditor}
-        />
-      </I18nextProvider>
+      <AddCreditorDialog
+        open={open}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        existingCreditor={existingCreditor}
+      />
     );
   };
 
@@ -183,14 +180,12 @@ describe('AddCreditorDialog', () => {
   // 新增测试用例：测试表单重置功能
   it('resets form when switching between add and edit modes', async () => {
     const { rerender } = render(
-      <I18nextProvider i18n={i18n}>
-        <AddCreditorDialog
-          open={true}
-          onClose={mockOnClose}
-          onSave={mockOnSave}
-          existingCreditor={null}
-        />
-      </I18nextProvider>
+      <AddCreditorDialog
+        open={true}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        existingCreditor={null}
+      />
     );
 
     // Fill some data in add mode
@@ -199,14 +194,12 @@ describe('AddCreditorDialog', () => {
 
     // Switch to edit mode
     rerender(
-      <I18nextProvider i18n={i18n}>
-        <AddCreditorDialog
-          open={true}
-          onClose={mockOnClose}
-          onSave={mockOnSave}
-          existingCreditor={initialCreditor}
-        />
-      </I18nextProvider>
+      <AddCreditorDialog
+        open={true}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        existingCreditor={initialCreditor}
+      />
     );
 
     // Should show existing creditor data
