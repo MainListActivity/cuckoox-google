@@ -12,14 +12,9 @@ interface SumResult {
   [key: string]: number | null; // e.g., { total_amount: 12345 } or { total_amount: null }
 }
 
-// Generic type for distinct count results
-import { green, yellow, red as muiRed, blue, orange, purple, cyan, teal } from '@mui/material/colors'; // For chart colors
-
-interface DistinctCountResult {
-  distinct_claimants: number; // Assuming the alias is distinct_claimants
-}
-
 // --- Chart Data Point Types ---
+// Import colors for chart data
+import { green, yellow, red as muiRed, blue, orange, purple, cyan, teal } from '@mui/material/colors'; // For chart colors
 // Import grey for default colors
 import { grey } from '@mui/material/colors';
 
@@ -73,8 +68,8 @@ export interface RecentReviewActionItem {
 // Raw query result types for lists
 interface RawRecentSubmission {
   id: string;
-  claim_id: string;
-  claimant_name: string;
+  claim_number: string;
+  creditor_name: string;
   amount: number;
   created_at: string; // ISO string
   // type is hardcoded or derived in parser
@@ -82,11 +77,11 @@ interface RawRecentSubmission {
 
 interface RawRecentReviewAction {
   id: string;
-  claim_id: string;
+  claim_number: string;
   status: string; // To be mapped to 'action'
-  reviewed_by: string; // To be mapped to 'reviewerName'
+  reviewer_name: string; // To be mapped to 'reviewerName'
   approved_amount: number; // To be mapped to 'reviewedAmount'
-  reviewed_at: string; // ISO string, to be mapped to 'time'
+  review_time: string; // ISO string, to be mapped to 'time'
 }
 
 
@@ -179,7 +174,7 @@ function createLiveMetricHook<TResultType, TDataType>(
             liveQueryId = queryResponse[0];
             
             // Step 3: Subscribe to live events with case filtering
-            client.subscribeLive(liveQueryId, (_action, data) => {
+            client.subscribeLive(String(liveQueryId), (_action, data) => {
               if (!isMounted) return;
               
               // Filter for relevant case_id changes
@@ -209,7 +204,7 @@ function createLiveMetricHook<TResultType, TDataType>(
       return () => {
         isMounted = false;
         if (liveQueryId && client) {
-          client.kill(liveQueryId).catch(killError => {
+          client.kill(String(liveQueryId)).catch(killError => {
             console.error(`Error killing live query ${liveQueryId} for ${debugName}:`, killError);
           });
         }
@@ -232,7 +227,7 @@ export const useLiveClaimCountForCase = createLiveMetricHook<CountResult, number
 
 // 2. useLiveTotalClaimAmount
 export const useLiveTotalClaimAmount = createLiveMetricHook<SumResult, number>(
-  (_caseId, _limit) => 'SELECT math::sum(amount) AS total_amount FROM claim WHERE case_id = $caseId GROUP ALL;',
+  (_caseId, _limit) => 'SELECT math::sum(asserted_claim_details.total_asserted_amount) AS total_amount FROM claim WHERE case_id = $caseId GROUP ALL;',
   (result: SumResult[], _caseId, _limit) => (result && result.length > 0 && result[0].total_amount !== null ? result[0].total_amount : 0),
   0,
   "TotalClaimAmount"
@@ -240,7 +235,7 @@ export const useLiveTotalClaimAmount = createLiveMetricHook<SumResult, number>(
 
 // 3. useLiveApprovedClaimAmount
 export const useLiveApprovedClaimAmount = createLiveMetricHook<SumResult, number>(
-  (_caseId, _limit) => "SELECT math::sum(approved_amount) AS approved_total FROM claim WHERE case_id = $caseId AND status = '审核通过' GROUP ALL;",
+  (_caseId, _limit) => "SELECT math::sum(approved_claim_details.total_approved_amount) AS approved_total FROM claim WHERE case_id = $caseId AND status = '审核通过' GROUP ALL;",
   (result: SumResult[], _caseId, _limit) => (result && result.length > 0 && result[0].approved_total !== null ? result[0].approved_total : 0),
   0,
   "ApprovedClaimAmount"
@@ -248,7 +243,7 @@ export const useLiveApprovedClaimAmount = createLiveMetricHook<SumResult, number
 
 // 4. useLivePendingClaimAmount
 export const useLivePendingClaimAmount = createLiveMetricHook<SumResult, number>(
-  (_caseId, _limit) => "SELECT math::sum(amount) AS pending_total FROM claim WHERE case_id = $caseId AND status = '待审' GROUP ALL;",
+  (_caseId, _limit) => "SELECT math::sum(asserted_claim_details.total_asserted_amount) AS pending_total FROM claim WHERE case_id = $caseId AND status = '待审' GROUP ALL;",
   (result: SumResult[], _caseId, _limit) => (result && result.length > 0 && result[0].pending_total !== null ? result[0].pending_total : 0),
   0,
   "PendingClaimAmount"
@@ -271,9 +266,9 @@ export const useLivePendingClaimsCount = createLiveMetricHook<CountResult, numbe
 );
 
 // 7. useLiveUniqueClaimantsCount
-export const useLiveUniqueClaimantsCount = createLiveMetricHook<DistinctCountResult, number>(
-  (_caseId, _limit) => 'SELECT count(DISTINCT claimant_id) AS distinct_claimants FROM claim WHERE case_id = $caseId GROUP ALL;',
-  (result: DistinctCountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].distinct_claimants : 0),
+export const useLiveUniqueClaimantsCount = createLiveMetricHook<CountResult, number>(
+  (_caseId, _limit) => 'SELECT array::len(array::distinct(array::flatten([SELECT creditor_id FROM claim WHERE case_id = $caseId]))) AS count FROM [] GROUP ALL;',
+  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
   0,
   "UniqueClaimantsCount"
 );
@@ -296,7 +291,7 @@ export const useLiveTodaysReviewedClaimsCount = createLiveMetricHook<CountResult
   (_caseId, _limit) => `
     SELECT count() 
     FROM claim 
-    WHERE case_id = $caseId AND reviewed_at IS NOT NULL AND string::slice(reviewed_at, 0, 10) = string::slice(time::now(), 0, 10) 
+    WHERE case_id = $caseId AND review_time IS NOT NULL AND string::slice(review_time, 0, 10) = string::slice(time::now(), 0, 10) 
     GROUP ALL;
   `,
   (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
@@ -395,7 +390,7 @@ const natureColorMap: { [key: string]: string } = {
 const defaultNatureColor = grey[600];
 
 export const useLiveClaimsByNatureChartData = createLiveMetricHook<GroupedCountResult[], PieChartDataPoint[]>(
-  (_caseId, _limit) => "SELECT nature, count() AS count FROM claim WHERE case_id = $caseId GROUP BY nature;",
+  (_caseId, _limit) => "SELECT asserted_claim_details.nature AS nature, count() AS count FROM claim WHERE case_id = $caseId GROUP BY nature;",
   (results: GroupedCountResult[], _caseId, _limit) => {
     if (!results) return [];
     return results.map((item, index) => ({
@@ -415,7 +410,7 @@ export const useLiveClaimsByNatureChartData = createLiveMetricHook<GroupedCountR
 // 14. useLiveRecentSubmissions
 export const useLiveRecentSubmissions = createLiveMetricHook<RawRecentSubmission[], RecentSubmissionItem[]>(
   (_caseId, _limit) => `
-    SELECT id, claim_id, claimant_name, amount, created_at 
+    SELECT id, claim_number, creditor_id.name AS creditor_name, asserted_claim_details.total_asserted_amount AS amount, created_at 
     FROM claim 
     WHERE case_id = $caseId 
     ORDER BY created_at DESC 
@@ -425,8 +420,8 @@ export const useLiveRecentSubmissions = createLiveMetricHook<RawRecentSubmission
     if (!results) return [];
     return results.map(item => ({
       id: String(item.id),
-      claimId: item.claim_id || 'N/A',
-      claimantName: item.claimant_name || '未知申请人',
+      claimId: item.claim_number || 'N/A',
+      claimantName: item.creditor_name || '未知申请人',
       amount: item.amount || 0,
       time: item.created_at ? new Date(item.created_at).toLocaleTimeString() : 'N/A',
       type: 'New',
@@ -439,21 +434,21 @@ export const useLiveRecentSubmissions = createLiveMetricHook<RawRecentSubmission
 // 15. useLiveRecentReviewActions
 export const useLiveRecentReviewActions = createLiveMetricHook<RawRecentReviewAction[], RecentReviewActionItem[]>(
   (_caseId, _limit) => `
-    SELECT id, claim_id, status, reviewed_by, approved_amount, reviewed_at 
+    SELECT id, claim_number, status, reviewer_id.name AS reviewer_name, approved_claim_details.total_approved_amount AS approved_amount, review_time 
     FROM claim 
-    WHERE case_id = $caseId AND reviewed_at IS NOT NULL 
-    ORDER BY reviewed_at DESC 
+    WHERE case_id = $caseId AND review_time IS NOT NULL 
+    ORDER BY review_time DESC 
     LIMIT $limit;
   `,
   (results: RawRecentReviewAction[], _caseId, _limit) => {
     if (!results) return [];
     return results.map(item => ({
       id: String(item.id),
-      claimId: item.claim_id || 'N/A',
+      claimId: item.claim_number || 'N/A',
       action: item.status || '未知操作',
-      reviewerName: item.reviewed_by || '未知审核人',
+      reviewerName: item.reviewer_name || '未知审核人',
       reviewedAmount: item.approved_amount || 0,
-      time: item.reviewed_at ? new Date(item.reviewed_at).toLocaleTimeString() : 'N/A',
+      time: item.review_time ? new Date(item.review_time).toLocaleTimeString() : 'N/A',
     }));
   },
   [],
