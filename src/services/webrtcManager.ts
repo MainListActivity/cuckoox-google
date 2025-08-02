@@ -45,6 +45,30 @@ export interface MediaDeviceInfo {
   groupId: string;
 }
 
+// 摄像头信息
+export interface CameraInfo {
+  deviceId: string;
+  label: string;
+  facingMode?: 'user' | 'environment';
+  capabilities?: MediaTrackCapabilities;
+}
+
+// 视频质量设置
+export interface VideoQualitySettings {
+  width: number;
+  height: number;
+  frameRate: number;
+  bitrate?: number;
+}
+
+// 视频质量预设
+export const VIDEO_QUALITY_PRESETS: Record<string, VideoQualitySettings> = {
+  low: { width: 320, height: 240, frameRate: 15 },
+  medium: { width: 640, height: 480, frameRate: 30 },
+  high: { width: 1280, height: 720, frameRate: 30 },
+  ultra: { width: 1920, height: 1080, frameRate: 30 }
+};
+
 // 事件监听器类型
 export interface WebRTCEventListeners {
   onConnectionStateChange?: (userId: string, state: ConnectionState) => void;
@@ -495,6 +519,397 @@ class WebRTCManager {
     } catch (error) {
       console.error('WebRTCManager: 获取媒体设备失败', error);
       throw error;
+    }
+  }
+
+  /**
+   * 获取可用的摄像头设备
+   */
+  async getCameraDevices(): Promise<CameraInfo[]> {
+    try {
+      const devices = await this.getMediaDevices();
+      const cameras = devices.filter(device => device.kind === 'videoinput');
+      
+      const cameraInfos: CameraInfo[] = [];
+      
+      for (const camera of cameras) {
+        const cameraInfo: CameraInfo = {
+          deviceId: camera.deviceId,
+          label: camera.label || `摄像头 ${cameraInfos.length + 1}`
+        };
+
+        // 尝试检测摄像头朝向（前置或后置）
+        if (camera.label.toLowerCase().includes('front') || 
+            camera.label.toLowerCase().includes('user') ||
+            camera.label.toLowerCase().includes('面向用户')) {
+          cameraInfo.facingMode = 'user';
+        } else if (camera.label.toLowerCase().includes('back') || 
+                   camera.label.toLowerCase().includes('rear') ||
+                   camera.label.toLowerCase().includes('environment') ||
+                   camera.label.toLowerCase().includes('环境')) {
+          cameraInfo.facingMode = 'environment';
+        }
+
+        // 尝试获取摄像头能力
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: camera.deviceId } }
+          });
+          
+          const track = stream.getVideoTracks()[0];
+          if (track) {
+            cameraInfo.capabilities = track.getCapabilities();
+          }
+          
+          // 立即停止流以释放资源
+          stream.getTracks().forEach(track => track.stop());
+        } catch (error) {
+          console.warn(`无法获取摄像头能力 ${camera.deviceId}:`, error);
+        }
+
+        cameraInfos.push(cameraInfo);
+      }
+      
+      console.log('WebRTCManager: 获取摄像头设备成功', cameraInfos);
+      return cameraInfos;
+    } catch (error) {
+      console.error('WebRTCManager: 获取摄像头设备失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 切换摄像头
+   */
+  async switchCamera(userId: string, cameraId?: string): Promise<MediaStream> {
+    const connectionInfo = this.connections.get(userId);
+    if (!connectionInfo) {
+      throw new Error(`连接不存在: ${userId}`);
+    }
+
+    try {
+      // 获取当前视频轨道
+      const currentStream = connectionInfo.localStream;
+      if (!currentStream) {
+        throw new Error('没有活跃的媒体流');
+      }
+
+      const currentVideoTrack = currentStream.getVideoTracks()[0];
+      if (!currentVideoTrack) {
+        throw new Error('没有视频轨道');
+      }
+
+      // 如果没有指定摄像头ID，则自动选择下一个摄像头
+      let targetCameraId = cameraId;
+      if (!targetCameraId) {
+        const cameras = await this.getCameraDevices();
+        if (cameras.length <= 1) {
+          throw new Error('只有一个摄像头设备');
+        }
+
+        const currentCameraId = currentVideoTrack.getSettings().deviceId;
+        const currentIndex = cameras.findIndex(cam => cam.deviceId === currentCameraId);
+        const nextIndex = (currentIndex + 1) % cameras.length;
+        targetCameraId = cameras[nextIndex].deviceId;
+      }
+
+      // 获取新的视频流
+      const newVideoStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          deviceId: { exact: targetCameraId },
+          width: currentVideoTrack.getSettings().width,
+          height: currentVideoTrack.getSettings().height,
+          frameRate: currentVideoTrack.getSettings().frameRate
+        }
+      });
+
+      const newVideoTrack = newVideoStream.getVideoTracks()[0];
+      if (!newVideoTrack) {
+        throw new Error('无法获取新的视频轨道');
+      }
+
+      // 在连接中替换视频轨道
+      const senders = connectionInfo.connection.getSenders();
+      const videoSender = senders.find(sender => 
+        sender.track && sender.track.kind === 'video'
+      );
+
+      if (videoSender) {
+        await videoSender.replaceTrack(newVideoTrack);
+      }
+
+      // 更新本地流
+      const audioTracks = currentStream.getAudioTracks();
+      const newStream = new MediaStream([...audioTracks, newVideoTrack]);
+      
+      // 停止旧的视频轨道
+      currentVideoTrack.stop();
+      
+      // 更新连接信息
+      connectionInfo.localStream = newStream;
+      connectionInfo.lastActivity = Date.now();
+
+      console.log(`WebRTCManager: 已切换摄像头 ${userId} -> ${targetCameraId}`);
+      return newStream;
+
+    } catch (error) {
+      console.error(`WebRTCManager: 切换摄像头失败 ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 替换媒体轨道（用于屏幕共享等）
+   */
+  async replaceMediaTrack(userId: string, newTrack: MediaStreamTrack, trackKind: 'audio' | 'video'): Promise<void> {
+    const connectionInfo = this.connections.get(userId);
+    if (!connectionInfo) {
+      throw new Error(`连接不存在: ${userId}`);
+    }
+
+    try {
+      // 查找对应类型的发送器
+      const senders = connectionInfo.connection.getSenders();
+      const targetSender = senders.find(sender => 
+        sender.track && sender.track.kind === trackKind
+      );
+
+      if (!targetSender) {
+        throw new Error(`找不到${trackKind}轨道发送器`);
+      }
+
+      // 替换轨道
+      await targetSender.replaceTrack(newTrack);
+
+      // 更新本地流
+      if (connectionInfo.localStream) {
+        const tracks = connectionInfo.localStream.getTracks();
+        const oldTrack = tracks.find(track => track.kind === trackKind);
+        
+        if (oldTrack) {
+          oldTrack.stop();
+          connectionInfo.localStream.removeTrack(oldTrack);
+        }
+        
+        connectionInfo.localStream.addTrack(newTrack);
+      }
+
+      connectionInfo.lastActivity = Date.now();
+      console.log(`WebRTCManager: 已替换${trackKind}轨道 ${userId}`);
+
+    } catch (error) {
+      console.error(`WebRTCManager: 替换${trackKind}轨道失败 ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 开始屏幕共享
+   */
+  async startScreenShare(userId: string, includeAudio: boolean = true): Promise<MediaStream> {
+    try {
+      const screenStream = await this.getDisplayMedia({
+        video: true,
+        audio: includeAudio
+      });
+
+      const videoTrack = screenStream.getVideoTracks()[0];
+      if (videoTrack) {
+        // 替换视频轨道为屏幕共享
+        await this.replaceMediaTrack(userId, videoTrack, 'video');
+
+        // 监听屏幕共享结束事件
+        videoTrack.onended = () => {
+          console.log('WebRTCManager: 屏幕共享已结束');
+          // 这里可以触发回调通知上层组件
+        };
+      }
+
+      // 如果包含音频，也替换音频轨道
+      if (includeAudio) {
+        const audioTrack = screenStream.getAudioTracks()[0];
+        if (audioTrack) {
+          await this.replaceMediaTrack(userId, audioTrack, 'audio');
+        }
+      }
+
+      console.log(`WebRTCManager: 开始屏幕共享 ${userId}`);
+      return screenStream;
+
+    } catch (error) {
+      console.error(`WebRTCManager: 开始屏幕共享失败 ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 停止屏幕共享，恢复摄像头
+   */
+  async stopScreenShare(userId: string, cameraId?: string): Promise<MediaStream> {
+    try {
+      // 获取摄像头流
+      const constraints: MediaConstraints = {
+        video: cameraId ? { deviceId: { exact: cameraId } } : true,
+        audio: true
+      };
+
+      const cameraStream = await this.getUserMedia(constraints);
+      
+      // 替换视频轨道
+      const videoTrack = cameraStream.getVideoTracks()[0];
+      if (videoTrack) {
+        await this.replaceMediaTrack(userId, videoTrack, 'video');
+      }
+
+      // 替换音频轨道
+      const audioTrack = cameraStream.getAudioTracks()[0];
+      if (audioTrack) {
+        await this.replaceMediaTrack(userId, audioTrack, 'audio');
+      }
+
+      console.log(`WebRTCManager: 停止屏幕共享 ${userId}`);
+      return cameraStream;
+
+    } catch (error) {
+      console.error(`WebRTCManager: 停止屏幕共享失败 ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 调整视频质量
+   */
+  async adjustVideoQuality(userId: string, quality: keyof typeof VIDEO_QUALITY_PRESETS | VideoQualitySettings): Promise<void> {
+    const connectionInfo = this.connections.get(userId);
+    if (!connectionInfo?.localStream) {
+      throw new Error(`连接或媒体流不存在: ${userId}`);
+    }
+
+    try {
+      const settings = typeof quality === 'string' ? VIDEO_QUALITY_PRESETS[quality] : quality;
+      if (!settings) {
+        throw new Error(`无效的视频质量设置: ${quality}`);
+      }
+
+      const videoTrack = connectionInfo.localStream.getVideoTracks()[0];
+      if (!videoTrack) {
+        throw new Error('没有视频轨道');
+      }
+
+      // 应用新的约束
+      await videoTrack.applyConstraints({
+        width: { exact: settings.width },
+        height: { exact: settings.height },
+        frameRate: { exact: settings.frameRate }
+      });
+
+      connectionInfo.lastActivity = Date.now();
+      console.log(`WebRTCManager: 调整视频质量 ${userId}`, settings);
+
+    } catch (error) {
+      console.error(`WebRTCManager: 调整视频质量失败 ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 获取媒体流统计信息
+   */
+  async getStreamStats(userId: string): Promise<RTCStatsReport | null> {
+    const connectionInfo = this.connections.get(userId);
+    if (!connectionInfo) {
+      return null;
+    }
+
+    try {
+      const stats = await connectionInfo.connection.getStats();
+      return stats;
+    } catch (error) {
+      console.error(`WebRTCManager: 获取流统计信息失败 ${userId}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * 检测网络质量
+   */
+  async detectNetworkQuality(userId: string): Promise<'excellent' | 'good' | 'fair' | 'poor' | 'unknown'> {
+    try {
+      const stats = await this.getStreamStats(userId);
+      if (!stats) {
+        return 'unknown';
+      }
+
+      let totalPacketsLost = 0;
+      let totalPacketsSent = 0;
+      let averageRtt = 0;
+      let rttCount = 0;
+
+      stats.forEach((report) => {
+        if (report.type === 'outbound-rtp') {
+          totalPacketsLost += report.packetsLost || 0;
+          totalPacketsSent += report.packetsSent || 0;
+        } else if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          if (report.currentRoundTripTime) {
+            averageRtt += report.currentRoundTripTime;
+            rttCount++;
+          }
+        }
+      });
+
+      const packetLossRate = totalPacketsSent > 0 ? totalPacketsLost / totalPacketsSent : 0;
+      const avgRtt = rttCount > 0 ? averageRtt / rttCount : 0;
+
+      // 根据丢包率和延迟判断网络质量
+      if (packetLossRate < 0.01 && avgRtt < 0.1) {
+        return 'excellent';
+      } else if (packetLossRate < 0.03 && avgRtt < 0.2) {
+        return 'good';
+      } else if (packetLossRate < 0.05 && avgRtt < 0.3) {
+        return 'fair';
+      } else if (packetLossRate < 0.1 && avgRtt < 0.5) {
+        return 'poor';
+      }
+
+      return 'poor';
+
+    } catch (error) {
+      console.error(`WebRTCManager: 检测网络质量失败 ${userId}`, error);
+      return 'unknown';
+    }
+  }
+
+  /**
+   * 自动调整视频质量基于网络状况
+   */
+  async autoAdjustVideoQuality(userId: string): Promise<void> {
+    try {
+      const networkQuality = await this.detectNetworkQuality(userId);
+      
+      let targetQuality: keyof typeof VIDEO_QUALITY_PRESETS;
+      
+      switch (networkQuality) {
+        case 'excellent':
+          targetQuality = 'ultra';
+          break;
+        case 'good':
+          targetQuality = 'high';
+          break;
+        case 'fair':
+          targetQuality = 'medium';
+          break;
+        case 'poor':
+          targetQuality = 'low';
+          break;
+        default:
+          targetQuality = 'medium';
+      }
+
+      await this.adjustVideoQuality(userId, targetQuality);
+      console.log(`WebRTCManager: 自动调整视频质量 ${userId} -> ${targetQuality} (网络质量: ${networkQuality})`);
+
+    } catch (error) {
+      console.error(`WebRTCManager: 自动调整视频质量失败 ${userId}`, error);
     }
   }
 

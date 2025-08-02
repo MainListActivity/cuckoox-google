@@ -43,8 +43,44 @@ export interface BusinessNotificationMessage extends BaseMessage {
   action_link?: string;
 }
 
+// Specific type for Conference/Meeting Invitation Messages
+export interface ConferenceInviteMessage extends BaseMessage {
+  type: 'CONFERENCE_INVITE';
+  sender_id: RecordId | string; // User who sent the invitation
+  sender_name: string; // Name of the person sending the invitation
+  target_user_ids: (RecordId | string)[]; // Users being invited
+  conference_id: string; // Unique conference identifier
+  conference_title: string; // Meeting title/subject
+  conference_description?: string; // Optional meeting description
+  call_type: 'audio' | 'video'; // Type of conference call
+  scheduled_start_time?: string; // ISO datetime string for scheduled meetings
+  scheduled_duration?: number; // Duration in minutes for scheduled meetings
+  is_immediate: boolean; // Whether it's an immediate call or scheduled
+  case_id?: RecordId | string; // Optional link to related case
+  group_id?: RecordId | string; // Optional link to related group
+  invitation_status: 'pending' | 'accepted' | 'declined' | 'expired' | 'cancelled';
+  expires_at?: string; // ISO datetime string when invitation expires
+  metadata?: {
+    max_participants?: number;
+    require_audio?: boolean;
+    require_video?: boolean;
+    allow_screen_share?: boolean;
+    record_meeting?: boolean;
+    meeting_password?: string;
+  };
+}
+
+// Conference invitation response data
+export interface ConferenceInviteResponse {
+  message_id: RecordId | string; // Original invitation message ID
+  conference_id: string; // Conference identifier
+  response: 'accepted' | 'declined';
+  response_message?: string; // Optional message from responder
+  responded_at: string; // ISO datetime string
+}
+
 // Union type for any kind of message
-export type Message = IMMessage | CaseRobotReminderMessage | BusinessNotificationMessage;
+export type Message = IMMessage | CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage;
 
 // Interface for an IM Conversation summary (for the left panel list)
 export interface ConversationSummary {

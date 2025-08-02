@@ -63,12 +63,14 @@ import MessageListItem from '@/src/components/messages/MessageListItem';
 import ChatBubble, { ChatBubbleProps } from '@/src/components/messages/ChatBubble';
 import ChatInput from '@/src/components/messages/ChatInput';
 import NotificationCard from '@/src/components/messages/NotificationCard';
+import ConferenceInviteCard from '@/src/components/messages/ConferenceInviteCard';
 import CreateConversationDialog from '@/src/components/messages/CreateConversationDialog';
 import {
   Message as MessageType,
   IMMessage,
   CaseRobotReminderMessage,
   BusinessNotificationMessage,
+  ConferenceInviteMessage,
   ConversationSummary
 } from '@/src/types/message';
 import {
@@ -88,6 +90,7 @@ import { idToStr } from '@/src/utils/id';
 const messageTypes = {
   BUSINESS_NOTIFICATION: { label: '系统通知', icon: <Notifications />, color: 'info' },
   CASE_ROBOT_REMINDER: { label: '案件提醒', icon: <SmartToy />, color: 'warning' },
+  CONFERENCE_INVITE: { label: '会议邀请', icon: <Notifications />, color: 'primary' },
   IM: { label: '用户消息', icon: <Person />, color: 'primary' },
   GROUP_IM: { label: '群组消息', icon: <Group />, color: 'secondary' },
 } as const;
@@ -159,8 +162,8 @@ const MessageCenterPage: React.FC = () => {
   const systemMessages = useMemo(
     () =>
       notifications.filter(
-        (n): n is CaseRobotReminderMessage | BusinessNotificationMessage =>
-          n.type === 'BUSINESS_NOTIFICATION' || n.type === 'CASE_ROBOT_REMINDER'
+        (n): n is CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage =>
+          n.type === 'BUSINESS_NOTIFICATION' || n.type === 'CASE_ROBOT_REMINDER' || n.type === 'CONFERENCE_INVITE'
       ),
     [notifications]
   );
@@ -180,7 +183,7 @@ const MessageCenterPage: React.FC = () => {
       is_read: c.unread_count === 0
     }));
 
-    const notifItems: DisplayListItem[] = notifications.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) => ({
+    const notifItems: DisplayListItem[] = notifications.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) => ({
       ...n,
       itemType: 'notification' as const
     }));
@@ -236,8 +239,8 @@ const MessageCenterPage: React.FC = () => {
     if (item.itemType === 'notification' && !item.is_read && client) {
       try {
         // Optimistic UI update
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
             n.id === item.id ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n
           )
         );
@@ -250,9 +253,9 @@ const MessageCenterPage: React.FC = () => {
         console.error("Error marking notification as read:", error);
         showError('标记通知为已读失败');
         // Revert optimistic update on error
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
-            n.id === item.id ? { ...n, is_read: false, updated_at: (item as BusinessNotificationMessage | CaseRobotReminderMessage).updated_at } : n
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
+            n.id === item.id ? { ...n, is_read: false, updated_at: (item as BusinessNotificationMessage | CaseRobotReminderMessage | ConferenceInviteMessage).updated_at } : n
           )
         );
       }
@@ -269,8 +272,8 @@ const MessageCenterPage: React.FC = () => {
 
       // Optimistic UI update
       if ('is_read' in item) {
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
             n.id === selectedMessageId ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n
           )
         );
@@ -299,8 +302,8 @@ const MessageCenterPage: React.FC = () => {
 
       // Optimistic UI update
       if ('is_read' in item) {
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage) =>
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
+          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
             n.id === selectedMessageId ? { ...n, is_read: false, updated_at: new Date().toISOString() } : n
           )
         );
@@ -328,8 +331,8 @@ const MessageCenterPage: React.FC = () => {
       if (!item) return;
 
       // Optimistic UI update
-      if ('type' in item && (item.type === 'BUSINESS_NOTIFICATION' || item.type === 'CASE_ROBOT_REMINDER')) {
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage)[]) => prev.filter((n: CaseRobotReminderMessage | BusinessNotificationMessage) => n.id !== selectedMessageId));
+      if ('type' in item && (item.type === 'BUSINESS_NOTIFICATION' || item.type === 'CASE_ROBOT_REMINDER' || item.type === 'CONFERENCE_INVITE')) {
+        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) => prev.filter((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) => n.id !== selectedMessageId));
       } else {
         setConversations((prev: ConversationSummary[]) => prev.filter((c: ConversationSummary) => c.id !== selectedMessageId));
       }
@@ -444,7 +447,7 @@ const MessageCenterPage: React.FC = () => {
   // 渲染消息列表项
   const renderMessageItem = (message: DisplayListItem) => {
     const isNotif = message.itemType === 'notification';
-    const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage) : undefined;
+    const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage | ConferenceInviteMessage) : undefined;
     const primaryText = isNotif ? (notifMsg?.title ?? '通知') : (message as ConversationSummary).last_message_sender_name ?? '会话';
     const hasHighPriority = isNotif && notifMsg?.priority === 'high';
     const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : 'IM';
@@ -626,74 +629,98 @@ const MessageCenterPage: React.FC = () => {
             ) : (
               // Mobile notification view
               <Box sx={{ p: 2, flexGrow: 1, overflow: 'auto' }}>
-                <Card sx={{ mb: 3 }}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Avatar
-                        sx={{
-                          bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
-                          mr: 2,
-                        }}
+                {selectedItem.type === 'CONFERENCE_INVITE' ? (
+                  // Mobile 会议邀请卡片
+                  <ConferenceInviteCard
+                    message={selectedItem as ConferenceInviteMessage}
+                    onResponse={(response, responseMessage) => {
+                      showSuccess(`会议邀请已${response === 'accepted' ? '接受' : '拒绝'}`);
+                      // 这里可以添加刷新逻辑或更新状态
+                    }}
+                    onJoinMeeting={(conferenceId) => {
+                      showInfo(`正在加入会议: ${conferenceId}`);
+                      // 这里可以添加跳转到会议界面的逻辑
+                    }}
+                    onError={(error) => {
+                      showError(`操作失败: ${error.message}`);
+                    }}
+                    isCurrentUser={selectedItem.sender_id === user?.id}
+                    showActions={true}
+                    compact={true} // Mobile 紧凑模式
+                  />
+                ) : (
+                  // 其他 Mobile 通知
+                  <>
+                    <Card sx={{ mb: 3 }}>
+                      <CardContent>
+                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                          <Avatar
+                            sx={{
+                              bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                              mr: 2,
+                            }}
+                          >
+                            {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
+                          </Avatar>
+                          <Box sx={{ flex: 1 }}>
+                            <Typography variant="h6" fontWeight="600">
+                              {selectedItem.title}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {new Date(selectedItem.created_at).toLocaleString()}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Typography variant="body1" paragraph sx={{ lineHeight: 1.6 }}>
+                          {selectedItem.content}
+                        </Typography>
+                        {selectedItem.priority === 'high' && (
+                          <Alert severity="warning" sx={{ mt: 2 }}>
+                            此消息为重要通知，请及时处理。
+                          </Alert>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Mobile notification actions */}
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        fullWidth
+                        size="large"
+                        startIcon={<MarkEmailRead />}
+                        onClick={handleMarkAsRead}
+                        disabled={selectedItem.is_read}
+                        sx={{ minHeight: '48px' }}
                       >
-                        {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
-                      </Avatar>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography variant="h6" fontWeight="600">
-                          {selectedItem.title}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {new Date(selectedItem.created_at).toLocaleString()}
-                        </Typography>
+                        标记为已读
+                      </Button>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          variant="outlined"
+                          fullWidth
+                          size="large"
+                          startIcon={<Archive />}
+                          onClick={handleArchive}
+                          sx={{ minHeight: '48px' }}
+                        >
+                          归档
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          fullWidth
+                          size="large"
+                          color="error"
+                          startIcon={<Delete />}
+                          onClick={handleDelete}
+                          sx={{ minHeight: '48px' }}
+                        >
+                          删除
+                        </Button>
                       </Box>
                     </Box>
-                    <Typography variant="body1" paragraph sx={{ lineHeight: 1.6 }}>
-                      {selectedItem.content}
-                    </Typography>
-                    {selectedItem.priority === 'high' && (
-                      <Alert severity="warning" sx={{ mt: 2 }}>
-                        此消息为重要通知，请及时处理。
-                      </Alert>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Mobile notification actions */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    size="large"
-                    startIcon={<MarkEmailRead />}
-                    onClick={handleMarkAsRead}
-                    disabled={selectedItem.is_read}
-                    sx={{ minHeight: '48px' }}
-                  >
-                    标记为已读
-                  </Button>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      size="large"
-                      startIcon={<Archive />}
-                      onClick={handleArchive}
-                      sx={{ minHeight: '48px' }}
-                    >
-                      归档
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      fullWidth
-                      size="large"
-                      color="error"
-                      startIcon={<Delete />}
-                      onClick={handleDelete}
-                      sx={{ minHeight: '48px' }}
-                    >
-                      删除
-                    </Button>
-                  </Box>
-                </Box>
+                  </>
+                )}
               </Box>
             )}
           </Box>
@@ -782,7 +809,7 @@ const MessageCenterPage: React.FC = () => {
               <Box sx={{ p: 2 }}>
                 {filteredDisplayList.map((message) => {
                   const isNotif = message.itemType === 'notification';
-                  const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage) : undefined;
+                  const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage | ConferenceInviteMessage) : undefined;
                   const primaryText = isNotif ? (notifMsg?.title ?? '通知') : (message as ConversationSummary).last_message_sender_name ?? '会话';
                   const hasHighPriority = isNotif && notifMsg?.priority === 'high';
                   const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : 'IM';
@@ -1119,56 +1146,78 @@ const MessageCenterPage: React.FC = () => {
                 ) : (
                   // 系统通知
                   <Box p={3} sx={{ flexGrow: 1, overflow: 'auto' }}>
-                    <Card>
-                      <CardContent>
-                        <Box display="flex" alignItems="center" mb={2}>
-                          <Avatar
-                            sx={{
-                              bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
-                              mr: 2,
-                            }}
-                          >
-                            {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
-                          </Avatar>
-                          <Box>
-                            <Typography variant="h6">{selectedItem.title}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {new Date(selectedItem.created_at).toLocaleString()}
-                            </Typography>
+                    {selectedItem.type === 'CONFERENCE_INVITE' ? (
+                      // 会议邀请卡片
+                      <ConferenceInviteCard
+                        message={selectedItem as ConferenceInviteMessage}
+                        onResponse={(response, responseMessage) => {
+                          showSuccess(`会议邀请已${response === 'accepted' ? '接受' : '拒绝'}`);
+                          // 这里可以添加刷新逻辑或更新状态
+                        }}
+                        onJoinMeeting={(conferenceId) => {
+                          showInfo(`正在加入会议: ${conferenceId}`);
+                          // 这里可以添加跳转到会议界面的逻辑
+                        }}
+                        onError={(error) => {
+                          showError(`操作失败: ${error.message}`);
+                        }}
+                        isCurrentUser={selectedItem.sender_id === user?.id}
+                        showActions={true}
+                        compact={false}
+                      />
+                    ) : (
+                      // 其他系统通知
+                      <Card>
+                        <CardContent>
+                          <Box display="flex" alignItems="center" mb={2}>
+                            <Avatar
+                              sx={{
+                                bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                                mr: 2,
+                              }}
+                            >
+                              {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
+                            </Avatar>
+                            <Box>
+                              <Typography variant="h6">{selectedItem.title}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {new Date(selectedItem.created_at).toLocaleString()}
+                              </Typography>
+                            </Box>
                           </Box>
-                        </Box>
-                        <Typography variant="body1" paragraph>
-                          {selectedItem.content}
-                        </Typography>
-                        {selectedItem.priority === 'high' && (
-                          <Alert severity="warning" sx={{ mt: 2 }}>
-                            此消息为重要通知，请及时处理。
-                          </Alert>
-                        )}
-                      </CardContent>
-                      <CardActions>
-                        <Button
-                          startIcon={<MarkEmailRead />}
-                          onClick={handleMarkAsRead}
-                          disabled={selectedItem.is_read}
-                        >
-                          标记为已读
-                        </Button>
-                        <Button
-                          startIcon={<Archive />}
-                          onClick={handleArchive}
-                        >
-                          归档
-                        </Button>
-                        <Button
-                          startIcon={<Delete />}
-                          color="error"
-                          onClick={handleDelete}
-                        >
-                          删除
-                        </Button>
-                      </CardActions>
-                    </Card>
+                          <Typography variant="body1" paragraph>
+                            {selectedItem.content}
+                          </Typography>
+                          {selectedItem.priority === 'high' && (
+                            <Alert severity="warning" sx={{ mt: 2 }}>
+                              此消息为重要通知，请及时处理。
+                            </Alert>
+                          )}
+                        </CardContent>
+                        <CardActions>
+                          <Button
+                            startIcon={<MarkEmailRead />}
+                            onClick={handleMarkAsRead}
+                            disabled={selectedItem.is_read}
+                          >
+                            标记为已读
+                          </Button>
+                          <Button
+                            startIcon={<Archive />}
+                            onClick={handleArchive}
+                          >
+                            归档
+                          </Button>
+                          <Button
+                            startIcon={<Delete />}
+                            color="error"
+                            onClick={handleDelete}
+                          >
+                            删除
+                          </Button>
+                        </CardActions>
+                      </Card>
+                    )}
                   </Box>
                 )}
               </>

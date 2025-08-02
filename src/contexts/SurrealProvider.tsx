@@ -903,6 +903,9 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       const { caseReminderService } = await import('@/src/services/caseReminderService');
       caseReminderService.setClientGetter(clientGetter);
 
+      const { groupManager } = await import('@/src/services/groupManager');
+      groupManager.setClientGetter(clientGetter);
+
       const { bidirectionalSyncService } = await import('@/src/services/bidirectionalSyncService');
       bidirectionalSyncService.setServiceWorkerComm(serviceWorkerComm);
 

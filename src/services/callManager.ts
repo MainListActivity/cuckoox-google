@@ -11,6 +11,15 @@ export type CallState = 'idle' | 'initiating' | 'ringing' | 'connecting' | 'conn
 // 通话方向
 export type CallDirection = 'outgoing' | 'incoming';
 
+// 会议角色
+export type ConferenceRole = 'host' | 'moderator' | 'participant' | 'observer';
+
+// 会议状态
+export type ConferenceState = 'creating' | 'waiting' | 'active' | 'ended';
+
+// 参与者连接状态
+export type ParticipantConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'failed';
+
 // 媒体状态
 export interface MediaState {
   audioEnabled: boolean;
@@ -30,6 +39,11 @@ export interface CallParticipant {
   connectionState: ConnectionState;
   joinedAt: number;
   stream?: MediaStream;
+  // 多人会议扩展字段
+  role?: ConferenceRole;
+  connectionStates?: Map<string, ParticipantConnectionState>; // 与其他参与者的连接状态
+  isPresenting?: boolean; // 是否正在演示/共享屏幕
+  isMutedByHost?: boolean; // 是否被主持人静音
 }
 
 // 通话会话信息
@@ -496,43 +510,30 @@ class CallManager {
   /**
    * 开始屏幕共享
    */
-  async startScreenShare(callId: string): Promise<void> {
+  async startScreenShare(callId: string, includeAudio: boolean = true): Promise<void> {
     const callSession = this.activeCalls.get(callId);
     if (!callSession) {
       throw new Error(`通话会话不存在: ${callId}`);
     }
 
     try {
-      // 获取屏幕共享流
-      const screenStream = await webrtcManager.getDisplayMedia();
-      
-      // 替换视频轨道
+      // 为每个远程参与者开始屏幕共享
       for (const [userId, participant] of callSession.participants) {
         if (!participant.isLocal) {
-          const connection = webrtcManager.getConnectionInfo(userId);
-          if (connection) {
-            const senders = connection.connection.getSenders();
-            const videoSender = senders.find(sender => 
-              sender.track && sender.track.kind === 'video'
-            );
-
-            if (videoSender) {
-              const videoTrack = screenStream.getVideoTracks()[0];
-              if (videoTrack) {
-                await videoSender.replaceTrack(videoTrack);
-              }
-            }
+          const screenStream = await webrtcManager.startScreenShare(userId, includeAudio);
+          
+          // 监听屏幕共享结束事件
+          const videoTrack = screenStream.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.onended = () => {
+              this.stopScreenShare(callId);
+            };
           }
         }
       }
 
       // 更新媒体状态
       callSession.localParticipant.mediaState.screenSharing = true;
-      
-      // 监听屏幕共享结束事件
-      screenStream.getVideoTracks()[0].onended = () => {
-        this.stopScreenShare(callId);
-      };
 
       // 通知媒体状态变更
       this.listeners.onParticipantMediaChanged?.(
@@ -552,36 +553,17 @@ class CallManager {
   /**
    * 停止屏幕共享
    */
-  async stopScreenShare(callId: string): Promise<void> {
+  async stopScreenShare(callId: string, cameraId?: string): Promise<void> {
     const callSession = this.activeCalls.get(callId);
     if (!callSession || !callSession.localParticipant.mediaState.screenSharing) {
       return;
     }
 
     try {
-      // 重新获取摄像头流
-      if (callSession.callType === 'video') {
-        const constraints = this.getMediaConstraints('video');
-        const cameraStream = await webrtcManager.getUserMedia(constraints);
-
-        // 替换视频轨道
-        for (const [userId, participant] of callSession.participants) {
-          if (!participant.isLocal) {
-            const connection = webrtcManager.getConnectionInfo(userId);
-            if (connection) {
-              const senders = connection.connection.getSenders();
-              const videoSender = senders.find(sender => 
-                sender.track && sender.track.kind === 'video'
-              );
-
-              if (videoSender) {
-                const videoTrack = cameraStream.getVideoTracks()[0];
-                if (videoTrack) {
-                  await videoSender.replaceTrack(videoTrack);
-                }
-              }
-            }
-          }
+      // 为每个远程参与者停止屏幕共享，恢复摄像头
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          await webrtcManager.stopScreenShare(userId, cameraId);
         }
       }
 
@@ -600,6 +582,135 @@ class CallManager {
     } catch (error) {
       console.error('CallManager: 停止屏幕共享失败', error);
       throw error;
+    }
+  }
+
+  /**
+   * 切换摄像头
+   */
+  async switchCamera(callId: string, cameraId?: string): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || callSession.callType === 'audio') {
+      throw new Error('无法在语音通话中切换摄像头');
+    }
+
+    try {
+      // 为每个远程参与者切换摄像头
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          const newStream = await webrtcManager.switchCamera(userId, cameraId);
+          
+          // 更新本地参与者的流
+          if (callSession.localParticipant.stream) {
+            // 保留音频轨道，替换视频轨道
+            const audioTracks = callSession.localParticipant.stream.getAudioTracks();
+            const videoTrack = newStream.getVideoTracks()[0];
+            
+            if (videoTrack) {
+              callSession.localParticipant.stream = new MediaStream([...audioTracks, videoTrack]);
+            }
+          }
+        }
+      }
+
+      // 通知本地流更新
+      if (callSession.localParticipant.stream) {
+        this.listeners.onLocalStreamReady?.(callId, callSession.localParticipant.stream);
+      }
+
+      console.log(`CallManager: 已切换摄像头 ${callId}`);
+
+    } catch (error) {
+      console.error('CallManager: 切换摄像头失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 调整视频质量
+   */
+  async adjustVideoQuality(callId: string, quality: 'low' | 'medium' | 'high' | 'ultra'): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || callSession.callType === 'audio') {
+      throw new Error('无法在语音通话中调整视频质量');
+    }
+
+    try {
+      // 为每个远程参与者调整视频质量
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          await webrtcManager.adjustVideoQuality(userId, quality);
+        }
+      }
+
+      console.log(`CallManager: 已调整视频质量 ${callId} -> ${quality}`);
+
+    } catch (error) {
+      console.error('CallManager: 调整视频质量失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 自动调整视频质量基于网络状况
+   */
+  async autoAdjustVideoQuality(callId: string): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || callSession.callType === 'audio') {
+      return;
+    }
+
+    try {
+      // 为每个远程参与者自动调整视频质量
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          await webrtcManager.autoAdjustVideoQuality(userId);
+        }
+      }
+
+      console.log(`CallManager: 已自动调整视频质量 ${callId}`);
+
+    } catch (error) {
+      console.error('CallManager: 自动调整视频质量失败', error);
+    }
+  }
+
+  /**
+   * 获取网络质量信息
+   */
+  async getNetworkQuality(callId: string): Promise<Record<string, 'excellent' | 'good' | 'fair' | 'poor' | 'unknown'>> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) {
+      return {};
+    }
+
+    const networkQualities: Record<string, 'excellent' | 'good' | 'fair' | 'poor' | 'unknown'> = {};
+
+    try {
+      // 获取每个远程参与者的网络质量
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          networkQualities[userId] = await webrtcManager.detectNetworkQuality(userId);
+        }
+      }
+
+      return networkQualities;
+
+    } catch (error) {
+      console.error('CallManager: 获取网络质量失败', error);
+      return networkQualities;
+    }
+  }
+
+  /**
+   * 获取可用摄像头列表
+   */
+  async getAvailableCameras(): Promise<import('./webrtcManager').CameraInfo[]> {
+    try {
+      return await webrtcManager.getCameraDevices();
+    } catch (error) {
+      console.error('CallManager: 获取摄像头列表失败', error);
+      return [];
     }
   }
 
@@ -685,6 +796,557 @@ class CallManager {
       : 0;
     
     return { ...this.stats };
+  }
+
+  // ====================== 多人会议管理方法 ======================
+
+  /**
+   * 创建多人会议
+   */
+  async createConference(conferenceId: string, callType: CallType = 'video', metadata?: any): Promise<string> {
+    if (!this.isInitialized || !this.currentUserId) {
+      throw new Error('CallManager未初始化或用户ID未设置');
+    }
+
+    try {
+      const callId = this.generateCallId();
+      
+      // 创建会议会话，设置创建者为主持人
+      const callSession = await this.createCallSession(
+        callId,
+        callType,
+        'outgoing',
+        [],
+        { ...metadata, conferenceId, conferenceState: 'creating' as ConferenceState },
+        true,
+        conferenceId
+      );
+
+      // 设置本地参与者为主持人
+      callSession.localParticipant.role = 'host';
+      callSession.localParticipant.connectionStates = new Map();
+
+      // 设置通话状态
+      this.updateCallState(callId, 'initiating');
+
+      // 获取本地媒体流
+      const constraints = this.getMediaConstraints(callType);
+      const localStream = await webrtcManager.getUserMedia(constraints);
+      
+      // 更新本地参与者信息
+      callSession.localParticipant.stream = localStream;
+      callSession.localParticipant.mediaState = this.getMediaStateFromStream(localStream, callType);
+
+      // 通知本地流准备就绪
+      this.listeners.onLocalStreamReady?.(callId, localStream);
+
+      // 更新会议状态为等待中
+      if (callSession.metadata) {
+        callSession.metadata.conferenceState = 'waiting';
+      }
+
+      console.log(`CallManager: 已创建多人会议 ${callId}, 会议ID: ${conferenceId}`);
+      return callId;
+
+    } catch (error) {
+      console.error('CallManager: 创建多人会议失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 加入多人会议
+   */
+  async joinConference(callId: string, role: ConferenceRole = 'participant'): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) {
+      throw new Error(`会议不存在: ${callId}`);
+    }
+
+    if (!callSession.isGroup) {
+      throw new Error('该通话不是多人会议');
+    }
+
+    try {
+      // 设置状态为连接中
+      this.updateCallState(callId, 'connecting');
+
+      // 获取本地媒体流
+      const constraints = this.getMediaConstraints(callSession.callType);
+      const localStream = await webrtcManager.getUserMedia(constraints);
+
+      // 更新本地参与者信息
+      callSession.localParticipant.role = role;
+      callSession.localParticipant.connectionStates = new Map();
+      callSession.localParticipant.stream = localStream;
+      callSession.localParticipant.mediaState = this.getMediaStateFromStream(localStream, callSession.callType);
+
+      // 通知本地流准备就绪
+      this.listeners.onLocalStreamReady?.(callId, localStream);
+
+      // 为每个现有参与者建立P2P连接
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          try {
+            await this.establishPeerConnection(callId, userId, localStream);
+          } catch (error) {
+            console.warn(`与参与者 ${userId} 建立连接失败:`, error);
+          }
+        }
+      }
+
+      // 发送加入会议信令
+      const groupCallData: GroupCallSignalData = {
+        callId,
+        callType: callSession.callType,
+        groupName: callSession.groupId || '',
+        initiatorName: this.currentUserId!
+      };
+
+      await signalingService.sendGroupCallJoin(callSession.groupId || '', groupCallData);
+
+      // 更新会议状态为活跃
+      if (callSession.metadata) {
+        callSession.metadata.conferenceState = 'active';
+      }
+
+      console.log(`CallManager: 已加入多人会议 ${callId}`);
+
+    } catch (error) {
+      console.error('CallManager: 加入多人会议失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 离开多人会议
+   */
+  async leaveConference(callId: string, reason?: string): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) {
+      return;
+    }
+
+    if (!callSession.isGroup) {
+      throw new Error('该通话不是多人会议');
+    }
+
+    try {
+      // 发送离开会议信令给所有参与者
+      const groupCallData: GroupCallSignalData = {
+        callId,
+        callType: callSession.callType,
+        groupName: callSession.groupId || '',
+        initiatorName: this.currentUserId!
+      };
+
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          try {
+            await signalingService.sendGroupCallLeave(userId, groupCallData);
+          } catch (error) {
+            console.warn(`向参与者 ${userId} 发送离开信令失败:`, error);
+          }
+        }
+      }
+
+      // 关闭所有WebRTC连接
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          await webrtcManager.closePeerConnection(userId);
+        }
+      }
+
+      // 结束通话
+      await this.endCall(callId, reason || '主动离开会议');
+
+      console.log(`CallManager: 已离开多人会议 ${callId}`);
+
+    } catch (error) {
+      console.error('CallManager: 离开多人会议失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 邀请参与者加入会议
+   */
+  async inviteToConference(callId: string, userIds: string[], role: ConferenceRole = 'participant'): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) {
+      throw new Error(`会议不存在: ${callId}`);
+    }
+
+    if (!callSession.isGroup) {
+      throw new Error('该通话不是多人会议');
+    }
+
+    // 检查权限：只有主持人和管理员可以邀请
+    if (callSession.localParticipant.role !== 'host' && callSession.localParticipant.role !== 'moderator') {
+      throw new Error('只有主持人和管理员可以邀请参与者');
+    }
+
+    try {
+      // 为每个被邀请用户发送邀请信令
+      const groupCallData: GroupCallSignalData = {
+        callId,
+        callType: callSession.callType,
+        groupName: callSession.groupId || '',
+        initiatorName: this.currentUserId!
+      };
+
+      for (const userId of userIds) {
+        // 检查用户是否已在会议中
+        if (callSession.participants.has(userId)) {
+          console.warn(`用户 ${userId} 已在会议中，跳过邀请`);
+          continue;
+        }
+
+        try {
+          await signalingService.sendGroupCallRequest(userId, groupCallData);
+          
+          // 预先添加参与者到会话中（状态为连接中）
+          const participant: CallParticipant = {
+            userId,
+            userName: userId,
+            isLocal: false,
+            mediaState: {
+              audioEnabled: true,
+              videoEnabled: callSession.callType === 'video',
+              speakerEnabled: false,
+              micMuted: false,
+              cameraOff: callSession.callType !== 'video',
+              screenSharing: false
+            },
+            connectionState: 'new',
+            joinedAt: Date.now(),
+            role,
+            connectionStates: new Map(),
+            isPresenting: false,
+            isMutedByHost: false
+          };
+
+          callSession.participants.set(userId, participant);
+
+          console.log(`CallManager: 已邀请用户 ${userId} 加入会议 ${callId}`);
+
+        } catch (error) {
+          console.error(`邀请用户 ${userId} 失败:`, error);
+        }
+      }
+
+    } catch (error) {
+      console.error('CallManager: 邀请参与者失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 管理参与者连接状态
+   */
+  async manageParticipantConnections(callId: string): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || !callSession.isGroup) {
+      return;
+    }
+
+    try {
+      // 检查所有参与者的连接状态
+      for (const [userId, participant] of callSession.participants) {
+        if (!participant.isLocal) {
+          const connectionInfo = webrtcManager.getConnectionInfo(userId);
+          
+          if (connectionInfo) {
+            // 更新参与者连接状态
+            participant.connectionState = connectionInfo.state;
+            
+            // 如果连接断开，尝试重连
+            if (connectionInfo.state === 'disconnected' || connectionInfo.state === 'failed') {
+              console.log(`参与者 ${userId} 连接断开，尝试重连...`);
+              
+              if (participant.connectionStates) {
+                participant.connectionStates.set(userId, 'reconnecting');
+              }
+
+              try {
+                // 重新建立连接
+                if (callSession.localParticipant.stream) {
+                  await this.establishPeerConnection(callId, userId, callSession.localParticipant.stream);
+                }
+              } catch (error) {
+                console.error(`重连参与者 ${userId} 失败:`, error);
+                if (participant.connectionStates) {
+                  participant.connectionStates.set(userId, 'failed');
+                }
+              }
+            }
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('CallManager: 管理参与者连接失败', error);
+    }
+  }
+
+  /**
+   * 管理会议特定的信令处理
+   */
+  async handleConferenceSignaling(callId: string, fromUser: string, signalType: string, data: any): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || !callSession.isGroup) {
+      return;
+    }
+
+    try {
+      switch (signalType) {
+        case 'participant-mute':
+          await this.handleParticipantMute(callId, fromUser, data);
+          break;
+        
+        case 'participant-unmute':
+          await this.handleParticipantUnmute(callId, fromUser, data);
+          break;
+        
+        case 'role-change':
+          await this.handleRoleChange(callId, fromUser, data);
+          break;
+        
+        case 'presentation-start':
+          await this.handlePresentationStart(callId, fromUser, data);
+          break;
+        
+        case 'presentation-stop':
+          await this.handlePresentationStop(callId, fromUser, data);
+          break;
+        
+        case 'conference-end':
+          await this.handleConferenceEnd(callId, fromUser, data);
+          break;
+        
+        default:
+          console.warn(`未知的会议信令类型: ${signalType}`);
+      }
+
+    } catch (error) {
+      console.error('CallManager: 处理会议信令失败', error);
+    }
+  }
+
+  /**
+   * 设置参与者角色
+   */
+  async setParticipantRole(callId: string, userId: string, newRole: ConferenceRole): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || !callSession.isGroup) {
+      throw new Error('会议不存在或不是多人会议');
+    }
+
+    // 检查权限：只有主持人可以修改角色
+    if (callSession.localParticipant.role !== 'host') {
+      throw new Error('只有主持人可以修改参与者角色');
+    }
+
+    const participant = callSession.participants.get(userId);
+    if (!participant) {
+      throw new Error(`参与者不存在: ${userId}`);
+    }
+
+    participant.role = newRole;
+
+    console.log(`CallManager: 已设置参与者 ${userId} 角色为 ${newRole}`);
+  }
+
+  /**
+   * 静音/取消静音参与者（主持人功能）
+   */
+  async muteParticipant(callId: string, userId: string, muted: boolean): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || !callSession.isGroup) {
+      throw new Error('会议不存在或不是多人会议');
+    }
+
+    // 检查权限：只有主持人和管理员可以静音他人
+    if (callSession.localParticipant.role !== 'host' && callSession.localParticipant.role !== 'moderator') {
+      throw new Error('只有主持人和管理员可以静音其他参与者');
+    }
+
+    const participant = callSession.participants.get(userId);
+    if (!participant) {
+      throw new Error(`参与者不存在: ${userId}`);
+    }
+
+    participant.isMutedByHost = muted;
+
+    // 这里应该发送信令通知目标用户被静音/取消静音
+    // 实际实现中需要扩展信令服务支持这类控制消息
+
+    console.log(`CallManager: 已${muted ? '静音' : '取消静音'}参与者 ${userId}`);
+  }
+
+  /**
+   * 获取会议信息
+   */
+  getConferenceInfo(callId: string): {
+    conferenceId: string;
+    state: ConferenceState;
+    participants: CallParticipant[];
+    host: CallParticipant | null;
+    moderators: CallParticipant[];
+  } | null {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession || !callSession.isGroup) {
+      return null;
+    }
+
+    const participants = Array.from(callSession.participants.values());
+    const host = participants.find(p => p.role === 'host') || null;
+    const moderators = participants.filter(p => p.role === 'moderator');
+    
+    return {
+      conferenceId: callSession.metadata?.conferenceId || callSession.groupId || '',
+      state: callSession.metadata?.conferenceState || 'active',
+      participants,
+      host,
+      moderators
+    };
+  }
+
+  // ====================== 私有辅助方法 ======================
+
+  /**
+   * 建立P2P连接
+   */
+  private async establishPeerConnection(callId: string, userId: string, localStream: MediaStream): Promise<void> {
+    try {
+      // 创建WebRTC连接
+      await webrtcManager.createPeerConnection(userId, true);
+      
+      // 添加本地流
+      await webrtcManager.addLocalStream(userId, localStream);
+      
+      // 创建Offer（如果是发起方）
+      const offer = await webrtcManager.createOffer(userId);
+      
+      console.log(`CallManager: 已建立P2P连接 ${userId} for call ${callId}`);
+      
+    } catch (error) {
+      console.error(`CallManager: 建立P2P连接失败 ${userId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 处理参与者静音信令
+   */
+  private async handleParticipantMute(callId: string, fromUser: string, data: any): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) return;
+
+    const participant = callSession.participants.get(fromUser);
+    if (participant) {
+      participant.mediaState.micMuted = true;
+      participant.mediaState.audioEnabled = false;
+      
+      // 通知媒体状态变更
+      this.listeners.onParticipantMediaChanged?.(callId, fromUser, participant.mediaState);
+    }
+  }
+
+  /**
+   * 处理参与者取消静音信令
+   */
+  private async handleParticipantUnmute(callId: string, fromUser: string, data: any): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) return;
+
+    const participant = callSession.participants.get(fromUser);
+    if (participant) {
+      // 检查是否被主持人静音
+      if (participant.isMutedByHost) {
+        console.warn(`参与者 ${fromUser} 被主持人静音，无法取消静音`);
+        return;
+      }
+
+      participant.mediaState.micMuted = false;
+      participant.mediaState.audioEnabled = true;
+      
+      // 通知媒体状态变更
+      this.listeners.onParticipantMediaChanged?.(callId, fromUser, participant.mediaState);
+    }
+  }
+
+  /**
+   * 处理角色变更信令
+   */
+  private async handleRoleChange(callId: string, fromUser: string, data: { userId: string; newRole: ConferenceRole }): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) return;
+
+    const participant = callSession.participants.get(data.userId);
+    if (participant) {
+      participant.role = data.newRole;
+      console.log(`CallManager: 参与者 ${data.userId} 角色变更为 ${data.newRole}`);
+    }
+  }
+
+  /**
+   * 处理演示开始信令
+   */
+  private async handlePresentationStart(callId: string, fromUser: string, data: any): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) return;
+
+    const participant = callSession.participants.get(fromUser);
+    if (participant) {
+      // 停止其他人的演示
+      for (const [userId, p] of callSession.participants) {
+        if (p.isPresenting && userId !== fromUser) {
+          p.isPresenting = false;
+        }
+      }
+
+      participant.isPresenting = true;
+      participant.mediaState.screenSharing = true;
+      
+      console.log(`CallManager: 参与者 ${fromUser} 开始演示`);
+      
+      // 通知媒体状态变更
+      this.listeners.onParticipantMediaChanged?.(callId, fromUser, participant.mediaState);
+    }
+  }
+
+  /**
+   * 处理演示停止信令
+   */
+  private async handlePresentationStop(callId: string, fromUser: string, data: any): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) return;
+
+    const participant = callSession.participants.get(fromUser);
+    if (participant) {
+      participant.isPresenting = false;
+      participant.mediaState.screenSharing = false;
+      
+      console.log(`CallManager: 参与者 ${fromUser} 停止演示`);
+      
+      // 通知媒体状态变更
+      this.listeners.onParticipantMediaChanged?.(callId, fromUser, participant.mediaState);
+    }
+  }
+
+  /**
+   * 处理会议结束信令
+   */
+  private async handleConferenceEnd(callId: string, fromUser: string, data: any): Promise<void> {
+    const callSession = this.activeCalls.get(callId);
+    if (!callSession) return;
+
+    // 检查发起者权限（只有主持人可以结束会议）
+    const participant = callSession.participants.get(fromUser);
+    if (participant?.role === 'host') {
+      await this.endCall(callId, '主持人结束会议');
+    }
   }
 
   // ====================== 私有方法 ======================
