@@ -171,18 +171,29 @@ function createLiveMetricHook<TResultType, TDataType>(
           await fetchMetric(caseId);
           if (!isMounted) return;
 
-          // Step 2: Set up the live query for the claim table
-          const liveSelectQuery = `LIVE SELECT * FROM claim WHERE case_id = $caseId;`;
-          const queryResponse = await client.query<[Uuid]>(liveSelectQuery, { caseId });
+          // Step 2: Set up the live query for the entire claim table (no parameters allowed)
+          const liveSelectQuery = `LIVE SELECT * FROM claim;`;
+          const queryResponse = await client.query<[Uuid]>(liveSelectQuery);
           
           if (queryResponse && queryResponse[0]) {
             liveQueryId = queryResponse[0];
             
-            // Step 3: Subscribe to live events
-            client.subscribeLive(liveQueryId, (_action, _data) => {
+            // Step 3: Subscribe to live events with case filtering
+            client.subscribeLive(liveQueryId, (_action, data) => {
               if (!isMounted) return;
-              // Re-fetch the metric when any claim changes
-              fetchMetric(caseId);
+              
+              // Filter for relevant case_id changes
+              // data contains the changed record, check if it matches our caseId
+              if (data && typeof data === 'object' && 'case_id' in data) {
+                const recordCaseId = data.case_id;
+                if (recordCaseId === caseId || String(recordCaseId) === String(caseId)) {
+                  // Re-fetch the metric when relevant claim changes
+                  fetchMetric(caseId);
+                }
+              } else {
+                // Fallback: refresh on any claim change (less efficient but safe)
+                fetchMetric(caseId);
+              }
             });
           }
         } catch (err) {
