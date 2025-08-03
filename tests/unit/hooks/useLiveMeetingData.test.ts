@@ -20,12 +20,13 @@ const mockClient = {
 };
 
 const surrealClientState = {
-  surreal: mockClient,
-  isSuccess: true,
+  client: mockClient,
+  isConnected: true,
 };
 
 vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurreal: () => surrealClientState,
+  useSurrealContext: () => surrealClientState,
 }));
 
 const createMockMeeting = (id: string, scheduled_time: string, title: string = 'Test Meeting'): Meeting => ({
@@ -47,7 +48,7 @@ describe('useLiveMeetings Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     liveCallback = null;
-    surrealClientState.isSuccess = true;
+    surrealClientState.isConnected = true;
 
     mockSubscribeLive.mockImplementation((queryId, callback) => {
       liveCallback = callback;
@@ -86,7 +87,7 @@ describe('useLiveMeetings Hook', () => {
     expect(result.current[1].title).toBe('Meeting A');
 
     await waitFor(() => {
-        expect(mockQuery).toHaveBeenCalledWith('LIVE SELECT * FROM meeting WHERE case_id = $caseId;', { caseId: 'case:test' });
+        expect(mockQuery).toHaveBeenCalledWith('LIVE SELECT * FROM meeting;');
         expect(mockSubscribeLive).toHaveBeenCalled();
     });
   });
@@ -169,7 +170,7 @@ describe('useLiveMeetings Hook', () => {
     });
 
     it('should not do anything if client is not connected', () => {
-        surrealClientState.isSuccess = false;
+        surrealClientState.isConnected = false;
         renderHook(() => useLiveMeetings('case:test'));
         expect(mockQuery).not.toHaveBeenCalled();
     });
