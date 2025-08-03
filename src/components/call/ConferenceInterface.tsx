@@ -6,7 +6,6 @@ import {
   IconButton,
   Avatar,
   Stack,
-  Fade,
   LinearProgress,
   Chip,
   Tooltip,
@@ -18,11 +17,9 @@ import {
   DialogContentText,
   Grid,
   Card,
-  CardContent,
   Menu,
   MenuItem,
   Fab,
-  Zoom,
   useMediaQuery,
   List,
   ListItem,
@@ -31,19 +28,14 @@ import {
   ListItemSecondaryAction,
   Drawer,
   Divider,
-  Badge,
-  Switch,
-  FormControlLabel
+  Badge
 } from '@mui/material';
 import {
-  Call as CallIcon,
   CallEnd as CallEndIcon,
   Mic as MicIcon,
   MicOff as MicOffIcon,
   Videocam as VideocamIcon,
   VideocamOff as VideocamOffIcon,
-  VolumeUp as VolumeUpIcon,
-  VolumeOff as VolumeOffIcon,
   ScreenShare as ScreenShareIcon,
   StopScreenShare as StopScreenShareIcon,
   CameraAlt as CameraAltIcon,
@@ -52,8 +44,6 @@ import {
   Settings as SettingsIcon,
   MoreVert as MoreVertIcon,
   FullscreenIcon,
-  FullscreenExitIcon,
-  PictureInPictureIcon,
   AspectRatio as AspectRatioIcon,
   NetworkWifi as NetworkWifiIcon,
   SignalWifi0Bar as SignalWifi0BarIcon,
@@ -62,7 +52,6 @@ import {
   SignalWifi3Bar as SignalWifi3BarIcon,
   SignalWifi4Bar as SignalWifi4BarIcon,
   People as PeopleIcon,
-  Chat as ChatIcon,
   Close as CloseIcon,
   PersonAdd as PersonAddIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
@@ -70,11 +59,10 @@ import {
   VolumeOff as MuteIcon,
   VolumeUp as UnmuteIcon,
   Crown as CrownIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon
+  Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
-import callManager, { CallSession, CallState, MediaState, CallParticipant, ConferenceRole } from '@/src/services/callManager';
+import callManager, { CallSession, CallState, MediaState, CallParticipant } from '@/src/services/callManager';
 import type { CameraInfo } from '@/src/services/webrtcManager';
 
 // 组件属性接口
@@ -105,14 +93,6 @@ const NetworkQualityIcons = {
   unknown: SignalWifi0BarIcon
 };
 
-// 网络质量颜色映射
-const NetworkQualityColors = {
-  excellent: 'success',
-  good: 'info',
-  fair: 'warning',
-  poor: 'error',
-  unknown: 'default'
-} as const;
 
 // 角色图标映射
 const RoleIcons = {
@@ -166,7 +146,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
   const [sidebarType, setSidebarType] = useState<SidebarType>(null);
   const [speakingParticipants, setSpeakingParticipants] = useState<Set<string>>(new Set());
   
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  // const [localStream, setLocalStream] = useState<MediaStream | null>(null); // 暂时保留用于未来功能
   const [participantStreams, setParticipantStreams] = useState<Map<string, MediaStream>>(new Map());
   const [availableCameras, setAvailableCameras] = useState<CameraInfo[]>([]);
   const [networkQualities, setNetworkQualities] = useState<Record<string, 'excellent' | 'good' | 'fair' | 'poor' | 'unknown'>>({});
@@ -334,7 +314,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
         stopTimers();
       }
     }
-  }, [callId, startTimers, stopTimers]);
+  }, [startTimers, stopTimers]);
 
   /**
    * 处理参与者媒体状态变化
@@ -346,7 +326,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     if (session && userId === session.localParticipant.userId) {
       setMediaState({ ...newMediaState });
     }
-  }, [callId]);
+  }, []);
 
   /**
    * 处理本地流准备就绪
@@ -372,19 +352,19 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
   /**
    * 处理参与者加入
    */
-  const handleParticipantJoined = useCallback((callId: string, participant: CallParticipant) => {
+  const handleParticipantJoined = useCallback((callId: string, _participant: CallParticipant) => {
     if (callId !== callId) return;
     
     const session = callManager.getCallSession(callId);
     if (session) {
       setCallSession({ ...session });
     }
-  }, [callId]);
+  }, []);
 
   /**
    * 处理参与者离开
    */
-  const handleParticipantLeft = useCallback((callId: string, userId: string, reason?: string) => {
+  const handleParticipantLeft = useCallback((callId: string, userId: string, _reason?: string) => {
     if (callId !== callId) return;
     
     // 清理视频流
@@ -406,7 +386,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
   /**
    * 处理通话结束
    */
-  const handleCallEnded = useCallback((callId: string, duration: number, reason?: string) => {
+  const handleCallEnded = useCallback((callId: string, _duration: number, _reason?: string) => {
     if (callId !== callId) return;
 
     stopTimers();
@@ -500,7 +480,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
   /**
    * 切换扬声器状态
    */
-  const handleToggleSpeaker = useCallback(async () => {
+  const _handleToggleSpeaker = useCallback(async () => {
     if (!callSession) return;
 
     try {
