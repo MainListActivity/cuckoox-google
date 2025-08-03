@@ -20,8 +20,8 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock AuthContext before other mocks
-vi.mock('../../../../src/contexts/AuthContext', async () => {
-  const actual = await vi.importActual('../../../../src/contexts/AuthContext');
+vi.mock('@/src/contexts/AuthContext', async () => {
+  const actual = await vi.importActual('@/src/contexts/AuthContext');
   return {
     ...actual,
     useAuth: () => ({
@@ -34,7 +34,7 @@ vi.mock('../../../../src/contexts/AuthContext', async () => {
   };
 });
 
-vi.mock('../../../../src/components/RichTextEditor', () => ({
+vi.mock('@/src/components/RichTextEditor', () => ({
   __esModule: true,
   default: vi.fn(({ value, onTextChange, placeholder, readOnly }) => (
     <textarea

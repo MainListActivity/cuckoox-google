@@ -21,7 +21,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 // Mock RichTextEditor
-vi.mock('../../../../src/components/RichTextEditor', () => ({
+vi.mock('@/src/components/RichTextEditor', () => ({
     __esModule: true,
     default: vi.fn(({ value, onChange }) => (
         <textarea
@@ -39,8 +39,8 @@ vi.mock('../../../../src/components/RichTextEditor', () => ({
 
 // Mock useSnackbar
 const mockShowSnackbar = vi.fn();
-vi.mock('../../../../src/contexts/SnackbarContext', async () => {
-    const actual = await vi.importActual('../../../../src/contexts/SnackbarContext');
+vi.mock('@/src/contexts/SnackbarContext', async () => {
+    const actual = await vi.importActual('@/src/contexts/SnackbarContext');
     return {
         ...actual,
         useSnackbar: () => ({

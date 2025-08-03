@@ -67,7 +67,7 @@ const i18nTestInstance = {
 
 // Mock child components (Dialogs)
 const mockAddCreditorDialog = vi.fn();
-vi.mock('../../../../src/components/creditor/AddCreditorDialog', () => ({
+vi.mock('@/src/components/creditor/AddCreditorDialog', () => ({
   default: (props: any) => {
     mockAddCreditorDialog(props);
     return (
@@ -95,7 +95,7 @@ vi.mock('../../../../src/components/creditor/AddCreditorDialog', () => ({
 }));
 
 const mockBatchImportDialog = vi.fn();
-vi.mock('../../../../src/components/creditor/BatchImportCreditorsDialog', () => ({
+vi.mock('@/src/components/creditor/BatchImportCreditorsDialog', () => ({
   default: (props: any) => {
     mockBatchImportDialog(props);
     return (
@@ -109,7 +109,7 @@ vi.mock('../../../../src/components/creditor/BatchImportCreditorsDialog', () => 
 }));
 
 const mockPrintWaybillsDialog = vi.fn();
-vi.mock('../../../../src/components/creditor/PrintWaybillsDialog', () => ({
+vi.mock('@/src/components/creditor/PrintWaybillsDialog', () => ({
   default: (props: any) => {
     mockPrintWaybillsDialog(props);
     return (
@@ -123,7 +123,7 @@ vi.mock('../../../../src/components/creditor/PrintWaybillsDialog', () => ({
 
 // Mock ConfirmDeleteDialog
 const mockConfirmDeleteDialog = vi.fn();
-vi.mock('../../../../src/components/common/ConfirmDeleteDialog', () => ({
+vi.mock('@/src/components/common/ConfirmDeleteDialog', () => ({
   default: (props: any) => {
     mockConfirmDeleteDialog(props);
     return (

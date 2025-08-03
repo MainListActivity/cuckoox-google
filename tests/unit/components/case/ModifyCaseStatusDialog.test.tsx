@@ -7,7 +7,7 @@ import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 import ModifyCaseStatusDialog, { CaseStatus } from '@/src/components/case/ModifyCaseStatusDialog';
 
 // Mock RichTextEditor
-vi.mock('../../../../src/components/RichTextEditor', () => ({
+vi.mock('@/src/components/RichTextEditor', () => ({
   __esModule: true,
   default: vi.fn(({ value, onTextChange, placeholder }) => (
       <textarea

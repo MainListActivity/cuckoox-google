@@ -42,8 +42,8 @@ const mockShowError = vi.fn();
 const mockShowInfo = vi.fn();
 const mockShowWarning = vi.fn();
 
-vi.mock('../../../../src/contexts/SnackbarContext', async () => {
-  const actual = await vi.importActual('../../../../src/contexts/SnackbarContext');
+vi.mock('@/src/contexts/SnackbarContext', async () => {
+  const actual = await vi.importActual('@/src/contexts/SnackbarContext');
   return {
     ...actual, // Spread actual to keep SnackbarProvider if it's used by the test directly
     useSnackbar: () => ({

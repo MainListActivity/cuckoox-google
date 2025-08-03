@@ -41,7 +41,7 @@ interface MockMeetingMinutesDialogProps {
 }
 
 // Mock child components (Dialogs)
-vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
+vi.mock('@/src/components/case/ModifyCaseStatusDialog', () => ({
   default: (props: MockModifyCaseStatusDialogProps) => (
     <div data-testid="mock-modify-status-dialog" data-open={props.open}>
       Mock ModifyCaseStatusDialog - Case ID: {props.currentCase?.id}
@@ -50,7 +50,7 @@ vi.mock('../../../../src/components/case/ModifyCaseStatusDialog', () => ({
   )
 }));
 
-vi.mock('../../../../src/components/case/MeetingMinutesDialog', () => ({
+vi.mock('@/src/components/case/MeetingMinutesDialog', () => ({
   default: (props: MockMeetingMinutesDialogProps) => {
     if (!props.open) return null;
     
@@ -73,8 +73,8 @@ vi.mock('../../../../src/components/case/MeetingMinutesDialog', () => ({
 // Mock context hooks
 const mockShowSuccess = vi.fn();
 const mockShowError = vi.fn();
-vi.mock('../../../../src/contexts/SnackbarContext', async () => {
-  const actual = await vi.importActual('../../../../src/contexts/SnackbarContext');
+vi.mock('@/src/contexts/SnackbarContext', async () => {
+  const actual = await vi.importActual('@/src/contexts/SnackbarContext');
   return {
     ...actual,
     useSnackbar: () => ({
@@ -85,7 +85,7 @@ vi.mock('../../../../src/contexts/SnackbarContext', async () => {
 });
 
 // Mock useOperationPermissions hook
-vi.mock('../../../../src/hooks/useOperationPermission', () => ({
+vi.mock('@/src/hooks/useOperationPermission', () => ({
   useOperationPermissions: () => ({
     permissions: {
       'case_list_view': true,

@@ -7,7 +7,7 @@ import MeetingMinutesDialog, { QuillDelta } from '@/src/components/case/MeetingM
 import { Delta } from 'quill/core'; // Import Delta
 
 // Mock RichTextEditor
-vi.mock('../../../../src/components/RichTextEditor', () => ({
+vi.mock('@/src/components/RichTextEditor', () => ({
   __esModule: true,
   default: vi.fn(({ value, onChange, placeholder }) => ( // Changed onTextChange to onChange based on MeetingMinutesDialog
       <textarea

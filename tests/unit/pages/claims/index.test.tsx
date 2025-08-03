@@ -22,8 +22,8 @@ const mockShowSuccess = vi.fn();
 const mockShowError = vi.fn();
 const mockShowWarning = vi.fn();
 const mockShowInfo = vi.fn();
-vi.mock('../../../../src/contexts/SnackbarContext', async () => {
-    const actual = await vi.importActual('../../../../src/contexts/SnackbarContext');
+vi.mock('@/src/contexts/SnackbarContext', async () => {
+    const actual = await vi.importActual('@/src/contexts/SnackbarContext');
     return {
         ...actual,
         useSnackbar: () => ({
@@ -36,7 +36,7 @@ vi.mock('../../../../src/contexts/SnackbarContext', async () => {
 });
 
 // Mock AdminCreateClaimBasicInfoDialog
-vi.mock('../../../../src/components/admin/claims/AdminCreateClaimBasicInfoDialog', () => ({
+vi.mock('@/src/components/admin/claims/AdminCreateClaimBasicInfoDialog', () => ({
     __esModule: true,
     default: vi.fn(({ open, onClose, onNext }) => {
         if (!open) return null;
