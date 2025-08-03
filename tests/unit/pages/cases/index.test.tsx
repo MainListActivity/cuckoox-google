@@ -5,24 +5,24 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router-dom';
 import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 import { Context as SurrealContext } from '@/src/contexts/SurrealProvider';
-import type Surreal from 'surrealdb';
+import { AuthContext, AuthContextType } from '@/src/contexts/AuthContext';
 
 // Define the context type based on the SurrealProvider implementation
 interface SurrealContextType {
-  surreal: Surreal;
+  client: any;
+  surreal: any;
+  isConnected: boolean;
   isConnecting: boolean;
-  isSuccess: boolean;
-  isError: boolean;
   error: Error | null;
-  connect: () => Promise<boolean>;
-  disconnect: () => Promise<void>;
-  signin: (auth: unknown) => Promise<unknown>;
-  signout: () => Promise<void>;
-  setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => void;
-  clearTokens: () => void;
-  getStoredAccessToken: () => string | null;
-  setTenantCode: (tenantCode: string) => Promise<void>;
-  getTenantCode: () => Promise<string | null>;
+  isSuccess?: boolean;
+  sendServiceWorkerMessage: (type: string, payload?: any) => Promise<any>;
+  isServiceWorkerAvailable: () => boolean;
+  waitForServiceWorkerReady: () => Promise<void>;
+  getAuthStatus: () => Promise<boolean>;
+  checkTenantCodeAndRedirect: () => boolean;
+  disposeSurrealClient: () => Promise<void>;
+  checkDatabaseConnection: () => Promise<{ isConnected: boolean; error?: string }>;
+  initializeDatabaseConnection: () => Promise<void>;
 }
 
 // Define simplified prop types for mocked dialogs
@@ -220,18 +220,21 @@ const mockCasesData = [
   },
 ];
 
-// Define mockSurrealContextValue in the describe scope
+// Define mockSurrealContextValue and mockAuthContextValue in the describe scope
 let mockSurrealContextValue: SurrealContextType;
+let mockAuthContextValue: AuthContextType;
 
 // Helper function to render the component with necessary providers
 const renderCaseListPage = () => {
   return render(
     <ThemeProvider theme={theme}>
       <BrowserRouter>
-        <SurrealContext.Provider value={mockSurrealContextValue as SurrealContextType}>
-          <SnackbarProvider>
-            <CaseListPage />
-          </SnackbarProvider>
+        <SurrealContext.Provider value={mockSurrealContextValue}>
+          <AuthContext.Provider value={mockAuthContextValue}>
+            <SnackbarProvider>
+              <CaseListPage />
+            </SnackbarProvider>
+          </AuthContext.Provider>
         </SurrealContext.Provider>
       </BrowserRouter>
     </ThemeProvider>
@@ -243,38 +246,81 @@ describe('CaseListPage', () => {
     mockShowSuccess.mockClear();
     mockShowError.mockClear();
 
-    mockSurrealContextValue = {
-      surreal: {
-        query: vi.fn().mockResolvedValue([mockCasesData]),
-        select: vi.fn().mockResolvedValue([]),
-        create: vi.fn().mockResolvedValue({}),
-        update: vi.fn().mockResolvedValue({}),
-        merge: vi.fn().mockResolvedValue({}),
-        delete: vi.fn().mockResolvedValue({}),
-        live: vi.fn(),
-        kill: vi.fn(),
-        let: vi.fn(),
-        unset: vi.fn(),
-        signup: vi.fn().mockResolvedValue({}),
-        signin: vi.fn().mockResolvedValue({}),
-        invalidate: vi.fn().mockResolvedValue(undefined),
-        authenticate: vi.fn().mockResolvedValue(''),
-        sync: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn().mockResolvedValue(undefined),
-      } as unknown as Surreal,
-      isConnecting: false,
-      isSuccess: true,
-      isError: false,
-      error: null,
-      connect: vi.fn().mockResolvedValue(true),
-      disconnect: vi.fn().mockResolvedValue(undefined),
+    const mockSurrealClient = {
+      query: vi.fn().mockImplementation((sql, _vars) => {
+        // Mock implementation that supports queryWithAuth
+        if (sql.includes('return $auth;')) {
+          // Return auth status + actual data for queryWithAuth
+          return Promise.resolve([
+            { id: 'user:test', name: 'test user' }, // Mock auth result
+            mockCasesData // Actual query result
+          ]);
+        }
+        // For other queries, return direct result
+        return Promise.resolve([mockCasesData]);
+      }),
+      select: vi.fn().mockResolvedValue([]),
+      create: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      merge: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue({}),
+      live: vi.fn(),
+      kill: vi.fn(),
+      let: vi.fn(),
+      unset: vi.fn(),
+      signup: vi.fn().mockResolvedValue({}),
       signin: vi.fn().mockResolvedValue({}),
-      signout: vi.fn().mockResolvedValue(undefined),
-      setTokens: vi.fn(),
-      clearTokens: vi.fn(),
-      getStoredAccessToken: vi.fn().mockReturnValue(null),
-      setTenantCode: vi.fn().mockResolvedValue(undefined),
-      getTenantCode: vi.fn().mockResolvedValue(null),
+      invalidate: vi.fn().mockResolvedValue(undefined),
+      authenticate: vi.fn().mockResolvedValue(''),
+      sync: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mockSurrealContextValue = {
+      client: mockSurrealClient,
+      surreal: mockSurrealClient,
+      isConnected: true,
+      isConnecting: false,
+      error: null,
+      isSuccess: true,
+      sendServiceWorkerMessage: vi.fn().mockResolvedValue({}),
+      isServiceWorkerAvailable: vi.fn().mockReturnValue(true),
+      waitForServiceWorkerReady: vi.fn().mockResolvedValue(undefined),
+      getAuthStatus: vi.fn().mockResolvedValue(true),
+      checkTenantCodeAndRedirect: vi.fn().mockReturnValue(true),
+      disposeSurrealClient: vi.fn().mockResolvedValue(undefined),
+      checkDatabaseConnection: vi.fn().mockResolvedValue({ isConnected: true }),
+      initializeDatabaseConnection: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mockAuthContextValue = {
+      isLoggedIn: true,
+      user: null,
+      oidcUser: null,
+      setAuthState: vi.fn(),
+      logout: vi.fn(),
+      isLoading: false,
+      selectedCaseId: null,
+      selectedCase: null,
+      userCases: [],
+      currentUserCaseRoles: [],
+      isCaseLoading: false,
+      selectCase: vi.fn(),
+      hasRole: vi.fn().mockReturnValue(false),
+      refreshUserCasesAndRoles: vi.fn(),
+      navMenuItems: [],
+      isMenuLoading: false,
+      navigateTo: null,
+      clearNavigateTo: vi.fn(),
+      useOperationPermission: vi.fn(() => ({ hasPermission: true, isLoading: false, error: null })),
+      useOperationPermissions: vi.fn(() => ({ permissions: {}, isLoading: false, error: null })),
+      useMenuPermission: vi.fn(() => ({ hasPermission: true, isLoading: false, error: null })),
+      useDataPermission: vi.fn(() => ({ hasPermission: true, isLoading: false, error: null })),
+      useUserRoles: vi.fn(() => ({ roles: [], isLoading: false, error: null })),
+      useClearPermissionCache: vi.fn(() => ({ clearUserPermissions: vi.fn(), clearAllPermissions: vi.fn() })),
+      useSyncPermissions: vi.fn(() => ({ syncPermissions: vi.fn() })),
+      preloadOperationPermission: vi.fn(),
+      preloadOperationPermissions: vi.fn(),
     };
   });
 
@@ -587,7 +633,7 @@ describe('CaseListPage', () => {
 
     it('handles database connection failure', async () => {
       mockSurrealContextValue.isSuccess = false;
-      mockSurrealContextValue.isError = true;
+      mockSurrealContextValue.error = new Error('模拟数据库连接失败');
       mockSurrealContextValue.error = new Error('Connection failed');
       
       renderCaseListPage();
