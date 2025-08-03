@@ -58,6 +58,10 @@ const mockSurrealClient = {
 // Mock SurrealDB provider
 vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurrealClient: vi.fn(() => mockSurrealClient),
+  useSurrealContext: vi.fn(() => ({
+    client: mockSurrealClient,
+    isConnected: false,
+  })),
 }));
 
 // 创建稳定的 mock 函数引用
