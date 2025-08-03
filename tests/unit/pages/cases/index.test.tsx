@@ -430,7 +430,10 @@ describe('CaseListPage', () => {
         },
       ];
       
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([customMockData]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([
+        { id: 'user:test', name: 'test user' }, // Mock auth result
+        customMockData
+      ]);
       renderCaseListPage();
       
       await waitFor(() => {
@@ -473,7 +476,10 @@ describe('CaseListPage', () => {
     });
 
     it('shows "暂无案件数据" when no cases are provided', async () => {
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([[]]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([
+        { id: 'user:test', name: 'test user' }, // Mock auth result
+        []
+      ]);
       renderCaseListPage();
       await waitFor(() => {
         expect(screen.getByText('暂无案件数据')).toBeInTheDocument();
@@ -683,7 +689,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([rawMockData]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, rawMockData]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -705,7 +711,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([incompleteMockData]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, incompleteMockData]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -946,7 +952,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([isoDateMockData]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, isoDateMockData]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -968,7 +974,7 @@ describe('CaseListPage', () => {
     });
 
     it('handles empty query result gracefully', async () => {
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, ]);
       
       renderCaseListPage();
       
@@ -978,7 +984,10 @@ describe('CaseListPage', () => {
     });
 
     it('handles null query result gracefully', async () => {
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce(null);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([
+        { id: 'user:test', name: 'test user' }, // Mock auth result
+        null
+      ]);
       
       renderCaseListPage();
       
@@ -1005,7 +1014,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockDataWithoutCaseNumber]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockDataWithoutCaseNumber]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -1029,7 +1038,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockDataWithoutLead]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockDataWithoutLead]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -1053,7 +1062,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockDataWithoutCreator]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockDataWithoutCreator]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -1077,7 +1086,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockDataWithoutProcedure]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockDataWithoutProcedure]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -1101,7 +1110,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockDataWithoutPhase]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockDataWithoutPhase]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -1297,7 +1306,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockCasesDataWithNullIds]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockCasesDataWithNullIds]);
       renderCaseListPage();
 
       await waitFor(() => {
@@ -1345,7 +1354,7 @@ describe('CaseListPage', () => {
         }
       ];
 
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([mockCasesDataWithoutIds]);
+      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockCasesDataWithoutIds]);
       
       // 这应该不会抛出错误
       expect(() => {
