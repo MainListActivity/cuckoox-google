@@ -707,6 +707,391 @@ describe('MessageService', () => {
     });
   });
 
+  describe('群组消息高级功能', () => {
+    it('应该成功获取群组消息历史', async () => {
+      // Arrange
+      const groupId = new RecordId('message_group', 'test-group');
+      const mockMessages = [mockGroupMessage];
+      
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('group_message') && query.includes('ORDER BY')) {
+          return Promise.resolve([mockMessages]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Act
+      const result = await messageService.getGroupMessages(groupId, 50, 0);
+
+      // Assert
+      expect(result).toEqual(mockMessages);
+    });
+
+    it('应该成功获取群组未读消息数量', async () => {
+      // Arrange
+      const groupId = new RecordId('message_group', 'test-group');
+      const userId = mockAuthResult.id;
+      
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('unread_count')) {
+          return Promise.resolve([{ unread_count: 5 }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Act
+      const result = await messageService.getGroupUnreadCount(groupId, userId);
+
+      // Assert
+      expect(result).toBe(5);
+    });
+
+    it('应该成功获取群组置顶消息', async () => {
+      // Arrange
+      const groupId = new RecordId('message_group', 'test-group');
+      const pinnedMessage = {
+        ...mockGroupMessage,
+        is_pinned: true,
+        pinned_by: mockAuthResult.id,
+        pinned_at: new Date().toISOString(),
+      };
+      
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('pinned_message')) {
+          return Promise.resolve([[pinnedMessage]]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Act
+      const result = await messageService.getGroupPinnedMessages(groupId);
+
+      // Assert
+      expect(result).toEqual([pinnedMessage]);
+    });
+
+    it('应该成功发送多媒体群组消息', async () => {
+      // Arrange
+      const messageData: SendGroupMessageData = {
+        group_id: new RecordId('message_group', 'test-group'),
+        content: '分享一张图片',
+        message_type: 'IMAGE',
+        file_metadata: {
+          file_name: 'image.jpg',
+          file_size: 1024000,
+          file_hash: 'abc123',
+          thumbnail_data: 'base64-thumbnail',
+          dimensions: { width: 1920, height: 1080 },
+          transfer_status: 'completed',
+        }
+      };
+
+      const mediaMessage = {
+        ...mockGroupMessage,
+        message_type: 'IMAGE',
+        file_metadata: messageData.file_metadata,
+      };
+
+      mockClient.create.mockResolvedValue([mediaMessage]);
+
+      // Act
+      const result = await messageService.sendGroupMessage(messageData);
+
+      // Assert
+      expect(result.message_type).toBe('IMAGE');
+      expect(result.file_metadata).toEqual(messageData.file_metadata);
+    });
+
+    it('应该成功发送通话结束消息', async () => {
+      // Arrange
+      const messageData: SendGroupMessageData = {
+        group_id: new RecordId('message_group', 'test-group'),
+        content: '群组通话已结束',
+        message_type: 'CALL_END',
+        call_metadata: {
+          call_id: 'call-123',
+          call_type: 'video',
+          duration: 1800, // 30分钟
+          participants: ['user:1', 'user:2', 'user:3'],
+          status: 'completed',
+        }
+      };
+
+      const callMessage = {
+        ...mockGroupMessage,
+        message_type: 'CALL_END',
+        call_metadata: messageData.call_metadata,
+      };
+
+      mockClient.create.mockResolvedValue([callMessage]);
+
+      // Act
+      const result = await messageService.sendGroupMessage(messageData);
+
+      // Assert
+      expect(result.message_type).toBe('CALL_END');
+      expect(result.call_metadata?.duration).toBe(1800);
+    });
+  });
+
+  describe('消息编辑和撤回', () => {
+    it('应该成功编辑群组消息', async () => {
+      // Arrange
+      const messageId = new RecordId('group_message', 'editable-message');
+      const newContent = '这是编辑后的内容';
+      
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('sender_id = $auth.id')) {
+          return Promise.resolve([{ id: messageId, sender_id: mockAuthResult.id }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockClient.merge.mockResolvedValue([{
+        ...mockGroupMessage,
+        id: messageId,
+        content: newContent,
+        is_edited: true,
+        edited_at: new Date().toISOString(),
+      }]);
+
+      // Act
+      const result = await messageService.editGroupMessage(messageId, newContent);
+
+      // Assert
+      expect(result).toBe(true);
+      expect(mockClient.merge).toHaveBeenCalledWith(messageId, expect.objectContaining({
+        content: newContent,
+        is_edited: true,
+      }));
+    });
+
+    it('应该成功撤回群组消息', async () => {
+      // Arrange
+      const messageId = new RecordId('group_message', 'recallable-message');
+      const reason = '发送错误';
+      
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('sender_id = $auth.id')) {
+          return Promise.resolve([{ 
+            id: messageId, 
+            sender_id: mockAuthResult.id,
+            created_at: new Date(Date.now() - 60000).toISOString() // 1分钟前
+          }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockClient.merge.mockResolvedValue([{
+        ...mockGroupMessage,
+        id: messageId,
+        is_recalled: true,
+        recalled_at: new Date().toISOString(),
+        recall_reason: reason,
+      }]);
+
+      // Act
+      const result = await messageService.recallGroupMessage(messageId, reason);
+
+      // Assert
+      expect(result).toBe(true);
+      expect(mockClient.merge).toHaveBeenCalledWith(messageId, expect.objectContaining({
+        is_recalled: true,
+        recall_reason: reason,
+      }));
+    });
+
+    it('超过撤回时间限制时应该抛出错误', async () => {
+      // Arrange
+      const messageId = new RecordId('group_message', 'old-message');
+      
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('sender_id = $auth.id')) {
+          return Promise.resolve([{ 
+            id: messageId, 
+            sender_id: mockAuthResult.id,
+            created_at: new Date(Date.now() - 3 * 60 * 1000).toISOString() // 3分钟前，超过2分钟限制
+          }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Act & Assert
+      await expect(messageService.recallGroupMessage(messageId))
+        .rejects.toThrow('消息发送时间超过2分钟，无法撤回');
+    });
+  });
+
+  describe('消息转发功能', () => {
+    it('应该成功转发消息到群组', async () => {
+      // Arrange
+      const originalMessageId = new RecordId('group_message', 'original-message');
+      const targetGroupId = new RecordId('message_group', 'target-group');
+      
+      const originalMessage = {
+        ...mockGroupMessage,
+        id: originalMessageId,
+        content: '原始消息内容',
+      };
+
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('SELECT') && query.includes(originalMessageId.toString())) {
+          return Promise.resolve([originalMessage]);
+        }
+        return Promise.resolve([]);
+      });
+
+      const forwardedMessage = {
+        ...mockGroupMessage,
+        group_id: targetGroupId,
+        content: originalMessage.content,
+        forwarded_from: originalMessageId,
+        is_forwarded: true,
+      };
+
+      mockClient.create.mockResolvedValue([forwardedMessage]);
+
+      // Act
+      const result = await messageService.forwardMessageToGroup(originalMessageId, targetGroupId);
+
+      // Assert
+      expect(result).toEqual(forwardedMessage);
+      expect(mockClient.create).toHaveBeenCalledWith('group_message', expect.objectContaining({
+        group_id: targetGroupId,
+        content: originalMessage.content,
+        forwarded_from: originalMessageId,
+        is_forwarded: true,
+      }));
+    });
+
+    it('应该成功批量转发消息', async () => {
+      // Arrange
+      const messageIds = [
+        new RecordId('group_message', 'msg1'),
+        new RecordId('group_message', 'msg2'),
+      ];
+      const targetGroupId = new RecordId('message_group', 'target-group');
+
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('SELECT') && query.includes('IN')) {
+          return Promise.resolve([
+            { id: messageIds[0], content: '消息1' },
+            { id: messageIds[1], content: '消息2' },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockClient.create.mockResolvedValue([
+        { id: 'forwarded1', content: '消息1', is_forwarded: true },
+        { id: 'forwarded2', content: '消息2', is_forwarded: true },
+      ]);
+
+      // Act
+      const result = await messageService.batchForwardMessages(messageIds, targetGroupId);
+
+      // Assert
+      expect(result).toHaveLength(2);
+      expect(mockClient.create).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('消息草稿功能', () => {
+    it('应该成功保存群组消息草稿', async () => {
+      // Arrange
+      const groupId = new RecordId('message_group', 'test-group');
+      const draftContent = '这是草稿内容';
+
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Act
+      await messageService.saveGroupMessageDraft(groupId, draftContent);
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPSERT'),
+        expect.objectContaining({
+          group_id: groupId,
+          draft_content: draftContent,
+        })
+      );
+    });
+
+    it('应该成功获取群组消息草稿', async () => {
+      // Arrange
+      const groupId = new RecordId('message_group', 'test-group');
+      const draftContent = '保存的草稿内容';
+
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        if (query.includes('draft_content')) {
+          return Promise.resolve([{ draft_content: draftContent }]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Act
+      const result = await messageService.getGroupMessageDraft(groupId);
+
+      // Assert
+      expect(result).toBe(draftContent);
+    });
+
+    it('应该成功清除群组消息草稿', async () => {
+      // Arrange
+      const groupId = new RecordId('message_group', 'test-group');
+
+      mockClient.query.mockImplementation((query: string) => {
+        if (query.includes('return $auth;')) {
+          return Promise.resolve([mockAuthResult]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // Act
+      await messageService.clearGroupMessageDraft(groupId);
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE'),
+        expect.objectContaining({
+          group_id: groupId,
+        })
+      );
+    });
+  });
+
   describe('数据验证', () => {
     it('应该验证消息内容长度', async () => {
       // Arrange
@@ -761,6 +1146,37 @@ describe('MessageService', () => {
       // Act & Assert
       await expect(messageService.sendGroupMessage(messageData))
         .rejects.toThrow('提及的用户不存在');
+    });
+
+    it('应该验证群组消息类型', async () => {
+      // Arrange
+      const messageData: SendGroupMessageData = {
+        group_id: new RecordId('message_group', 'test-group'),
+        content: '测试消息',
+        message_type: 'INVALID_TYPE' as any,
+      };
+
+      // Act & Assert
+      await expect(messageService.sendGroupMessage(messageData))
+        .rejects.toThrow('无效的消息类型');
+    });
+
+    it('应该验证文件元数据完整性', async () => {
+      // Arrange
+      const messageData: SendGroupMessageData = {
+        group_id: new RecordId('message_group', 'test-group'),
+        content: '文件消息',
+        message_type: 'FILE',
+        file_metadata: {
+          file_name: 'test.pdf',
+          file_size: 1024000,
+          // 缺少必需的 file_hash 字段
+        } as any,
+      };
+
+      // Act & Assert
+      await expect(messageService.sendGroupMessage(messageData))
+        .rejects.toThrow('文件元数据不完整');
     });
   });
 });

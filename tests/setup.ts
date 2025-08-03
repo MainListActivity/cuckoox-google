@@ -1,5 +1,32 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+
+// Initialize i18n for tests
+i18n
+  .use(initReactI18next)
+  .init({
+    lng: 'zh',
+    fallbackLng: 'zh',
+    debug: false,
+    interpolation: {
+      escapeValue: false,
+    },
+    resources: {
+      zh: {
+        translation: {
+          // Add minimal translations for tests
+          "creditor_list_page_title": "债权人列表",
+          "add_single_creditor_button": "添加单个债权人",
+          "batch_import_creditors_button": "批量导入债权人",
+          "print_waybill_button": "打印运单",
+          "loading": "加载中...",
+          "no_data_available": "暂无数据",
+        },
+      },
+    },
+  });
 
 // Mock global objects that might not be available in test environment
 Object.defineProperty(window, 'matchMedia', {
