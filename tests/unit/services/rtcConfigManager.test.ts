@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import rtcConfigManager from '../../../src/services/rtcConfigManager';
-import rtcConfigService from '../../../src/services/rtcConfigService';
+import rtcConfigManager from '@/src/services/rtcConfigManager';
+import rtcConfigService from '@/src/services/rtcConfigService';
 
 // Mock dependencies
-vi.mock('../../../src/services/rtcConfigService');
+vi.mock('@/src/services/rtcConfigService');
 
 const mockRtcConfigService = vi.mocked(rtcConfigService);
 

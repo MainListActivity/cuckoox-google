@@ -20,7 +20,7 @@ global.fetch = mockFetch;
 
 // Mock Turnstile component with manual trigger
 let turnstileSuccessCallback: ((token: string) => void) | null = null;
-vi.mock('../../../src/components/Turnstile', () => ({
+vi.mock('@/src/components/Turnstile', () => ({
   default: ({ onSuccess }: { onSuccess: (token: string) => void }) => {
     // Store the callback for manual triggering
     turnstileSuccessCallback = onSuccess;
@@ -30,12 +30,12 @@ vi.mock('../../../src/components/Turnstile', () => ({
 
 const mockSetAuthState = vi.fn();
 const mockUseAuthFn = vi.fn();
-vi.mock('../../../src/contexts/AuthContext', () => ({
+vi.mock('@/src/contexts/AuthContext', () => ({
   useAuth: () => mockUseAuthFn(),
 }));
 
 const mockLoginRedirect = vi.fn();
-vi.mock('../../../src/services/authService', () => ({
+vi.mock('@/src/services/authService', () => ({
   default: {
     loginRedirect: (...args: any[]) => mockLoginRedirect(...args),
   },
@@ -49,7 +49,7 @@ const mockSurrealClient = {
 
 const mockSetTokens = vi.fn();
 
-vi.mock('../../../src/contexts/SurrealProvider', () => ({
+vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurrealClient: () => mockSurrealClient,
   useSurreal: () => ({
     setTokens: mockSetTokens,

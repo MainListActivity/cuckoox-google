@@ -23,7 +23,7 @@ const localStorageMock = (() => {
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 // Mock authService
-vi.mock('../../../src/services/authService', () => ({
+vi.mock('@/src/services/authService', () => ({
   default: {
     getUser: vi.fn(),
     loginRedirect: vi.fn(),
@@ -34,7 +34,7 @@ vi.mock('../../../src/services/authService', () => ({
 }));
 
 // Mock menuService
-vi.mock('../../../src/services/menuService', () => ({
+vi.mock('@/src/services/menuService', () => ({
   default: {
     loadUserMenus: vi.fn(),
     getUserMenus: vi.fn(),

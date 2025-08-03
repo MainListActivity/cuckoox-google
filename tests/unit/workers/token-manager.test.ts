@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TokenManager, TokenInfo } from '../../../src/workers/token-manager';
+import { TokenManager, TokenInfo } from '@/src/workers/token-manager';
 import { RecordId } from 'surrealdb';
 
 // Mock SurrealDB

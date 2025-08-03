@@ -3,7 +3,7 @@ import {
   useLiveTodaysSubmissionsCount, 
   useLiveTodaysReviewedClaimsCount,
   useLiveUsersOnlineByRoleChartData,
-} from '../../../src/hooks/useLiveDashboardData';
+} from '@/src/hooks/useLiveDashboardData';
 import { teal, cyan, purple, grey } from '@mui/material/colors';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Uuid } from 'surrealdb';
@@ -25,7 +25,7 @@ const surrealClientState = {
   isConnected: true,
 };
 
-vi.mock('../../../src/contexts/SurrealProvider', () => ({
+vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurreal: () => surrealClientState,
   useSurrealContext: () => surrealClientState,
 }));

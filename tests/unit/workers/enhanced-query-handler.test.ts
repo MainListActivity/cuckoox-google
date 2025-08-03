@@ -25,12 +25,12 @@ describe('EnhancedQueryHandler', () => {
 
   it('should be importable', async () => {
     // 简单的导入测试
-    const { EnhancedQueryHandler } = await import('../../../src/workers/enhanced-query-handler');
+    const { EnhancedQueryHandler } = await import('@/src/workers/enhanced-query-handler');
     expect(EnhancedQueryHandler).toBeDefined();
   });
 
   it('should create instance with required dependencies', async () => {
-    const { EnhancedQueryHandler } = await import('../../../src/workers/enhanced-query-handler');
+    const { EnhancedQueryHandler } = await import('@/src/workers/enhanced-query-handler');
     
     const handler = new EnhancedQueryHandler(
       mockLocalDb as any,
@@ -45,7 +45,7 @@ describe('EnhancedQueryHandler', () => {
   });
 
   it('should handle query failure gracefully', async () => {
-    const { EnhancedQueryHandler } = await import('../../../src/workers/enhanced-query-handler');
+    const { EnhancedQueryHandler } = await import('@/src/workers/enhanced-query-handler');
     
     const handler = new EnhancedQueryHandler(
       mockLocalDb as any,

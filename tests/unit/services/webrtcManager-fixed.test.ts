@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import webrtcManagerInstance, { WebRTCManager } from '../../../src/services/webrtcManager';
-import rtcConfigManager from '../../../src/services/rtcConfigManager';
-import type { MediaConstraints, IceCandidate, SessionDescription } from '../../../src/services/webrtcManager';
+import webrtcManagerInstance, { WebRTCManager } from '@/src/services/webrtcManager';
+import rtcConfigManager from '@/src/services/rtcConfigManager';
+import type { MediaConstraints, IceCandidate, SessionDescription } from '@/src/services/webrtcManager';
 
 // Mock dependencies
-vi.mock('../../../src/services/rtcConfigManager');
+vi.mock('@/src/services/rtcConfigManager');
 
 const mockRtcConfigManager = vi.mocked(rtcConfigManager);
 

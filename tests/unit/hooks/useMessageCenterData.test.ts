@@ -24,7 +24,7 @@ const mockSurrealDbClient = {
   status: 'connected',
 };
 
-vi.mock('../../../src/contexts/SurrealProvider', () => ({
+vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurreal: () => ({
     client: mockSurrealDbClient,
     isConnected: true,
@@ -36,7 +36,7 @@ vi.mock('../../../src/contexts/SurrealProvider', () => ({
 }));
 
 // Mock useAuth if needed for userId (not strictly necessary if we pass userId directly)
-vi.mock('../../../src/contexts/AuthContext', () => ({
+vi.mock('@/src/contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'user:test-user', name: 'Test User' },
     // ... other auth context values if needed by hooks directly (they don't seem to)

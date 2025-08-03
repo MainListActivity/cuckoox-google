@@ -27,7 +27,7 @@ const mockSurrealDbClient = {
   status: 'connected' as const,
 };
 
-vi.mock('../../../src/contexts/SurrealProvider', () => ({
+vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurreal: () => ({
     client: mockSurrealDbClient,
     isConnected: true,

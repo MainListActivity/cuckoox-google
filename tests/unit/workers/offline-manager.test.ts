@@ -23,7 +23,7 @@ vi.stubGlobal('crypto', {
 });
 
 // Import after mocking globals
-import { OfflineManager } from '../../../src/workers/offline-manager';
+import { OfflineManager } from '@/src/workers/offline-manager';
 
 afterEach(() => {
   vi.clearAllMocks();

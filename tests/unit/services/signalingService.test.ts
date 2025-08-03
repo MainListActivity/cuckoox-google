@@ -21,7 +21,7 @@ const mockClient = {
   kill: vi.fn(),
 };
 
-vi.mock('../../../src/contexts/SurrealProvider', () => ({
+vi.mock('@/src/contexts/SurrealProvider', () => ({
   useSurrealClientSingleton: vi.fn(() => mockClient),
   TenantCodeMissingError: class extends Error {},
 }));
