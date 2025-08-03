@@ -33,6 +33,7 @@ src/
 ├── services/         # Business logic services with dependency injection
 ├── utils/            # Including surrealAuth.ts for authenticated queries
 ├── pages/            # File-based routing structure
+├── tests/            # 单元测试目录
 ```
 
 ## Development Guidelines
@@ -56,7 +57,7 @@ class SomeService {
 ### Essential Commands
 - **Package Manager**: Uses `bun` (not npm/yarn)
 - **Development**: `bun run dev` (includes Service Worker hot reload)
-- **Testing**: `bun run test` (Vitest), `bun run test:e2e` (Playwright)  
+- **Testing**: `bun run test:run` (Vitest), `bun run test:e2e` (Playwright)  , 运行单个测试文件：`bun run test:run -- src/tests/unit/your-test-file.ts`
 - **Type Checking**: Strict TypeScript with `@/*` path aliases mapping to project root
 
 ### Technology Stack Specifics
@@ -85,6 +86,8 @@ class SomeService {
 - **Unit Tests**: Focus on business logic and service layer (`tests/unit/`)
 - **E2E Tests**: Critical user journeys with Playwright (`e2e/`)
 - **Service Worker Testing**: Mock SW communication in unit tests
+- **Coverage**: Aim for 90%+ coverage on critical paths
+- **测试要求**: 先将修复后的测试文件覆盖到原来的测试文件，请记住，非必要不能新增重复的单元测试文件，请在原来的测试文件中修改，如果必须创建新的测试文件，需要确保测试用例的完善，在测试通过后需要覆盖原来的测试文件
 
 ## Key Files to Understand
 - `src/contexts/SurrealProvider.tsx` - Service Worker client setup
