@@ -893,7 +893,7 @@ class MessageService {
       const now = new Date().toISOString();
       
       // 处理@提及
-      let processedContent = data.content;
+      const processedContent = data.content;
       const mentionedUsers: string[] = [];
       
       if (data.mentions && data.mentions.length > 0) {
@@ -1157,7 +1157,7 @@ class MessageService {
       }
       
       // 构建搜索查询
-      let whereConditions = [
+      const whereConditions = [
         `group_id = $group_id`,
         `is_deleted = false`
       ];

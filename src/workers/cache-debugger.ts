@@ -841,8 +841,8 @@ export class CacheDebugger {
 
   private async checkDataIntegrity(table: string, data: any[]): Promise<{ orphaned: number; missingRefs: number }> {
     // 简化的数据完整性检查
-    let orphaned = 0;
-    let missingRefs = 0;
+    const orphaned = 0;
+    const missingRefs = 0;
     
     // 这里应该实现更复杂的完整性检查逻辑
     // 比如检查外键引用、关联数据等

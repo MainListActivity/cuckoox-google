@@ -473,7 +473,7 @@ class PWAInstallGuideManager {
     if (!guide) return 0;
 
     // 基于是否支持原生安装和故障排除步骤数量来估算成功率
-    let baseRate = guide.supportsNativeInstall ? 0.85 : 0.70;
+    const baseRate = guide.supportsNativeInstall ? 0.85 : 0.70;
     
     // 根据故障排除步骤数量调整
     const troubleshootingCount = guide.troubleshooting?.length || 0;

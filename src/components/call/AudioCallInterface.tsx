@@ -36,7 +36,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import callManager, { CallSession, CallState, MediaState } from '@/src/services/callManager';
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
-import { useWebRTCPermissions, WEBRTC_PERMISSIONS } from '@/src/hooks/useWebRTCPermissions';
+import { useWebRTCPermissions } from '@/src/hooks/useWebRTCPermissions';
 
 // 组件属性接口
 export interface AudioCallInterfaceProps {
@@ -92,8 +92,13 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   
   // WebRTC权限检查
   const { permissions, preloadPermissionGroup } = useWebRTCPermissions();
-  const mediaControlsPermissions = permissions.mediaControls();
-  const basicCallingPermissions = permissions.basicCalling();
+  
+  // 获取具体权限状态
+  const canToggleMicrophone = permissions.canToggleMicrophone();
+  const canToggleSpeaker = permissions.canToggleSpeaker();
+  const canToggleCamera = permissions.canToggleCamera();
+  const canShareScreen = permissions.canShareScreen();
+  const canEndCall = permissions.canEndCall();
   const [callSession, setCallSession] = useState<CallSession | null>(null);
   const [callDuration, setCallDuration] = useState<number>(0);
   const [mediaState, setMediaState] = useState<MediaState>({
@@ -795,57 +800,76 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
               }}
             >
               {/* 静音按钮 */}
-              <Tooltip title={mediaState.micMuted ? '取消静音' : '静音'}>
-                <IconButton
-                  onClick={handleToggleMute}
-                  disabled={isLoading}
-                  size="large"
-                  sx={{
-                    width: getButtonSize(),
-                    height: getButtonSize(),
-                    bgcolor: mediaState.micMuted ? theme.palette.warning.main : theme.palette.action.hover,
-                    color: mediaState.micMuted ? theme.palette.warning.contrastText : theme.palette.text.primary,
-                    '&:hover': {
-                      bgcolor: mediaState.micMuted ? theme.palette.warning.dark : theme.palette.action.selected
-                    }
-                  }}
-                >
-                  {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
-                </IconButton>
-              </Tooltip>
+              {canToggleMicrophone.hasPermission && (
+                <Tooltip title={
+                  canToggleMicrophone.hasPermission 
+                    ? (mediaState.micMuted ? '取消静音' : '静音')
+                    : '没有麦克风控制权限'
+                }>
+                  <IconButton
+                    onClick={handleToggleMute}
+                    disabled={isLoading || !canToggleMicrophone.hasPermission}
+                    size="large"
+                    sx={{
+                      width: getButtonSize(),
+                      height: getButtonSize(),
+                      bgcolor: mediaState.micMuted ? theme.palette.warning.main : theme.palette.action.hover,
+                      color: mediaState.micMuted ? theme.palette.warning.contrastText : theme.palette.text.primary,
+                      opacity: canToggleMicrophone.hasPermission ? 1 : 0.5,
+                      '&:hover': {
+                        bgcolor: mediaState.micMuted ? theme.palette.warning.dark : theme.palette.action.selected
+                      }
+                    }}
+                  >
+                    {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
+                  </IconButton>
+                </Tooltip>
+              )}
 
               {/* 扬声器按钮 */}
-              <Tooltip title={mediaState.speakerEnabled ? '关闭扬声器' : '开启扬声器'}>
-                <IconButton
-                  onClick={handleToggleSpeaker}
-                  disabled={isLoading}
-                  size="large"
-                  sx={{
-                    width: getButtonSize(),
-                    height: getButtonSize(),
-                    bgcolor: mediaState.speakerEnabled ? theme.palette.success.main : theme.palette.action.hover,
-                    color: mediaState.speakerEnabled ? theme.palette.success.contrastText : theme.palette.text.primary,
-                    '&:hover': {
-                      bgcolor: mediaState.speakerEnabled ? theme.palette.success.dark : theme.palette.action.selected
-                    }
-                  }}
-                >
-                  {mediaState.speakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
-                </IconButton>
-              </Tooltip>
+              {canToggleSpeaker.hasPermission && (
+                <Tooltip title={
+                  canToggleSpeaker.hasPermission
+                    ? (mediaState.speakerEnabled ? '关闭扬声器' : '开启扬声器')
+                    : '没有扬声器控制权限'
+                }>
+                  <IconButton
+                    onClick={handleToggleSpeaker}
+                    disabled={isLoading || !canToggleSpeaker.hasPermission}
+                    size="large"
+                    sx={{
+                      width: getButtonSize(),
+                      height: getButtonSize(),
+                      bgcolor: mediaState.speakerEnabled ? theme.palette.success.main : theme.palette.action.hover,
+                      color: mediaState.speakerEnabled ? theme.palette.success.contrastText : theme.palette.text.primary,
+                      opacity: canToggleSpeaker.hasPermission ? 1 : 0.5,
+                      '&:hover': {
+                        bgcolor: mediaState.speakerEnabled ? theme.palette.success.dark : theme.palette.action.selected
+                      }
+                    }}
+                  >
+                    {mediaState.speakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
+                  </IconButton>
+                </Tooltip>
+              )}
 
               {/* 摄像头按钮（仅视频通话显示） */}
-              {callSession.callType === 'video' && (
-                <Tooltip title={mediaState.cameraOff ? '开启摄像头' : '关闭摄像头'}>
+              {callSession.callType === 'video' && canToggleCamera.hasPermission && (
+                <Tooltip title={
+                  canToggleCamera.hasPermission
+                    ? (mediaState.cameraOff ? '开启摄像头' : '关闭摄像头')
+                    : '没有摄像头控制权限'
+                }>
                   <IconButton
                     onClick={handleToggleCamera}
-                    disabled={isLoading}
+                    disabled={isLoading || !canToggleCamera.hasPermission}
                     size="large"
                     sx={{
                       width: getButtonSize(),
                       height: getButtonSize(),
                       bgcolor: mediaState.cameraOff ? theme.palette.error.main : theme.palette.success.main,
                       color: mediaState.cameraOff ? theme.palette.error.contrastText : theme.palette.success.contrastText,
+                      opacity: canToggleCamera.hasPermission ? 1 : 0.5,
                       '&:hover': {
                         bgcolor: mediaState.cameraOff ? theme.palette.error.dark : theme.palette.success.dark
                       }
@@ -857,44 +881,56 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
               )}
 
               {/* 屏幕共享按钮 */}
-              <Tooltip title={mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享'}>
-                <IconButton
-                  onClick={handleToggleScreenShare}
-                  disabled={isLoading}
-                  size="large"
-                  sx={{
-                    width: getButtonSize(),
-                    height: getButtonSize(),
-                    bgcolor: mediaState.screenSharing ? theme.palette.primary.main : theme.palette.action.hover,
-                    color: mediaState.screenSharing ? theme.palette.primary.contrastText : theme.palette.text.primary,
-                    '&:hover': {
-                      bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : theme.palette.action.selected
-                    }
-                  }}
-                >
-                  {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
-                </IconButton>
-              </Tooltip>
+              {canShareScreen.hasPermission && (
+                <Tooltip title={
+                  canShareScreen.hasPermission
+                    ? (mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享')
+                    : '没有屏幕共享权限'
+                }>
+                  <IconButton
+                    onClick={handleToggleScreenShare}
+                    disabled={isLoading || !canShareScreen.hasPermission}
+                    size="large"
+                    sx={{
+                      width: getButtonSize(),
+                      height: getButtonSize(),
+                      bgcolor: mediaState.screenSharing ? theme.palette.primary.main : theme.palette.action.hover,
+                      color: mediaState.screenSharing ? theme.palette.primary.contrastText : theme.palette.text.primary,
+                      opacity: canShareScreen.hasPermission ? 1 : 0.5,
+                      '&:hover': {
+                        bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : theme.palette.action.selected
+                      }
+                    }}
+                  >
+                    {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                  </IconButton>
+                </Tooltip>
+              )}
 
               {/* 结束通话按钮 */}
-              <Tooltip title="结束通话">
-                <IconButton
-                  onClick={handleConfirmEndCall}
-                  disabled={isLoading}
-                  size="large"
-                  sx={{
-                    width: getButtonSize(),
-                    height: getButtonSize(),
-                    bgcolor: theme.palette.error.main,
-                    color: theme.palette.error.contrastText,
-                    '&:hover': {
-                      bgcolor: theme.palette.error.dark
-                    }
-                  }}
-                >
-                  <CallEndIcon />
-                </IconButton>
-              </Tooltip>
+              {canEndCall.hasPermission && (
+                <Tooltip title={
+                  canEndCall.hasPermission ? '结束通话' : '没有结束通话权限'
+                }>
+                  <IconButton
+                    onClick={handleConfirmEndCall}
+                    disabled={isLoading || !canEndCall.hasPermission}
+                    size="large"
+                    sx={{
+                      width: getButtonSize(),
+                      height: getButtonSize(),
+                      bgcolor: theme.palette.error.main,
+                      color: theme.palette.error.contrastText,
+                      opacity: canEndCall.hasPermission ? 1 : 0.5,
+                      '&:hover': {
+                        bgcolor: theme.palette.error.dark
+                      }
+                    }}
+                  >
+                    <CallEndIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           </Fade>
         ) : (
@@ -910,48 +946,67 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
             }}
           >
             {/* 静音按钮 */}
-            <Tooltip title={mediaState.micMuted ? '取消静音' : '静音'}>
-              <IconButton
-                onClick={handleToggleMute}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.micMuted ? theme.palette.warning.main : theme.palette.action.hover,
-                  color: mediaState.micMuted ? theme.palette.warning.contrastText : theme.palette.text.primary,
-                  '&:hover': {
-                    bgcolor: mediaState.micMuted ? theme.palette.warning.dark : theme.palette.action.selected
-                  }
-                }}
-              >
-                {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
-              </IconButton>
-            </Tooltip>
+            {canToggleMicrophone.hasPermission && (
+              <Tooltip title={
+                canToggleMicrophone.hasPermission 
+                  ? (mediaState.micMuted ? '取消静音' : '静音')
+                  : '没有麦克风控制权限'
+              }>
+                <IconButton
+                  onClick={handleToggleMute}
+                  disabled={isLoading || !canToggleMicrophone.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.micMuted ? theme.palette.warning.main : theme.palette.action.hover,
+                    color: mediaState.micMuted ? theme.palette.warning.contrastText : theme.palette.text.primary,
+                    opacity: canToggleMicrophone.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.micMuted ? theme.palette.warning.dark : theme.palette.action.selected
+                    }
+                  }}
+                >
+                  {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
 
             {/* 扬声器按钮 */}
-            <Tooltip title={mediaState.speakerEnabled ? '关闭扬声器' : '开启扬声器'}>
-              <IconButton
-                onClick={handleToggleSpeaker}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.speakerEnabled ? theme.palette.success.main : theme.palette.action.hover,
-                  color: mediaState.speakerEnabled ? theme.palette.success.contrastText : theme.palette.text.primary,
-                  '&:hover': {
-                    bgcolor: mediaState.speakerEnabled ? theme.palette.success.dark : theme.palette.action.selected
-                  }
-                }}
-              >
-                {mediaState.speakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
-              </IconButton>
-            </Tooltip>
+            {canToggleSpeaker.hasPermission && (
+              <Tooltip title={
+                canToggleSpeaker.hasPermission
+                  ? (mediaState.speakerEnabled ? '关闭扬声器' : '开启扬声器')
+                  : '没有扬声器控制权限'
+              }>
+                <IconButton
+                  onClick={handleToggleSpeaker}
+                  disabled={isLoading || !canToggleSpeaker.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.speakerEnabled ? theme.palette.success.main : theme.palette.action.hover,
+                    color: mediaState.speakerEnabled ? theme.palette.success.contrastText : theme.palette.text.primary,
+                    opacity: canToggleSpeaker.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.speakerEnabled ? theme.palette.success.dark : theme.palette.action.selected
+                    }
+                  }}
+                >
+                  {mediaState.speakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
 
             {/* 摄像头按钮（仅视频通话显示） */}
-            {callSession.callType === 'video' && (
-              <Tooltip title={mediaState.cameraOff ? '开启摄像头' : '关闭摄像头'}>
+            {callSession.callType === 'video' && canToggleCamera.hasPermission && (
+              <Tooltip title={
+                canToggleCamera.hasPermission
+                  ? (mediaState.cameraOff ? '开启摄像头' : '关闭摄像头')
+                  : '没有摄像头控制权限'
+              }>
                 <IconButton
                   onClick={handleToggleCamera}
-                  disabled={isLoading}
+                  disabled={isLoading || !canToggleCamera.hasPermission}
                   sx={{
                     bgcolor: mediaState.cameraOff ? theme.palette.error.main : theme.palette.success.main,
                     color: mediaState.cameraOff ? theme.palette.error.contrastText : theme.palette.success.contrastText,
+                    opacity: canToggleCamera.hasPermission ? 1 : 0.5,
                     '&:hover': {
                       bgcolor: mediaState.cameraOff ? theme.palette.error.dark : theme.palette.success.dark
                     }
@@ -963,39 +1018,51 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
             )}
 
             {/* 屏幕共享按钮 */}
-            <Tooltip title={mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享'}>
-              <IconButton
-                onClick={handleToggleScreenShare}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.screenSharing ? theme.palette.primary.main : theme.palette.action.hover,
-                  color: mediaState.screenSharing ? theme.palette.primary.contrastText : theme.palette.text.primary,
-                  '&:hover': {
-                    bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : theme.palette.action.selected
-                  }
-                }}
-              >
-                {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
-              </IconButton>
-            </Tooltip>
+            {canShareScreen.hasPermission && (
+              <Tooltip title={
+                canShareScreen.hasPermission
+                  ? (mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享')
+                  : '没有屏幕共享权限'
+              }>
+                <IconButton
+                  onClick={handleToggleScreenShare}
+                  disabled={isLoading || !canShareScreen.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.screenSharing ? theme.palette.primary.main : theme.palette.action.hover,
+                    color: mediaState.screenSharing ? theme.palette.primary.contrastText : theme.palette.text.primary,
+                    opacity: canShareScreen.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : theme.palette.action.selected
+                    }
+                  }}
+                >
+                  {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
 
             {/* 结束通话按钮 */}
-            <Tooltip title="结束通话">
-              <IconButton
-                onClick={handleConfirmEndCall}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: theme.palette.error.main,
-                  color: theme.palette.error.contrastText,
-                  '&:hover': {
-                    bgcolor: theme.palette.error.dark
-                  },
-                  ml: 2
-                }}
-              >
-                <CallEndIcon />
-              </IconButton>
-            </Tooltip>
+            {canEndCall.hasPermission && (
+              <Tooltip title={
+                canEndCall.hasPermission ? '结束通话' : '没有结束通话权限'
+              }>
+                <IconButton
+                  onClick={handleConfirmEndCall}
+                  disabled={isLoading || !canEndCall.hasPermission}
+                  sx={{
+                    bgcolor: theme.palette.error.main,
+                    color: theme.palette.error.contrastText,
+                    opacity: canEndCall.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: theme.palette.error.dark
+                    },
+                    ml: 2
+                  }}
+                >
+                  <CallEndIcon />
+                </IconButton>
+              </Tooltip>
+            )}
           </Box>
         )}
 
