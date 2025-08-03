@@ -52,7 +52,8 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useGroupDetails, useGroupOperations, useGroupPermissions } from '@/src/hooks/useGroupData';
 import { messageService } from '@/src/services/messageService';
-import callManager, { CallType, CallSession, CallParticipant } from '@/src/services/callManager';
+import callManager, { CallType, CallSession, CallParticipant, CallState } from '@/src/services/callManager';
+import { useWebRTCPermissions } from '@/src/hooks/useWebRTCPermissions';
 
 interface GroupChatInterfaceProps {
   groupId: RecordId | string;
@@ -84,6 +85,20 @@ export default function GroupChatInterface({
   const { group, members, isLoading, error, refetch } = useGroupDetails(groupId);
   const { leaveGroup } = useGroupOperations();
   const permissions = useGroupPermissions(groupId, user?.id);
+  
+  // WebRTC权限检查
+  const { permissions: webrtcPermissions, preloadPermissionGroup } = useWebRTCPermissions();
+  
+  // 获取具体WebRTC权限状态
+  const canInitiateVoiceCall = webrtcPermissions.canInitiateVoiceCall();
+  const canInitiateVideoCall = webrtcPermissions.canInitiateVideoCall();
+  const canAnswerCall = webrtcPermissions.canAnswerCall();
+  const canRejectCall = webrtcPermissions.canRejectCall();
+  const canEndCall = webrtcPermissions.canEndCall();
+  const canToggleMicrophone = webrtcPermissions.canToggleMicrophone();
+  const canToggleCamera = webrtcPermissions.canToggleCamera();
+  const canCreateGroupCall = webrtcPermissions.canCreateGroupCall();
+  const canJoinGroupCall = webrtcPermissions.canJoinGroupCall();
   
   // 本地状态
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
@@ -150,7 +165,7 @@ export default function GroupChatInterface({
     // 设置事件监听器
     callManager.setEventListeners({
       onCallStateChanged: (callId: string, state: CallState) => {
-        setCallState(state);
+        // 通话状态变化处理
         if (state === 'ended' || state === 'failed' || state === 'rejected') {
           setActiveCall(null);
           setCallParticipants([]);
@@ -181,8 +196,8 @@ export default function GroupChatInterface({
         }
       },
       
-      onGroupCallInvite: (callId: string, groupId: string, fromUser: string, metadata?: { callType?: CallType }) => {
-        if (String(groupId) === String(groupId)) {
+      onGroupCallInvite: (callId: string, inviteGroupId: string, fromUser: string, metadata?: { callType?: CallType }) => {
+        if (String(inviteGroupId) === String(groupId)) {
           setIncomingGroupCall({
             callId,
             fromUser,
@@ -222,6 +237,23 @@ export default function GroupChatInterface({
       checkMuteStatus();
     }
   }, [group, loadPinnedMessages, loadUnreadCount, checkMuteStatus]);
+
+  // 预加载WebRTC权限
+  useEffect(() => {
+    const loadWebRTCPermissions = async () => {
+      try {
+        await Promise.all([
+          preloadPermissionGroup('BASIC_CALLING'),
+          preloadPermissionGroup('MEDIA_CONTROLS'),
+          preloadPermissionGroup('GROUP_CALLING')
+        ]);
+      } catch (error) {
+        console.error('WebRTC权限预加载失败:', error);
+      }
+    };
+
+    loadWebRTCPermissions();
+  }, [preloadPermissionGroup]);
   
   // 处理菜单
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -275,8 +307,29 @@ export default function GroupChatInterface({
   
   // 群组通话处理函数
   const handleStartGroupCall = useCallback(async (callType: CallType) => {
+    // 检查群组消息权限
     if (!permissions.canSendMessage) {
       showError('您没有权限发起群组通话');
+      return;
+    }
+
+    // 检查WebRTC权限
+    const hasVoicePermission = canInitiateVoiceCall.hasPermission;
+    const hasVideoPermission = canInitiateVideoCall.hasPermission;
+    const hasGroupCallPermission = canCreateGroupCall.hasPermission;
+
+    if (!hasGroupCallPermission) {
+      showError('没有创建群组通话权限');
+      return;
+    }
+
+    if (callType === 'audio' && !hasVoicePermission) {
+      showError('没有发起语音通话权限');
+      return;
+    }
+
+    if (callType === 'video' && !hasVideoPermission) {
+      showError('没有发起视频通话权限');
       return;
     }
     
@@ -306,10 +359,24 @@ export default function GroupChatInterface({
     } finally {
       setLoadingAction(null);
     }
-  }, [groupId, activeCall, permissions.canSendMessage, group?.name, user, showSuccess, showError]);
+  }, [groupId, activeCall, permissions.canSendMessage, group?.name, user, showSuccess, showError, canInitiateVoiceCall, canInitiateVideoCall, canCreateGroupCall]);
   
   const handleAcceptGroupCall = useCallback(async () => {
     if (!incomingGroupCall) return;
+
+    // 检查WebRTC接听权限
+    if (!canAnswerCall.hasPermission) {
+      showError('没有接听通话权限');
+      setIncomingGroupCall(null);
+      return;
+    }
+
+    // 检查群组通话加入权限
+    if (!canJoinGroupCall.hasPermission) {
+      showError('没有加入群组通话权限');
+      setIncomingGroupCall(null);
+      return;
+    }
     
     try {
       setLoadingAction('accepting-call');
@@ -326,10 +393,17 @@ export default function GroupChatInterface({
     } finally {
       setLoadingAction(null);
     }
-  }, [incomingGroupCall, showSuccess, showError]);
+  }, [incomingGroupCall, showSuccess, showError, canAnswerCall, canJoinGroupCall]);
   
   const handleRejectGroupCall = useCallback(async () => {
     if (!incomingGroupCall) return;
+
+    // 检查WebRTC拒绝权限
+    if (!canRejectCall.hasPermission) {
+      showError('没有拒绝通话权限');
+      setIncomingGroupCall(null);
+      return;
+    }
     
     try {
       // 拒绝群组通话
@@ -340,10 +414,16 @@ export default function GroupChatInterface({
     } catch (error) {
       showError(`拒绝通话失败: ${(error as Error).message}`);
     }
-  }, [incomingGroupCall, showError]);
+  }, [incomingGroupCall, showError, canRejectCall]);
   
   const handleEndGroupCall = useCallback(async () => {
     if (!activeCall) return;
+
+    // 检查WebRTC结束通话权限
+    if (!canEndCall.hasPermission) {
+      showError('没有结束通话权限');
+      return;
+    }
     
     try {
       setLoadingAction('ending-call');
@@ -363,10 +443,16 @@ export default function GroupChatInterface({
     } finally {
       setLoadingAction(null);
     }
-  }, [activeCall, showSuccess, showError]);
+  }, [activeCall, showSuccess, showError, canEndCall]);
   
   const handleToggleCallMute = useCallback(() => {
     if (!activeCall) return;
+
+    // 检查麦克风控制权限
+    if (!canToggleMicrophone.hasPermission) {
+      showError('没有麦克风控制权限');
+      return;
+    }
     
     try {
       const isMuted = callManager.toggleMute(activeCall.callId);
@@ -374,10 +460,16 @@ export default function GroupChatInterface({
     } catch (error) {
       showError(`切换静音失败: ${(error as Error).message}`);
     }
-  }, [activeCall, showError]);
+  }, [activeCall, showError, canToggleMicrophone]);
   
   const handleToggleCallCamera = useCallback(() => {
     if (!activeCall || activeCall.callType === 'audio') return;
+
+    // 检查摄像头控制权限
+    if (!canToggleCamera.hasPermission) {
+      showError('没有摄像头控制权限');
+      return;
+    }
     
     try {
       const isCameraOff = callManager.toggleCamera(activeCall.callId);
@@ -385,7 +477,7 @@ export default function GroupChatInterface({
     } catch (error) {
       showError(`切换摄像头失败: ${(error as Error).message}`);
     }
-  }, [activeCall, showError]);
+  }, [activeCall, showError, canToggleCamera]);
   
   // 获取群组状态信息
   const getGroupStatusText = useCallback(() => {
@@ -537,25 +629,45 @@ export default function GroupChatInterface({
           {/* 通话按钮 */}
           {permissions.canSendMessage && (
             <>
-              {!isMobile && (
-                <Tooltip title="语音通话">
+              {/* 语音通话按钮 */}
+              {!isMobile && canInitiateVoiceCall.hasPermission && canCreateGroupCall.hasPermission && (
+                <Tooltip title={
+                  canInitiateVoiceCall.hasPermission && canCreateGroupCall.hasPermission
+                    ? "语音通话" 
+                    : "没有语音通话权限"
+                }>
                   <IconButton
                     onClick={() => handleStartGroupCall('audio')}
-                    disabled={loadingAction !== null || Boolean(activeCall)}
+                    disabled={loadingAction !== null || Boolean(activeCall) || 
+                             !canInitiateVoiceCall.hasPermission || !canCreateGroupCall.hasPermission}
+                    sx={{
+                      opacity: (canInitiateVoiceCall.hasPermission && canCreateGroupCall.hasPermission) ? 1 : 0.5
+                    }}
                   >
                     <CallIcon />
                   </IconButton>
                 </Tooltip>
               )}
               
-              <Tooltip title="视频通话">
-                <IconButton
-                  onClick={() => handleStartGroupCall('video')}
-                  disabled={loadingAction !== null || Boolean(activeCall)}
-                >
-                  <VideoCallIcon />
-                </IconButton>
-              </Tooltip>
+              {/* 视频通话按钮 */}
+              {canInitiateVideoCall.hasPermission && canCreateGroupCall.hasPermission && (
+                <Tooltip title={
+                  canInitiateVideoCall.hasPermission && canCreateGroupCall.hasPermission
+                    ? "视频通话" 
+                    : "没有视频通话权限"
+                }>
+                  <IconButton
+                    onClick={() => handleStartGroupCall('video')}
+                    disabled={loadingAction !== null || Boolean(activeCall) || 
+                             !canInitiateVideoCall.hasPermission || !canCreateGroupCall.hasPermission}
+                    sx={{
+                      opacity: (canInitiateVideoCall.hasPermission && canCreateGroupCall.hasPermission) ? 1 : 0.5
+                    }}
+                  >
+                    <VideoCallIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
             </>
           )}
           
@@ -812,22 +924,28 @@ export default function GroupChatInterface({
             </Typography>
           </DialogContent>
           <DialogActions>
-            <Button
-              onClick={handleRejectGroupCall}
-              startIcon={<PhoneDisabledIcon />}
-              disabled={loadingAction !== null}
-            >
-              拒绝
-            </Button>
-            <Button
-              onClick={handleAcceptGroupCall}
-              variant="contained"
-              startIcon={<PhoneIcon />}
-              disabled={loadingAction !== null}
-              color="success"
-            >
-              接听
-            </Button>
+            {canRejectCall.hasPermission && (
+              <Button
+                onClick={handleRejectGroupCall}
+                startIcon={<PhoneDisabledIcon />}
+                disabled={loadingAction !== null || !canRejectCall.hasPermission}
+                sx={{ opacity: canRejectCall.hasPermission ? 1 : 0.5 }}
+              >
+                拒绝
+              </Button>
+            )}
+            {canAnswerCall.hasPermission && canJoinGroupCall.hasPermission && (
+              <Button
+                onClick={handleAcceptGroupCall}
+                variant="contained"
+                startIcon={<PhoneIcon />}
+                disabled={loadingAction !== null || !canAnswerCall.hasPermission || !canJoinGroupCall.hasPermission}
+                color="success"
+                sx={{ opacity: (canAnswerCall.hasPermission && canJoinGroupCall.hasPermission) ? 1 : 0.5 }}
+              >
+                接听
+              </Button>
+            )}
           </DialogActions>
         </Dialog>
       )}
@@ -863,38 +981,67 @@ export default function GroupChatInterface({
             
             <Box display="flex" alignItems="center" gap={1}>
               {/* 静音控制 */}
-              <IconButton
-                size="small"
-                onClick={handleToggleCallMute}
-                sx={{ color: 'inherit' }}
-              >
-                {activeCall.localParticipant.mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
-              </IconButton>
+              {canToggleMicrophone.hasPermission && (
+                <Tooltip title={
+                  canToggleMicrophone.hasPermission
+                    ? (activeCall.localParticipant.mediaState.micMuted ? '取消静音' : '静音')
+                    : '没有麦克风控制权限'
+                }>
+                  <IconButton
+                    size="small"
+                    onClick={handleToggleCallMute}
+                    disabled={!canToggleMicrophone.hasPermission}
+                    sx={{ 
+                      color: 'inherit',
+                      opacity: canToggleMicrophone.hasPermission ? 1 : 0.5
+                    }}
+                  >
+                    {activeCall.localParticipant.mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
+                  </IconButton>
+                </Tooltip>
+              )}
               
               {/* 摄像头控制 */}
-              {activeCall.callType === 'video' && (
-                <IconButton
-                  size="small"
-                  onClick={handleToggleCallCamera}
-                  sx={{ color: 'inherit' }}
-                >
-                  {activeCall.localParticipant.mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
-                </IconButton>
+              {activeCall.callType === 'video' && canToggleCamera.hasPermission && (
+                <Tooltip title={
+                  canToggleCamera.hasPermission
+                    ? (activeCall.localParticipant.mediaState.cameraOff ? '开启摄像头' : '关闭摄像头')
+                    : '没有摄像头控制权限'
+                }>
+                  <IconButton
+                    size="small"
+                    onClick={handleToggleCallCamera}
+                    disabled={!canToggleCamera.hasPermission}
+                    sx={{ 
+                      color: 'inherit',
+                      opacity: canToggleCamera.hasPermission ? 1 : 0.5
+                    }}
+                  >
+                    {activeCall.localParticipant.mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
+                  </IconButton>
+                </Tooltip>
               )}
               
               {/* 结束通话 */}
-              <IconButton
-                size="small"
-                onClick={handleEndGroupCall}
-                disabled={loadingAction === 'ending-call'}
-                sx={{ 
-                  color: 'error.main',
-                  bgcolor: 'background.paper',
-                  '&:hover': { bgcolor: 'error.light' }
-                }}
-              >
-                <CallEndIcon />
-              </IconButton>
+              {canEndCall.hasPermission && (
+                <Tooltip title={
+                  canEndCall.hasPermission ? '结束通话' : '没有结束通话权限'
+                }>
+                  <IconButton
+                    size="small"
+                    onClick={handleEndGroupCall}
+                    disabled={loadingAction === 'ending-call' || !canEndCall.hasPermission}
+                    sx={{ 
+                      color: 'error.main',
+                      bgcolor: 'background.paper',
+                      opacity: canEndCall.hasPermission ? 1 : 0.5,
+                      '&:hover': { bgcolor: 'error.light' }
+                    }}
+                  >
+                    <CallEndIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           </Box>
         </Paper>

@@ -6,8 +6,6 @@ import {
   Paper,
   Menu,
   MenuItem,
-  Chip,
-  Autocomplete,
   Box,
   Typography,
   Avatar,
@@ -18,17 +16,11 @@ import {
   useMediaQuery,
   Popover,
   Grid,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
   LinearProgress
 } from '@mui/material';
 import {
   Send as SendIcon,
   AttachFile as AttachFileIcon,
-  Image as ImageIcon,
   VideoFile as VideoFileIcon,
   AudioFile as AudioFileIcon,
   InsertDriveFile as FileIcon,
@@ -43,10 +35,10 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import { RecordId } from 'surrealdb';
-import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import mediaFileHandler, { FileMetadata } from '@/src/services/mediaFileHandler';
-import callManager, { CallType } from '@/src/services/callManager';
+import { CallType } from '@/src/services/callManager';
+import { useWebRTCPermissions } from '@/src/hooks/useWebRTCPermissions';
 
 // 聊天模式类型
 export type ChatMode = 'private' | 'group';
@@ -194,7 +186,7 @@ export interface ChatInputProps {
 
 const ChatInput: React.FC<ChatInputProps> = ({
   mode,
-  conversationId,
+  conversationId: _conversationId,
   onSendMessage,
   onStartCall,
   disabled = false,
@@ -208,8 +200,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { user } = useAuth();
   const { showSuccess, showError } = useSnackbar();
+  
+  // WebRTC权限检查
+  const { permissions, preloadPermissionGroup } = useWebRTCPermissions();
+  
+  // 获取具体通话权限状态
+  const canInitiateVoiceCall = permissions.canInitiateVoiceCall();
+  const canInitiateVideoCall = permissions.canInitiateVideoCall();
 
   // 输入状态
   const [inputText, setInputText] = useState(initialDraft);
@@ -227,7 +225,6 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // 语音录制状态
   const [voiceState, setVoiceState] = useState<VoiceRecordingState>('idle');
   const [recordingTime, setRecordingTime] = useState(0);
-  const [voiceWaveform, setVoiceWaveform] = useState<number[]>([]);
 
   // 文件处理状态
   const [uploadProgress, setUploadProgress] = useState<Map<string, number>>(new Map());
@@ -339,7 +336,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }, [handleSend]);
 
   // 处理文件选择
-  const handleFileSelect = useCallback(async (files: FileList | null, fileType?: FileType) => {
+  const handleFileSelect = useCallback(async (files: FileList | null, _fileType?: FileType) => {
     if (!files || !fileUploadEnabled) return;
 
     setIsUploading(true);
@@ -475,7 +472,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         setRecordingTime(prev => prev + 1);
       }, 1000);
 
-    } catch (error) {
+    } catch {
       showError('无法访问麦克风');
     }
   }, [showSuccess, showError]);
@@ -490,6 +487,36 @@ const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, []);
 
+  // 处理语音通话
+  const handleVoiceCall = useCallback(() => {
+    // 检查语音通话权限
+    if (!canInitiateVoiceCall.hasPermission) {
+      showError('没有发起语音通话权限');
+      return;
+    }
+
+    try {
+      onStartCall?.('audio');
+    } catch (error) {
+      showError(`发起语音通话失败: ${(error as Error).message}`);
+    }
+  }, [canInitiateVoiceCall, onStartCall, showError]);
+
+  // 处理视频通话
+  const handleVideoCall = useCallback(() => {
+    // 检查视频通话权限
+    if (!canInitiateVideoCall.hasPermission) {
+      showError('没有发起视频通话权限');
+      return;
+    }
+
+    try {
+      onStartCall?.('video');
+    } catch (error) {
+      showError(`发起视频通话失败: ${(error as Error).message}`);
+    }
+  }, [canInitiateVideoCall, onStartCall, showError]);
+
   // 清理定时器
   useEffect(() => {
     return () => {
@@ -498,6 +525,19 @@ const ChatInput: React.FC<ChatInputProps> = ({
       }
     };
   }, []);
+
+  // 预加载WebRTC权限
+  useEffect(() => {
+    const loadPermissions = async () => {
+      try {
+        await preloadPermissionGroup('BASIC_CALLING');
+      } catch (error) {
+        console.error('权限预加载失败:', error);
+      }
+    };
+
+    loadPermissions();
+  }, [preloadPermissionGroup]);
 
   // 渲染附件预览
   const renderAttachments = () => {
@@ -739,24 +779,45 @@ const ChatInput: React.FC<ChatInputProps> = ({
         {/* 通话按钮 */}
         {callEnabled && !isMobile && (
           <>
-            <Tooltip title="语音通话">
-              <IconButton
-                size="small"
-                onClick={() => onStartCall?.('audio')}
-                disabled={disabled}
-              >
-                <CallIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="视频通话">
-              <IconButton
-                size="small"
-                onClick={() => onStartCall?.('video')}
-                disabled={disabled}
-              >
-                <VideoCallIcon />
-              </IconButton>
-            </Tooltip>
+            {/* 语音通话按钮 */}
+            {canInitiateVoiceCall.hasPermission && (
+              <Tooltip title={
+                canInitiateVoiceCall.hasPermission 
+                  ? "语音通话" 
+                  : "没有发起语音通话权限"
+              }>
+                <IconButton
+                  size="small"
+                  onClick={handleVoiceCall}
+                  disabled={disabled || !canInitiateVoiceCall.hasPermission}
+                  sx={{
+                    opacity: canInitiateVoiceCall.hasPermission ? 1 : 0.5
+                  }}
+                >
+                  <CallIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            
+            {/* 视频通话按钮 */}
+            {canInitiateVideoCall.hasPermission && (
+              <Tooltip title={
+                canInitiateVideoCall.hasPermission 
+                  ? "视频通话" 
+                  : "没有发起视频通话权限"
+              }>
+                <IconButton
+                  size="small"
+                  onClick={handleVideoCall}
+                  disabled={disabled || !canInitiateVideoCall.hasPermission}
+                  sx={{
+                    opacity: canInitiateVideoCall.hasPermission ? 1 : 0.5
+                  }}
+                >
+                  <VideoCallIcon />
+                </IconButton>
+              </Tooltip>
+            )}
           </>
         )}
 
