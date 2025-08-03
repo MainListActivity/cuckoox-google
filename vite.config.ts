@@ -84,7 +84,7 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         strategies: 'injectManifest',
-        srcDir:'dist/sw',
+        srcDir:'public/sw',
         filename:'sw-surreal.js',
         includeAssets: ['assets/logo/*.svg', 'favicon.ico'],
         injectManifest: {
