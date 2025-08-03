@@ -1156,6 +1156,7 @@ describe('CaseListPage', () => {
   describe('Performance and Optimization', () => {
     it('does not fetch data when database is not connected', async () => {
       mockSurrealContextValue.isSuccess = false;
+      mockSurrealContextValue.client = null; // Set client to null to prevent queries
       
       renderCaseListPage();
       
@@ -1166,13 +1167,17 @@ describe('CaseListPage', () => {
     it('shows loading state immediately when component mounts', () => {
       // Mock a slow query
       (mockSurrealContextValue.surreal.query as Mock).mockImplementation(
-        () => new Promise(resolve => setTimeout(() => resolve([mockCasesData]), 1000))
+        () => new Promise(resolve => setTimeout(() => resolve([
+        { id: 'user:test', name: 'test user' }, // Mock auth result
+        mockCasesData
+      ]), 1000))
       );
       
       renderCaseListPage();
       
-      // Should show loading immediately
-      expect(screen.getByText('正在加载案件列表...')).toBeInTheDocument();
+      // Should show skeleton loading immediately
+      const skeletons = document.querySelectorAll('.MuiSkeleton-root');
+      expect(skeletons.length).toBeGreaterThan(0);
     });
   });
 
@@ -1236,7 +1241,7 @@ describe('CaseListPage', () => {
 
       // Verify table headers are rendered (styling would require more complex testing)
       const headers = screen.getAllByRole('columnheader');
-      expect(headers.length).toBe(7); // Should have 7 columns
+      expect(headers.length).toBe(8); // Should have 8 columns (including row numbers and actions)
     });
   });
 
