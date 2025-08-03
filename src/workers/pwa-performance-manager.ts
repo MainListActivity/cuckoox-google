@@ -180,7 +180,7 @@ export class PWAPerformanceManager {
     }
 
     try {
-      let totalSize = 0;
+      const totalSize = 0;
       const preloadPromises: Promise<void>[] = [];
 
       for (const url of urls) {

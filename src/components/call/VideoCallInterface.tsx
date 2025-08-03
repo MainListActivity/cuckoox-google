@@ -6,7 +6,6 @@ import {
   IconButton,
   Avatar,
   Stack,
-  Fade,
   LinearProgress,
   Chip,
   Tooltip,
@@ -16,9 +15,6 @@ import {
   DialogContent,
   DialogActions,
   DialogContentText,
-  Grid,
-  Card,
-  CardContent,
   Menu,
   MenuItem,
   Fab,
@@ -26,25 +22,18 @@ import {
   useMediaQuery
 } from '@mui/material';
 import {
-  Call as CallIcon,
   CallEnd as CallEndIcon,
   Mic as MicIcon,
   MicOff as MicOffIcon,
   Videocam as VideocamIcon,
   VideocamOff as VideocamOffIcon,
-  VolumeUp as VolumeUpIcon,
-  VolumeOff as VolumeOffIcon,
   ScreenShare as ScreenShareIcon,
   StopScreenShare as StopScreenShareIcon,
   CameraAlt as CameraAltIcon,
   Flip as FlipIcon,
   Person as PersonIcon,
   Settings as SettingsIcon,
-  MoreVert as MoreVertIcon,
   FullscreenIcon,
-  FullscreenExitIcon,
-  PictureInPictureIcon,
-  AspectRatio as AspectRatioIcon,
   NetworkWifi as NetworkWifiIcon,
   SignalWifi0Bar as SignalWifi0BarIcon,
   SignalWifi1Bar as SignalWifi1BarIcon,
@@ -55,6 +44,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import callManager, { CallSession, CallState, MediaState } from '@/src/services/callManager';
 import type { CameraInfo } from '@/src/services/webrtcManager';
+import { useWebRTCPermissions } from '@/src/hooks/useWebRTCPermissions';
 
 // 组件属性接口
 export interface VideoCallInterfaceProps {
@@ -102,6 +92,15 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // WebRTC权限检查
+  const { permissions, preloadPermissionGroup } = useWebRTCPermissions();
+  
+  // 获取具体权限状态
+  const canToggleMicrophone = permissions.canToggleMicrophone();
+  const canToggleCamera = permissions.canToggleCamera();
+  const canShareScreen = permissions.canShareScreen();
+  const canEndCall = permissions.canEndCall();
   
   const [callSession, setCallSession] = useState<CallSession | null>(null);
   const [callDuration, setCallDuration] = useState<number>(0);
@@ -292,7 +291,7 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
   /**
    * 处理通话结束
    */
-  const handleCallEnded = useCallback((callId: string, duration: number, reason?: string) => {
+  const handleCallEnded = useCallback((callId: string, _duration: number, _reason?: string) => {
     if (callId !== callId) return;
 
     stopTimers();
@@ -315,6 +314,20 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
    * 初始化组件
    */
   useEffect(() => {
+    // 预加载WebRTC权限
+    const loadPermissions = async () => {
+      try {
+        await Promise.all([
+          preloadPermissionGroup('BASIC_CALLING'),
+          preloadPermissionGroup('MEDIA_CONTROLS')
+        ]);
+      } catch (error) {
+        console.error('权限预加载失败:', error);
+      }
+    };
+
+    loadPermissions();
+
     // 获取当前通话会话
     const session = callManager.getCallSession(callId);
     if (session) {
@@ -344,13 +357,19 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
     return () => {
       stopTimers();
     };
-  }, [callId, startTimers, stopTimers, handleCallStateChanged, handleParticipantMediaChanged, handleLocalStreamReady, handleRemoteStreamReceived, handleCallEnded, handleCallFailed]);
+  }, [callId, startTimers, stopTimers, handleCallStateChanged, handleParticipantMediaChanged, handleLocalStreamReady, handleRemoteStreamReceived, handleCallEnded, handleCallFailed, preloadPermissionGroup]);
 
   /**
    * 切换静音状态
    */
   const handleToggleMute = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查麦克风控制权限
+    if (!canToggleMicrophone.hasPermission) {
+      onError?.(new Error('没有麦克风控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -361,13 +380,19 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canToggleMicrophone]);
 
   /**
    * 切换摄像头状态
    */
   const handleToggleCamera = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查摄像头控制权限
+    if (!canToggleCamera.hasPermission) {
+      onError?.(new Error('没有摄像头控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -378,30 +403,20 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canToggleCamera]);
 
-  /**
-   * 切换扬声器状态
-   */
-  const handleToggleSpeaker = useCallback(async () => {
-    if (!callSession) return;
-
-    try {
-      setIsLoading(true);
-      callManager.toggleSpeaker(callId);
-    } catch (error) {
-      console.error('切换扬声器失败:', error);
-      onError?.(error as Error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [callSession, callId, onError]);
 
   /**
    * 切换屏幕共享
    */
   const handleToggleScreenShare = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查屏幕共享权限
+    if (!canShareScreen.hasPermission) {
+      onError?.(new Error('没有屏幕共享权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -416,13 +431,19 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, mediaState.screenSharing, onError]);
+  }, [callSession, callId, mediaState.screenSharing, onError, canShareScreen]);
 
   /**
    * 切换摄像头
    */
   const handleSwitchCamera = useCallback(async (cameraId?: string) => {
     if (!callSession) return;
+
+    // 检查摄像头控制权限
+    if (!canToggleCamera.hasPermission) {
+      onError?.(new Error('没有摄像头控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -434,7 +455,7 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canToggleCamera]);
 
   /**
    * 调整视频质量
@@ -486,6 +507,12 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
   const handleEndCall = useCallback(async () => {
     if (!callSession) return;
 
+    // 检查结束通话权限
+    if (!canEndCall.hasPermission) {
+      onError?.(new Error('没有结束通话权限'));
+      return;
+    }
+
     try {
       setIsLoading(true);
       await callManager.endCall(callId, '用户主动结束');
@@ -496,7 +523,7 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canEndCall]);
 
   // 如果没有通话会话，显示加载状态
   if (!callSession) {
@@ -725,43 +752,57 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
         >
           <Stack direction="row" justifyContent="center" spacing={2}>
             {/* 静音按钮 */}
-            <Tooltip title={mediaState.micMuted ? '取消静音' : '静音'}>
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={handleToggleMute}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.micMuted ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
-                  color: mediaState.micMuted ? 'white' : theme.palette.common.white,
-                  '&:hover': {
-                    bgcolor: mediaState.micMuted ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
-                  }
-                }}
-              >
-                {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
-              </Fab>
-            </Tooltip>
+            {canToggleMicrophone.hasPermission && (
+              <Tooltip title={
+                canToggleMicrophone.hasPermission 
+                  ? (mediaState.micMuted ? '取消静音' : '静音')
+                  : '没有麦克风控制权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={handleToggleMute}
+                  disabled={isLoading || !canToggleMicrophone.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.micMuted ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
+                    color: mediaState.micMuted ? 'white' : theme.palette.common.white,
+                    opacity: canToggleMicrophone.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.micMuted ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
+                    }
+                  }}
+                >
+                  {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
+                </Fab>
+              </Tooltip>
+            )}
 
             {/* 摄像头按钮 */}
-            <Tooltip title={mediaState.cameraOff ? '开启摄像头' : '关闭摄像头'}>
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={handleToggleCamera}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.cameraOff ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
-                  color: mediaState.cameraOff ? 'white' : theme.palette.common.white,
-                  '&:hover': {
-                    bgcolor: mediaState.cameraOff ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
-                  }
-                }}
-              >
-                {mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
-              </Fab>
-            </Tooltip>
+            {canToggleCamera.hasPermission && (
+              <Tooltip title={
+                canToggleCamera.hasPermission
+                  ? (mediaState.cameraOff ? '开启摄像头' : '关闭摄像头')
+                  : '没有摄像头控制权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={handleToggleCamera}
+                  disabled={isLoading || !canToggleCamera.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.cameraOff ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
+                    color: mediaState.cameraOff ? 'white' : theme.palette.common.white,
+                    opacity: canToggleCamera.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.cameraOff ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
+                    }
+                  }}
+                >
+                  {mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
+                </Fab>
+              </Tooltip>
+            )}
 
             {/* 切换摄像头按钮 */}
-            {availableCameras.length > 1 && !mediaState.cameraOff && (
+            {availableCameras.length > 1 && !mediaState.cameraOff && canToggleCamera.hasPermission && (
               <Tooltip title="切换摄像头">
                 <Fab
                   ref={cameraMenuAnchorRef}
@@ -782,22 +823,29 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
             )}
 
             {/* 屏幕共享按钮 */}
-            <Tooltip title={mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享'}>
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={handleToggleScreenShare}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.screenSharing ? theme.palette.primary.main : 'rgba(255,255,255,0.1)',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : 'rgba(255,255,255,0.2)'
-                  }
-                }}
-              >
-                {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
-              </Fab>
-            </Tooltip>
+            {canShareScreen.hasPermission && (
+              <Tooltip title={
+                canShareScreen.hasPermission
+                  ? (mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享')
+                  : '没有屏幕共享权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={handleToggleScreenShare}
+                  disabled={isLoading || !canShareScreen.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.screenSharing ? theme.palette.primary.main : 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    opacity: canShareScreen.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : 'rgba(255,255,255,0.2)'
+                    }
+                  }}
+                >
+                  {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                </Fab>
+              </Tooltip>
+            )}
 
             {/* 视频质量按钮 */}
             <Tooltip title="视频质量">
@@ -819,22 +867,27 @@ const VideoCallInterface: React.FC<VideoCallInterfaceProps> = ({
             </Tooltip>
 
             {/* 结束通话按钮 */}
-            <Tooltip title="结束通话">
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={() => setShowEndCallConfirm(true)}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: theme.palette.error.main,
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: theme.palette.error.dark
-                  }
-                }}
-              >
-                <CallEndIcon />
-              </Fab>
-            </Tooltip>
+            {canEndCall.hasPermission && (
+              <Tooltip title={
+                canEndCall.hasPermission ? '结束通话' : '没有结束通话权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={() => setShowEndCallConfirm(true)}
+                  disabled={isLoading || !canEndCall.hasPermission}
+                  sx={{
+                    bgcolor: theme.palette.error.main,
+                    color: 'white',
+                    opacity: canEndCall.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: theme.palette.error.dark
+                    }
+                  }}
+                >
+                  <CallEndIcon />
+                </Fab>
+              </Tooltip>
+            )}
           </Stack>
         </Box>
       </Paper>
