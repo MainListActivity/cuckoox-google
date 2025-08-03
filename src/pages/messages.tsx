@@ -51,7 +51,7 @@ import {
   MarkEmailUnread,
   SmartToy,
   Person,
-  Group,
+  Group as GroupIcon,
   Warning,
   Info,
   CheckCircle,
@@ -81,7 +81,7 @@ import {
   useConversationsList,
   useSystemNotifications
 } from '@/src/hooks/useMessageCenterData';
-import { useGroupsData } from '@/src/hooks/useGroupsData';
+import { useUserGroups } from '@/src/hooks/useGroupData';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
@@ -99,7 +99,7 @@ const messageTypes = {
   CASE_ROBOT_REMINDER: { label: '案件提醒', icon: <SmartToy />, color: 'warning' },
   CONFERENCE_INVITE: { label: '会议邀请', icon: <Notifications />, color: 'primary' },
   IM: { label: '用户消息', icon: <Person />, color: 'primary' },
-  GROUP_IM: { label: '群组消息', icon: <Group />, color: 'secondary' },
+  GROUP_IM: { label: '群组消息', icon: <GroupIcon />, color: 'secondary' },
 } as const;
 type MessageTypeKey = keyof typeof messageTypes;
 
@@ -125,7 +125,7 @@ const MessageCenterPage: React.FC = () => {
     isLoading: isLoadingGroups,
     error: groupsError,
     setGroups
-  } = useGroupsData(user?.id || null);
+  } = useUserGroups(user?.id || null);
 
   const {
     conversations,
@@ -144,13 +144,18 @@ const MessageCenterPage: React.FC = () => {
   // State for UI
   const [activeTab, setActiveTab] = useState(0);
   const [selectedItem, setSelectedItem] = useState<DisplayListItem | null>(null);
-  const [currentFilter, setCurrentFilter] = useState<'all' | 'im' | 'reminders'>('all');
+  const [currentFilter, setCurrentFilter] = useState<'all' | 'im' | 'reminders' | 'groups'>('all');
   const [currentConversation, setCurrentConversation] = useState<ChatMessageDisplay[]>([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string>('');
   const [chatInput, setChatInput] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
   const [createConversationOpen, setCreateConversationOpen] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [currentChatMode, setCurrentChatMode] = useState<'conversation' | 'group'>('conversation');
+  const [currentViewMode, setCurrentViewMode] = useState<'list' | 'chat'>('list');
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const chatHistoryEndRef = useRef<HTMLDivElement>(null);
 
@@ -505,7 +510,7 @@ const MessageCenterPage: React.FC = () => {
       return combinedList.filter((item: DisplayListItem) => item.itemType === 'notification');
     }
     if (currentFilter === 'groups') {
-      return combinedList.filter((item: DisplayListItem) => item.itemType === 'group');
+      return combinedList.filter((item: DisplayListItem) => (item as any).itemType === 'group');
     }
     return combinedList; // 'all'
   }, [combinedList, currentFilter]);
@@ -882,7 +887,7 @@ const MessageCenterPage: React.FC = () => {
               onClick: () => setCreateConversationOpen(true)
             },
             {
-              icon: <Group />,
+              icon: <GroupIcon />,
               label: '创建群组',
               onClick: () => setCreateGroupOpen(true)
             }
@@ -947,7 +952,7 @@ const MessageCenterPage: React.FC = () => {
                 iconPosition="start"
               />
               <Tab 
-                icon={<Group />}
+                icon={<GroupIcon />}
                 label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ''}`}
                 iconPosition="start"
               />
@@ -1197,7 +1202,7 @@ const MessageCenterPage: React.FC = () => {
                   iconPosition="start"
                 />
                 <Tab 
-                  icon={<Group />}
+                  icon={<GroupIcon />}
                   label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ''}`}
                   iconPosition="start"
                 />
@@ -1266,7 +1271,7 @@ const MessageCenterPage: React.FC = () => {
                 />
                 <SpeedDialAction
                   key="group"
-                  icon={<Group />}
+                  icon={<GroupIcon />}
                   tooltipTitle="创建群组"
                   onClick={() => setCreateGroupOpen(true)}
                 />
@@ -1288,7 +1293,7 @@ const MessageCenterPage: React.FC = () => {
                       <ArrowBack />
                     </IconButton>
                     <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                      <Group />
+                      <GroupIcon />
                     </Avatar>
                     <Box>
                       <Typography variant="h6" noWrap>{selectedGroup.name}</Typography>

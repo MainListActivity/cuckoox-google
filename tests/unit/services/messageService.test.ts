@@ -82,10 +82,54 @@ describe('MessageService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // 设置默认认证状态
-    mockClient.query.mockImplementation((query: string) => {
+    // 设置默认认证状态和数据库查询响应
+    mockClient.query.mockImplementation((query: string, _params?: any) => {
       if (query.includes('return $auth;')) {
         return Promise.resolve([mockAuthResult]);
+      }
+      // 模拟用户存在检查
+      if (query.includes('SELECT * FROM user:')) {
+        return Promise.resolve([{ id: new RecordId('user', 'target-user') }]);
+      }
+      // 模拟群组成员检查
+      if (query.includes('SELECT * FROM message_group_member WHERE') || 
+          query.includes('SELECT * FROM group_member WHERE')) {
+        return Promise.resolve([{ 
+          id: new RecordId('message_group_member', 'test-member'),
+          group_id: new RecordId('message_group', 'test-group'),
+          user_id: mockAuthResult.id,
+          role: 'ADMIN',
+          permissions: ['send_message', 'pin_message']
+        }]);
+      }
+      // 模拟会话参与者检查
+      if (query.includes('SELECT * FROM conversation_participant WHERE')) {
+        return Promise.resolve([{
+          id: new RecordId('conversation_participant', 'test-participant'),
+          conversation_id: mockConversation.id,
+          user_id: mockAuthResult.id,
+          role: 'MEMBER'
+        }]);
+      }
+      // 模拟会话存在检查
+      if (query.includes('SELECT * FROM conversation WHERE')) {
+        return Promise.resolve([mockConversation]);
+      }
+      // 模拟消息查询
+      if (query.includes('SELECT * FROM message WHERE')) {
+        return Promise.resolve([mockMessage]);
+      }
+      // 模拟群组消息查询
+      if (query.includes('SELECT * FROM group_message WHERE')) {
+        return Promise.resolve([mockGroupMessage]);
+      }
+      // 模拟案例数据查询
+      if (query.includes('SELECT * FROM case WHERE')) {
+        return Promise.resolve([{ 
+          id: new RecordId('case', 'test-case'),
+          case_number: 'CASE-001',
+          title: '测试案例'
+        }]);
       }
       return Promise.resolve([]);
     });
@@ -103,16 +147,28 @@ describe('MessageService', () => {
         participants: [new RecordId('user', 'target-user')]
       };
 
-      mockClient.create.mockResolvedValue([mockConversation]);
+      mockClient.create.mockResolvedValueOnce([mockConversation]);
+      mockClient.create.mockResolvedValueOnce([{
+        id: new RecordId('conversation_participant', 'test-participant'),
+        conversation_id: mockConversation.id,
+        user_id: new RecordId('user', 'target-user'),
+        role: 'MEMBER'
+      }]);
 
       // Act
       const result = await messageService.createConversation(conversationData);
 
       // Assert
       expect(result).toEqual(mockConversation);
-      expect(mockClient.create).toHaveBeenCalledWith('conversation', expect.objectContaining({
+      expect(mockClient.create).toHaveBeenCalledTimes(2);
+      expect(mockClient.create).toHaveBeenNthCalledWith(1, 'conversation', expect.objectContaining({
         type: 'DIRECT',
-        participants: expect.arrayContaining([mockAuthResult.id])
+        created_by: '$auth.id'
+      }));
+      expect(mockClient.create).toHaveBeenNthCalledWith(2, 'conversation_participant', expect.objectContaining({
+        conversation_id: mockConversation.id,
+        user_id: new RecordId('user', 'target-user'),
+        role: 'MEMBER'
       }));
     });
 
@@ -464,7 +520,7 @@ describe('MessageService', () => {
 
       // Assert
       expect(result).toEqual(mockNotification);
-      expect(mockClient.create).toHaveBeenCalledWith('notification', expect.objectContaining({
+      expect(mockClient.create).toHaveBeenCalledWith('message', expect.objectContaining({
         type: 'SYSTEM_NOTIFICATION',
         title: '系统通知',
         content: '这是一条系统通知',
@@ -733,7 +789,6 @@ describe('MessageService', () => {
     it('应该成功获取群组未读消息数量', async () => {
       // Arrange
       const groupId = new RecordId('message_group', 'test-group');
-      const userId = mockAuthResult.id;
       
       mockClient.query.mockImplementation((query: string) => {
         if (query.includes('return $auth;')) {
@@ -746,7 +801,7 @@ describe('MessageService', () => {
       });
 
       // Act
-      const result = await messageService.getGroupUnreadCount(groupId, userId);
+      const result = await messageService.getGroupUnreadCount(groupId);
 
       // Assert
       expect(result).toBe(5);
@@ -785,20 +840,22 @@ describe('MessageService', () => {
         group_id: new RecordId('message_group', 'test-group'),
         content: '分享一张图片',
         message_type: 'IMAGE',
-        file_metadata: {
-          file_name: 'image.jpg',
-          file_size: 1024000,
-          file_hash: 'abc123',
-          thumbnail_data: 'base64-thumbnail',
-          dimensions: { width: 1920, height: 1080 },
-          transfer_status: 'completed',
-        }
+        attachments: [
+          {
+            file_name: 'image.jpg',
+            file_type: 'image',
+            file_size: 1024000,
+            mime_type: 'image/jpeg',
+            s3_object_key: 'images/image.jpg',
+            thumbnail_url: 'https://example.com/thumb.jpg'
+          }
+        ]
       };
 
       const mediaMessage = {
         ...mockGroupMessage,
         message_type: 'IMAGE',
-        file_metadata: messageData.file_metadata,
+        attachments: messageData.attachments,
       };
 
       mockClient.create.mockResolvedValue([mediaMessage]);
@@ -808,38 +865,40 @@ describe('MessageService', () => {
 
       // Assert
       expect(result.message_type).toBe('IMAGE');
-      expect(result.file_metadata).toEqual(messageData.file_metadata);
+      expect(result.attachments).toEqual(messageData.attachments);
     });
 
-    it('应该成功发送通话结束消息', async () => {
+    it('应该记录群组通话结束', async () => {
       // Arrange
       const messageData: SendGroupMessageData = {
         group_id: new RecordId('message_group', 'test-group'),
-        content: '群组通话已结束',
-        message_type: 'CALL_END',
-        call_metadata: {
-          call_id: 'call-123',
-          call_type: 'video',
-          duration: 1800, // 30分钟
-          participants: ['user:1', 'user:2', 'user:3'],
-          status: 'completed',
+        content: '通话已结束',
+        message_type: 'SYSTEM',
+        metadata: {
+          system_message_type: 'CALL_END',
+          call_duration: 300,
+          participants: [
+            new RecordId('user', 'user1'),
+            new RecordId('user', 'user2')
+          ]
         }
       };
 
-      const callMessage = {
+      const callEndMessage = {
         ...mockGroupMessage,
-        message_type: 'CALL_END',
-        call_metadata: messageData.call_metadata,
+        message_type: 'SYSTEM',
+        metadata: messageData.metadata,
       };
 
-      mockClient.create.mockResolvedValue([callMessage]);
+      mockClient.create.mockResolvedValue([callEndMessage]);
 
       // Act
       const result = await messageService.sendGroupMessage(messageData);
 
       // Assert
-      expect(result.message_type).toBe('CALL_END');
-      expect(result.call_metadata?.duration).toBe(1800);
+      expect(result.message_type).toBe('SYSTEM');
+      expect(result.metadata?.system_message_type).toBe('CALL_END');
+      expect(result.metadata?.call_duration).toBe(300);
     });
   });
 
@@ -1167,11 +1226,13 @@ describe('MessageService', () => {
         group_id: new RecordId('message_group', 'test-group'),
         content: '文件消息',
         message_type: 'FILE',
-        file_metadata: {
-          file_name: 'test.pdf',
-          file_size: 1024000,
-          // 缺少必需的 file_hash 字段
-        } as any,
+        attachments: [
+          {
+            file_name: 'test.pdf',
+            file_size: 1024000,
+            // 缺少必需的字段
+          } as any,
+        ],
       };
 
       // Act & Assert

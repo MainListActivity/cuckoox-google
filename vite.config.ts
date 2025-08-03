@@ -191,8 +191,8 @@ export default defineConfig(({ mode }) => {
         'tests/unit/**/*.test.fixed.{ts,tsx}' // Include fixed test files
       ],
       setupFiles: './tests/setup.ts', // Setup file for test environment
-      testTimeout: 15000, // 15 seconds timeout for each test
-      hookTimeout: 10000, // 10 seconds timeout for hooks
+      testTimeout: 500, // 15 seconds timeout for each test
+      hookTimeout: 1000, // 10 seconds timeout for hooks
       pool: 'forks', // Use forks pool to avoid file handle issues
       poolOptions: {
         forks: {
