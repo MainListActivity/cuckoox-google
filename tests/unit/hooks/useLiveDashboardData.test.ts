@@ -21,12 +21,13 @@ const mockClient = {
 };
 
 const surrealClientState = {
-  surreal: mockClient,
-  isSuccess: true,
+  client: mockClient,
+  isConnected: true,
 };
 
 vi.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurreal: () => surrealClientState,
+  useSurrealContext: () => surrealClientState,
 }));
 
 describe('useLiveDashboardData Hooks', () => {
@@ -36,7 +37,7 @@ describe('useLiveDashboardData Hooks', () => {
     mockKill.mockReset();
     liveCallback = undefined;
     
-    surrealClientState.isSuccess = true;
+    surrealClientState.isConnected = true;
     mockKill.mockResolvedValue(undefined);
 
     mockSubscribeLive.mockImplementation((qid, callback) => {
@@ -124,7 +125,7 @@ describe('useLiveDashboardData Hooks', () => {
     });
 
     it('should handle disconnected client', () => {
-      surrealClientState.isSuccess = false;
+      surrealClientState.isConnected = false;
       
       const { result } = renderHook(() => useLiveTodaysSubmissionsCount('case:test'));
       

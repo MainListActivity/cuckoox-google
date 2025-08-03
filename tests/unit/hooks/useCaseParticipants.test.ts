@@ -29,8 +29,8 @@ const mockSurrealDbClient = {
 
 vi.mock('../../../src/contexts/SurrealProvider', () => ({
   useSurreal: () => ({
-    surreal: mockSurrealDbClient,
-    isSuccess: true,
+    client: mockSurrealDbClient,
+    isConnected: true,
     isConnecting: false,
     isError: false,
     error: null,
@@ -41,6 +41,10 @@ vi.mock('../../../src/contexts/SurrealProvider', () => ({
     setTokens: vi.fn(),
     clearTokens: vi.fn(),
     getStoredAccessToken: vi.fn(),
+  }),
+  useSurrealContext: () => ({
+    client: mockSurrealDbClient,
+    isConnected: true,
   }),
 }));
 
