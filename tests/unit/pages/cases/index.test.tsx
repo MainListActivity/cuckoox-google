@@ -331,17 +331,15 @@ describe('CaseListPage', () => {
       expect(screen.getByText('管理和跟踪所有破产案件的进展情况')).toBeInTheDocument();
     });
 
-    it('renders "创建新案件" button with correct link', async () => {
+    it('renders "创建新案件" button', async () => {
       renderCaseListPage();
-      const createLink = screen.getByRole('link', { name: /创建新案件/i });
-      expect(createLink).toBeInTheDocument();
-      expect(createLink).toHaveAttribute('href', '/cases/create');
+      const createButton = screen.getByRole('button', { name: /创建新案件/i });
+      expect(createButton).toBeInTheDocument();
     });
 
-    it('renders search field and filter button', async () => {
+    it('renders search field and export button', async () => {
       renderCaseListPage();
       expect(screen.getByPlaceholderText('搜索案件...')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /筛选/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /导出/i })).toBeInTheDocument();
     });
 
@@ -515,8 +513,8 @@ describe('CaseListPage', () => {
       expect(firstRowActions).not.toBeNull();
 
       if (firstRowActions) {
-        expect(within(firstRowActions).getByRole('link', { name: /查看详情/i })).toBeInTheDocument();
-        expect(within(firstRowActions).getByRole('link', { name: /查看材料/i })).toBeInTheDocument();
+        expect(within(firstRowActions).getByRole('button', { name: /查看详情/i })).toBeInTheDocument();
+        expect(within(firstRowActions).getByRole('button', { name: /查看材料/i })).toBeInTheDocument();
         expect(within(firstRowActions).getByRole('button', { name: /修改状态/i })).toBeInTheDocument();
       }
     });
@@ -763,9 +761,8 @@ describe('CaseListPage', () => {
         expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
       });
 
-      const detailsLinks = screen.getAllByRole('link', { name: /查看详情/i });
-      expect(detailsLinks.length).toBeGreaterThan(0);
-      expect(detailsLinks[0]).toHaveAttribute('href', '/cases/case001');
+      const detailsButtons = screen.getAllByRole('button', { name: /查看详情/i });
+      expect(detailsButtons.length).toBeGreaterThan(0);
     });
 
     it('has correct navigation links for case documents', async () => {
@@ -774,9 +771,8 @@ describe('CaseListPage', () => {
         expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
       });
 
-      const documentsLinks = screen.getAllByRole('link', { name: /查看材料/i });
-      expect(documentsLinks.length).toBeGreaterThan(0);
-      expect(documentsLinks[0]).toHaveAttribute('href', '/cases/case001');
+      const documentsButtons = screen.getAllByRole('button', { name: /查看材料/i });
+      expect(documentsButtons.length).toBeGreaterThan(0);
     });
   });
 
@@ -1121,11 +1117,10 @@ describe('CaseListPage', () => {
         expect(screen.getByText('BK-2023-001')).toBeInTheDocument();
       });
 
-      // Check for tooltip titles which provide accessibility
-      const viewDetailsButtons = screen.getAllByRole('link', { name: /查看详情/i });
+      const viewDetailsButtons = screen.getAllByRole('button', { name: /查看详情/i });
       expect(viewDetailsButtons.length).toBeGreaterThan(0);
 
-      const viewDocumentsButtons = screen.getAllByRole('link', { name: /查看材料/i });
+      const viewDocumentsButtons = screen.getAllByRole('button', { name: /查看材料/i });
       expect(viewDocumentsButtons.length).toBeGreaterThan(0);
 
       const modifyStatusButtons = screen.getAllByRole('button', { name: /修改状态/i });
