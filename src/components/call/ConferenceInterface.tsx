@@ -64,6 +64,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import callManager, { CallSession, CallState, MediaState, CallParticipant } from '@/src/services/callManager';
 import type { CameraInfo } from '@/src/services/webrtcManager';
+import { useWebRTCPermissions } from '@/src/hooks/useWebRTCPermissions';
 
 // 组件属性接口
 export interface ConferenceInterfaceProps {
@@ -124,6 +125,17 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
+  // WebRTC权限检查
+  const { permissions, preloadPermissionGroup } = useWebRTCPermissions();
+  
+  // 获取具体权限状态
+  const canToggleMicrophone = permissions.canToggleMicrophone();
+  const canToggleCamera = permissions.canToggleCamera();
+  const canShareScreen = permissions.canShareScreen();
+  const canEndCall = permissions.canEndCall();
+  const canInviteToGroupCall = permissions.canInviteToGroupCall();
+  const canManageGroupCall = permissions.canManageGroupCall();
   
   const [callSession, setCallSession] = useState<CallSession | null>(null);
   const [callDuration, setCallDuration] = useState<number>(0);
@@ -333,13 +345,13 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
    */
   const handleLocalStreamReady = useCallback((callId: string, stream: MediaStream) => {
     if (callId !== callId) return;
-    setLocalStream(stream);
+    // setLocalStream(stream); // 注释掉因为localStream已被移除
     
     const session = callManager.getCallSession(callId);
     if (session) {
       setupParticipantVideo(session.localParticipant.userId, stream);
     }
-  }, [callId, setupParticipantVideo]);
+  }, [setupParticipantVideo]);
 
   /**
    * 处理远程流接收
@@ -347,7 +359,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
   const handleRemoteStreamReceived = useCallback((callId: string, userId: string, stream: MediaStream) => {
     if (callId !== callId) return;
     setupParticipantVideo(userId, stream);
-  }, [callId, setupParticipantVideo]);
+  }, [setupParticipantVideo]);
 
   /**
    * 处理参与者加入
@@ -381,7 +393,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     if (session) {
       setCallSession({ ...session });
     }
-  }, [callId]);
+  }, []);
 
   /**
    * 处理通话结束
@@ -391,12 +403,12 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
 
     stopTimers();
     setCallSession(null);
-    setLocalStream(null);
+    // setLocalStream(null); // 注释掉因为localStream已被移除
     setParticipantStreams(new Map());
     videoRefs.current.clear();
     
     onCallEnd?.();
-  }, [callId, stopTimers, onCallEnd]);
+  }, [stopTimers, onCallEnd]);
 
   /**
    * 处理通话失败
@@ -404,12 +416,27 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
   const handleCallFailed = useCallback((callId: string, error: Error) => {
     if (callId !== callId) return;
     onError?.(error);
-  }, [callId, onError]);
+  }, [onError]);
 
   /**
    * 初始化组件
    */
   useEffect(() => {
+    // 预加载WebRTC权限
+    const loadPermissions = async () => {
+      try {
+        await Promise.all([
+          preloadPermissionGroup('BASIC_CALLING'),
+          preloadPermissionGroup('MEDIA_CONTROLS'),
+          preloadPermissionGroup('GROUP_CALLING')
+        ]);
+      } catch (error) {
+        console.error('权限预加载失败:', error);
+      }
+    };
+
+    loadPermissions();
+
     // 获取当前通话会话
     const session = callManager.getCallSession(callId);
     if (session) {
@@ -441,13 +468,19 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     return () => {
       stopTimers();
     };
-  }, [callId, startTimers, stopTimers, handleCallStateChanged, handleParticipantMediaChanged, handleLocalStreamReady, handleRemoteStreamReceived, handleParticipantJoined, handleParticipantLeft, handleCallEnded, handleCallFailed]);
+  }, [callId, startTimers, stopTimers, handleCallStateChanged, handleParticipantMediaChanged, handleLocalStreamReady, handleRemoteStreamReceived, handleParticipantJoined, handleParticipantLeft, handleCallEnded, handleCallFailed, preloadPermissionGroup]);
 
   /**
    * 切换静音状态
    */
   const handleToggleMute = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查麦克风控制权限
+    if (!canToggleMicrophone.hasPermission) {
+      onError?.(new Error('没有麦克风控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -458,13 +491,19 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canToggleMicrophone]);
 
   /**
    * 切换摄像头状态
    */
   const handleToggleCamera = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查摄像头控制权限
+    if (!canToggleCamera.hasPermission) {
+      onError?.(new Error('没有摄像头控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -475,30 +514,20 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canToggleCamera]);
 
-  /**
-   * 切换扬声器状态
-   */
-  const _handleToggleSpeaker = useCallback(async () => {
-    if (!callSession) return;
-
-    try {
-      setIsLoading(true);
-      callManager.toggleSpeaker(callId);
-    } catch (error) {
-      console.error('切换扬声器失败:', error);
-      onError?.(error as Error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [callSession, callId, onError]);
 
   /**
    * 切换屏幕共享
    */
   const handleToggleScreenShare = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查屏幕共享权限
+    if (!canShareScreen.hasPermission) {
+      onError?.(new Error('没有屏幕共享权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -513,13 +542,19 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, mediaState.screenSharing, onError]);
+  }, [callSession, callId, mediaState.screenSharing, onError, canShareScreen]);
 
   /**
    * 切换摄像头
    */
   const handleSwitchCamera = useCallback(async (cameraId?: string) => {
     if (!callSession) return;
+
+    // 检查摄像头控制权限
+    if (!canToggleCamera.hasPermission) {
+      onError?.(new Error('没有摄像头控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -531,7 +566,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canToggleCamera]);
 
   /**
    * 调整视频质量
@@ -560,14 +595,26 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
    * 邀请参与者
    */
   const handleInviteParticipants = useCallback(() => {
+    // 检查邀请权限
+    if (!canInviteToGroupCall.hasPermission) {
+      onError?.(new Error('没有邀请参与者权限'));
+      return;
+    }
+
     onInviteParticipants?.(callId);
-  }, [callId, onInviteParticipants]);
+  }, [callId, onInviteParticipants, canInviteToGroupCall, onError]);
 
   /**
    * 管理参与者（静音/踢出等）
    */
   const handleManageParticipant = useCallback(async (userId: string, action: 'mute' | 'unmute' | 'kick' | 'promote' | 'demote') => {
     if (!callSession) return;
+
+    // 检查群组管理权限
+    if (!canManageGroupCall.hasPermission) {
+      onError?.(new Error('没有管理参与者权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -598,7 +645,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canManageGroupCall]);
 
   /**
    * 切换显示模式
@@ -621,6 +668,12 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
   const handleEndCall = useCallback(async () => {
     if (!callSession) return;
 
+    // 检查结束通话权限
+    if (!canEndCall.hasPermission) {
+      onError?.(new Error('没有结束通话权限'));
+      return;
+    }
+
     try {
       setIsLoading(true);
       
@@ -639,7 +692,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, canEndCall]);
 
   /**
    * 渲染参与者视频
@@ -760,7 +813,7 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
         </Box>
 
         {/* 参与者管理菜单（仅主持人/管理员可见） */}
-        {!participant.isLocal && callSession?.localParticipant.role && ['host', 'moderator'].includes(callSession.localParticipant.role) && (
+        {!participant.isLocal && callSession?.localParticipant.role && ['host', 'moderator'].includes(callSession.localParticipant.role) && canManageGroupCall.hasPermission && (
           <IconButton
             sx={{
               position: 'absolute',
@@ -772,13 +825,14 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
             }}
             size="small"
             onClick={() => setShowParticipantMenu(participant.userId)}
+            disabled={!canManageGroupCall.hasPermission}
           >
             <MoreVertIcon />
           </IconButton>
         )}
       </Card>
     );
-  }, [participantStreams, networkQualities, speakingParticipants, callSession, theme]);
+  }, [participantStreams, networkQualities, speakingParticipants, callSession, theme, canManageGroupCall]);
 
   // 如果没有通话会话，显示加载状态
   if (!callSession) {
@@ -1002,58 +1056,79 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
         >
           <Stack direction="row" justifyContent="center" spacing={2} flexWrap="wrap">
             {/* 静音按钮 */}
-            <Tooltip title={mediaState.micMuted ? '取消静音' : '静音'}>
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={handleToggleMute}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.micMuted ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
-                  color: mediaState.micMuted ? 'white' : theme.palette.common.white,
-                  '&:hover': {
-                    bgcolor: mediaState.micMuted ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
-                  }
-                }}
-              >
-                {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
-              </Fab>
-            </Tooltip>
+            {canToggleMicrophone.hasPermission && (
+              <Tooltip title={
+                canToggleMicrophone.hasPermission 
+                  ? (mediaState.micMuted ? '取消静音' : '静音')
+                  : '没有麦克风控制权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={handleToggleMute}
+                  disabled={isLoading || !canToggleMicrophone.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.micMuted ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
+                    color: mediaState.micMuted ? 'white' : theme.palette.common.white,
+                    opacity: canToggleMicrophone.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.micMuted ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
+                    }
+                  }}
+                >
+                  {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
+                </Fab>
+              </Tooltip>
+            )}
 
             {/* 摄像头按钮 */}
-            <Tooltip title={mediaState.cameraOff ? '开启摄像头' : '关闭摄像头'}>
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={handleToggleCamera}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.cameraOff ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
-                  color: mediaState.cameraOff ? 'white' : theme.palette.common.white,
-                  '&:hover': {
-                    bgcolor: mediaState.cameraOff ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
-                  }
-                }}
-              >
-                {mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
-              </Fab>
-            </Tooltip>
+            {canToggleCamera.hasPermission && (
+              <Tooltip title={
+                canToggleCamera.hasPermission
+                  ? (mediaState.cameraOff ? '开启摄像头' : '关闭摄像头')
+                  : '没有摄像头控制权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={handleToggleCamera}
+                  disabled={isLoading || !canToggleCamera.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.cameraOff ? theme.palette.error.main : 'rgba(255,255,255,0.1)',
+                    color: mediaState.cameraOff ? 'white' : theme.palette.common.white,
+                    opacity: canToggleCamera.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.cameraOff ? theme.palette.error.dark : 'rgba(255,255,255,0.2)'
+                    }
+                  }}
+                >
+                  {mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
+                </Fab>
+              </Tooltip>
+            )}
 
             {/* 屏幕共享按钮 */}
-            <Tooltip title={mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享'}>
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={handleToggleScreenShare}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: mediaState.screenSharing ? theme.palette.primary.main : 'rgba(255,255,255,0.1)',
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : 'rgba(255,255,255,0.2)'
-                  }
-                }}
-              >
-                {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
-              </Fab>
-            </Tooltip>
+            {canShareScreen.hasPermission && (
+              <Tooltip title={
+                canShareScreen.hasPermission
+                  ? (mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享')
+                  : '没有屏幕共享权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={handleToggleScreenShare}
+                  disabled={isLoading || !canShareScreen.hasPermission}
+                  sx={{
+                    bgcolor: mediaState.screenSharing ? theme.palette.primary.main : 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    opacity: canShareScreen.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : 'rgba(255,255,255,0.2)'
+                    }
+                  }}
+                >
+                  {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                </Fab>
+              </Tooltip>
+            )}
 
             {/* 参与者列表按钮 */}
             <Tooltip title="参与者">
@@ -1075,15 +1150,18 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
             </Tooltip>
 
             {/* 邀请按钮（主持人/管理员） */}
-            {(isHost || isModerator) && (
-              <Tooltip title="邀请参与者">
+            {(isHost || isModerator) && canInviteToGroupCall.hasPermission && (
+              <Tooltip title={
+                canInviteToGroupCall.hasPermission ? '邀请参与者' : '没有邀请参与者权限'
+              }>
                 <Fab
                   size={isMobile ? 'medium' : 'large'}
                   onClick={handleInviteParticipants}
-                  disabled={isLoading}
+                  disabled={isLoading || !canInviteToGroupCall.hasPermission}
                   sx={{
                     bgcolor: 'rgba(255,255,255,0.1)',
                     color: theme.palette.common.white,
+                    opacity: canInviteToGroupCall.hasPermission ? 1 : 0.5,
                     '&:hover': {
                       bgcolor: 'rgba(255,255,255,0.2)'
                     }
@@ -1114,22 +1192,29 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
             </Tooltip>
 
             {/* 结束会议按钮 */}
-            <Tooltip title={isHost ? "结束会议" : "离开会议"}>
-              <Fab
-                size={isMobile ? 'medium' : 'large'}
-                onClick={() => setShowEndCallConfirm(true)}
-                disabled={isLoading}
-                sx={{
-                  bgcolor: theme.palette.error.main,
-                  color: 'white',
-                  '&:hover': {
-                    bgcolor: theme.palette.error.dark
-                  }
-                }}
-              >
-                <CallEndIcon />
-              </Fab>
-            </Tooltip>
+            {canEndCall.hasPermission && (
+              <Tooltip title={
+                canEndCall.hasPermission 
+                  ? (isHost ? "结束会议" : "离开会议")
+                  : '没有结束通话权限'
+              }>
+                <Fab
+                  size={isMobile ? 'medium' : 'large'}
+                  onClick={() => setShowEndCallConfirm(true)}
+                  disabled={isLoading || !canEndCall.hasPermission}
+                  sx={{
+                    bgcolor: theme.palette.error.main,
+                    color: 'white',
+                    opacity: canEndCall.hasPermission ? 1 : 0.5,
+                    '&:hover': {
+                      bgcolor: theme.palette.error.dark
+                    }
+                  }}
+                >
+                  <CallEndIcon />
+                </Fab>
+              </Tooltip>
+            )}
           </Stack>
         </Box>
       </Paper>
@@ -1218,11 +1303,12 @@ const ConferenceInterface: React.FC<ConferenceInterfaceProps> = ({
                         }
                       />
                       
-                      {!participant.isLocal && (isHost || isModerator) && (
+                      {!participant.isLocal && (isHost || isModerator) && canManageGroupCall.hasPermission && (
                         <ListItemSecondaryAction>
                           <IconButton
                             edge="end"
                             onClick={() => setShowParticipantMenu(participant.userId)}
+                            disabled={!canManageGroupCall.hasPermission}
                           >
                             <MoreVertIcon />
                           </IconButton>

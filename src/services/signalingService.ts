@@ -434,7 +434,7 @@ class SignalingService {
       const client = await this.getClient();
       
       let query = "SELECT * FROM webrtc_signal WHERE ";
-      let params: any = { user_id: this.currentUserId, limit };
+      const params: any = { user_id: this.currentUserId, limit };
 
       if (targetUserId) {
         query += "(from_user = $user_id AND to_user = $target_user_id) OR (from_user = $target_user_id AND to_user = $user_id)";
