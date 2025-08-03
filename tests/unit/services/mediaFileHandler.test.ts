@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { mediaFileHandler } from '@/src/services/mediaFileHandler';
+import mediaFileHandler from '@/src/services/mediaFileHandler';
 import webrtcManager from '@/src/services/webrtcManager';
 import rtcConfigManager from '@/src/services/rtcConfigManager';
 
@@ -22,6 +22,7 @@ vi.mock('@/src/services/rtcConfigManager', () => ({
     getSupportedFileTypes: vi.fn(),
     isFileSupported: vi.fn(),
     isFileSizeValid: vi.fn(),
+    onConfigUpdate: vi.fn(),
   },
 }));
 
@@ -40,6 +41,7 @@ const mockRtcConfigManager = rtcConfigManager as {
   getSupportedFileTypes: Mock;
   isFileSupported: Mock;
   isFileSizeValid: Mock;
+  onConfigUpdate: Mock;
 };
 
 // Mock File and FileReader
@@ -109,6 +111,7 @@ describe('MediaFileHandler', () => {
     });
     mockRtcConfigManager.isFileSupported.mockReturnValue(true);
     mockRtcConfigManager.isFileSizeValid.mockReturnValue(true);
+    mockRtcConfigManager.onConfigUpdate.mockReturnValue(() => {}); // Return unsubscribe function
     
     mockWebrtcManager.hasConnection.mockReturnValue(true);
     mockWebrtcManager.sendDataChannelMessage.mockResolvedValue(undefined);

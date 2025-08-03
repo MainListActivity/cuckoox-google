@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { networkAdaptation } from '@/src/services/networkAdaptation';
+import networkAdaptation from '@/src/services/networkAdaptation';
 import webrtcManager from '@/src/services/webrtcManager';
 import rtcConfigManager from '@/src/services/rtcConfigManager';
 
@@ -18,6 +18,7 @@ vi.mock('@/src/services/rtcConfigManager', () => ({
   default: {
     getConfig: vi.fn(),
     getNetworkQualityLevel: vi.fn(),
+    onConfigUpdate: vi.fn(),
   },
 }));
 
@@ -32,6 +33,7 @@ const mockWebrtcManager = webrtcManager as {
 const mockRtcConfigManager = rtcConfigManager as {
   getConfig: Mock;
   getNetworkQualityLevel: Mock;
+  onConfigUpdate: Mock;
 };
 
 // Mock performance API
@@ -95,6 +97,7 @@ describe('NetworkAdaptation', () => {
     // Setup default mocks
     mockRtcConfigManager.getConfig.mockReturnValue(mockConfig);
     mockRtcConfigManager.getNetworkQualityLevel.mockReturnValue('good');
+    mockRtcConfigManager.onConfigUpdate.mockReturnValue(() => {}); // Return unsubscribe function
     mockWebrtcManager.getStreamStats.mockResolvedValue(mockStats);
     mockWebrtcManager.detectNetworkQuality.mockResolvedValue('good');
     mockWebrtcManager.getConnectionInfo.mockReturnValue({
@@ -103,9 +106,11 @@ describe('NetworkAdaptation', () => {
     });
     
     // Reset network adaptation state
-    (networkAdaptation as any).monitoringCallIds = new Set();
-    (networkAdaptation as any).qualityHistory = new Map();
-    (networkAdaptation as any).adaptationCallbacks = new Map();
+    (networkAdaptation as any).qualityHistory = [];
+    (networkAdaptation as any).metricsHistory = [];
+    (networkAdaptation as any).peerConnections = new Map();
+    (networkAdaptation as any).currentQualityState = null;
+    (networkAdaptation as any).isMonitoring = false;
   });
 
   afterEach(() => {

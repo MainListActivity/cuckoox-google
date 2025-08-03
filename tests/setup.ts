@@ -93,6 +93,19 @@ Object.defineProperty(RTCPeerConnectionMock, 'generateCertificate', {
 
 global.RTCPeerConnection = RTCPeerConnectionMock as any;
 
+// Mock RTCSessionDescription
+global.RTCSessionDescription = vi.fn().mockImplementation((description) => ({
+  type: description.type,
+  sdp: description.sdp,
+}));
+
+// Mock RTCIceCandidate
+global.RTCIceCandidate = vi.fn().mockImplementation((candidate) => ({
+  candidate: candidate.candidate,
+  sdpMLineIndex: candidate.sdpMLineIndex,
+  sdpMid: candidate.sdpMid,
+}));
+
 // Mock URL.createObjectURL
 global.URL.createObjectURL = vi.fn().mockReturnValue('mock-object-url');
 global.URL.revokeObjectURL = vi.fn();
