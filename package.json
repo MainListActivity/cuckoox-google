@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run",
+    "test:run": "vitest run --reporter=verbose --maxWorkers=2 --testTimeout=10000 --coverage --coverageProvider=v8",
     "test:e2e": "playwright test"
   },
   "dependencies": {
