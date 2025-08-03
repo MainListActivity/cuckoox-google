@@ -98,11 +98,11 @@ export interface SignalingEventListeners {
  * 基于SurrealDB Live Query实现实时信令消息传递
  */
 class SignalingService {
-  private clientGetter: () => Promise<SurrealWorkerAPI> | null = null;
+  private clientGetter: (() => Promise<SurrealWorkerAPI>) | null = null;
   private listeners: SignalingEventListeners = {};
   private liveQueryUuids: string[] = [];
   private currentUserId: string | null = null;
-  private isConnected: boolean = false;
+  private _isConnected: boolean = false;
 
   /**
    * 设置客户端获取函数
@@ -144,7 +144,7 @@ class SignalingService {
       // 启动信令监听
       await this.startSignalingListeners();
       
-      this.isConnected = true;
+      this._isConnected = true;
       console.log(`SignalingService: 已初始化，用户ID: ${userId}`);
     } catch (error) {
       console.error('SignalingService: 初始化失败', error);
@@ -282,7 +282,7 @@ class SignalingService {
    * 发送私聊信令消息
    */
   async sendPrivateSignal(type: SignalType, data: any, targetUserId: string, callId?: string): Promise<void> {
-    if (!this.isConnected) {
+    if (!this._isConnected) {
       throw new Error('信令服务未连接');
     }
 
@@ -321,7 +321,7 @@ class SignalingService {
    * 发送群组信令消息
    */
   async sendGroupSignal(type: SignalType, data: any, groupId: string, callId?: string): Promise<void> {
-    if (!this.isConnected) {
+    if (!this._isConnected) {
       throw new Error('信令服务未连接');
     }
 
@@ -477,7 +477,7 @@ class SignalingService {
    * 检查是否连接
    */
   isConnected(): boolean {
-    return this.isConnected;
+    return this._isConnected;
   }
 
   /**
@@ -495,7 +495,7 @@ class SignalingService {
       // 重新启动监听器
       await this.startSignalingListeners();
       
-      this.isConnected = true;
+      this._isConnected = true;
       console.log('SignalingService: 重新连接成功');
     } catch (error) {
       console.error('SignalingService: 重新连接失败', error);
@@ -538,7 +538,7 @@ class SignalingService {
       // 重置状态
       this.listeners = {};
       this.currentUserId = null;
-      this.isConnected = false;
+      this._isConnected = false;
       
       console.log('SignalingService: 销毁完成');
     } catch (error) {
@@ -555,7 +555,7 @@ class SignalingService {
     activeListeners: number;
   } {
     return {
-      connected: this.isConnected,
+      connected: this._isConnected,
       userId: this.currentUserId,
       activeListeners: this.liveQueryUuids.length
     };

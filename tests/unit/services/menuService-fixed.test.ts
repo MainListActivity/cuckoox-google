@@ -1,16 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { menuService } from '@/src/services/menuService';
+import { loadUserMenus, loadUserOperations, hasOperation } from '@/src/services/menuService';
 
-// Mock dataService interface
-const mockDataService = {
-  queryWithAuth: vi.fn(),
+// Mock queryWithAuth
+vi.mock('@/src/utils/surrealAuth', () => ({
+  queryWithAuth: vi.fn()
+}));
+
+import { queryWithAuth } from '@/src/utils/surrealAuth';
+const mockQueryWithAuth = vi.mocked(queryWithAuth);
+
+// Mock surrealClient
+const mockClient = {
   query: vi.fn(),
-};
+} as any;
 
 describe('MenuService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    menuService.setDataService(mockDataService);
   });
 
   describe('loadUserMenus', () => {
@@ -30,17 +36,17 @@ describe('MenuService', () => {
         },
       ];
 
-      mockDataService.queryWithAuth.mockResolvedValue(mockMenuData);
+      mockQueryWithAuth.mockResolvedValue(mockMenuData);
 
       // Act
-      const result = await menuService.loadUserMenus();
+      const result = await loadUserMenus(mockClient);
 
       // Assert
-      expect(mockDataService.queryWithAuth).toHaveBeenCalledWith(
+      expect(mockQueryWithAuth).toHaveBeenCalledWith(
+        mockClient,
         'select * from menu_metadata',
         {}
       );
-      expect(mockDataService.query).not.toHaveBeenCalled();
       expect(result).toEqual([
         {
           id: 'dashboard',
@@ -53,15 +59,13 @@ describe('MenuService', () => {
 
     it('should handle authentication errors gracefully', async () => {
       // Arrange
-      mockDataService.queryWithAuth.mockRejectedValue(
-        new Error('Authentication required')
-      );
+      mockQueryWithAuth.mockRejectedValue(new Error('Authentication failed'));
 
       // Act
-      const result = await menuService.loadUserMenus();
+      const result = await loadUserMenus(mockClient);
 
       // Assert
-      expect(mockDataService.queryWithAuth).toHaveBeenCalled();
+      expect(mockQueryWithAuth).toHaveBeenCalled();
       expect(result).toEqual([]);
     });
   });
@@ -71,42 +75,53 @@ describe('MenuService', () => {
       // Arrange
       const mockOperations = [
         {
-          id: 'op:1',
+          id: 'operation:1',
           operation_id: 'create_case',
+          label_key: 'create_case',
           menu_id: 'cases',
-          operation_name: 'Create Case',
-          operation_type: 'create',
-          is_active: true,
-          created_at: '2023-01-01T00:00:00Z',
-          updated_at: '2023-01-01T00:00:00Z',
         },
       ];
 
-      mockDataService.queryWithAuth.mockResolvedValue(mockOperations);
+      mockQueryWithAuth.mockResolvedValue(mockOperations);
 
       // Act
-      const result = await menuService.loadUserOperations('cases');
+      const result = await loadUserOperations(mockClient, 'cases');
 
       // Assert
-      expect(mockDataService.queryWithAuth).toHaveBeenCalledWith(
+      expect(mockQueryWithAuth).toHaveBeenCalledWith(
+        mockClient,
         'select * from operation_metadata where menu_id = $menu_id',
         { menu_id: 'cases' }
       );
-      expect(result).toEqual(mockOperations);
+      expect(result).toEqual([
+        {
+          id: 'operation:1',
+          operation_id: 'create_case',
+          label_key: 'create_case',
+          menu_id: 'cases',
+        },
+      ]);
     });
   });
 
   describe('hasOperation', () => {
     it('should use queryWithAuth for permission check', async () => {
       // Arrange
-      const mockResult = [{ operation_id: 'create_case' }];
-      mockDataService.queryWithAuth.mockResolvedValue(mockResult);
+      const mockOperation = [
+        {
+          id: 'operation:1',
+          operation_id: 'create_case',
+        },
+      ];
+
+      mockQueryWithAuth.mockResolvedValue(mockOperation);
 
       // Act
-      const result = await menuService.hasOperation('create_case');
+      const result = await hasOperation(mockClient, 'create_case');
 
       // Assert
-      expect(mockDataService.queryWithAuth).toHaveBeenCalledWith(
+      expect(mockQueryWithAuth).toHaveBeenCalledWith(
+        mockClient,
         'select * from operation_metadata where operation_id = $operation_id',
         { operation_id: 'create_case' }
       );

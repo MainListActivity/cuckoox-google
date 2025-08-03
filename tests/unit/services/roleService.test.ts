@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RecordId } from 'surrealdb';
 import type { Role } from '@/src/services/roleService';
 
-// 直接导入函数而不是整个模块来避免副作用
-const { getAllRoles, getRoleById, getRoleByName, getCaseMemberRoles } = await import('@/src/services/roleService');
-
-// Mock queryWithAuth
+// Mock queryWithAuth 先定义mock函数
 const mockQueryWithAuth = vi.fn();
 vi.mock('@/src/utils/surrealAuth', () => ({
   queryWithAuth: mockQueryWithAuth
 }));
+
+// 动态导入服务以确保mock生效
+const { getAllRoles, getRoleById, getRoleByName, getCaseMemberRoles } = await import('@/src/services/roleService');
 
 // Mock SurrealWorkerAPI
 const mockClient = {} as any;

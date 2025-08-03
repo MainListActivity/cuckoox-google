@@ -29,6 +29,10 @@
 - **E2E Tests**: Playwright
 - **Test Environment**: jsdom
 - **单元测试**: 非必要不能新增重复的单元测试文件，请在原来的测试文件中修改，如果必须创建新的测试文件，需要确保测试用例的完善，在测试通过后需要覆盖原来的测试文件
+- **永远不要**创建新的测试文件，只需要保证现有测试文件能够通过测试。
+- **永远不要**删除现有的测试文件或测试用例。
+- 你需要确保修改后的代码能够通过所有单元测试。
+- 在终端运行命令后务必等待命令执行结束再获取结果。
 
 ## Common Commands
 
@@ -52,8 +56,6 @@ bun run preview
 
 ### Testing
 ```bash
-# Run unit tests
-bun run test
 
 # Run tests with UI
 bun run test:ui

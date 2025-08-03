@@ -48,11 +48,11 @@ interface AppUser extends Record<string, any> {
 const oidcSettings: UserManagerSettings = {
   authority: import.meta.env.VITE_OIDC_AUTHORITY || 'http://localhost:8082/realms/your-realm',
   client_id: import.meta.env.VITE_OIDC_CLIENT_ID || 'your-client-id',
-  redirect_uri: import.meta.env.VITE_OIDC_REDIRECT_URI || window.location.origin + '/oidc-callback',
-  post_logout_redirect_uri: import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || window.location.origin + '/login',
+  redirect_uri: import.meta.env.VITE_OIDC_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin + '/oidc-callback' : 'http://localhost:3000/oidc-callback'),
+  post_logout_redirect_uri: import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost:3000/login'),
   response_type: 'code',
   scope: import.meta.env.VITE_OIDC_SCOPE || 'openid profile email',
-  userStore: new WebStorageStateStore({ store: window.localStorage }),
+  userStore: new WebStorageStateStore({ store: typeof window !== 'undefined' ? window.localStorage : {} as any }),
   automaticSilentRenew: true,
 };
 
@@ -302,14 +302,18 @@ class AuthService {
       await userManager.clearStaleState();
 
       // Simple redirect to login page, avoiding OIDC endpoint access
-      const postLogoutUri = import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || window.location.origin + '/login';
-      window.location.href = postLogoutUri;
+      const postLogoutUri = import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost:3000/login');
+      if (typeof window !== 'undefined') {
+        window.location.href = postLogoutUri;
+      }
     } catch (error) {
       console.error('Error during OIDC logout:', error);
       // Ensure state is cleared even if errors occur and redirect
       await this.clearAuthTokens();
-      const postLogoutUri = import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || window.location.origin + '/login';
-      window.location.href = postLogoutUri;
+      const postLogoutUri = import.meta.env.VITE_OIDC_POST_LOGOUT_REDIRECT_URI || (typeof window !== 'undefined' ? window.location.origin + '/login' : 'http://localhost:3000/login');
+      if (typeof window !== 'undefined') {
+        window.location.href = postLogoutUri;
+      }
     }
   }
 

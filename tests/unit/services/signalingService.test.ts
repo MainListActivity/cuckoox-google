@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import signalingService, { SignalType } from '../../../src/services/signalingService';
+import signalingService, { 
+  SignalType, 
+  type OfferSignalData, 
+  type AnswerSignalData,
+  type IceCandidateSignalData,
+  type CallRequestSignalData,
+  type CallResponseSignalData,
+  type GroupCallSignalData,
+  type SignalingEventListeners
+} from '../../../src/services/signalingService';
 
 // Mock SurrealProvider
 const mockClient = {
@@ -18,10 +27,10 @@ vi.mock('../../../src/contexts/SurrealProvider', () => ({
 }));
 
 describe('SignalingService', () => {
-  const mockUserId = 'user123';
-  const mockTargetUserId = 'user456';
-  const mockGroupId = 'group789';
-  const mockCallId = 'call123';
+  const mockUserId = 'user:123';
+  const mockTargetUserId = 'user:456';
+  const mockGroupId = 'group:789';
+  const mockCallId = 'call:123';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,6 +45,12 @@ describe('SignalingService', () => {
     mockClient.query.mockResolvedValue([]);
     mockClient.live.mockResolvedValue('live-query-uuid');
     mockClient.kill.mockResolvedValue(undefined);
+    
+    // Reset service state
+    (signalingService as any).currentUserId = null;
+    (signalingService as any)._isConnected = false;
+    (signalingService as any).liveQueryUuids = [];
+    (signalingService as any).listeners = {};
   });
 
   afterEach(() => {
@@ -49,6 +64,7 @@ describe('SignalingService', () => {
 
       // Assert
       expect(signalingService.isConnected()).toBe(true);
+      expect(mockClient.live).toHaveBeenCalledTimes(2); // Private and group signals
     });
 
     it('should handle initialization failure gracefully', async () => {
@@ -63,7 +79,7 @@ describe('SignalingService', () => {
   describe('Event Listeners', () => {
     it('should set event listeners', () => {
       // Arrange
-      const listeners = {
+      const listeners: SignalingEventListeners = {
         onOfferReceived: vi.fn(),
         onAnswerReceived: vi.fn(),
         onIceCandidateReceived: vi.fn(),
@@ -84,8 +100,8 @@ describe('SignalingService', () => {
 
     it('should send offer successfully', async () => {
       // Arrange
-      const offerData = {
-        type: 'offer' as const,
+      const offerData: OfferSignalData = {
+        type: 'offer',
         sdp: 'offer-sdp-content',
         constraints: { audio: true, video: true },
       };
@@ -94,19 +110,22 @@ describe('SignalingService', () => {
       await signalingService.sendOffer(mockTargetUserId, offerData, mockCallId);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.OFFER,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: offerData,
-        call_id: mockCallId,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.OFFER,
+          from_user: mockUserId,
+          to_user: mockTargetUserId,
+          signal_data: offerData,
+          call_id: mockCallId,
+        })
+      );
     });
 
     it('should handle offer sending failure', async () => {
       // Arrange
-      mockClient.create.mockRejectedValue(new Error('Database error'));
-      const offerData = { type: 'offer' as const, sdp: 'offer-sdp' };
+      mockClient.query.mockRejectedValue(new Error('Database error'));
+      const offerData: OfferSignalData = { type: 'offer', sdp: 'offer-sdp' };
 
       // Act & Assert
       await expect(
@@ -122,8 +141,8 @@ describe('SignalingService', () => {
 
     it('should send answer successfully', async () => {
       // Arrange
-      const answerData = {
-        type: 'answer' as const,
+      const answerData: AnswerSignalData = {
+        type: 'answer',
         sdp: 'answer-sdp-content',
       };
 
@@ -131,13 +150,16 @@ describe('SignalingService', () => {
       await signalingService.sendAnswer(mockTargetUserId, answerData, mockCallId);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.ANSWER,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: answerData,
-        call_id: mockCallId,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.ANSWER,
+          from_user: mockUserId,
+          to_user: mockTargetUserId,
+          signal_data: answerData,
+          call_id: mockCallId,
+        })
+      );
     });
   });
 
@@ -148,7 +170,7 @@ describe('SignalingService', () => {
 
     it('should send ICE candidate successfully', async () => {
       // Arrange
-      const candidateData = {
+      const candidateData: IceCandidateSignalData = {
         candidate: 'candidate:123 1 UDP 2113667326 192.168.1.100 54400 typ host',
         sdpMLineIndex: 0,
         sdpMid: '0',
@@ -159,13 +181,16 @@ describe('SignalingService', () => {
       await signalingService.sendIceCandidate(mockTargetUserId, candidateData, mockCallId);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.ICE_CANDIDATE,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: candidateData,
-        call_id: mockCallId,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.ICE_CANDIDATE,
+          from_user: mockUserId,
+          to_user: mockTargetUserId,
+          signal_data: candidateData,
+          call_id: mockCallId,
+        })
+      );
     });
   });
 
@@ -176,24 +201,26 @@ describe('SignalingService', () => {
 
     it('should send call request successfully', async () => {
       // Arrange
-      const callRequestData = {
-        call_type: 'voice' as const,
-        user_id: mockUserId,
-        user_name: 'Test User',
-        avatar_url: 'https://example.com/avatar.jpg',
-        call_id: mockCallId,
+      const callRequestData: CallRequestSignalData = {
+        callType: 'audio',
+        callId: mockCallId,
+        initiatorName: 'Test User',
+        constraints: { audio: true, video: false },
       };
 
       // Act
       await signalingService.sendCallRequest(mockTargetUserId, callRequestData);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.CALL_REQUEST,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: callRequestData,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.CALL_REQUEST,
+          from_user: mockUserId,
+          to_user: mockTargetUserId,
+          signal_data: callRequestData,
+        })
+      );
     });
   });
 
@@ -204,44 +231,47 @@ describe('SignalingService', () => {
 
     it('should send call accept successfully', async () => {
       // Arrange
-      const responseData = {
-        call_id: mockCallId,
-        user_id: mockUserId,
-        user_name: 'Test User',
-        avatar_url: 'https://example.com/avatar.jpg',
+      const responseData: CallResponseSignalData = {
+        callId: mockCallId,
+        accepted: true,
       };
 
       // Act
       await signalingService.sendCallAccept(mockTargetUserId, responseData);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.CALL_ACCEPT,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: responseData,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.CALL_ACCEPT,
+          from_user: mockUserId,
+          to_user: mockTargetUserId,
+          signal_data: responseData,
+        })
+      );
     });
 
     it('should send call reject successfully', async () => {
       // Arrange
-      const responseData = {
-        call_id: mockCallId,
-        user_id: mockUserId,
-        user_name: 'Test User',
-        avatar_url: 'https://example.com/avatar.jpg',
+      const responseData: CallResponseSignalData = {
+        callId: mockCallId,
+        accepted: false,
+        reason: 'User is busy',
       };
 
       // Act
       await signalingService.sendCallReject(mockTargetUserId, responseData);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.CALL_REJECT,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: responseData,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.CALL_REJECT,
+          from_user: mockUserId,
+          to_user: mockTargetUserId,
+          signal_data: responseData,
+        })
+      );
     });
   });
 
@@ -252,68 +282,75 @@ describe('SignalingService', () => {
 
     it('should send group call request successfully', async () => {
       // Arrange
-      const groupCallData = {
-        call_type: 'video' as const,
-        user_id: mockUserId,
-        user_name: 'Test User',
-        avatar_url: 'https://example.com/avatar.jpg',
-        call_id: mockCallId,
+      const groupCallData: GroupCallSignalData = {
+        callId: mockCallId,
+        callType: 'video',
+        groupName: 'Test Group',
+        initiatorName: 'Test User',
+        participants: ['user:456', 'user:789'],
       };
 
       // Act
       await signalingService.sendGroupCallRequest(mockGroupId, groupCallData);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.GROUP_CALL_REQUEST,
-        from_user: mockUserId,
-        group_id: mockGroupId,
-        signal_data: groupCallData,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.GROUP_CALL_REQUEST,
+          from_user: mockUserId,
+          group_id: mockGroupId,
+          signal_data: groupCallData,
+        })
+      );
     });
 
     it('should send group call join successfully', async () => {
       // Arrange
-      const groupCallData = {
-        call_type: 'video' as const,
-        user_id: mockUserId,
-        user_name: 'Test User',
-        avatar_url: 'https://example.com/avatar.jpg',
-        call_id: mockCallId,
+      const groupCallData: GroupCallSignalData = {
+        callId: mockCallId,
+        callType: 'video',
+        groupName: 'Test Group',
+        initiatorName: 'Test User',
       };
 
       // Act
       await signalingService.sendGroupCallJoin(mockGroupId, groupCallData);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.GROUP_CALL_JOIN,
-        from_user: mockUserId,
-        group_id: mockGroupId,
-        signal_data: groupCallData,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.GROUP_CALL_JOIN,
+          from_user: mockUserId,
+          group_id: mockGroupId,
+          signal_data: groupCallData,
+        })
+      );
     });
 
     it('should send group call leave successfully', async () => {
       // Arrange
-      const groupCallData = {
-        call_type: 'video' as const,
-        user_id: mockUserId,
-        user_name: 'Test User',
-        avatar_url: 'https://example.com/avatar.jpg',
-        call_id: mockCallId,
+      const groupCallData: GroupCallSignalData = {
+        callId: mockCallId,
+        callType: 'video',
+        groupName: 'Test Group',
+        initiatorName: 'Test User',
       };
 
       // Act
       await signalingService.sendGroupCallLeave(mockGroupId, groupCallData);
 
       // Assert
-      expect(mockClient.create).toHaveBeenCalledWith('webrtc_signal', expect.objectContaining({
-        signal_type: SignalType.GROUP_CALL_LEAVE,
-        from_user: mockUserId,
-        group_id: mockGroupId,
-        signal_data: groupCallData,
-      }));
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.GROUP_CALL_LEAVE,
+          from_user: mockUserId,
+          group_id: mockGroupId,
+          signal_data: groupCallData,
+        })
+      );
     });
   });
 
@@ -352,7 +389,7 @@ describe('SignalingService', () => {
           signal_type: SignalType.GROUP_CALL_REQUEST,
           from_user: mockUserId,
           group_id: mockGroupId,
-          signal_data: { call_type: 'video' },
+          signal_data: { callType: 'video' },
           created_at: '2023-01-01T00:00:00Z',
         },
       ];
@@ -377,7 +414,9 @@ describe('SignalingService', () => {
       await signalingService.cleanupExpiredSignals();
 
       // Assert
-      expect(mockClient.delete).toHaveBeenCalled();
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE webrtc_signal WHERE')
+      );
     });
 
     it('should reconnect successfully', async () => {
@@ -394,6 +433,230 @@ describe('SignalingService', () => {
 
       // Assert
       expect(mockClient.kill).toHaveBeenCalled();
+    });
+  });
+
+  describe('Conference and Group Signaling', () => {
+    beforeEach(async () => {
+      await signalingService.initialize(mockUserId);
+    });
+
+    it('should send conference invite successfully', async () => {
+      // Arrange
+      const conferenceData = {
+        conferenceId: 'conf123',
+        conferenceName: 'Team Meeting',
+        participants: ['user:456', 'user:789'],
+        startTime: '2023-01-01T10:00:00Z',
+      };
+
+      // Act
+      await signalingService.sendConferenceInvite(mockTargetUserId, conferenceData);
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.CONFERENCE_INVITE,
+          from_user: mockUserId,
+          to_user: mockTargetUserId,
+          signal_data: conferenceData,
+        })
+      );
+    });
+
+    it('should handle group call with multiple participants', async () => {
+      // Arrange
+      const groupCallData: GroupCallSignalData = {
+        callId: mockCallId,
+        callType: 'video',
+        groupName: 'Project Team',
+        initiatorName: 'Test User',
+        participants: ['user:456', 'user:789', 'user:101'],
+      };
+
+      // Act
+      await signalingService.sendGroupCallRequest(mockGroupId, groupCallData);
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.GROUP_CALL_REQUEST,
+          from_user: mockUserId,
+          group_id: mockGroupId,
+          signal_data: expect.objectContaining({
+            participants: expect.arrayContaining(['user:456', 'user:789', 'user:101']),
+          }),
+        })
+      );
+    });
+
+    it('should handle group call participant management', async () => {
+      // Arrange
+      const participantData = {
+        callId: mockCallId,
+        callType: 'video' as const,
+        groupName: 'Project Team',
+        initiatorName: 'Test User',
+        action: 'participant_muted',
+        targetParticipant: 'user:456',
+      };
+
+      // Act
+      await signalingService.sendGroupSignal(
+        SignalType.GROUP_CALL_JOIN, 
+        participantData, 
+        mockGroupId, 
+        mockCallId
+      );
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO webrtc_signal'),
+        expect.objectContaining({
+          signal_type: SignalType.GROUP_CALL_JOIN,
+          group_id: mockGroupId,
+          signal_data: expect.objectContaining({
+            action: 'participant_muted',
+            targetParticipant: 'user:456',
+          }),
+        })
+      );
+    });
+  });
+
+  describe('Signal Processing and Filtering', () => {
+    beforeEach(async () => {
+      await signalingService.initialize(mockUserId);
+    });
+
+    it('should filter signals by call ID', async () => {
+      // Arrange
+      const callId = 'specific-call-123';
+      mockClient.query.mockResolvedValue([[
+        {
+          id: 'signal:1',
+          signal_type: SignalType.OFFER,
+          call_id: callId,
+          from_user: mockTargetUserId,
+          created_at: '2023-01-01T00:00:00Z',
+        },
+        {
+          id: 'signal:2',
+          signal_type: SignalType.ANSWER,
+          call_id: 'other-call-456',
+          from_user: mockTargetUserId,
+          created_at: '2023-01-01T00:01:00Z',
+        },
+      ]]);
+
+      // Act
+      const result = await signalingService.getSignalHistoryByCallId(callId);
+
+      // Assert
+      expect(result).toHaveLength(1);
+      expect(result[0].call_id).toBe(callId);
+    });
+
+    it('should get signals within time range', async () => {
+      // Arrange
+      const startTime = '2023-01-01T00:00:00Z';
+      const endTime = '2023-01-01T23:59:59Z';
+      
+      mockClient.query.mockResolvedValue([[
+        {
+          id: 'signal:1',
+          signal_type: SignalType.OFFER,
+          created_at: '2023-01-01T12:00:00Z',
+        },
+      ]]);
+
+      // Act
+      const result = await signalingService.getSignalHistoryByTimeRange(startTime, endTime);
+
+      // Assert
+      expect(result).toHaveLength(1);
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('WHERE created_at >= $start_time AND created_at <= $end_time'),
+        expect.objectContaining({
+          start_time: startTime,
+          end_time: endTime,
+        })
+      );
+    });
+
+    it('should batch process multiple signals', async () => {
+      // Arrange
+      const signals = [
+        { type: SignalType.OFFER, data: { sdp: 'offer1' }, targetUserId: 'user:1' },
+        { type: SignalType.ANSWER, data: { sdp: 'answer1' }, targetUserId: 'user:2' },
+        { type: SignalType.ICE_CANDIDATE, data: { candidate: 'candidate1' }, targetUserId: 'user:3' },
+      ];
+
+      // Act
+      await signalingService.batchSendSignals(signals);
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledTimes(signals.length);
+    });
+  });
+
+  describe('Signal Reliability and Retry', () => {
+    beforeEach(async () => {
+      await signalingService.initialize(mockUserId);
+    });
+
+    it('should retry failed signal sending', async () => {
+      // Arrange
+      const offerData: OfferSignalData = {
+        type: 'offer',
+        sdp: 'test-offer-sdp',
+      };
+      
+      mockClient.query
+        .mockRejectedValueOnce(new Error('Network error'))
+        .mockResolvedValueOnce([{ id: 'signal:123' }]);
+
+      // Act
+      await signalingService.sendOfferWithRetry(mockTargetUserId, offerData, mockCallId, 3);
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledTimes(2);
+    });
+
+    it('should fail after max retries', async () => {
+      // Arrange
+      const offerData: OfferSignalData = {
+        type: 'offer',
+        sdp: 'test-offer-sdp',
+      };
+      
+      mockClient.query.mockRejectedValue(new Error('Persistent error'));
+
+      // Act & Assert
+      await expect(
+        signalingService.sendOfferWithRetry(mockTargetUserId, offerData, mockCallId, 2)
+      ).rejects.toThrow('Persistent error');
+      
+      expect(mockClient.query).toHaveBeenCalledTimes(3); // Initial + 2 retries
+    });
+
+    it('should handle signal acknowledgment', async () => {
+      // Arrange
+      const signalId = 'signal:123';
+      const ackCallback = vi.fn();
+      
+      signalingService.onSignalAcknowledged(ackCallback);
+
+      // Act
+      await signalingService.acknowledgeSignal(signalId);
+
+      // Assert
+      expect(mockClient.query).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE webrtc_signal SET acknowledged = true'),
+        { signal_id: signalId }
+      );
     });
   });
 
@@ -415,629 +678,26 @@ describe('SignalingService', () => {
       const status = signalingService.getStatus();
 
       // Assert
-      expect(status).toHaveProperty('isConnected');
-      expect(status).toHaveProperty('currentUserId');
+      expect(status).toHaveProperty('connected');
+      expect(status).toHaveProperty('userId');
       expect(status).toHaveProperty('activeListeners');
     });
-  });
-});
-  log: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-};
-vi.stubGlobal('console', mockConsole);
 
-// Mock user IDs
-const mockUserId = 'user:123' as RecordId;
-const mockTargetUserId = 'user:456' as RecordId;
-const mockGroupId = 'message_group:789' as RecordId;
-
-describe('SignalingService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    // Reset service state
-    (signalingService as any).listeners = {};
-    (signalingService as any).subscriptions.clear();
-    (signalingService as any).currentUserId = null;
-    (signalingService as any).isInitialized = false;
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  describe('initialize', () => {
-    it('should initialize successfully with valid user ID', async () => {
-      // Arrange
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-
+    it('should return detailed service metrics', () => {
       // Act
-      await signalingService.initialize(mockUserId);
+      const metrics = signalingService.getMetrics();
 
       // Assert
-      expect(signalingService.isInitialized()).toBe(true);
-      expect(signalingService.getCurrentUserId()).toBe(mockUserId);
-      expect(mockSurrealClientSingleton.queryLive).toHaveBeenCalled();
-    });
-
-    it('should throw error when user ID is invalid', async () => {
-      // Act & Assert
-      await expect(signalingService.initialize(null as any))
-        .rejects.toThrow('用户ID不能为空');
-      
-      await expect(signalingService.initialize('' as any))
-        .rejects.toThrow('用户ID不能为空');
-    });
-
-    it('should handle subscription setup errors', async () => {
-      // Arrange
-      mockSurrealClientSingleton.queryLive.mockRejectedValue(new Error('Subscription failed'));
-
-      // Act & Assert
-      await expect(signalingService.initialize(mockUserId))
-        .rejects.toThrow('信令服务初始化失败');
-    });
-
-    it('should not reinitialize if already initialized', async () => {
-      // Arrange
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-      vi.clearAllMocks();
-
-      // Act
-      await signalingService.initialize('user:456' as RecordId);
-
-      // Assert
-      expect(mockSurrealClientSingleton.queryLive).not.toHaveBeenCalled();
-      expect(signalingService.getCurrentUserId()).toBe(mockUserId); // Should not change
-    });
-  });
-
-  describe('sendOffer', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should send offer signal successfully', async () => {
-      // Arrange
-      const offerData: OfferSignalData = {
-        type: 'offer',
-        sdp: 'mock-offer-sdp',
-        constraints: { audio: true, video: true }
-      };
-      const callId = 'call_123';
-
-      mockSurrealClientSingleton.create.mockResolvedValue([{
-        id: 'signal_123',
-        signal_type: SignalType.OFFER,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: offerData,
-        call_id: callId,
-      }]);
-
-      // Act
-      const result = await signalingService.sendOffer(mockTargetUserId, offerData, callId);
-
-      // Assert
-      expect(mockSurrealClientSingleton.create).toHaveBeenCalledWith(
-        'webrtc_signal',
-        expect.objectContaining({
-          signal_type: SignalType.OFFER,
-          from_user: mockUserId,
-          to_user: mockTargetUserId,
-          signal_data: offerData,
-          call_id: callId,
-          expires_at: expect.any(String),
-        })
-      );
-      expect(result).toBeDefined();
-    });
-
-    it('should throw error when not initialized', async () => {
-      // Arrange
-      (signalingService as any).isInitialized = false;
-
-      const offerData: OfferSignalData = {
-        type: 'offer',
-        sdp: 'mock-offer-sdp'
-      };
-
-      // Act & Assert
-      await expect(signalingService.sendOffer(mockTargetUserId, offerData))
-        .rejects.toThrow('信令服务未初始化');
-    });
-
-    it('should handle send errors gracefully', async () => {
-      // Arrange
-      const offerData: OfferSignalData = {
-        type: 'offer',
-        sdp: 'mock-offer-sdp'
-      };
-
-      mockSurrealClientSingleton.create.mockRejectedValue(new Error('Network error'));
-
-      // Act & Assert
-      await expect(signalingService.sendOffer(mockTargetUserId, offerData))
-        .rejects.toThrow('发送offer信令失败');
-    });
-  });
-
-  describe('sendAnswer', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should send answer signal successfully', async () => {
-      // Arrange
-      const answerData: AnswerSignalData = {
-        type: 'answer',
-        sdp: 'mock-answer-sdp'
-      };
-      const callId = 'call_123';
-
-      mockSurrealClientSingleton.create.mockResolvedValue([{
-        id: 'signal_456',
-        signal_type: SignalType.ANSWER,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: answerData,
-        call_id: callId,
-      }]);
-
-      // Act
-      const result = await signalingService.sendAnswer(mockTargetUserId, answerData, callId);
-
-      // Assert
-      expect(mockSurrealClientSingleton.create).toHaveBeenCalledWith(
-        'webrtc_signal',
-        expect.objectContaining({
-          signal_type: SignalType.ANSWER,
-          from_user: mockUserId,
-          to_user: mockTargetUserId,
-          signal_data: answerData,
-          call_id: callId,
-        })
-      );
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('sendIceCandidate', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should send ICE candidate signal successfully', async () => {
-      // Arrange
-      const candidateData: IceCandidateSignalData = {
-        candidate: 'candidate:1 1 UDP 2122252543 192.168.1.100 54400 typ host',
-        sdpMLineIndex: 0,
-        sdpMid: '0',
-        usernameFragment: 'abcd'
-      };
-      const callId = 'call_123';
-
-      mockSurrealClientSingleton.create.mockResolvedValue([{
-        id: 'signal_789',
-        signal_type: SignalType.ICE_CANDIDATE,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: candidateData,
-        call_id: callId,
-      }]);
-
-      // Act
-      const result = await signalingService.sendIceCandidate(mockTargetUserId, candidateData, callId);
-
-      // Assert
-      expect(mockSurrealClientSingleton.create).toHaveBeenCalledWith(
-        'webrtc_signal',
-        expect.objectContaining({
-          signal_type: SignalType.ICE_CANDIDATE,
-          from_user: mockUserId,
-          to_user: mockTargetUserId,
-          signal_data: candidateData,
-          call_id: callId,
-        })
-      );
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('sendCallRequest', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should send call request signal successfully', async () => {
-      // Arrange
-      const callRequestData: CallRequestSignalData = {
-        callType: 'video',
-        callId: 'call_123',
-        initiatorName: 'John Doe',
-        constraints: { audio: true, video: true }
-      };
-
-      mockSurrealClientSingleton.create.mockResolvedValue([{
-        id: 'signal_call_request',
-        signal_type: SignalType.CALL_REQUEST,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: callRequestData,
-        call_id: callRequestData.callId,
-      }]);
-
-      // Act
-      const result = await signalingService.sendCallRequest(mockTargetUserId, callRequestData);
-
-      // Assert
-      expect(mockSurrealClientSingleton.create).toHaveBeenCalledWith(
-        'webrtc_signal',
-        expect.objectContaining({
-          signal_type: SignalType.CALL_REQUEST,
-          from_user: mockUserId,
-          to_user: mockTargetUserId,
-          signal_data: callRequestData,
-          call_id: callRequestData.callId,
-        })
-      );
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('sendCallResponse', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should send call accept response successfully', async () => {
-      // Arrange
-      const responseData: CallResponseSignalData = {
-        callId: 'call_123',
-        accepted: true
-      };
-
-      mockSurrealClientSingleton.create.mockResolvedValue([{
-        id: 'signal_call_accept',
-        signal_type: SignalType.CALL_ACCEPT,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: responseData,
-        call_id: responseData.callId,
-      }]);
-
-      // Act
-      const result = await signalingService.sendCallResponse(mockTargetUserId, responseData, true);
-
-      // Assert
-      expect(mockSurrealClientSingleton.create).toHaveBeenCalledWith(
-        'webrtc_signal',
-        expect.objectContaining({
-          signal_type: SignalType.CALL_ACCEPT,
-          signal_data: responseData,
-        })
-      );
-      expect(result).toBeDefined();
-    });
-
-    it('should send call reject response successfully', async () => {
-      // Arrange
-      const responseData: CallResponseSignalData = {
-        callId: 'call_123',
-        accepted: false,
-        reason: 'User is busy'
-      };
-
-      mockSurrealClientSingleton.create.mockResolvedValue([{
-        id: 'signal_call_reject',
-        signal_type: SignalType.CALL_REJECT,
-        from_user: mockUserId,
-        to_user: mockTargetUserId,
-        signal_data: responseData,
-        call_id: responseData.callId,
-      }]);
-
-      // Act
-      const result = await signalingService.sendCallResponse(mockTargetUserId, responseData, false);
-
-      // Assert
-      expect(mockSurrealClientSingleton.create).toHaveBeenCalledWith(
-        'webrtc_signal',
-        expect.objectContaining({
-          signal_type: SignalType.CALL_REJECT,
-          signal_data: responseData,
-        })
-      );
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('sendGroupCallRequest', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should send group call request successfully', async () => {
-      // Arrange
-      const groupCallData = {
-        callId: 'group_call_123',
-        callType: 'conference' as const,
-        groupName: 'Project Team',
-        initiatorName: 'John Doe',
-        participants: ['user:456', 'user:789']
-      };
-
-      mockSurrealClientSingleton.create.mockResolvedValue([{
-        id: 'signal_group_call',
-        signal_type: SignalType.GROUP_CALL_REQUEST,
-        from_user: mockUserId,
-        group_id: mockGroupId,
-        signal_data: groupCallData,
-        call_id: groupCallData.callId,
-      }]);
-
-      // Act
-      const result = await signalingService.sendGroupCallRequest(mockGroupId, groupCallData);
-
-      // Assert
-      expect(mockSurrealClientSingleton.create).toHaveBeenCalledWith(
-        'webrtc_signal',
-        expect.objectContaining({
-          signal_type: SignalType.GROUP_CALL_REQUEST,
-          from_user: mockUserId,
-          group_id: mockGroupId,
-          signal_data: groupCallData,
-          call_id: groupCallData.callId,
-        })
-      );
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('addEventListener', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should register event listeners correctly', () => {
-      // Arrange
-      const listeners = {
-        onOfferReceived: vi.fn(),
-        onAnswerReceived: vi.fn(),
-        onIceCandidateReceived: vi.fn(),
-        onCallRequest: vi.fn(),
-        onCallAccept: vi.fn(),
-        onCallReject: vi.fn(),
-        onError: vi.fn(),
-      };
-
-      // Act
-      signalingService.addEventListener(listeners);
-
-      // Assert
-      expect((signalingService as any).listeners.onOfferReceived).toBe(listeners.onOfferReceived);
-      expect((signalingService as any).listeners.onAnswerReceived).toBe(listeners.onAnswerReceived);
-      expect((signalingService as any).listeners.onIceCandidateReceived).toBe(listeners.onIceCandidateReceived);
-      expect((signalingService as any).listeners.onCallRequest).toBe(listeners.onCallRequest);
-      expect((signalingService as any).listeners.onCallAccept).toBe(listeners.onCallAccept);
-      expect((signalingService as any).listeners.onCallReject).toBe(listeners.onCallReject);
-      expect((signalingService as any).listeners.onError).toBe(listeners.onError);
-    });
-  });
-
-  describe('removeEventListener', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should remove specific event listeners', () => {
-      // Arrange
-      const listeners = {
-        onOfferReceived: vi.fn(),
-        onAnswerReceived: vi.fn(),
-      };
-
-      signalingService.addEventListener(listeners);
-
-      // Act
-      signalingService.removeEventListener(['onOfferReceived']);
-
-      // Assert
-      expect((signalingService as any).listeners.onOfferReceived).toBeUndefined();
-      expect((signalingService as any).listeners.onAnswerReceived).toBe(listeners.onAnswerReceived);
-    });
-
-    it('should remove all event listeners when no specific types provided', () => {
-      // Arrange
-      const listeners = {
-        onOfferReceived: vi.fn(),
-        onAnswerReceived: vi.fn(),
-        onCallRequest: vi.fn(),
-      };
-
-      signalingService.addEventListener(listeners);
-
-      // Act
-      signalingService.removeEventListener();
-
-      // Assert
-      expect(Object.keys((signalingService as any).listeners)).toHaveLength(0);
-    });
-  });
-
-  describe('markSignalAsProcessed', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should mark signal as processed successfully', async () => {
-      // Arrange
-      const signalId = 'webrtc_signal:123';
-      mockSurrealClientSingleton.update.mockResolvedValue([{ processed: true }]);
-
-      // Act
-      await signalingService.markSignalAsProcessed(signalId);
-
-      // Assert
-      expect(mockSurrealClientSingleton.update).toHaveBeenCalledWith(
-        signalId,
-        { processed: true }
-      );
-    });
-
-    it('should handle update errors gracefully', async () => {
-      // Arrange
-      const signalId = 'webrtc_signal:123';
-      mockSurrealClientSingleton.update.mockRejectedValue(new Error('Update failed'));
-
-      // Act & Assert
-      await expect(signalingService.markSignalAsProcessed(signalId))
-        .rejects.toThrow('标记信令为已处理失败');
-    });
-  });
-
-  describe('getUnprocessedSignals', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should get unprocessed signals for user', async () => {
-      // Arrange
-      const mockSignals = [
-        {
-          id: 'signal_1',
-          signal_type: SignalType.OFFER,
-          from_user: mockTargetUserId,
-          to_user: mockUserId,
-          signal_data: { type: 'offer', sdp: 'mock-sdp' },
-          created_at: new Date().toISOString(),
-          processed: false,
-        },
-        {
-          id: 'signal_2',
-          signal_type: SignalType.ICE_CANDIDATE,
-          from_user: mockTargetUserId,
-          to_user: mockUserId,
-          signal_data: { candidate: 'mock-candidate' },
-          created_at: new Date().toISOString(),
-          processed: false,
-        }
-      ];
-
-      mockSurrealClientSingleton.query.mockResolvedValue([mockSignals]);
-
-      // Act
-      const result = await signalingService.getUnprocessedSignals();
-
-      // Assert
-      expect(mockSurrealClientSingleton.query).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE to_user = $user_id AND processed = false'),
-        { user_id: mockUserId }
-      );
-      expect(result).toEqual(mockSignals);
-    });
-
-    it('should filter signals by type when specified', async () => {
-      // Arrange
-      const signalTypes = [SignalType.OFFER, SignalType.ANSWER];
-      mockSurrealClientSingleton.query.mockResolvedValue([[]]);
-
-      // Act
-      await signalingService.getUnprocessedSignals(signalTypes);
-
-      // Assert
-      expect(mockSurrealClientSingleton.query).toHaveBeenCalledWith(
-        expect.stringContaining('AND signal_type IN $signal_types'),
-        { user_id: mockUserId, signal_types: signalTypes }
-      );
-    });
-  });
-
-  describe('cleanup', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should cleanup subscriptions and reset state', async () => {
-      // Act
-      await signalingService.cleanup();
-
-      // Assert
-      expect(mockSurrealClientSingleton.unsubscribe).toHaveBeenCalledWith('subscription_123');
-      expect((signalingService as any).isInitialized).toBe(false);
-      expect((signalingService as any).currentUserId).toBeNull();
-      expect((signalingService as any).subscriptions.size).toBe(0);
-      expect(Object.keys((signalingService as any).listeners)).toHaveLength(0);
-    });
-
-    it('should handle cleanup errors gracefully', async () => {
-      // Arrange
-      mockSurrealClientSingleton.unsubscribe.mockRejectedValue(new Error('Cleanup failed'));
-
-      // Act
-      await signalingService.cleanup();
-
-      // Assert - Should not throw and should still reset state
-      expect((signalingService as any).isInitialized).toBe(false);
-      expect(mockConsole.warn).toHaveBeenCalledWith(
-        expect.stringContaining('清理订阅失败'),
-        expect.any(Error)
-      );
-    });
-  });
-
-  describe('signal processing', () => {
-    beforeEach(async () => {
-      mockSurrealClientSingleton.queryLive.mockResolvedValue('subscription_123');
-      await signalingService.initialize(mockUserId);
-    });
-
-    it('should process incoming signals and call appropriate listeners', () => {
-      // Arrange
-      const onOfferReceived = vi.fn();
-      const onAnswerReceived = vi.fn();
-      const onIceCandidateReceived = vi.fn();
-
-      signalingService.addEventListener({
-        onOfferReceived,
-        onAnswerReceived,
-        onIceCandidateReceived,
+      expect(metrics).toEqual({
+        totalSignalsSent: expect.any(Number),
+        totalSignalsReceived: expect.any(Number),
+        signalsSentByType: expect.any(Object),
+        signalsReceivedByType: expect.any(Object),
+        averageSignalLatency: expect.any(Number),
+        failedSignals: expect.any(Number),
+        retryAttempts: expect.any(Number),
+        activeConnections: expect.any(Number),
       });
-
-      const offerSignal: SignalMessage = {
-        id: 'signal_1',
-        signal_type: SignalType.OFFER,
-        from_user: mockTargetUserId,
-        to_user: mockUserId,
-        signal_data: { type: 'offer', sdp: 'mock-sdp' },
-        call_id: 'call_123',
-        created_at: new Date().toISOString(),
-      };
-
-      // Act - Simulate receiving signal through live query callback
-      const processSignal = (signalingService as any).processIncomingSignal;
-      if (processSignal) {
-        processSignal(offerSignal);
-      }
-
-      // Assert
-      expect(onOfferReceived).toHaveBeenCalledWith(
-        mockTargetUserId,
-        offerSignal.signal_data,
-        'call_123'
-      );
     });
   });
 });
