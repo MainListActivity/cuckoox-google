@@ -65,6 +65,9 @@ import ChatInput from '@/src/components/messages/ChatInput';
 import NotificationCard from '@/src/components/messages/NotificationCard';
 import ConferenceInviteCard from '@/src/components/messages/ConferenceInviteCard';
 import CreateConversationDialog from '@/src/components/messages/CreateConversationDialog';
+import GroupChatInterface from '@/src/components/messages/GroupChatInterface';
+import GroupCreateDialog from '@/src/components/messages/GroupCreateDialog';
+import GroupInfoPanel from '@/src/components/messages/GroupInfoPanel';
 import {
   Message as MessageType,
   IMMessage,
@@ -73,14 +76,18 @@ import {
   ConferenceInviteMessage,
   ConversationSummary
 } from '@/src/types/message';
+import type { Group, GroupMember } from '@/src/types/group';
 import {
   useConversationsList,
   useSystemNotifications
 } from '@/src/hooks/useMessageCenterData';
+import { useGroupsData } from '@/src/hooks/useGroupsData';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { messageService } from '@/src/services/messageService';
+import { groupManager } from '@/src/services/groupManager';
+import callManager, { CallType } from '@/src/services/callManager';
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
 import { RecordId } from 'surrealdb';
@@ -112,6 +119,14 @@ const MessageCenterPage: React.FC = () => {
   const client = useSurrealClient();
 
   // Fetch data using hooks
+  // Fetch groups data
+  const {
+    groups,
+    isLoading: isLoadingGroups,
+    error: groupsError,
+    setGroups
+  } = useGroupsData(user?.id || null);
+
   const {
     conversations,
     isLoading: isLoadingConversations,
@@ -149,14 +164,19 @@ const MessageCenterPage: React.FC = () => {
       const errMsg = (notificationsError as Error)?.message ?? '未知错误';
       showError(`加载通知列表失败: ${errMsg}`);
     }
-  }, [conversationsError, notificationsError, showError]);
+    if (groupsError) {
+      const errMsg = (groupsError as Error)?.message ?? '未知错误';
+      showError(`加载群组列表失败: ${errMsg}`);
+    }
+  }, [conversationsError, notificationsError, groupsError, showError]);
 
   // 统计未读消息
   const unreadCount = useMemo(() => {
     const notificationUnread = notifications.filter((n: any) => !n.is_read).length;
     const conversationUnread = conversations.reduce((count: number, conv: any) => count + (conv.unread_count || 0), 0);
-    return notificationUnread + conversationUnread;
-  }, [notifications, conversations]);
+    const groupUnread = groups.reduce((count: number, group: Group) => count + (group.unread_count || 0), 0);
+    return notificationUnread + conversationUnread + groupUnread;
+  }, [notifications, conversations, groups]);
 
   // 系统/提醒消息 (目前未直接使用，但保留示例)
   const systemMessages = useMemo(
@@ -173,7 +193,7 @@ const MessageCenterPage: React.FC = () => {
     [conversations]
   );
 
-  // Combine conversations and notifications into a single list for display, sorted by timestamp
+  // Combine conversations, notifications, and groups into a single list for display, sorted by timestamp
   const combinedList = useMemo((): DisplayListItem[] => {
     const convItems: DisplayListItem[] = conversations.map((c: ConversationSummary) => ({
       ...c,
@@ -188,7 +208,13 @@ const MessageCenterPage: React.FC = () => {
       itemType: 'notification' as const
     }));
 
-    const allItems = [...convItems, ...notifItems];
+    const groupItems: DisplayListItem[] = groups.map((g: Group) => ({
+      ...g,
+      itemType: 'group' as const,
+      is_read: (g.unread_count || 0) === 0
+    }));
+
+    const allItems = [...convItems, ...notifItems, ...groupItems];
 
     // Sort by updated_at or created_at (last_message_timestamp for conversations)
     allItems.sort((a, b) => {
@@ -198,7 +224,7 @@ const MessageCenterPage: React.FC = () => {
     });
 
     return allItems;
-  }, [conversations, notifications]);
+  }, [conversations, notifications, groups]);
 
   // Update simulated conversation when a conversation summary is selected
   useEffect(() => {
@@ -434,6 +460,43 @@ const MessageCenterPage: React.FC = () => {
     showSuccess('会话创建成功');
   }, [showSuccess]);
 
+  // 群组相关事件处理
+  const handleGroupCreated = useCallback((newGroup: Group) => {
+    setGroups(prev => [newGroup, ...prev]);
+    setCreateGroupOpen(false);
+    setSelectedGroup(newGroup);
+    setCurrentChatMode('group');
+    setCurrentViewMode('chat');
+    showSuccess('群组创建成功');
+  }, [setGroups, showSuccess]);
+
+  const handleGroupSelect = useCallback((group: Group) => {
+    setSelectedGroup(group);
+    setSelectedItem(null);
+    setCurrentChatMode('group');
+    setCurrentViewMode('chat');
+    setShowGroupInfo(false);
+  }, []);
+
+  const handleStartGroupCall = useCallback(async (type: CallType) => {
+    if (!selectedGroup || !user?.id) return;
+    
+    try {
+      await callManager.startGroupCall(selectedGroup.id, type, user.id);
+      showSuccess(`群组${type === 'video' ? '视频' : '语音'}通话已发起`);
+    } catch (error) {
+      showError(`发起群组通话失败: ${(error as Error).message}`);
+    }
+  }, [selectedGroup, user?.id, showSuccess, showError]);
+
+  const handleBackToList = useCallback(() => {
+    setCurrentViewMode('list');
+    setSelectedGroup(null);
+    setSelectedItem(null);
+    setCurrentChatMode('conversation');
+    setShowGroupInfo(false);
+  }, []);
+
   const filteredDisplayList = useMemo((): DisplayListItem[] => {
     if (currentFilter === 'im') {
       return combinedList.filter((item: DisplayListItem) => item.itemType === 'conversation');
@@ -441,21 +504,41 @@ const MessageCenterPage: React.FC = () => {
     if (currentFilter === 'reminders') {
       return combinedList.filter((item: DisplayListItem) => item.itemType === 'notification');
     }
+    if (currentFilter === 'groups') {
+      return combinedList.filter((item: DisplayListItem) => item.itemType === 'group');
+    }
     return combinedList; // 'all'
   }, [combinedList, currentFilter]);
 
   // 渲染消息列表项
   const renderMessageItem = (message: DisplayListItem) => {
     const isNotif = message.itemType === 'notification';
+    const isGroup = message.itemType === 'group';
     const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage | ConferenceInviteMessage) : undefined;
-    const primaryText = isNotif ? (notifMsg?.title ?? '通知') : (message as ConversationSummary).last_message_sender_name ?? '会话';
+    const groupData = isGroup ? (message as Group) : undefined;
+    
+    let primaryText: string;
+    if (isNotif) {
+      primaryText = notifMsg?.title ?? '通知';
+    } else if (isGroup) {
+      primaryText = groupData?.name ?? '群组';
+    } else {
+      primaryText = (message as ConversationSummary).last_message_sender_name ?? '会话';
+    }
+    
     const hasHighPriority = isNotif && notifMsg?.priority === 'high';
-    const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : 'IM';
+    const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : isGroup ? 'GROUP_IM' : 'IM';
 
     return (
       <React.Fragment key={message.id}>
         <ListItem
-          onClick={() => handleSelectItem(message)}
+          onClick={() => {
+            if (message.itemType === 'group') {
+              handleGroupSelect(message as Group);
+            } else {
+              handleSelectItem(message);
+            }
+          }}
           sx={{
             cursor: 'pointer',
             backgroundColor: (message as any).unread ? 'action.hover' : 'transparent',
@@ -472,7 +555,11 @@ const MessageCenterPage: React.FC = () => {
           </ListItemAvatar>
           <ListItemText
             primary={<Box display="flex" alignItems="center" gap={1}><Typography variant="subtitle2" fontWeight={(message as any).unread ? 'bold' : 'normal'}>{primaryText}</Typography>{hasHighPriority && (<Chip label="重要" size="small" color="error" sx={{ height: 20 }} />)}{(message as any).hasAttachment && (<AttachFile fontSize="small" color="action" />)}</Box>}
-            secondary={<Typography variant="body2" color="text.secondary" noWrap>{isNotif ? notifMsg?.content : (message as ConversationSummary).last_message_snippet}</Typography>}
+            secondary={<Typography variant="body2" color="text.secondary" noWrap>{
+              isNotif ? notifMsg?.content : 
+              isGroup ? (groupData?.last_message_snippet || '暂无消息') :
+              (message as ConversationSummary).last_message_snippet
+            }</Typography>}
           />
           <ListItemSecondaryAction>
             <Box display="flex" flexDirection="column" alignItems="flex-end">
@@ -490,6 +577,59 @@ const MessageCenterPage: React.FC = () => {
 
   // Mobile rendering
   if (isMobile) {
+    // Mobile group chat view
+    if (currentViewMode === 'chat' && selectedGroup) {
+      return (
+        <MobileOptimizedLayout
+          title={selectedGroup.name}
+          showBackButton={true}
+          onBackClick={handleBackToList}
+          rightActions={[
+            {
+              icon: <Info />,
+              onClick: () => setShowGroupInfo(!showGroupInfo),
+              ariaLabel: '群组信息'
+            }
+          ]}
+        >
+          <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+            {showGroupInfo ? (
+              <GroupInfoPanel
+                group={selectedGroup}
+                onClose={() => setShowGroupInfo(false)}
+                onMemberAdded={(member) => {
+                  showSuccess(`成员 ${member.user_name} 已加入群组`);
+                }}
+                onMemberRemoved={(member) => {
+                  showSuccess(`成员 ${member.user_name} 已移除`);
+                }}
+                onGroupUpdated={(updatedGroup) => {
+                  setSelectedGroup(updatedGroup);
+                  setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g));
+                  showSuccess('群组信息已更新');
+                }}
+                onGroupDeleted={() => {
+                  setGroups(prev => prev.filter(g => g.id !== selectedGroup.id));
+                  handleBackToList();
+                  showSuccess('群组已解散');
+                }}
+                currentUserId={user?.id}
+                compact={true}
+              />
+            ) : (
+              <GroupChatInterface
+                group={selectedGroup}
+                onStartCall={handleStartGroupCall}
+                onBack={handleBackToList}
+                onShowInfo={() => setShowGroupInfo(true)}
+                compact={true}
+              />
+            )}
+          </Box>
+        </MobileOptimizedLayout>
+      );
+    }
+
     // Mobile conversation view
     if (selectedItem) {
       return (
@@ -735,8 +875,19 @@ const MessageCenterPage: React.FC = () => {
         showBackButton={false}
         fabConfig={{
           icon: <Add />,
-          action: () => setCreateConversationOpen(true),
-          ariaLabel: "新建对话",
+          actions: [
+            {
+              icon: <Chat />,
+              label: '新建对话',
+              onClick: () => setCreateConversationOpen(true)
+            },
+            {
+              icon: <Group />,
+              label: '创建群组',
+              onClick: () => setCreateGroupOpen(true)
+            }
+          ],
+          ariaLabel: "新建",
         }}
       >
         <Box sx={{ p: 0 }}>
@@ -775,15 +926,36 @@ const MessageCenterPage: React.FC = () => {
             />
             <Tabs
               value={activeTab}
-              onChange={(e: React.SyntheticEvent, newValue: number) => setActiveTab(newValue)}
+              onChange={(e: React.SyntheticEvent, newValue: number) => {
+                setActiveTab(newValue);
+                const filters = ['all', 'im', 'groups', 'reminders'] as const;
+                setCurrentFilter(filters[newValue] || 'all');
+              }}
               sx={{ mt: 2 }}
               variant="fullWidth"
               textColor="primary"
               indicatorColor="primary"
             >
-              <Tab label="全部" />
-              <Tab label="聊天" />
-              <Tab label="通知" />
+              <Tab 
+                icon={<Message />} 
+                label={`全部${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+                iconPosition="start"
+              />
+              <Tab 
+                icon={<Chat />} 
+                label={`会话${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0) > 0 ? ` (${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0)})` : ''}`}
+                iconPosition="start"
+              />
+              <Tab 
+                icon={<Group />}
+                label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ''}`}
+                iconPosition="start"
+              />
+              <Tab 
+                icon={<Notifications />}
+                label={`通知${notifications.filter(n => !n.is_read).length > 0 ? ` (${notifications.filter(n => !n.is_read).length})` : ''}`}
+                iconPosition="start"
+              />
             </Tabs>
           </Box>
 
@@ -825,7 +997,13 @@ const MessageCenterPage: React.FC = () => {
                         '&:active': { backgroundColor: 'action.selected' },
                         minHeight: '80px'
                       }}
-                      onClick={() => handleSelectItem(message)}
+                      onClick={() => {
+                        if (message.itemType === 'group') {
+                          handleGroupSelect(message as Group);
+                        } else {
+                          handleSelectItem(message);
+                        }
+                      }}
                     >
                       <CardContent sx={{ display: 'flex', alignItems: 'center', p: 2 }}>
                         <Badge color="error" variant="dot" invisible={!((message as any).unread)}>
@@ -929,6 +1107,13 @@ const MessageCenterPage: React.FC = () => {
           onClose={() => setCreateConversationOpen(false)}
           onCreated={handleConversationCreated}
         />
+        
+        {/* 创建群组对话框 */}
+        <GroupCreateDialog
+          open={createGroupOpen}
+          onClose={() => setCreateGroupOpen(false)}
+          onGroupCreated={handleGroupCreated}
+        />
 
         {/* 消息操作菜单 */}
         <Menu
@@ -993,13 +1178,34 @@ const MessageCenterPage: React.FC = () => {
               />
               <Tabs
                 value={activeTab}
-                onChange={(e: React.SyntheticEvent, newValue: number) => setActiveTab(newValue)}
+                onChange={(e: React.SyntheticEvent, newValue: number) => {
+                  setActiveTab(newValue);
+                  const filters = ['all', 'im', 'groups', 'reminders'] as const;
+                  setCurrentFilter(filters[newValue] || 'all');
+                }}
                 sx={{ mt: 1 }}
                 variant="fullWidth"
               >
-                <Tab label="全部" />
-                <Tab label="聊天" />
-                <Tab label="通知" />
+                <Tab 
+                  icon={<Message />} 
+                  label={`全部${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+                  iconPosition="start"
+                />
+                <Tab 
+                  icon={<Chat />} 
+                  label={`会话${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0) > 0 ? ` (${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0)})` : ''}`}
+                  iconPosition="start"
+                />
+                <Tab 
+                  icon={<Group />}
+                  label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ''}`}
+                  iconPosition="start"
+                />
+                <Tab 
+                  icon={<Notifications />}
+                  label={`通知${notifications.filter(n => !n.is_read).length > 0 ? ` (${notifications.filter(n => !n.is_read).length})` : ''}`}
+                  iconPosition="start"
+                />
               </Tabs>
             </Box>
 
@@ -1032,7 +1238,7 @@ const MessageCenterPage: React.FC = () => {
               )}
             </List>
             
-            {/* 创建会话按钮 */}
+            {/* 创建按钮 */}
             <Box
               sx={{
                 position: 'absolute',
@@ -1040,20 +1246,31 @@ const MessageCenterPage: React.FC = () => {
                 right: 16,
               }}
             >
-              <IconButton
-                color="primary"
+              <SpeedDial
+                ariaLabel="新建"
                 sx={{
-                  bgcolor: 'primary.main',
-                  color: 'primary.contrastText',
-                  '&:hover': {
-                    bgcolor: 'primary.dark',
+                  '& .MuiFab-primary': {
+                    bgcolor: 'primary.main',
+                    '&:hover': {
+                      bgcolor: 'primary.dark',
+                    },
                   },
-                  boxShadow: 3,
                 }}
-                onClick={() => setCreateConversationOpen(true)}
+                icon={<SpeedDialIcon />}
               >
-                <Add />
-              </IconButton>
+                <SpeedDialAction
+                  key="conversation"
+                  icon={<Chat />}
+                  tooltipTitle="新建对话"
+                  onClick={() => setCreateConversationOpen(true)}
+                />
+                <SpeedDialAction
+                  key="group"
+                  icon={<Group />}
+                  tooltipTitle="创建群组"
+                  onClick={() => setCreateGroupOpen(true)}
+                />
+              </SpeedDial>
             </Box>
           </Paper>
         </Grid>
@@ -1061,7 +1278,65 @@ const MessageCenterPage: React.FC = () => {
         {/* 右侧消息详情 */}
         <Grid size={{ xs: 12, md: 8 }}>
           <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
-            {selectedItem ? (
+            {/* 群组聊天界面 */}
+            {currentViewMode === 'chat' && selectedGroup ? (
+              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                {/* 群组头部 */}
+                <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <IconButton onClick={handleBackToList}>
+                      <ArrowBack />
+                    </IconButton>
+                    <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                      <Group />
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" noWrap>{selectedGroup.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {selectedGroup.member_count} 人
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <IconButton onClick={() => setShowGroupInfo(!showGroupInfo)}>
+                    <Info />
+                  </IconButton>
+                </Box>
+
+                {/* 群组信息面板或聊天界面 */}
+                {showGroupInfo ? (
+                  <GroupInfoPanel
+                    group={selectedGroup}
+                    onClose={() => setShowGroupInfo(false)}
+                    onMemberAdded={(member) => {
+                      showSuccess(`成员 ${member.user_name} 已加入群组`);
+                    }}
+                    onMemberRemoved={(member) => {
+                      showSuccess(`成员 ${member.user_name} 已移除`);
+                    }}
+                    onGroupUpdated={(updatedGroup) => {
+                      setSelectedGroup(updatedGroup);
+                      setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g));
+                      showSuccess('群组信息已更新');
+                    }}
+                    onGroupDeleted={() => {
+                      setGroups(prev => prev.filter(g => g.id !== selectedGroup.id));
+                      handleBackToList();
+                      showSuccess('群组已解散');
+                    }}
+                    currentUserId={user?.id}
+                    compact={false}
+                  />
+                ) : (
+                  <GroupChatInterface
+                    group={selectedGroup}
+                    onStartCall={handleStartGroupCall}
+                    onBack={handleBackToList}
+                    onShowInfo={() => setShowGroupInfo(true)}
+                    compact={false}
+                  />
+                )}
+              </Box>
+            ) : selectedItem ? (
               <>
                 {/* 消息详情头部 */}
                 <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
@@ -1269,6 +1544,13 @@ const MessageCenterPage: React.FC = () => {
         open={createConversationOpen}
         onClose={() => setCreateConversationOpen(false)}
         onCreated={handleConversationCreated}
+      />
+      
+      {/* 创建群组对话框 */}
+      <GroupCreateDialog
+        open={createGroupOpen}
+        onClose={() => setCreateGroupOpen(false)}
+        onGroupCreated={handleGroupCreated}
       />
     </Box>
   );

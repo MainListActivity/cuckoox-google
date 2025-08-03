@@ -15,7 +15,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  DialogContentText
+  DialogContentText,
+  useMediaQuery,
+  Fab,
+  alpha
 } from '@mui/material';
 import {
   Call as CallIcon,
@@ -30,10 +33,12 @@ import {
   VideocamOff as VideocamOffIcon,
   Person as PersonIcon,
   Settings as SettingsIcon,
-  MoreVert as MoreVertIcon
+  MoreVert as MoreVertIcon,
+  Fullscreen as FullscreenIcon
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import callManager, { CallSession, CallState, MediaState } from '@/src/services/callManager';
+import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
 // 组件属性接口
 export interface AudioCallInterfaceProps {
@@ -80,6 +85,13 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   style
 }) => {
   const theme = useTheme();
+  const { isMobile, isTablet } = useResponsiveLayout();
+  const isLandscape = useMediaQuery('(orientation: landscape)');
+  const isPortrait = useMediaQuery('(orientation: portrait)');
+  
+  // 针对不同屏幕尺寸的断点
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMediumScreen = useMediaQuery(theme.breakpoints.between('sm', 'md'));
   const [callSession, setCallSession] = useState<CallSession | null>(null);
   const [callDuration, setCallDuration] = useState<number>(0);
   const [mediaState, setMediaState] = useState<MediaState>({
@@ -95,6 +107,10 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'unknown'>('unknown');
+  
+  // 移动端状态
+  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
+  const [showMobileActions, setShowMobileActions] = useState<boolean>(false);
 
   // 音频元素引用
   const localAudioRef = useRef<HTMLAudioElement>(null);
@@ -381,7 +397,88 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   const handleCancelEndCall = useCallback(() => {
     setShowEndCallConfirm(false);
   }, []);
+  
+  /**
+   * 切换全屏模式(移动端)
+   */
+  const handleToggleFullScreen = useCallback(() => {
+    if (!isMobile) return;
+    
+    if (!isFullScreen) {
+      // 进入全屏
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+      setIsFullScreen(true);
+    } else {
+      // 退出全屏
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+      setIsFullScreen(false);
+    }
+  }, [isMobile, isFullScreen]);
+  
+  /**
+   * 处理屏幕方向变化
+   */
+  const handleOrientationChange = useCallback(() => {
+    // 屏幕方向变化时的逻辑
+    if (isMobile) {
+      // 隐藏移动端操作栏，然后在短暂延迟后显示
+      setShowMobileActions(false);
+      setTimeout(() => {
+        setShowMobileActions(true);
+      }, 300);
+    }
+  }, [isMobile]);
+  
+  // 监听屏幕方向变化
+  useEffect(() => {
+    if (isMobile) {
+      window.addEventListener('orientationchange', handleOrientationChange);
+      
+      // 初始化显示移动端操作栏
+      setShowMobileActions(true);
+      
+      return () => {
+        window.removeEventListener('orientationchange', handleOrientationChange);
+      };
+    }
+  }, [isMobile, handleOrientationChange]);
 
+  // 获取移动端适配的尺寸参数
+  const getMobileStyles = useCallback(() => {
+    if (!isMobile) return {};
+    
+    const baseStyles = {
+      height: isLandscape ? '100vh' : '100dvh', // 使用动态视口高度
+      minHeight: isLandscape ? '100vh' : '100dvh',
+      borderRadius: isFullScreen ? 0 : 3,
+      padding: isLandscape ? theme.spacing(1) : theme.spacing(2)
+    };
+    
+    // 横屏模式下的特殊调整
+    if (isLandscape) {
+      return {
+        ...baseStyles,
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center'
+      };
+    }
+    
+    return baseStyles;
+  }, [isMobile, isLandscape, isFullScreen, theme]);
+  
+  // 获取触摸友好的按钮尺寸
+  const getButtonSize = useCallback(() => {
+    if (isMobile) {
+      return isSmallScreen ? 56 : 64; // 遵循Touch Target指导原则(44px+)
+    }
+    return 48;
+  }, [isMobile, isSmallScreen]);
+  
   // 如果没有通话会话，显示加载状态
   if (!callSession) {
     return (
@@ -392,11 +489,15 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          height: 400,
+          height: isMobile ? '100dvh' : 400,
           ...style
         }}
       >
-        <Typography variant="h6" color="text.secondary">
+        <Typography 
+          variant={isMobile ? "h5" : "h6"} 
+          color="text.secondary"
+          sx={{ px: 2, textAlign: 'center' }}
+        >
           正在加载通话信息...
         </Typography>
       </Box>
@@ -406,7 +507,11 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   const mainParticipant = getMainParticipant();
 
   return (
-    <Box className={className} style={style}>
+    <Box 
+      className={className} 
+      style={style}
+      sx={isMobile ? getMobileStyles() : {}}
+    >
       {/* 隐藏的音频元素 */}
       <audio ref={localAudioRef} autoPlay playsInline style={{ display: 'none' }} />
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
@@ -414,16 +519,26 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
       <Paper
         elevation={8}
         sx={{
-          p: 3,
-          borderRadius: 3,
+          p: isMobile ? (isLandscape ? 1 : 2) : 3,
+          borderRadius: isMobile && isFullScreen ? 0 : 3,
           background: theme.palette.mode === 'dark' 
             ? 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)'
             : 'linear-gradient(135deg, #f5f5f5 0%, #ffffff 100%)',
-          minHeight: 400,
+          minHeight: isMobile ? (isLandscape ? '100vh' : '100dvh') : 400,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: isMobile && isLandscape ? 'row' : 'column',
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          // 移动端全屏样式
+          ...(isMobile && isFullScreen && {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9999,
+            borderRadius: 0
+          })
         }}
       >
         {/* 加载进度条 */}
@@ -445,27 +560,54 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'flex-start',
-            mb: 2
+            mb: isMobile && isLandscape ? 1 : 2,
+            // 移动端横屏时调整为垂直布局
+            ...(isMobile && isLandscape && {
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              width: '30%',
+              pr: 2
+            })
           }}
         >
-          <Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             <Chip
               label={CallStateLabels[callSession.state]}
               color={CallStateColors[callSession.state]}
-              size="small"
-              sx={{ mb: 1 }}
+              size={isMobile ? 'small' : 'small'}
+              sx={{ 
+                mb: isMobile ? 0.5 : 1,
+                fontSize: isMobile ? '0.7rem' : undefined
+              }}
             />
             {callSession.state === 'connected' && (
-              <Typography variant="body2" color="text.secondary">
+              <Typography 
+                variant={isMobile ? 'caption' : 'body2'} 
+                color="text.secondary"
+                sx={{ fontWeight: 'medium' }}
+              >
                 {formatDuration(callDuration)}
               </Typography>
             )}
           </Box>
           
-          <Box>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            {/* 移动端全屏按钮 */}
+            {isMobile && (
+              <Tooltip title={isFullScreen ? '退出全屏' : '进入全屏'}>
+                <IconButton 
+                  size="small" 
+                  onClick={handleToggleFullScreen}
+                  sx={{ color: theme.palette.text.secondary }}
+                >
+                  <FullscreenIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            
             <Tooltip title="更多选项">
               <IconButton size="small">
-                <MoreVertIcon />
+                <MoreVertIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           </Box>
@@ -480,67 +622,97 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
             justifyContent: 'center',
             alignItems: 'center',
             textAlign: 'center',
-            py: 2
+            py: isMobile ? (isLandscape ? 1 : 2) : 2,
+            // 移动端横屏时调整布局
+            ...(isMobile && isLandscape && {
+              width: '70%',
+              justifyContent: 'flex-start',
+              pt: 2
+            })
           }}
         >
           <Fade in={true} timeout={1000}>
-            <Box>
+            <Box sx={{ width: '100%' }}>
               {/* 头像 */}
               <Avatar
                 sx={{
-                  width: 120,
-                  height: 120,
-                  mb: 2,
+                  width: isMobile ? (isLandscape ? 80 : 100) : 120,
+                  height: isMobile ? (isLandscape ? 80 : 100) : 120,
+                  mb: isMobile ? 1.5 : 2,
                   bgcolor: theme.palette.primary.main,
-                  fontSize: '3rem'
+                  fontSize: isMobile ? (isLandscape ? '2rem' : '2.5rem') : '3rem',
+                  mx: 'auto'
                 }}
               >
                 {mainParticipant ? (
                   mainParticipant.userName.charAt(0).toUpperCase()
                 ) : (
-                  <PersonIcon fontSize="large" />
+                  <PersonIcon fontSize={isMobile ? 'medium' : 'large'} />
                 )}
               </Avatar>
 
               {/* 参与者姓名 */}
-              <Typography variant="h5" gutterBottom>
+              <Typography 
+                variant={isMobile ? (isLandscape ? 'h6' : 'h5') : 'h5'} 
+                gutterBottom
+                sx={{ 
+                  fontWeight: 'medium',
+                  lineHeight: 1.2
+                }}
+              >
                 {mainParticipant?.userName || '未知用户'}
               </Typography>
 
               {/* 连接状态 */}
               {mainParticipant && (
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                <Typography 
+                  variant={isMobile ? 'caption' : 'body2'} 
+                  color="text.secondary" 
+                  sx={{ mb: isMobile ? 1 : 1 }}
+                >
                   {mainParticipant.connectionState === 'connected' ? '已连接' : '连接中...'}
                 </Typography>
               )}
 
               {/* 媒体状态指示器 */}
-              <Stack direction="row" spacing={1} justifyContent="center" sx={{ mb: 2 }}>
+              <Stack 
+                direction={isMobile && isLandscape ? 'column' : 'row'} 
+                spacing={isMobile && isLandscape ? 0.5 : 1} 
+                justifyContent="center" 
+                alignItems="center"
+                sx={{ 
+                  mb: isMobile ? 1 : 2,
+                  flexWrap: 'wrap'
+                }}
+              >
                 {mediaState.screenSharing && (
                   <Chip
-                    icon={<ScreenShareIcon />}
+                    icon={<ScreenShareIcon fontSize="small" />}
                     label="屏幕共享中"
                     color="primary"
                     variant="outlined"
                     size="small"
+                    sx={{ fontSize: isMobile ? '0.65rem' : undefined }}
                   />
                 )}
                 {mediaState.micMuted && (
                   <Chip
-                    icon={<MicOffIcon />}
+                    icon={<MicOffIcon fontSize="small" />}
                     label="已静音"
                     color="warning"
                     variant="outlined"
                     size="small"
+                    sx={{ fontSize: isMobile ? '0.65rem' : undefined }}
                   />
                 )}
                 {!mediaState.cameraOff && callSession.callType === 'video' && (
                   <Chip
-                    icon={<VideocamIcon />}
+                    icon={<VideocamIcon fontSize="small" />}
                     label="摄像头开启"
                     color="success"
                     variant="outlined"
                     size="small"
+                    sx={{ fontSize: isMobile ? '0.65rem' : undefined }}
                   />
                 )}
               </Stack>
@@ -549,120 +721,258 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
         </Box>
 
         {/* 底部控制按钮区域 */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: 2,
-            pt: 2,
-            borderTop: `1px solid ${theme.palette.divider}`
-          }}
-        >
-          {/* 静音按钮 */}
-          <Tooltip title={mediaState.micMuted ? '取消静音' : '静音'}>
-            <IconButton
-              onClick={handleToggleMute}
-              disabled={isLoading}
+        {isMobile ? (
+          /* 移动端操作栏 */
+          <Fade in={showMobileActions} timeout={300}>
+            <Box
               sx={{
-                bgcolor: mediaState.micMuted ? theme.palette.warning.main : theme.palette.action.hover,
-                color: mediaState.micMuted ? theme.palette.warning.contrastText : theme.palette.text.primary,
-                '&:hover': {
-                  bgcolor: mediaState.micMuted ? theme.palette.warning.dark : theme.palette.action.selected
-                }
+                position: isFullScreen ? 'fixed' : 'absolute',
+                bottom: isFullScreen ? 20 : 16,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: isLandscape ? 1 : 1.5,
+                p: 1.5,
+                borderRadius: '20px',
+                bgcolor: alpha(theme.palette.background.paper, 0.9),
+                backdropFilter: 'blur(10px)',
+                boxShadow: theme.shadows[8],
+                zIndex: 1000
               }}
             >
-              {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
-            </IconButton>
-          </Tooltip>
+              {/* 静音按钮 */}
+              <Tooltip title={mediaState.micMuted ? '取消静音' : '静音'}>
+                <IconButton
+                  onClick={handleToggleMute}
+                  disabled={isLoading}
+                  size="large"
+                  sx={{
+                    width: getButtonSize(),
+                    height: getButtonSize(),
+                    bgcolor: mediaState.micMuted ? theme.palette.warning.main : theme.palette.action.hover,
+                    color: mediaState.micMuted ? theme.palette.warning.contrastText : theme.palette.text.primary,
+                    '&:hover': {
+                      bgcolor: mediaState.micMuted ? theme.palette.warning.dark : theme.palette.action.selected
+                    }
+                  }}
+                >
+                  {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
+                </IconButton>
+              </Tooltip>
 
-          {/* 扬声器按钮 */}
-          <Tooltip title={mediaState.speakerEnabled ? '关闭扬声器' : '开启扬声器'}>
-            <IconButton
-              onClick={handleToggleSpeaker}
-              disabled={isLoading}
-              sx={{
-                bgcolor: mediaState.speakerEnabled ? theme.palette.success.main : theme.palette.action.hover,
-                color: mediaState.speakerEnabled ? theme.palette.success.contrastText : theme.palette.text.primary,
-                '&:hover': {
-                  bgcolor: mediaState.speakerEnabled ? theme.palette.success.dark : theme.palette.action.selected
-                }
-              }}
-            >
-              {mediaState.speakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
-            </IconButton>
-          </Tooltip>
+              {/* 扬声器按钮 */}
+              <Tooltip title={mediaState.speakerEnabled ? '关闭扬声器' : '开启扬声器'}>
+                <IconButton
+                  onClick={handleToggleSpeaker}
+                  disabled={isLoading}
+                  size="large"
+                  sx={{
+                    width: getButtonSize(),
+                    height: getButtonSize(),
+                    bgcolor: mediaState.speakerEnabled ? theme.palette.success.main : theme.palette.action.hover,
+                    color: mediaState.speakerEnabled ? theme.palette.success.contrastText : theme.palette.text.primary,
+                    '&:hover': {
+                      bgcolor: mediaState.speakerEnabled ? theme.palette.success.dark : theme.palette.action.selected
+                    }
+                  }}
+                >
+                  {mediaState.speakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
+                </IconButton>
+              </Tooltip>
 
-          {/* 摄像头按钮（仅视频通话显示） */}
-          {callSession.callType === 'video' && (
-            <Tooltip title={mediaState.cameraOff ? '开启摄像头' : '关闭摄像头'}>
+              {/* 摄像头按钮（仅视频通话显示） */}
+              {callSession.callType === 'video' && (
+                <Tooltip title={mediaState.cameraOff ? '开启摄像头' : '关闭摄像头'}>
+                  <IconButton
+                    onClick={handleToggleCamera}
+                    disabled={isLoading}
+                    size="large"
+                    sx={{
+                      width: getButtonSize(),
+                      height: getButtonSize(),
+                      bgcolor: mediaState.cameraOff ? theme.palette.error.main : theme.palette.success.main,
+                      color: mediaState.cameraOff ? theme.palette.error.contrastText : theme.palette.success.contrastText,
+                      '&:hover': {
+                        bgcolor: mediaState.cameraOff ? theme.palette.error.dark : theme.palette.success.dark
+                      }
+                    }}
+                  >
+                    {mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {/* 屏幕共享按钮 */}
+              <Tooltip title={mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享'}>
+                <IconButton
+                  onClick={handleToggleScreenShare}
+                  disabled={isLoading}
+                  size="large"
+                  sx={{
+                    width: getButtonSize(),
+                    height: getButtonSize(),
+                    bgcolor: mediaState.screenSharing ? theme.palette.primary.main : theme.palette.action.hover,
+                    color: mediaState.screenSharing ? theme.palette.primary.contrastText : theme.palette.text.primary,
+                    '&:hover': {
+                      bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : theme.palette.action.selected
+                    }
+                  }}
+                >
+                  {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+                </IconButton>
+              </Tooltip>
+
+              {/* 结束通话按钮 */}
+              <Tooltip title="结束通话">
+                <IconButton
+                  onClick={handleConfirmEndCall}
+                  disabled={isLoading}
+                  size="large"
+                  sx={{
+                    width: getButtonSize(),
+                    height: getButtonSize(),
+                    bgcolor: theme.palette.error.main,
+                    color: theme.palette.error.contrastText,
+                    '&:hover': {
+                      bgcolor: theme.palette.error.dark
+                    }
+                  }}
+                >
+                  <CallEndIcon />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          </Fade>
+        ) : (
+          /* 桌面端控制按钮 */
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 2,
+              pt: 2,
+              borderTop: `1px solid ${theme.palette.divider}`
+            }}
+          >
+            {/* 静音按钮 */}
+            <Tooltip title={mediaState.micMuted ? '取消静音' : '静音'}>
               <IconButton
-                onClick={handleToggleCamera}
+                onClick={handleToggleMute}
                 disabled={isLoading}
                 sx={{
-                  bgcolor: mediaState.cameraOff ? theme.palette.error.main : theme.palette.success.main,
-                  color: mediaState.cameraOff ? theme.palette.error.contrastText : theme.palette.success.contrastText,
+                  bgcolor: mediaState.micMuted ? theme.palette.warning.main : theme.palette.action.hover,
+                  color: mediaState.micMuted ? theme.palette.warning.contrastText : theme.palette.text.primary,
                   '&:hover': {
-                    bgcolor: mediaState.cameraOff ? theme.palette.error.dark : theme.palette.success.dark
+                    bgcolor: mediaState.micMuted ? theme.palette.warning.dark : theme.palette.action.selected
                   }
                 }}
               >
-                {mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
+                {mediaState.micMuted ? <MicOffIcon /> : <MicIcon />}
               </IconButton>
             </Tooltip>
-          )}
 
-          {/* 屏幕共享按钮 */}
-          <Tooltip title={mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享'}>
-            <IconButton
-              onClick={handleToggleScreenShare}
-              disabled={isLoading}
-              sx={{
-                bgcolor: mediaState.screenSharing ? theme.palette.primary.main : theme.palette.action.hover,
-                color: mediaState.screenSharing ? theme.palette.primary.contrastText : theme.palette.text.primary,
-                '&:hover': {
-                  bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : theme.palette.action.selected
-                }
+            {/* 扬声器按钮 */}
+            <Tooltip title={mediaState.speakerEnabled ? '关闭扬声器' : '开启扬声器'}>
+              <IconButton
+                onClick={handleToggleSpeaker}
+                disabled={isLoading}
+                sx={{
+                  bgcolor: mediaState.speakerEnabled ? theme.palette.success.main : theme.palette.action.hover,
+                  color: mediaState.speakerEnabled ? theme.palette.success.contrastText : theme.palette.text.primary,
+                  '&:hover': {
+                    bgcolor: mediaState.speakerEnabled ? theme.palette.success.dark : theme.palette.action.selected
+                  }
+                }}
+              >
+                {mediaState.speakerEnabled ? <VolumeUpIcon /> : <VolumeOffIcon />}
+              </IconButton>
+            </Tooltip>
+
+            {/* 摄像头按钮（仅视频通话显示） */}
+            {callSession.callType === 'video' && (
+              <Tooltip title={mediaState.cameraOff ? '开启摄像头' : '关闭摄像头'}>
+                <IconButton
+                  onClick={handleToggleCamera}
+                  disabled={isLoading}
+                  sx={{
+                    bgcolor: mediaState.cameraOff ? theme.palette.error.main : theme.palette.success.main,
+                    color: mediaState.cameraOff ? theme.palette.error.contrastText : theme.palette.success.contrastText,
+                    '&:hover': {
+                      bgcolor: mediaState.cameraOff ? theme.palette.error.dark : theme.palette.success.dark
+                    }
+                  }}
+                >
+                  {mediaState.cameraOff ? <VideocamOffIcon /> : <VideocamIcon />}
+                </IconButton>
+              </Tooltip>
+            )}
+
+            {/* 屏幕共享按钮 */}
+            <Tooltip title={mediaState.screenSharing ? '停止屏幕共享' : '开始屏幕共享'}>
+              <IconButton
+                onClick={handleToggleScreenShare}
+                disabled={isLoading}
+                sx={{
+                  bgcolor: mediaState.screenSharing ? theme.palette.primary.main : theme.palette.action.hover,
+                  color: mediaState.screenSharing ? theme.palette.primary.contrastText : theme.palette.text.primary,
+                  '&:hover': {
+                    bgcolor: mediaState.screenSharing ? theme.palette.primary.dark : theme.palette.action.selected
+                  }
+                }}
+              >
+                {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
+              </IconButton>
+            </Tooltip>
+
+            {/* 结束通话按钮 */}
+            <Tooltip title="结束通话">
+              <IconButton
+                onClick={handleConfirmEndCall}
+                disabled={isLoading}
+                sx={{
+                  bgcolor: theme.palette.error.main,
+                  color: theme.palette.error.contrastText,
+                  '&:hover': {
+                    bgcolor: theme.palette.error.dark
+                  },
+                  ml: 2
+                }}
+              >
+                <CallEndIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
+
+        {/* 额外的通话信息（仅桌面端显示或移动端竖屏显示） */}
+        {(!isMobile || (isMobile && isPortrait)) && (
+          <Box
+            sx={{
+              mt: isMobile ? 1 : 2,
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              px: 1
+            }}
+          >
+            <Typography 
+              variant="caption" 
+              color="text.secondary"
+              sx={{ 
+                textAlign: 'center',
+                fontSize: isMobile ? '0.65rem' : undefined,
+                lineHeight: 1.2
               }}
             >
-              {mediaState.screenSharing ? <StopScreenShareIcon /> : <ScreenShareIcon />}
-            </IconButton>
-          </Tooltip>
-
-          {/* 结束通话按钮 */}
-          <Tooltip title="结束通话">
-            <IconButton
-              onClick={handleConfirmEndCall}
-              disabled={isLoading}
-              sx={{
-                bgcolor: theme.palette.error.main,
-                color: theme.palette.error.contrastText,
-                '&:hover': {
-                  bgcolor: theme.palette.error.dark
-                },
-                ml: 2
-              }}
-            >
-              <CallEndIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
-
-        {/* 额外的通话信息 */}
-        <Box
-          sx={{
-            mt: 2,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center'
-          }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            {callSession.isGroup ? `群组通话 · ${callSession.participants.size} 人` : '一对一通话'}
-            {callSession.callType === 'video' && ' · 视频通话'}
-            {callSession.callType === 'audio' && ' · 语音通话'}
-          </Typography>
-        </Box>
+              {callSession.isGroup ? `群组通话 · ${callSession.participants.size} 人` : '一对一通话'}
+              {callSession.callType === 'video' && ' · 视频通话'}
+              {callSession.callType === 'audio' && ' · 语音通话'}
+            </Typography>
+          </Box>
+        )}
       </Paper>
 
       {/* 结束通话确认对话框 */}
