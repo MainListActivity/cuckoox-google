@@ -59,6 +59,31 @@ export interface CompressionOptions {
   format?: 'jpeg' | 'png' | 'webp';
 }
 
+// 移动端文件选择选项
+export interface MobileFilePickerOptions {
+  accept?: string; // 文件类型限制
+  multiple?: boolean; // 是否支持多选
+  quality?: number; // 图片质量 (0.0 - 1.0)
+  maxWidth?: number; // 最大宽度
+  maxHeight?: number; // 最大高度
+  allowEditing?: boolean; // 是否允许编辑
+  preferredCamera?: 'front' | 'back'; // 优先相机
+}
+
+// 移动端文件选择模式
+export type MobileFilePickerMode = 
+  | 'camera' // 相机拍照
+  | 'gallery' // 相册选择
+  | 'file' // 文件浏览器
+  | 'auto'; // 自动选择最佳模式
+
+// 移动端文件选择结果
+export interface MobileFilePickerResult {
+  files: File[];
+  source: 'camera' | 'gallery' | 'file';
+  cancelled: boolean;
+}
+
 // 事件监听器接口
 export interface MediaFileEventListeners {
   onTransferProgress?: (progress: TransferProgress) => void;
@@ -549,6 +574,345 @@ class MediaFileHandler {
       videos: config.supported_video_types,
       audios: config.supported_audio_types,
       documents: config.supported_document_types
+    };
+  }
+
+  /**
+   * 检测设备是否为移动端
+   */
+  private isMobileDevice(): boolean {
+    return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
+  /**
+   * 检测是否支持相机访问
+   */
+  private async isCameraSupported(): Promise<boolean> {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return false;
+      }
+      
+      // 检查是否有可用的视频设备
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.some(device => device.kind === 'videoinput');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 移动端文件选择器
+   */
+  async pickFiles(
+    mode: MobileFilePickerMode = 'auto',
+    options: MobileFilePickerOptions = {}
+  ): Promise<MobileFilePickerResult> {
+    try {
+      const {
+        accept = '*/*',
+        multiple = false,
+        quality = 0.8,
+        maxWidth = 1920,
+        maxHeight = 1080,
+        allowEditing = false,
+        preferredCamera = 'back'
+      } = options;
+
+      // 如果是自动模式，根据设备类型选择最佳模式
+      if (mode === 'auto') {
+        if (this.isMobileDevice() && await this.isCameraSupported()) {
+          mode = 'camera';
+        } else {
+          mode = 'file';
+        }
+      }
+
+      switch (mode) {
+        case 'camera':
+          return await this.pickFromCamera(quality, maxWidth, maxHeight, preferredCamera);
+        
+        case 'gallery':
+          return await this.pickFromGallery(accept, multiple);
+        
+        case 'file':
+          return await this.pickFromFileSystem(accept, multiple);
+        
+        default:
+          throw new Error(`不支持的文件选择模式: ${mode}`);
+      }
+
+    } catch (error) {
+      console.error('MediaFileHandler: 文件选择失败', error);
+      return {
+        files: [],
+        source: 'file',
+        cancelled: true
+      };
+    }
+  }
+
+  /**
+   * 从相机拍照
+   */
+  private async pickFromCamera(
+    quality: number,
+    maxWidth: number,
+    maxHeight: number,
+    preferredCamera: 'front' | 'back'
+  ): Promise<MobileFilePickerResult> {
+    return new Promise((resolve) => {
+      try {
+        // 创建相机输入元素
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = preferredCamera === 'front' ? 'user' : 'environment';
+        
+        input.onchange = async (event) => {
+          const files = (event.target as HTMLInputElement).files;
+          if (files && files.length > 0) {
+            const file = files[0];
+            
+            try {
+              // 压缩图片
+              const compressedFile = await this.compressImage(file, {
+                quality,
+                maxWidth,
+                maxHeight,
+                format: 'jpeg'
+              });
+              
+              resolve({
+                files: [compressedFile],
+                source: 'camera',
+                cancelled: false
+              });
+            } catch (error) {
+              console.error('相机照片压缩失败:', error);
+              resolve({
+                files: [file], // 如果压缩失败，返回原文件
+                source: 'camera',
+                cancelled: false
+              });
+            }
+          } else {
+            resolve({
+              files: [],
+              source: 'camera',
+              cancelled: true
+            });
+          }
+          
+          // 清理
+          document.body.removeChild(input);
+        };
+
+        input.oncancel = () => {
+          resolve({
+            files: [],
+            source: 'camera',
+            cancelled: true
+          });
+          document.body.removeChild(input);
+        };
+
+        // 添加到DOM并触发
+        input.style.display = 'none';
+        document.body.appendChild(input);
+        input.click();
+
+      } catch (error) {
+        console.error('相机访问失败:', error);
+        resolve({
+          files: [],
+          source: 'camera',
+          cancelled: true
+        });
+      }
+    });
+  }
+
+  /**
+   * 从相册选择
+   */
+  private async pickFromGallery(
+    accept: string,
+    multiple: boolean
+  ): Promise<MobileFilePickerResult> {
+    return new Promise((resolve) => {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = accept.includes('*') ? 'image/*,video/*' : accept;
+        input.multiple = multiple;
+        
+        // 移动端相册选择
+        if (this.isMobileDevice()) {
+          // 优先显示相册而不是相机
+          if (accept.includes('image')) {
+            input.accept = 'image/*';
+          } else if (accept.includes('video')) {
+            input.accept = 'video/*';
+          }
+        }
+
+        input.onchange = (event) => {
+          const files = (event.target as HTMLInputElement).files;
+          if (files && files.length > 0) {
+            resolve({
+              files: Array.from(files),
+              source: 'gallery',
+              cancelled: false
+            });
+          } else {
+            resolve({
+              files: [],
+              source: 'gallery',
+              cancelled: true
+            });
+          }
+          
+          // 清理
+          document.body.removeChild(input);
+        };
+
+        input.oncancel = () => {
+          resolve({
+            files: [],
+            source: 'gallery',
+            cancelled: true
+          });
+          document.body.removeChild(input);
+        };
+
+        // 添加到DOM并触发
+        input.style.display = 'none';
+        document.body.appendChild(input);
+        input.click();
+
+      } catch (error) {
+        console.error('相册访问失败:', error);
+        resolve({
+          files: [],
+          source: 'gallery',
+          cancelled: true
+        });
+      }
+    });
+  }
+
+  /**
+   * 从文件系统选择
+   */
+  private async pickFromFileSystem(
+    accept: string,
+    multiple: boolean
+  ): Promise<MobileFilePickerResult> {
+    return new Promise((resolve) => {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = accept;
+        input.multiple = multiple;
+
+        input.onchange = (event) => {
+          const files = (event.target as HTMLInputElement).files;
+          if (files && files.length > 0) {
+            resolve({
+              files: Array.from(files),
+              source: 'file',
+              cancelled: false
+            });
+          } else {
+            resolve({
+              files: [],
+              source: 'file',
+              cancelled: true
+            });
+          }
+          
+          // 清理
+          document.body.removeChild(input);
+        };
+
+        input.oncancel = () => {
+          resolve({
+            files: [],
+            source: 'file',
+            cancelled: true
+          });
+          document.body.removeChild(input);
+        };
+
+        // 添加到DOM并触发
+        input.style.display = 'none';
+        document.body.appendChild(input);
+        input.click();
+
+      } catch (error) {
+        console.error('文件系统访问失败:', error);
+        resolve({
+          files: [],
+          source: 'file',
+          cancelled: true
+        });
+      }
+    });
+  }
+
+  /**
+   * 移动端优化的文件验证
+   */
+  validateMobileFile(file: File, options: MobileFilePickerOptions = {}): {
+    valid: boolean;
+    reason?: string;
+    suggestions?: string[];
+  } {
+    const suggestions: string[] = [];
+
+    // 基础验证
+    if (!this.validateFileType(file)) {
+      return {
+        valid: false,
+        reason: '不支持的文件类型',
+        suggestions: ['请选择支持的文件格式']
+      };
+    }
+
+    if (!this.validateFileSize(file)) {
+      const maxSizeMB = this.config ? Math.round(this.config.max_file_size / 1024 / 1024) : 50;
+      return {
+        valid: false,
+        reason: `文件大小超过限制 (${maxSizeMB}MB)`,
+        suggestions: [
+          '尝试压缩图片质量',
+          '选择较小的文件',
+          '使用相机拍照以自动压缩'
+        ]
+      };
+    }
+
+    // 移动端特殊建议
+    if (this.isMobileDevice()) {
+      const fileSizeMB = file.size / 1024 / 1024;
+      
+      if (fileSizeMB > 10) {
+        suggestions.push('建议在WiFi环境下传输大文件');
+      }
+
+      if (file.type.startsWith('image/') && fileSizeMB > 5) {
+        suggestions.push('可以降低图片质量以减少传输时间');
+      }
+
+      if (file.type.startsWith('video/') && fileSizeMB > 20) {
+        suggestions.push('视频文件较大，建议使用压缩工具');
+      }
+    }
+
+    return {
+      valid: true,
+      suggestions: suggestions.length > 0 ? suggestions : undefined
     };
   }
 
