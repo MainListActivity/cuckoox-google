@@ -17,6 +17,7 @@ const mockShowSuccess = vi.fn();
 const mockShowError = vi.fn();
 const mockShowInfo = vi.fn();
 const mockShowWarning = vi.fn();
+const mockQueryWithAuth = vi.fn();
 
 const mockSurrealClient = {
   query: vi.fn(),
@@ -66,7 +67,7 @@ vi.mock('@/src/hooks/useDebounce', () => ({
 }));
 
 vi.mock('@/src/utils/surrealAuth', () => ({
-  queryWithAuth: vi.fn(),
+  queryWithAuth: mockQueryWithAuth,
 }));
 
 vi.mock('@/src/hooks/usePermission', () => ({
@@ -166,6 +167,22 @@ describe('Creditors Module Tests', () => {
       console.log('Returning data result:', dataResult);
       return Promise.resolve(dataResult);
     });
+
+    // Mock queryWithAuth to return the same data as the direct surreal client
+    mockQueryWithAuth.mockImplementation((query: string, params?: Record<string, unknown>) => {
+      console.log('Mock queryWithAuth called with:', query, params);
+      
+      if (query.includes('count()')) {
+        const countResult = [{ total: mockCreditors.length }];
+        console.log('Returning queryWithAuth count result:', countResult);
+        return Promise.resolve(countResult);
+      }
+      
+      // For data queries, return the creditors array wrapped in another array
+      const dataResult = [mockCreditors];
+      console.log('Returning queryWithAuth data result:', dataResult);
+      return Promise.resolve(dataResult);
+    });
   });
 
   afterEach(() => {
@@ -175,13 +192,6 @@ describe('Creditors Module Tests', () => {
   // 新增：产品规范测试 - 自动导航功能
   describe('Auto Navigation (Product Requirement)', () => {
     it('should auto-navigate to creditor management when case is in "立案" stage and user has permission', async () => {
-      // Mock case in "立案" stage
-      const mockCaseInSetupStage = {
-        id: 'case:123',
-        process_stage: '立案',
-        case_procedure: '破产'
-      };
-      
       // Mock user with creditor management permission
       mockHasRole.mockImplementation((role: string) => {
         return role === 'creditor_manager' || role === 'case_manager';

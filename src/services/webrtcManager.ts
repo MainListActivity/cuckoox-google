@@ -245,11 +245,13 @@ class WebRTCManager {
       connectionInfo.lastActivity = Date.now();
     };
 
-    // 错误处理
-    connection.onerror = (event) => {
-      console.error(`WebRTCManager: 连接错误 ${userId}`, event);
-      this.listeners.onError?.(userId, new Error('PeerConnection错误'));
-    };
+    // 错误处理 - 通过连接状态变化监听错误
+    connection.addEventListener('connectionstatechange', () => {
+      if (connection.connectionState === 'failed') {
+        console.error(`WebRTCManager: 连接失败 ${userId}`);
+        this.listeners.onError?.(userId, new Error('PeerConnection连接失败'));
+      }
+    });
   }
 
   /**
@@ -1022,4 +1024,4 @@ const webrtcManager = new WebRTCManager();
 
 // 导出管理器实例和类型
 export default webrtcManager;
-export { WebRTCManager };')
+export { WebRTCManager };

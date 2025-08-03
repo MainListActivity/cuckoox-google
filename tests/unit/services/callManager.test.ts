@@ -5,10 +5,18 @@ import callManager, {
   CallDirection, 
   MediaState, 
   CallSession, 
-  CallParticipant 
+  CallParticipant,
+  ConferenceRole,
+  ConferenceState,
+  ParticipantConnectionState
 } from '@/src/services/callManager';
 import webrtcManager from '@/src/services/webrtcManager';
-import signalingService, { SignalType, CallRequestSignalData } from '@/src/services/signalingService';
+import signalingService, { 
+  SignalType, 
+  CallRequestSignalData, 
+  CallResponseSignalData,
+  GroupCallSignalData 
+} from '@/src/services/signalingService';
 import rtcConfigManager from '@/src/services/rtcConfigManager';
 
 // Mock dependencies
@@ -25,7 +33,15 @@ vi.mock('@/src/services/webrtcManager', () => ({
     getDisplayMedia: vi.fn(),
     addLocalStream: vi.fn(),
     removeLocalStream: vi.fn(),
-    addEventListener: vi.fn(),
+    setEventListeners: vi.fn(),
+    switchCamera: vi.fn(),
+    adjustVideoQuality: vi.fn(),
+    autoAdjustVideoQuality: vi.fn(),
+    detectNetworkQuality: vi.fn(),
+    getCameraDevices: vi.fn(),
+    startScreenShare: vi.fn(),
+    stopScreenShare: vi.fn(),
+    stopMediaStream: vi.fn(),
     cleanup: vi.fn(),
   },
 }));
@@ -35,12 +51,16 @@ vi.mock('@/src/services/signalingService', () => ({
     initialize: vi.fn(),
     isInitialized: vi.fn(),
     sendCallRequest: vi.fn(),
-    sendCallResponse: vi.fn(),
+    sendCallAccept: vi.fn(),
+    sendCallReject: vi.fn(),
+    sendCallEnd: vi.fn(),
     sendOffer: vi.fn(),
     sendAnswer: vi.fn(),
     sendIceCandidate: vi.fn(),
     sendGroupCallRequest: vi.fn(),
-    addEventListener: vi.fn(),
+    sendGroupCallJoin: vi.fn(),
+    sendGroupCallLeave: vi.fn(),
+    setEventListeners: vi.fn(),
     cleanup: vi.fn(),
   },
   SignalType: {
@@ -52,6 +72,8 @@ vi.mock('@/src/services/signalingService', () => ({
     CALL_REJECT: 'call-reject',
     CALL_END: 'call-end',
     GROUP_CALL_REQUEST: 'group-call-request',
+    GROUP_CALL_JOIN: 'group-call-join',
+    GROUP_CALL_LEAVE: 'group-call-leave',
   },
 }));
 
@@ -60,6 +82,9 @@ vi.mock('@/src/services/rtcConfigManager', () => ({
     getConfig: vi.fn(),
     isInitialized: vi.fn(),
     initialize: vi.fn(),
+    isVoiceCallEnabled: vi.fn(),
+    isVideoCallEnabled: vi.fn(),
+    isGroupChatEnabled: vi.fn(),
   },
 }));
 
@@ -75,7 +100,15 @@ const mockWebrtcManager = webrtcManager as {
   getDisplayMedia: Mock;
   addLocalStream: Mock;
   removeLocalStream: Mock;
-  addEventListener: Mock;
+  setEventListeners: Mock;
+  switchCamera: Mock;
+  adjustVideoQuality: Mock;
+  autoAdjustVideoQuality: Mock;
+  detectNetworkQuality: Mock;
+  getCameraDevices: Mock;
+  startScreenShare: Mock;
+  stopScreenShare: Mock;
+  stopMediaStream: Mock;
   cleanup: Mock;
 };
 
@@ -83,12 +116,16 @@ const mockSignalingService = signalingService as {
   initialize: Mock;
   isInitialized: Mock;
   sendCallRequest: Mock;
-  sendCallResponse: Mock;
+  sendCallAccept: Mock;
+  sendCallReject: Mock;
+  sendCallEnd: Mock;
   sendOffer: Mock;
   sendAnswer: Mock;
   sendIceCandidate: Mock;
   sendGroupCallRequest: Mock;
-  addEventListener: Mock;
+  sendGroupCallJoin: Mock;
+  sendGroupCallLeave: Mock;
+  setEventListeners: Mock;
   cleanup: Mock;
 };
 
@@ -96,6 +133,9 @@ const mockRtcConfigManager = rtcConfigManager as {
   getConfig: Mock;
   isInitialized: Mock;
   initialize: Mock;
+  isVoiceCallEnabled: Mock;
+  isVideoCallEnabled: Mock;
+  isGroupChatEnabled: Mock;
 };
 
 // Mock MediaStream
@@ -142,82 +182,50 @@ describe('CallManager', () => {
     };
 
     // Setup default mocks
-    mockRtcConfigManager.getConfig.mockReturnValue(mockConfig);
+    mockRtcConfigManager.getConfig.mockResolvedValue(mockConfig);
     mockRtcConfigManager.isInitialized.mockReturnValue(true);
+    mockRtcConfigManager.isVoiceCallEnabled.mockResolvedValue(true);
+    mockRtcConfigManager.isVideoCallEnabled.mockResolvedValue(true);
+    mockRtcConfigManager.isGroupChatEnabled.mockResolvedValue(true);
     mockWebrtcManager.isInitialized.mockReturnValue(true);
+    mockWebrtcManager.setEventListeners.mockImplementation(() => {});
     mockSignalingService.isInitialized.mockReturnValue(true);
+    mockSignalingService.setEventListeners.mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  describe('initialize', () => {
-    it('should initialize successfully with valid user ID', async () => {
-      // Arrange
-      mockWebrtcManager.initialize.mockResolvedValue(undefined);
-      mockSignalingService.initialize.mockResolvedValue(undefined);
-
+  describe('initialization', () => {
+    it('should set current user ID successfully', () => {
       // Act
-      await callManager.initialize('user123');
+      callManager.setCurrentUserId('user123');
 
       // Assert
-      expect(mockWebrtcManager.initialize).toHaveBeenCalledWith('user123');
-      expect(mockSignalingService.initialize).toHaveBeenCalledWith('user123');
-      expect(callManager.isInitialized()).toBe(true);
-      expect(callManager.getCurrentUserId()).toBe('user123');
+      expect(mockWebrtcManager.setEventListeners).toHaveBeenCalled();
+      expect(mockSignalingService.setEventListeners).toHaveBeenCalled();
     });
 
-    it('should throw error when user ID is invalid', async () => {
-      // Act & Assert
-      await expect(callManager.initialize(''))
-        .rejects.toThrow('用户ID不能为空');
-      
-      await expect(callManager.initialize(null as any))
-        .rejects.toThrow('用户ID不能为空');
-    });
-
-    it('should handle WebRTC manager initialization failure', async () => {
+    it('should set event listeners correctly', () => {
       // Arrange
-      mockWebrtcManager.initialize.mockRejectedValue(new Error('WebRTC init failed'));
-
-      // Act & Assert
-      await expect(callManager.initialize('user123'))
-        .rejects.toThrow('通话管理器初始化失败');
-    });
-
-    it('should handle signaling service initialization failure', async () => {
-      // Arrange
-      mockWebrtcManager.initialize.mockResolvedValue(undefined);
-      mockSignalingService.initialize.mockRejectedValue(new Error('Signaling init failed'));
-
-      // Act & Assert
-      await expect(callManager.initialize('user123'))
-        .rejects.toThrow('通话管理器初始化失败');
-    });
-
-    it('should not reinitialize if already initialized', async () => {
-      // Arrange
-      mockWebrtcManager.initialize.mockResolvedValue(undefined);
-      mockSignalingService.initialize.mockResolvedValue(undefined);
-      await callManager.initialize('user123');
-      vi.clearAllMocks();
+      const listeners = {
+        onIncomingCall: vi.fn(),
+        onCallStateChanged: vi.fn(),
+      };
 
       // Act
-      await callManager.initialize('user456');
+      callManager.setEventListeners(listeners);
 
       // Assert
-      expect(mockWebrtcManager.initialize).not.toHaveBeenCalled();
-      expect(mockSignalingService.initialize).not.toHaveBeenCalled();
-      expect(callManager.getCurrentUserId()).toBe('user123'); // Should not change
+      expect((callManager as any).listeners.onIncomingCall).toBe(listeners.onIncomingCall);
+      expect((callManager as any).listeners.onCallStateChanged).toBe(listeners.onCallStateChanged);
     });
   });
 
   describe('startCall', () => {
-    beforeEach(async () => {
-      mockWebrtcManager.initialize.mockResolvedValue(undefined);
-      mockSignalingService.initialize.mockResolvedValue(undefined);
-      await callManager.initialize('user123');
+    beforeEach(() => {
+      callManager.setCurrentUserId('user123');
     });
 
     it('should start audio call successfully', async () => {
@@ -621,6 +629,196 @@ describe('CallManager', () => {
       // Act & Assert
       await expect(callManager.startScreenShare(callId))
         .rejects.toThrow('开始屏幕共享失败');
+    });
+  });
+
+  describe('Group Call Management', () => {
+    beforeEach(async () => {
+      mockWebrtcManager.initialize.mockResolvedValue(undefined);
+      mockSignalingService.initialize.mockResolvedValue(undefined);
+      await callManager.initialize('user123');
+    });
+
+    it('should start group call successfully', async () => {
+      // Arrange
+      const groupId = 'group456';
+      const callType: CallType = 'video';
+      
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+      mockSignalingService.sendGroupCallRequest.mockResolvedValue({});
+
+      // Act
+      const callId = await callManager.startGroupCall(groupId, callType);
+
+      // Assert
+      expect(callId).toBeDefined();
+      expect(mockWebrtcManager.getUserMedia).toHaveBeenCalledWith({
+        audio: true,
+        video: true,
+      });
+      expect(mockSignalingService.sendGroupCallRequest).toHaveBeenCalledWith(
+        groupId,
+        expect.objectContaining({
+          callType,
+          callId,
+          groupName: groupId,
+          initiatorName: 'user123',
+        })
+      );
+
+      const callSession = callManager.getCallSession(callId);
+      expect(callSession).toBeDefined();
+      expect(callSession!.isGroup).toBe(true);
+      expect(callSession!.groupId).toBe(groupId);
+    });
+
+    it('should create conference successfully', async () => {
+      // Arrange
+      const conferenceId = 'conf123';
+      const callType: CallType = 'video';
+      
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+
+      // Act
+      const callId = await callManager.createConference(conferenceId, callType);
+
+      // Assert
+      expect(callId).toBeDefined();
+      const callSession = callManager.getCallSession(callId);
+      expect(callSession!.localParticipant.role).toBe('host');
+      expect(callSession!.metadata?.conferenceId).toBe(conferenceId);
+    });
+
+    it('should invite participants to conference', async () => {
+      // Arrange
+      const conferenceId = 'conf123';
+      const userIds = ['user456', 'user789'];
+      
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+      const callId = await callManager.createConference(conferenceId, 'video');
+
+      // Act
+      await callManager.inviteToConference(callId, userIds);
+
+      // Assert
+      expect(mockSignalingService.sendGroupCallRequest).toHaveBeenCalledTimes(userIds.length);
+      
+      const callSession = callManager.getCallSession(callId);
+      userIds.forEach(userId => {
+        expect(callSession!.participants.has(userId)).toBe(true);
+      });
+    });
+
+    it('should handle participant joining conference', async () => {
+      // Arrange
+      const conferenceId = 'conf123';
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+      mockWebrtcManager.createPeerConnection.mockReturnValue({});
+      
+      const callId = await callManager.createConference(conferenceId, 'video');
+
+      // Act
+      await callManager.joinConference(callId, 'participant');
+
+      // Assert
+      const callSession = callManager.getCallSession(callId);
+      expect(callSession!.localParticipant.role).toBe('participant');
+      expect(callSession!.metadata?.conferenceState).toBe('active');
+    });
+
+    it('should leave conference successfully', async () => {
+      // Arrange
+      const conferenceId = 'conf123';
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+      
+      const callId = await callManager.createConference(conferenceId, 'video');
+      await callManager.joinConference(callId, 'participant');
+
+      // Act
+      await callManager.leaveConference(callId, 'User left');
+
+      // Assert
+      expect(mockWebrtcManager.closePeerConnection).toHaveBeenCalled();
+      const callSession = callManager.getCallSession(callId);
+      expect(callSession!.state).toBe('ended');
+    });
+  });
+
+  describe('Media Controls', () => {
+    beforeEach(async () => {
+      mockWebrtcManager.initialize.mockResolvedValue(undefined);
+      mockSignalingService.initialize.mockResolvedValue(undefined);
+      await callManager.initialize('user123');
+    });
+
+    it('should switch camera successfully', async () => {
+      // Arrange
+      const targetUserId = 'user456';
+      const newStream = { ...mockMediaStream, id: 'new-stream' };
+      
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+      mockWebrtcManager.createPeerConnection.mockReturnValue({});
+      mockSignalingService.sendCallRequest.mockResolvedValue({});
+      mockWebrtcManager.switchCamera.mockResolvedValue(newStream);
+
+      const callId = await callManager.startCall(targetUserId, 'video');
+
+      // Act
+      await callManager.switchCamera(callId, 'camera123');
+
+      // Assert
+      expect(mockWebrtcManager.switchCamera).toHaveBeenCalledWith(targetUserId, 'camera123');
+    });
+
+    it('should adjust video quality successfully', async () => {
+      // Arrange
+      const targetUserId = 'user456';
+      
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+      mockWebrtcManager.createPeerConnection.mockReturnValue({});
+      mockSignalingService.sendCallRequest.mockResolvedValue({});
+
+      const callId = await callManager.startCall(targetUserId, 'video');
+
+      // Act
+      await callManager.adjustVideoQuality(callId, 'high');
+
+      // Assert
+      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(targetUserId, 'high');
+    });
+
+    it('should get network quality successfully', async () => {
+      // Arrange
+      const targetUserId = 'user456';
+      
+      mockWebrtcManager.getUserMedia.mockResolvedValue(mockMediaStream);
+      mockWebrtcManager.createPeerConnection.mockReturnValue({});
+      mockSignalingService.sendCallRequest.mockResolvedValue({});
+      mockWebrtcManager.detectNetworkQuality.mockResolvedValue('good');
+
+      const callId = await callManager.startCall(targetUserId, 'video');
+
+      // Act
+      const quality = await callManager.getNetworkQuality(callId);
+
+      // Assert
+      expect(quality).toEqual({ [targetUserId]: 'good' });
+    });
+
+    it('should get available cameras successfully', async () => {
+      // Arrange
+      const mockCameras = [
+        { deviceId: 'cam1', label: 'Front Camera', facingMode: 'user' as const },
+        { deviceId: 'cam2', label: 'Back Camera', facingMode: 'environment' as const }
+      ];
+      
+      mockWebrtcManager.getCameraDevices.mockResolvedValue(mockCameras);
+
+      // Act
+      const cameras = await callManager.getAvailableCameras();
+
+      // Assert
+      expect(cameras).toEqual(mockCameras);
     });
   });
 

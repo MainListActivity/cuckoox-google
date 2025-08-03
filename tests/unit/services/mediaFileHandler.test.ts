@@ -1,673 +1,543 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import mediaFileHandler, { 
-  TransferStatus, 
-  FileMetadata, 
-  FileChunk, 
-  TransferProgress, 
-  CompressionOptions 
-} from '@/src/services/mediaFileHandler';
+import { mediaFileHandler } from '@/src/services/mediaFileHandler';
+import webrtcManager from '@/src/services/webrtcManager';
 import rtcConfigManager from '@/src/services/rtcConfigManager';
 
-// Mock rtcConfigManager
-vi.mock('@/src/services/rtcConfigManager', () => ({
+// Mock dependencies
+vi.mock('@/src/services/webrtcManager', () => ({
   default: {
-    getConfig: vi.fn(),
-    onConfigUpdate: vi.fn(),
-    isInitialized: vi.fn(),
+    sendDataChannelMessage: vi.fn(),
+    onDataChannelMessage: vi.fn(),
+    onDataChannelOpen: vi.fn(),
+    onDataChannelClose: vi.fn(),
+    hasConnection: vi.fn(),
+    createPeerConnection: vi.fn(),
   },
 }));
 
-const mockRtcConfigManager = rtcConfigManager as {
-  getConfig: Mock;
-  onConfigUpdate: Mock;
-  isInitialized: Mock;
+vi.mock('@/src/services/rtcConfigManager', () => ({
+  default: {
+    getConfig: vi.fn(),
+    getMaxFileSize: vi.fn(),
+    getSupportedFileTypes: vi.fn(),
+    isFileSupported: vi.fn(),
+    isFileSizeValid: vi.fn(),
+  },
+}));
+
+const mockWebrtcManager = webrtcManager as {
+  sendDataChannelMessage: Mock;
+  onDataChannelMessage: Mock;
+  onDataChannelOpen: Mock;
+  onDataChannelClose: Mock;
+  hasConnection: Mock;
+  createPeerConnection: Mock;
 };
 
-// Mock Web APIs
-const mockCreateObjectURL = vi.fn();
-const mockRevokeObjectURL = vi.fn();
+const mockRtcConfigManager = rtcConfigManager as {
+  getConfig: Mock;
+  getMaxFileSize: Mock;
+  getSupportedFileTypes: Mock;
+  isFileSupported: Mock;
+  isFileSizeValid: Mock;
+};
 
-vi.stubGlobal('URL', {
-  createObjectURL: mockCreateObjectURL,
-  revokeObjectURL: mockRevokeObjectURL,
-});
+// Mock File and FileReader
+const mockFile = {
+  name: 'test.jpg',
+  size: 1024000,
+  type: 'image/jpeg',
+  lastModified: Date.now(),
+  arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(1024000)),
+  slice: vi.fn(),
+} as unknown as File;
 
-// Mock FileReader
 const mockFileReader = {
   readAsArrayBuffer: vi.fn(),
   readAsDataURL: vi.fn(),
   result: null,
   onload: null,
   onerror: null,
-  addEventListener: vi.fn(),
 };
 
-vi.stubGlobal('FileReader', vi.fn(() => mockFileReader));
+global.FileReader = vi.fn(() => mockFileReader) as any;
+global.URL = {
+  createObjectURL: vi.fn().mockReturnValue('blob:mock-url'),
+  revokeObjectURL: vi.fn(),
+} as any;
 
 // Mock Canvas for image processing
 const mockCanvas = {
-  getContext: vi.fn(),
+  getContext: vi.fn().mockReturnValue({
+    drawImage: vi.fn(),
+    getImageData: vi.fn(),
+    putImageData: vi.fn(),
+  }),
   toBlob: vi.fn(),
-  toDataURL: vi.fn(),
   width: 0,
   height: 0,
 };
 
-const mockCanvasContext = {
-  drawImage: vi.fn(),
-  getImageData: vi.fn(),
-  putImageData: vi.fn(),
-};
-
-mockCanvas.getContext.mockReturnValue(mockCanvasContext);
-vi.stubGlobal('HTMLCanvasElement', vi.fn(() => mockCanvas));
-
-// Mock Image
-const mockImage = {
-  onload: null,
-  onerror: null,
-  src: '',
-  width: 800,
-  height: 600,
-  addEventListener: vi.fn(),
-};
-
-vi.stubGlobal('Image', vi.fn(() => mockImage));
-
-// Mock crypto for hash generation
-const mockCrypto = {
-  subtle: {
-    digest: vi.fn(),
-  },
-};
-
-vi.stubGlobal('crypto', mockCrypto);
-
-// Mock console
-const mockConsole = {
-  log: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-};
-vi.stubGlobal('console', mockConsole);
-
-// Mock config
-const mockConfig = {
-  max_file_size: 100 * 1024 * 1024, // 100MB
-  file_chunk_size: 16384,
-  supported_image_types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-  supported_video_types: ['video/mp4', 'video/webm', 'video/mov'],
-  supported_audio_types: ['audio/mp3', 'audio/wav', 'audio/ogg'],
-  supported_document_types: ['application/pdf'],
-  file_transfer_timeout: 300000,
-};
-
-// Helper to create mock File
-const createMockFile = (name: string, size: number, type: string): File => {
-  const file = new File(['mock file content'], name, { type });
-  Object.defineProperty(file, 'size', { value: size });
-  return file;
-};
+global.HTMLCanvasElement = vi.fn(() => mockCanvas) as any;
+document.createElement = vi.fn((tagName) => {
+  if (tagName === 'canvas') return mockCanvas;
+  if (tagName === 'img') return { onload: null, onerror: null, src: '' };
+  return {};
+}) as any;
 
 describe('MediaFileHandler', () => {
+  const mockConfig = {
+    max_file_size: 100 * 1024 * 1024, // 100MB
+    file_chunk_size: 16384, // 16KB
+    supported_image_types: ['image/jpeg', 'image/png', 'image/gif'],
+    supported_video_types: ['video/mp4', 'video/webm'],
+    supported_audio_types: ['audio/mp3', 'audio/wav', 'audio/ogg'],
+    supported_document_types: ['application/pdf'],
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // Reset handler state
-    (mediaFileHandler as any).config = null;
-    (mediaFileHandler as any).listeners = {};
-    (mediaFileHandler as any).activeTransfers.clear();
-    (mediaFileHandler as any).chunkCache.clear();
-    (mediaFileHandler as any).isInitialized = false;
-
     // Setup default mocks
     mockRtcConfigManager.getConfig.mockReturnValue(mockConfig);
-    mockRtcConfigManager.isInitialized.mockReturnValue(true);
-    mockCreateObjectURL.mockReturnValue('blob:mock-url');
-    mockCrypto.subtle.digest.mockResolvedValue(new ArrayBuffer(32));
+    mockRtcConfigManager.getMaxFileSize.mockReturnValue(mockConfig.max_file_size);
+    mockRtcConfigManager.getSupportedFileTypes.mockReturnValue({
+      images: mockConfig.supported_image_types,
+      videos: mockConfig.supported_video_types,
+      audios: mockConfig.supported_audio_types,
+      documents: mockConfig.supported_document_types,
+    });
+    mockRtcConfigManager.isFileSupported.mockReturnValue(true);
+    mockRtcConfigManager.isFileSizeValid.mockReturnValue(true);
+    
+    mockWebrtcManager.hasConnection.mockReturnValue(true);
+    mockWebrtcManager.sendDataChannelMessage.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  describe('validateFile', () => {
-    it('should validate supported file types', () => {
-      // Arrange
-      const imageFile = createMockFile('test.jpg', 1024 * 1024, 'image/jpeg');
-      const videoFile = createMockFile('test.mp4', 50 * 1024 * 1024, 'video/mp4');
-      const audioFile = createMockFile('test.mp3', 10 * 1024 * 1024, 'audio/mp3');
-      const pdfFile = createMockFile('test.pdf', 5 * 1024 * 1024, 'application/pdf');
+  describe('File Validation', () => {
+    it('should validate file type correctly', async () => {
+      // Act
+      const isValid = await mediaFileHandler.validateFileType(mockFile, mockConfig.supported_image_types);
 
-      // Act & Assert
-      expect(mediaFileHandler.validateFile(imageFile)).toBe(true);
-      expect(mediaFileHandler.validateFile(videoFile)).toBe(true);
-      expect(mediaFileHandler.validateFile(audioFile)).toBe(true);
-      expect(mediaFileHandler.validateFile(pdfFile)).toBe(true);
+      // Assert
+      expect(isValid).toBe(true);
     });
 
-    it('should reject unsupported file types', () => {
+    it('should reject unsupported file type', async () => {
       // Arrange
-      const unsupportedFile = createMockFile('test.exe', 1024, 'application/octet-stream');
+      const unsupportedFile = { ...mockFile, type: 'application/exe' } as File;
 
-      // Act & Assert
-      expect(mediaFileHandler.validateFile(unsupportedFile)).toBe(false);
+      // Act
+      const isValid = await mediaFileHandler.validateFileType(unsupportedFile, mockConfig.supported_image_types);
+
+      // Assert
+      expect(isValid).toBe(false);
     });
 
-    it('should reject files exceeding size limit', () => {
-      // Arrange
-      const largeFile = createMockFile('large.jpg', 200 * 1024 * 1024, 'image/jpeg');
+    it('should validate file size correctly', async () => {
+      // Act
+      const isValid = await mediaFileHandler.validateFileSize(mockFile, mockConfig.max_file_size);
 
-      // Act & Assert
-      expect(mediaFileHandler.validateFile(largeFile)).toBe(false);
+      // Assert
+      expect(isValid).toBe(true);
     });
 
-    it('should reject empty files', () => {
+    it('should reject oversized file', async () => {
       // Arrange
-      const emptyFile = createMockFile('empty.jpg', 0, 'image/jpeg');
+      const oversizedFile = { ...mockFile, size: mockConfig.max_file_size + 1 } as File;
 
-      // Act & Assert
-      expect(mediaFileHandler.validateFile(emptyFile)).toBe(false);
+      // Act
+      const isValid = await mediaFileHandler.validateFileSize(oversizedFile, mockConfig.max_file_size);
+
+      // Assert
+      expect(isValid).toBe(false);
     });
   });
 
-  describe('compressImage', () => {
-    beforeEach(() => {
-      // Setup Image mock
-      mockImage.addEventListener.mockImplementation((event, callback) => {
-        if (event === 'load') {
-          mockImage.onload = callback;
-        }
-      });
-
-      // Setup Canvas mock
-      mockCanvas.toBlob.mockImplementation((callback, type, quality) => {
-        const mockBlob = new Blob(['compressed image'], { type });
-        callback(mockBlob);
-      });
-    });
-
-    it('should compress image with specified options', async () => {
-      // Arrange
-      const imageFile = createMockFile('test.jpg', 2 * 1024 * 1024, 'image/jpeg');
-      const options: CompressionOptions = {
-        quality: 0.8,
-        maxWidth: 1024,
-        maxHeight: 768,
-        format: 'jpeg',
-      };
-
-      mockCreateObjectURL.mockReturnValue('blob:test-url');
-
-      // Act
-      const promise = mediaFileHandler.compressImage(imageFile, options);
-      
-      // Simulate image load
-      if (mockImage.onload) {
-        mockImage.onload(new Event('load'));
-      }
-      
-      const result = await promise;
-
-      // Assert
-      expect(mockCreateObjectURL).toHaveBeenCalledWith(imageFile);
-      expect(mockCanvas.width).toBe(1024);
-      expect(mockCanvas.height).toBe(768);
-      expect(mockCanvasContext.drawImage).toHaveBeenCalledWith(
-        mockImage, 0, 0, 1024, 768
-      );
-      expect(mockCanvas.toBlob).toHaveBeenCalledWith(
-        expect.any(Function),
-        'image/jpeg',
-        0.8
-      );
-      expect(result).toBeInstanceOf(Blob);
-    });
-
-    it('should handle image load errors', async () => {
-      // Arrange
-      const imageFile = createMockFile('test.jpg', 1024 * 1024, 'image/jpeg');
-      
-      mockImage.addEventListener.mockImplementation((event, callback) => {
-        if (event === 'error') {
-          mockImage.onerror = callback;
-        }
-      });
-
-      // Act
-      const promise = mediaFileHandler.compressImage(imageFile, { quality: 0.8 });
-      
-      // Simulate image error
-      if (mockImage.onerror) {
-        mockImage.onerror(new Event('error'));
-      }
-
-      // Assert
-      await expect(promise).rejects.toThrow('图片加载失败');
-    });
-
-    it('should maintain aspect ratio when resizing', async () => {
-      // Arrange
-      mockImage.width = 1600;
-      mockImage.height = 900;
-      
-      const imageFile = createMockFile('test.jpg', 2 * 1024 * 1024, 'image/jpeg');
-      const options: CompressionOptions = {
-        quality: 0.8,
-        maxWidth: 800,
-        maxHeight: 600,
-      };
-
-      // Act
-      const promise = mediaFileHandler.compressImage(imageFile, options);
-      
-      if (mockImage.onload) {
-        mockImage.onload(new Event('load'));
-      }
-      
-      await promise;
-
-      // Assert - Should scale to 800x450 to maintain 16:9 aspect ratio
-      expect(mockCanvas.width).toBe(800);
-      expect(mockCanvas.height).toBe(450);
-    });
-  });
-
-  describe('generateThumbnail', () => {
-    beforeEach(() => {
-      mockImage.addEventListener.mockImplementation((event, callback) => {
-        if (event === 'load') {
-          mockImage.onload = callback;
-        }
-      });
-
-      mockCanvas.toDataURL.mockReturnValue('data:image/jpeg;base64,thumbnail-data');
-    });
-
-    it('should generate thumbnail for image file', async () => {
-      // Arrange
-      const imageFile = createMockFile('test.jpg', 1024 * 1024, 'image/jpeg');
-
-      // Act
-      const promise = mediaFileHandler.generateThumbnail(imageFile);
-      
-      if (mockImage.onload) {
-        mockImage.onload(new Event('load'));
-      }
-      
-      const thumbnail = await promise;
-
-      // Assert
-      expect(thumbnail).toBe('data:image/jpeg;base64,thumbnail-data');
-      expect(mockCanvas.width).toBe(200); // Default thumbnail size
-      expect(mockCanvas.height).toBe(150);
-    });
-
-    it('should handle non-image files gracefully', async () => {
-      // Arrange
-      const pdfFile = createMockFile('test.pdf', 1024 * 1024, 'application/pdf');
-
-      // Act
-      const thumbnail = await mediaFileHandler.generateThumbnail(pdfFile);
-
-      // Assert
-      expect(thumbnail).toBeUndefined();
-    });
-  });
-
-  describe('splitFileIntoChunks', () => {
-    beforeEach(() => {
-      // Mock FileReader for chunk processing
-      mockFileReader.readAsArrayBuffer.mockImplementation(function() {
-        // Simulate successful read
-        this.result = new ArrayBuffer(16384);
-        if (this.onload) {
-          this.onload({ target: this });
-        }
-      });
-    });
-
+  describe('File Processing', () => {
     it('should split file into chunks correctly', async () => {
       // Arrange
-      const file = createMockFile('test.mp4', 100 * 1024, 'video/mp4'); // 100KB file
-      const chunkSize = 16384; // 16KB chunks
+      const chunkSize = 1024;
+      const fileBuffer = new ArrayBuffer(3000);
+      mockFile.arrayBuffer = vi.fn().mockResolvedValue(fileBuffer);
 
       // Act
-      const chunks = await mediaFileHandler.splitFileIntoChunks(file, chunkSize);
+      const chunks = await mediaFileHandler.splitFileToChunks(mockFile, chunkSize);
 
       // Assert
-      expect(chunks.length).toBe(Math.ceil(file.size / chunkSize));
-      expect(chunks[0].chunkIndex).toBe(0);
-      expect(chunks[0].chunkSize).toBe(chunkSize);
-      expect(chunks[0].data).toBeInstanceOf(ArrayBuffer);
+      expect(chunks).toHaveLength(3); // 3000 bytes / 1024 = 3 chunks
+      expect(chunks[0].byteLength).toBe(chunkSize);
+      expect(chunks[1].byteLength).toBe(chunkSize);
+      expect(chunks[2].byteLength).toBe(3000 - 2 * chunkSize);
     });
 
-    it('should handle the last chunk correctly', async () => {
+    it('should reassemble file from chunks correctly', async () => {
       // Arrange
-      const file = createMockFile('test.mp3', 50000, 'audio/mp3'); // 50KB file
-      const chunkSize = 16384; // 16KB chunks
-
-      // Mock different sizes for different chunks
-      let readCount = 0;
-      mockFileReader.readAsArrayBuffer.mockImplementation(function() {
-        readCount++;
-        if (readCount === 4) {
-          // Last chunk is smaller
-          this.result = new ArrayBuffer(1424); // 50000 - 3*16384 = 1424
-        } else {
-          this.result = new ArrayBuffer(16384);
-        }
-        if (this.onload) {
-          this.onload({ target: this });
-        }
-      });
-
-      // Act
-      const chunks = await mediaFileHandler.splitFileIntoChunks(file, chunkSize);
-
-      // Assert
-      expect(chunks.length).toBe(4);
-      expect(chunks[3].chunkSize).toBe(1424);
-    });
-
-    it('should handle file read errors', async () => {
-      // Arrange
-      const file = createMockFile('test.jpg', 32768, 'image/jpeg');
-      
-      mockFileReader.readAsArrayBuffer.mockImplementation(function() {
-        if (this.onerror) {
-          this.onerror(new Event('error'));
-        }
-      });
-
-      // Act & Assert
-      await expect(mediaFileHandler.splitFileIntoChunks(file, 16384))
-        .rejects.toThrow('文件分片失败');
-    });
-  });
-
-  describe('reassembleChunks', () => {
-    it('should reassemble chunks into complete file', async () => {
-      // Arrange
-      const chunks: FileChunk[] = [
-        {
-          chunkIndex: 0,
-          chunkSize: 16384,
-          data: new ArrayBuffer(16384),
-          hash: 'hash1',
-        },
-        {
-          chunkIndex: 1,
-          chunkSize: 16384,
-          data: new ArrayBuffer(16384),
-          hash: 'hash2',
-        },
-        {
-          chunkIndex: 2,
-          chunkSize: 1000,
-          data: new ArrayBuffer(1000),
-          hash: 'hash3',
-        },
+      const chunks = [
+        new ArrayBuffer(1024),
+        new ArrayBuffer(1024),
+        new ArrayBuffer(952)
       ];
-
-      const metadata: FileMetadata = {
-        fileName: 'test.mp4',
-        fileSize: 33768,
-        fileType: 'video/mp4',
-        mimeType: 'video/mp4',
-        fileHash: 'expected-hash',
-        chunkSize: 16384,
-        totalChunks: 3,
-        transferStatus: 'completed',
-        transferId: 'transfer_123',
-        createdAt: Date.now(),
+      const metadata = {
+        fileName: 'test.jpg',
+        fileSize: 3000,
+        fileType: 'image/jpeg',
+        fileHash: 'mock-hash',
       };
 
       // Act
-      const reassembledFile = await mediaFileHandler.reassembleChunks(chunks, metadata);
+      const reassembledFile = await mediaFileHandler.reassembleFile(chunks, metadata);
 
       // Assert
-      expect(reassembledFile).toBeInstanceOf(File);
       expect(reassembledFile.name).toBe(metadata.fileName);
-      expect(reassembledFile.type).toBe(metadata.mimeType);
       expect(reassembledFile.size).toBe(metadata.fileSize);
+      expect(reassembledFile.type).toBe(metadata.fileType);
     });
 
-    it('should throw error when chunks are missing', async () => {
+    it('should generate thumbnail for image', async () => {
       // Arrange
-      const incompleteChunks: FileChunk[] = [
-        {
-          chunkIndex: 0,
-          chunkSize: 16384,
-          data: new ArrayBuffer(16384),
-          hash: 'hash1',
-        },
-        // Missing chunk 1
-        {
-          chunkIndex: 2,
-          chunkSize: 1000,
-          data: new ArrayBuffer(1000),
-          hash: 'hash3',
-        },
-      ];
-
-      const metadata: FileMetadata = {
-        fileName: 'test.mp4',
-        fileSize: 33768,
-        fileType: 'video/mp4',
-        mimeType: 'video/mp4',
-        fileHash: 'expected-hash',
-        chunkSize: 16384,
-        totalChunks: 3,
-        transferStatus: 'completed',
-        transferId: 'transfer_123',
-        createdAt: Date.now(),
-      };
-
-      // Act & Assert
-      await expect(mediaFileHandler.reassembleChunks(incompleteChunks, metadata))
-        .rejects.toThrow('文件分片不完整');
-    });
-
-    it('should validate file hash after reassembly', async () => {
-      // Arrange
-      const chunks: FileChunk[] = [
-        {
-          chunkIndex: 0,
-          chunkSize: 1000,
-          data: new ArrayBuffer(1000),
-          hash: 'hash1',
-        },
-      ];
-
-      const metadata: FileMetadata = {
-        fileName: 'test.txt',
-        fileSize: 1000,
-        fileType: 'text/plain',
-        mimeType: 'text/plain',
-        fileHash: 'expected-hash',
-        chunkSize: 1000,
-        totalChunks: 1,
-        transferStatus: 'completed',
-        transferId: 'transfer_123',
-        createdAt: Date.now(),
-      };
-
-      // Mock hash verification to return different hash
-      const mockArrayBuffer = new ArrayBuffer(32);
-      const mockUint8Array = new Uint8Array(mockArrayBuffer);
-      mockUint8Array.set([1, 2, 3, 4]); // Different from expected
-      mockCrypto.subtle.digest.mockResolvedValue(mockArrayBuffer);
-
-      // Act & Assert
-      await expect(mediaFileHandler.reassembleChunks(chunks, metadata))
-        .rejects.toThrow('文件完整性验证失败');
-    });
-  });
-
-  describe('startTransfer', () => {
-    it('should initiate file transfer successfully', async () => {
-      // Arrange
-      const file = createMockFile('test.jpg', 32768, 'image/jpeg');
-      const onProgress = vi.fn();
-      
-      mediaFileHandler.addEventListener({ onTransferProgress: onProgress });
-
-      // Mock file processing
-      mockFileReader.readAsArrayBuffer.mockImplementation(function() {
-        this.result = new ArrayBuffer(16384);
-        if (this.onload) {
-          this.onload({ target: this });
-        }
+      mockCanvas.toBlob = vi.fn((callback) => {
+        callback(new Blob(['mock-thumbnail'], { type: 'image/jpeg' }));
       });
 
       // Act
-      const transferId = await mediaFileHandler.startTransfer(file, 'user456');
+      const thumbnail = await mediaFileHandler.generateThumbnail(mockFile);
 
       // Assert
-      expect(transferId).toBeDefined();
-      expect(typeof transferId).toBe('string');
-      
-      const progress = mediaFileHandler.getTransferProgress(transferId);
-      expect(progress).toBeDefined();
-      expect(progress!.fileName).toBe(file.name);
-      expect(progress!.totalSize).toBe(file.size);
-      expect(progress!.status).toBe('preparing');
+      expect(thumbnail).toBe('blob:mock-url');
+      expect(global.URL.createObjectURL).toHaveBeenCalled();
     });
 
-    it('should reject invalid files', async () => {
-      // Arrange
-      const invalidFile = createMockFile('test.exe', 1024, 'application/octet-stream');
+    it('should extract file metadata correctly', async () => {
+      // Act
+      const metadata = await mediaFileHandler.extractMetadata(mockFile);
 
-      // Act & Assert
-      await expect(mediaFileHandler.startTransfer(invalidFile, 'user456'))
-        .rejects.toThrow('不支持的文件类型');
-    });
-
-    it('should reject files exceeding size limit', async () => {
-      // Arrange
-      const largeFile = createMockFile('huge.mp4', 200 * 1024 * 1024, 'video/mp4');
-
-      // Act & Assert
-      await expect(mediaFileHandler.startTransfer(largeFile, 'user456'))
-        .rejects.toThrow('文件大小超出限制');
+      // Assert
+      expect(metadata).toEqual({
+        fileName: mockFile.name,
+        fileSize: mockFile.size,
+        fileType: mockFile.type,
+        lastModified: mockFile.lastModified,
+        fileHash: expect.any(String),
+      });
     });
   });
 
-  describe('cancelTransfer', () => {
-    it('should cancel active transfer successfully', async () => {
-      // Arrange
-      const file = createMockFile('test.jpg', 32768, 'image/jpeg');
-      
-      mockFileReader.readAsArrayBuffer.mockImplementation(function() {
-        this.result = new ArrayBuffer(16384);
-        if (this.onload) {
-          this.onload({ target: this });
-        }
-      });
+  describe('P2P File Transfer', () => {
+    const targetUserId = 'user456';
+    const transferId = 'transfer123';
 
-      const transferId = await mediaFileHandler.startTransfer(file, 'user456');
+    it('should send file successfully', async () => {
+      // Arrange
+      const mockTransferId = 'mock-transfer-id';
+      vi.spyOn(mediaFileHandler, 'generateTransferId').mockReturnValue(mockTransferId);
 
       // Act
-      await mediaFileHandler.cancelTransfer(transferId);
+      const result = await mediaFileHandler.sendFile(mockFile, targetUserId);
 
       // Assert
-      const progress = mediaFileHandler.getTransferProgress(transferId);
-      expect(progress!.status).toBe('cancelled');
+      expect(result).toBe(mockTransferId);
+      expect(mockWebrtcManager.sendDataChannelMessage).toHaveBeenCalled();
     });
 
-    it('should throw error for non-existent transfer', async () => {
-      // Act & Assert
-      await expect(mediaFileHandler.cancelTransfer('nonexistent'))
-        .rejects.toThrow('传输不存在');
-    });
-  });
-
-  describe('addEventListener', () => {
-    it('should register event listeners correctly', () => {
+    it('should handle file transfer progress', async () => {
       // Arrange
-      const listeners = {
-        onTransferProgress: vi.fn(),
-        onTransferComplete: vi.fn(),
-        onTransferError: vi.fn(),
-        onChunkProcessed: vi.fn(),
+      const progressCallback = vi.fn();
+      const mockProgress = {
+        transferId,
+        fileName: mockFile.name,
+        totalSize: mockFile.size,
+        transferredSize: 512,
+        percentage: 50,
+        speed: 1024,
+        estimatedTimeRemaining: 30,
+        status: 'transferring' as const,
       };
 
       // Act
-      mediaFileHandler.addEventListener(listeners);
+      mediaFileHandler.onTransferProgress(transferId, progressCallback);
+      
+      // Simulate progress update
+      (mediaFileHandler as any).updateTransferProgress(transferId, mockProgress);
 
       // Assert
-      expect((mediaFileHandler as any).listeners.onTransferProgress).toBe(listeners.onTransferProgress);
-      expect((mediaFileHandler as any).listeners.onTransferComplete).toBe(listeners.onTransferComplete);
-      expect((mediaFileHandler as any).listeners.onTransferError).toBe(listeners.onTransferError);
-      expect((mediaFileHandler as any).listeners.onChunkProcessed).toBe(listeners.onChunkProcessed);
+      expect(progressCallback).toHaveBeenCalledWith(mockProgress);
+    });
+
+    it('should handle transfer completion', async () => {
+      // Arrange
+      const completeCallback = vi.fn();
+
+      // Act
+      mediaFileHandler.onTransferComplete(transferId, completeCallback);
+      
+      // Simulate transfer completion
+      (mediaFileHandler as any).completeTransfer(transferId, mockFile);
+
+      // Assert
+      expect(completeCallback).toHaveBeenCalledWith(mockFile);
+    });
+
+    it('should handle transfer errors', async () => {
+      // Arrange
+      const errorCallback = vi.fn();
+      const mockError = {
+        transferId,
+        errorCode: 'NETWORK_ERROR',
+        errorMessage: 'Connection lost',
+        canRetry: true,
+        retryAfter: 5,
+      };
+
+      // Act
+      mediaFileHandler.onTransferError(transferId, errorCallback);
+      
+      // Simulate transfer error
+      (mediaFileHandler as any).handleTransferError(transferId, mockError);
+
+      // Assert
+      expect(errorCallback).toHaveBeenCalledWith(mockError);
+    });
+
+    it('should pause file transfer', async () => {
+      // Arrange
+      (mediaFileHandler as any).activeTransfers.set(transferId, {
+        status: 'transferring',
+        file: mockFile,
+        targetUserId,
+      });
+
+      // Act
+      await mediaFileHandler.pauseFileTransfer(transferId);
+
+      // Assert
+      const transfer = (mediaFileHandler as any).activeTransfers.get(transferId);
+      expect(transfer.status).toBe('paused');
+    });
+
+    it('should resume file transfer', async () => {
+      // Arrange
+      (mediaFileHandler as any).activeTransfers.set(transferId, {
+        status: 'paused',
+        file: mockFile,
+        targetUserId,
+        pausedAt: 512,
+      });
+
+      // Act
+      await mediaFileHandler.resumeFileTransfer(transferId);
+
+      // Assert
+      const transfer = (mediaFileHandler as any).activeTransfers.get(transferId);
+      expect(transfer.status).toBe('transferring');
+    });
+
+    it('should cancel file transfer', async () => {
+      // Arrange
+      (mediaFileHandler as any).activeTransfers.set(transferId, {
+        status: 'transferring',
+        file: mockFile,
+        targetUserId,
+      });
+
+      // Act
+      await mediaFileHandler.cancelFileTransfer(transferId);
+
+      // Assert
+      expect((mediaFileHandler as any).activeTransfers.has(transferId)).toBe(false);
     });
   });
 
-  describe('getTransferProgress', () => {
-    it('should return transfer progress for existing transfer', async () => {
+  describe('File Compression', () => {
+    it('should compress image successfully', async () => {
       // Arrange
-      const file = createMockFile('test.mp3', 16384, 'audio/mp3');
-      
-      mockFileReader.readAsArrayBuffer.mockImplementation(function() {
-        this.result = new ArrayBuffer(16384);
-        if (this.onload) {
-          this.onload({ target: this });
-        }
+      const quality = 0.8;
+      mockCanvas.toBlob = vi.fn((callback) => {
+        callback(new Blob(['compressed-image'], { type: 'image/jpeg' }));
       });
 
-      const transferId = await mediaFileHandler.startTransfer(file, 'user456');
-
       // Act
-      const progress = mediaFileHandler.getTransferProgress(transferId);
+      const compressedFile = await mediaFileHandler.compressImage(mockFile, quality);
 
       // Assert
-      expect(progress).toBeDefined();
-      expect(progress!.transferId).toBe(transferId);
-      expect(progress!.fileName).toBe(file.name);
-      expect(progress!.totalSize).toBe(file.size);
+      expect(compressedFile).toBeInstanceOf(File);
+      expect(compressedFile.type).toBe('image/jpeg');
     });
 
-    it('should return null for non-existent transfer', () => {
-      // Act
-      const progress = mediaFileHandler.getTransferProgress('nonexistent');
+    it('should handle image compression failure', async () => {
+      // Arrange
+      mockCanvas.toBlob = vi.fn((callback) => {
+        callback(null); // Simulate compression failure
+      });
 
-      // Assert
-      expect(progress).toBeNull();
+      // Act & Assert
+      await expect(mediaFileHandler.compressImage(mockFile, 0.8))
+        .rejects.toThrow('图片压缩失败');
     });
   });
 
-  describe('getAllActiveTransfers', () => {
-    it('should return all active transfers', async () => {
-      // Arrange
-      const file1 = createMockFile('test1.jpg', 16384, 'image/jpeg');
-      const file2 = createMockFile('test2.mp3', 32768, 'audio/mp3');
-      
-      mockFileReader.readAsArrayBuffer.mockImplementation(function() {
-        this.result = new ArrayBuffer(16384);
-        if (this.onload) {
-          this.onload({ target: this });
-        }
-      });
+  describe('File Caching', () => {
+    const cacheKey = 'test-cache-key';
 
-      const transferId1 = await mediaFileHandler.startTransfer(file1, 'user456');
-      const transferId2 = await mediaFileHandler.startTransfer(file2, 'user789');
-
+    it('should cache file successfully', async () => {
       // Act
-      const activeTransfers = mediaFileHandler.getAllActiveTransfers();
+      await mediaFileHandler.cacheFile(mockFile, cacheKey);
 
       // Assert
-      expect(activeTransfers).toHaveLength(2);
-      expect(activeTransfers.map(t => t.transferId)).toContain(transferId1);
-      expect(activeTransfers.map(t => t.transferId)).toContain(transferId2);
+      const cachedFile = await mediaFileHandler.getCachedFile(cacheKey);
+      expect(cachedFile).toBeDefined();
+      expect(cachedFile!.name).toBe(mockFile.name);
     });
 
-    it('should return empty array when no active transfers', () => {
+    it('should return null for non-existent cache', async () => {
       // Act
-      const activeTransfers = mediaFileHandler.getAllActiveTransfers();
+      const cachedFile = await mediaFileHandler.getCachedFile('non-existent-key');
 
       // Assert
-      expect(activeTransfers).toEqual([]);
+      expect(cachedFile).toBeNull();
+    });
+
+    it('should clear file cache', async () => {
+      // Arrange
+      await mediaFileHandler.cacheFile(mockFile, cacheKey);
+
+      // Act
+      await mediaFileHandler.clearFileCache();
+
+      // Assert
+      const cachedFile = await mediaFileHandler.getCachedFile(cacheKey);
+      expect(cachedFile).toBeNull();
+    });
+
+    it('should clear file cache with pattern', async () => {
+      // Arrange
+      await mediaFileHandler.cacheFile(mockFile, 'test-1');
+      await mediaFileHandler.cacheFile(mockFile, 'test-2');
+      await mediaFileHandler.cacheFile(mockFile, 'other-1');
+
+      // Act
+      await mediaFileHandler.clearFileCache('test-*');
+
+      // Assert
+      expect(await mediaFileHandler.getCachedFile('test-1')).toBeNull();
+      expect(await mediaFileHandler.getCachedFile('test-2')).toBeNull();
+      expect(await mediaFileHandler.getCachedFile('other-1')).toBeDefined();
+    });
+  });
+
+  describe('Multiple File Operations', () => {
+    const targetUserId = 'user456';
+    const files = [
+      { ...mockFile, name: 'file1.jpg' },
+      { ...mockFile, name: 'file2.jpg' },
+      { ...mockFile, name: 'file3.jpg' },
+    ] as File[];
+
+    it('should send multiple files successfully', async () => {
+      // Arrange
+      vi.spyOn(mediaFileHandler, 'sendFile').mockResolvedValue('transfer-id');
+
+      // Act
+      const transferIds = await mediaFileHandler.sendMultipleFiles(files, targetUserId);
+
+      // Assert
+      expect(transferIds).toHaveLength(files.length);
+      expect(mediaFileHandler.sendFile).toHaveBeenCalledTimes(files.length);
+    });
+
+    it('should create file package successfully', async () => {
+      // Arrange
+      const packageName = 'test-package';
+
+      // Act
+      const packageFile = await mediaFileHandler.createFilePackage(files, packageName);
+
+      // Assert
+      expect(packageFile.name).toBe(`${packageName}.zip`);
+      expect(packageFile.type).toBe('application/zip');
+    });
+
+    it('should extract file package successfully', async () => {
+      // Arrange
+      const packageFile = new File(['mock-zip-content'], 'package.zip', { type: 'application/zip' });
+
+      // Act
+      const extractedFiles = await mediaFileHandler.extractFilePackage(packageFile);
+
+      // Assert
+      expect(extractedFiles).toBeInstanceOf(Array);
+      expect(extractedFiles.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Preview Management', () => {
+    it('should create preview URL successfully', () => {
+      // Act
+      const previewUrl = mediaFileHandler.createPreviewUrl(mockFile);
+
+      // Assert
+      expect(previewUrl).toBe('blob:mock-url');
+      expect(global.URL.createObjectURL).toHaveBeenCalledWith(mockFile);
+    });
+
+    it('should revoke preview URL successfully', () => {
+      // Arrange
+      const previewUrl = 'blob:mock-url';
+
+      // Act
+      mediaFileHandler.revokePreviewUrl(previewUrl);
+
+      // Assert
+      expect(global.URL.revokeObjectURL).toHaveBeenCalledWith(previewUrl);
+    });
+
+    it('should generate preview thumbnail with custom size', async () => {
+      // Arrange
+      const size = { width: 200, height: 150 };
+      mockCanvas.toBlob = vi.fn((callback) => {
+        callback(new Blob(['thumbnail'], { type: 'image/jpeg' }));
+      });
+
+      // Act
+      const thumbnail = await mediaFileHandler.generatePreviewThumbnail(mockFile, size);
+
+      // Assert
+      expect(thumbnail).toBe('blob:mock-url');
+      expect(mockCanvas.width).toBe(size.width);
+      expect(mockCanvas.height).toBe(size.height);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle file reading errors', async () => {
+      // Arrange
+      mockFile.arrayBuffer = vi.fn().mockRejectedValue(new Error('File read error'));
+
+      // Act & Assert
+      await expect(mediaFileHandler.splitFileToChunks(mockFile, 1024))
+        .rejects.toThrow('File read error');
+    });
+
+    it('should handle network connection errors', async () => {
+      // Arrange
+      mockWebrtcManager.hasConnection.mockReturnValue(false);
+
+      // Act & Assert
+      await expect(mediaFileHandler.sendFile(mockFile, 'user456'))
+        .rejects.toThrow('WebRTC连接不存在');
+    });
+
+    it('should handle data channel send errors', async () => {
+      // Arrange
+      mockWebrtcManager.sendDataChannelMessage.mockRejectedValue(new Error('Send failed'));
+
+      // Act & Assert
+      await expect(mediaFileHandler.sendFile(mockFile, 'user456'))
+        .rejects.toThrow('Send failed');
     });
   });
 });

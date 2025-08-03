@@ -9,9 +9,9 @@
     "build:sw": "vite build --config vite.sw.config.ts",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest",
+    "test": "vitest run --reporter=verbose --pool=forks --poolOptions.forks.singleFork=true",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run --reporter=verbose --maxWorkers=2 --testTimeout=10000 --coverage --coverageProvider=v8",
+    "test:run": "vitest run --reporter=verbose --pool=forks --poolOptions.forks.singleFork=true",
     "test:e2e": "playwright test"
   },
   "dependencies": {
