@@ -17,11 +17,9 @@ import {
   DialogActions,
   DialogContentText,
   useMediaQuery,
-  Fab,
   alpha
 } from '@mui/material';
 import {
-  Call as CallIcon,
   CallEnd as CallEndIcon,
   Mic as MicIcon,
   MicOff as MicOffIcon,
@@ -32,13 +30,13 @@ import {
   Videocam as VideocamIcon,
   VideocamOff as VideocamOffIcon,
   Person as PersonIcon,
-  Settings as SettingsIcon,
   MoreVert as MoreVertIcon,
   Fullscreen as FullscreenIcon
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import callManager, { CallSession, CallState, MediaState } from '@/src/services/callManager';
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
+import { useWebRTCPermissions, WEBRTC_PERMISSIONS } from '@/src/hooks/useWebRTCPermissions';
 
 // 组件属性接口
 export interface AudioCallInterfaceProps {
@@ -85,13 +83,17 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   style
 }) => {
   const theme = useTheme();
-  const { isMobile, isTablet } = useResponsiveLayout();
+  const { isMobile } = useResponsiveLayout();
   const isLandscape = useMediaQuery('(orientation: landscape)');
   const isPortrait = useMediaQuery('(orientation: portrait)');
   
   // 针对不同屏幕尺寸的断点
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
-  const isMediumScreen = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+  
+  // WebRTC权限检查
+  const { permissions, preloadPermissionGroup } = useWebRTCPermissions();
+  const mediaControlsPermissions = permissions.mediaControls();
+  const basicCallingPermissions = permissions.basicCalling();
   const [callSession, setCallSession] = useState<CallSession | null>(null);
   const [callDuration, setCallDuration] = useState<number>(0);
   const [mediaState, setMediaState] = useState<MediaState>({
@@ -104,9 +106,10 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showEndCallConfirm, setShowEndCallConfirm] = useState<boolean>(false);
-  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'unknown'>('unknown');
+  // 媒体流状态（暂时保留用于未来功能）
+  // const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  // const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  // const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'unknown'>('unknown');
   
   // 移动端状态
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
@@ -179,10 +182,10 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   /**
    * 处理通话状态变化
    */
-  const handleCallStateChanged = useCallback((callId: string, state: CallState, previousState: CallState) => {
-    if (callId !== callId) return;
+  const handleCallStateChanged = useCallback((sessionCallId: string, state: CallState, previousState: CallState) => {
+    if (sessionCallId !== callId) return;
 
-    const session = callManager.getCallSession(callId);
+    const session = callManager.getCallSession(sessionCallId);
     if (session) {
       setCallSession({ ...session });
       
@@ -197,10 +200,10 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   /**
    * 处理参与者媒体状态变化
    */
-  const handleParticipantMediaChanged = useCallback((callId: string, userId: string, newMediaState: MediaState) => {
-    if (callId !== callId) return;
+  const handleParticipantMediaChanged = useCallback((sessionCallId: string, userId: string, newMediaState: MediaState) => {
+    if (sessionCallId !== callId) return;
 
-    const session = callManager.getCallSession(callId);
+    const session = callManager.getCallSession(sessionCallId);
     if (session && userId === session.localParticipant.userId) {
       setMediaState({ ...newMediaState });
     }
@@ -209,10 +212,10 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   /**
    * 处理本地流准备就绪
    */
-  const handleLocalStreamReady = useCallback((callId: string, stream: MediaStream) => {
-    if (callId !== callId) return;
+  const handleLocalStreamReady = useCallback((sessionCallId: string, stream: MediaStream) => {
+    if (sessionCallId !== callId) return;
 
-    setLocalStream(stream);
+    // setLocalStream(stream);
     
     // 设置本地音频播放
     if (localAudioRef.current) {
@@ -224,10 +227,10 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   /**
    * 处理远程流接收
    */
-  const handleRemoteStreamReceived = useCallback((callId: string, userId: string, stream: MediaStream) => {
-    if (callId !== callId) return;
+  const handleRemoteStreamReceived = useCallback((sessionCallId: string, userId: string, stream: MediaStream) => {
+    if (sessionCallId !== callId) return;
 
-    setRemoteStream(stream);
+    // setRemoteStream(stream);
     
     // 设置远程音频播放
     if (remoteAudioRef.current) {
@@ -239,13 +242,13 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   /**
    * 处理通话结束
    */
-  const handleCallEnded = useCallback((callId: string, duration: number, reason?: string) => {
-    if (callId !== callId) return;
+  const handleCallEnded = useCallback((sessionCallId: string) => {
+    if (sessionCallId !== callId) return;
 
     stopDurationTimer();
     setCallSession(null);
-    setLocalStream(null);
-    setRemoteStream(null);
+    // setLocalStream(null);
+    // setRemoteStream(null);
     
     onCallEnd?.();
   }, [callId, stopDurationTimer, onCallEnd]);
@@ -253,8 +256,8 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   /**
    * 处理通话失败
    */
-  const handleCallFailed = useCallback((callId: string, error: Error) => {
-    if (callId !== callId) return;
+  const handleCallFailed = useCallback((sessionCallId: string, error: Error) => {
+    if (sessionCallId !== callId) return;
 
     onError?.(error);
   }, [callId, onError]);
@@ -263,6 +266,20 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
    * 初始化组件
    */
   useEffect(() => {
+    // 预加载WebRTC权限
+    const loadPermissions = async () => {
+      try {
+        await Promise.all([
+          preloadPermissionGroup('BASIC_CALLING'),
+          preloadPermissionGroup('MEDIA_CONTROLS')
+        ]);
+      } catch (error) {
+        console.error('权限预加载失败:', error);
+      }
+    };
+
+    loadPermissions();
+
     // 获取当前通话会话
     const session = callManager.getCallSession(callId);
     if (session) {
@@ -287,13 +304,20 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
     return () => {
       stopDurationTimer();
     };
-  }, [callId, startDurationTimer, stopDurationTimer, handleCallStateChanged, handleParticipantMediaChanged, handleLocalStreamReady, handleRemoteStreamReceived, handleCallEnded, handleCallFailed]);
+  }, [callId, startDurationTimer, stopDurationTimer, handleCallStateChanged, handleParticipantMediaChanged, handleLocalStreamReady, handleRemoteStreamReceived, handleCallEnded, handleCallFailed, preloadPermissionGroup]);
 
   /**
    * 切换静音状态
    */
   const handleToggleMute = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查麦克风控制权限
+    const canToggleMicrophone = permissions.canToggleMicrophone();
+    if (!canToggleMicrophone.hasPermission) {
+      onError?.(new Error('没有麦克风控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -305,13 +329,20 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, permissions]);
 
   /**
    * 切换扬声器状态
    */
   const handleToggleSpeaker = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查扬声器控制权限
+    const canToggleSpeaker = permissions.canToggleSpeaker();
+    if (!canToggleSpeaker.hasPermission) {
+      onError?.(new Error('没有扬声器控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -323,13 +354,20 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, permissions]);
 
   /**
    * 切换摄像头状态
    */
   const handleToggleCamera = useCallback(async () => {
     if (!callSession || callSession.callType === 'audio') return;
+
+    // 检查摄像头控制权限
+    const canToggleCamera = permissions.canToggleCamera();
+    if (!canToggleCamera.hasPermission) {
+      onError?.(new Error('没有摄像头控制权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -341,13 +379,20 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, permissions]);
 
   /**
    * 切换屏幕共享
    */
   const handleToggleScreenShare = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查屏幕共享权限
+    const canShareScreen = permissions.canShareScreen();
+    if (!canShareScreen.hasPermission) {
+      onError?.(new Error('没有屏幕共享权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -364,13 +409,20 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, mediaState.screenSharing, onError]);
+  }, [callSession, callId, mediaState.screenSharing, onError, permissions]);
 
   /**
    * 结束通话
    */
   const handleEndCall = useCallback(async () => {
     if (!callSession) return;
+
+    // 检查结束通话权限
+    const canEndCall = permissions.canEndCall();
+    if (!canEndCall.hasPermission) {
+      onError?.(new Error('没有结束通话权限'));
+      return;
+    }
 
     try {
       setIsLoading(true);
@@ -382,7 +434,7 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [callSession, callId, onError]);
+  }, [callSession, callId, onError, permissions]);
 
   /**
    * 确认结束通话
