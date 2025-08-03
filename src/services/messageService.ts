@@ -148,6 +148,24 @@ class MessageService {
    */
   async createConversation(data: CreateConversationData) {
     try {
+      const client = await this.getClient();
+      
+      // Check authentication
+      const [authResult] = await client.query('return $auth;');
+      if (!authResult || !authResult.id) {
+        throw new Error('用户未认证');
+      }
+      
+      // Validate participants
+      if (!data.participants || data.participants.length === 0) {
+        throw new Error('参与者列表不能为空');
+      }
+      
+      // Validate conversation type
+      if (!['DIRECT', 'GROUP', 'SYSTEM'].includes(data.type)) {
+        throw new Error('无效的会话类型');
+      }
+      
       const conversationData = {
         type: data.type,
         name: data.name,
@@ -163,7 +181,6 @@ class MessageService {
         updated_at: new Date().toISOString()
       };
 
-      const client = await this.getClient();
       const [conversation] = await client.create('conversation', conversationData);
 
       // Create conversation_participant records for each participant
@@ -195,6 +212,50 @@ class MessageService {
   async sendMessage(data: SendMessageData) {
     try {
       const client = await this.getClient();
+      
+      // Check authentication
+      const [authResult] = await client.query('return $auth;');
+      if (!authResult || !authResult.id) {
+        throw new Error('用户未认证');
+      }
+      
+      // Validate message content
+      if (!data.content || data.content.trim() === '') {
+        throw new Error('消息内容不能为空');
+      }
+      
+      // Validate message content length (max 2000 characters)
+      if (data.content.length > 2000) {
+        throw new Error('消息内容过长');
+      }
+      
+      // Validate attachments size
+      if (data.attachments && data.attachments.length > 0) {
+        const totalSize = data.attachments.reduce((total, attachment) => total + attachment.file_size, 0);
+        const maxSize = 100 * 1024 * 1024; // 100MB
+        if (totalSize > maxSize) {
+          throw new Error('附件大小超过限制');
+        }
+      }
+      
+      // Check if conversation exists and user is participant
+      const conversationCheckQuery = `
+        SELECT conversation_id FROM conversation_participant 
+        WHERE conversation_id = $conversation_id AND user_id = $auth.id
+      `;
+      const [participantCheck] = await client.query(conversationCheckQuery, {
+        conversation_id: data.conversation_id
+      });
+      
+      if (!participantCheck) {
+        throw new Error('您不是此会话的参与者');
+      }
+      
+      // Check if conversation exists
+      const [conversationExists] = await client.query(`SELECT * FROM ${String(data.conversation_id)}`);
+      if (!conversationExists) {
+        throw new Error('会话不存在');
+      }
       
       const messageData = {
         type: 'IM',
@@ -865,15 +926,48 @@ class MessageService {
     try {
       const client = await this.getClient();
       
+      // Validate message content
+      if (!data.content || data.content.trim() === '') {
+        throw new Error('消息内容不能为空');
+      }
+      
+      // Validate message type
+      const validTypes = ['TEXT', 'IMAGE', 'FILE', 'AUDIO', 'VIDEO', 'SYSTEM'];
+      if (data.message_type && !validTypes.includes(data.message_type)) {
+        throw new Error('无效的消息类型');
+      }
+      
+      // Validate attachments
+      if (data.attachments && data.attachments.length > 0) {
+        for (const attachment of data.attachments) {
+          if (!attachment.file_name || !attachment.file_type || !attachment.mime_type) {
+            throw new Error('文件元数据不完整');
+          }
+        }
+      }
+      
+      // Validate mentions - check if mentioned users exist
+      if (data.mentions && data.mentions.length > 0) {
+        for (const mentionId of data.mentions) {
+          const userId = typeof mentionId === 'string' ? mentionId : String(mentionId);
+          const [userExists] = await client.query(`SELECT * FROM ${userId}`);
+          if (!userExists) {
+            throw new Error('提及的用户不存在');
+          }
+        }
+      }
+      
       // 验证用户是否有发送消息的权限
       const memberQuery = `
         SELECT * FROM group_member 
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
       
-      const [member] = await client.query(memberQuery, {
+      const memberResults = await client.query(memberQuery, {
         group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id)
       });
+      
+      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
       
       if (!member) {
         throw new Error('您不是此群组成员');
@@ -887,7 +981,7 @@ class MessageService {
       // 检查群组权限
       const hasPermission = await this.checkGroupMessagePermission(data.group_id, 'send_message');
       if (!hasPermission) {
-        throw new Error('您没有在此群组中发送消息的权限');
+        throw new Error('权限不足，无法在此群组发送消息');
       }
       
       const now = new Date().toISOString();
@@ -908,7 +1002,9 @@ class MessageService {
           user_ids: data.mentions.map(id => typeof id === 'string' ? id : String(id))
         });
         
-        mentionedUsers.push(...mentionResults.map((r: any) => String(r.user_id)));
+        if (Array.isArray(mentionResults)) {
+          mentionedUsers.push(...mentionResults.map((r: any) => String(r.user_id)));
+        }
       }
       
       // 创建消息记录
@@ -964,7 +1060,7 @@ class MessageService {
       // 检查置顶权限
       const hasPermission = await this.checkGroupMessagePermission(data.group_id, 'pin_message');
       if (!hasPermission) {
-        throw new Error('您没有置顶消息的权限');
+        throw new Error('权限不足，无法置顶消息');
       }
       
       const now = new Date().toISOString();
@@ -1389,6 +1485,345 @@ class MessageService {
     } catch (error) {
       console.error('Error sending group system message:', error);
       // 不抛出错误，避免影响主流程
+    }
+  }
+  
+  /**
+   * 获取群组消息历史
+   */
+  async getGroupMessages(groupId: RecordId | string, limit: number = 50, offset: number = 0) {
+    try {
+      const client = await this.getClient();
+      
+      // Check membership first
+      const memberQuery = `
+        SELECT * FROM group_member 
+        WHERE group_id = $group_id AND user_id = $auth.id
+      `;
+      
+      const memberResults = await client.query(memberQuery, {
+        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+      });
+      
+      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
+      
+      if (!member) {
+        throw new Error('您不是此群组成员');
+      }
+      
+      const query = `
+        SELECT * FROM message 
+        WHERE group_id = $group_id AND is_deleted = false 
+        ORDER BY created_at DESC 
+        LIMIT $limit 
+        START $offset
+      `;
+      
+      const messages = await client.query(query, {
+        group_id: typeof groupId === 'string' ? groupId : String(groupId),
+        limit,
+        offset
+      });
+      
+      return Array.isArray(messages) ? messages : [];
+    } catch (error) {
+      console.error('Error getting group messages:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 编辑群组消息
+   */
+  async editGroupMessage(messageId: RecordId | string, newContent: string) {
+    try {
+      const client = await this.getClient();
+      
+      // Check if message exists and user is the sender
+      const messageResults = await client.query(`SELECT * FROM ${String(messageId)}`);
+      const message = Array.isArray(messageResults) ? messageResults[0] : messageResults;
+      if (!message) {
+        throw new Error('消息不存在');
+      }
+      
+      if (message.sender_id !== '$auth.id') {
+        throw new Error('您只能编辑自己发送的消息');
+      }
+      
+      // Check if message is too old to edit (2 minutes)
+      const messageTime = new Date(message.created_at);
+      const now = new Date();
+      const diffInMinutes = (now.getTime() - messageTime.getTime()) / (1000 * 60);
+      
+      if (diffInMinutes > 2) {
+        throw new Error('消息发送时间超过2分钟，无法编辑');
+      }
+      
+      const updateQuery = `
+        UPDATE message SET 
+          content = $content,
+          updated_at = $updated_at,
+          metadata.is_edited = true,
+          metadata.edited_at = $updated_at
+        WHERE id = $message_id
+        RETURN *
+      `;
+      
+      const updateResults = await client.query(updateQuery, {
+        message_id: typeof messageId === 'string' ? messageId : String(messageId),
+        content: newContent,
+        updated_at: new Date().toISOString()
+      });
+      
+      return Array.isArray(updateResults) ? updateResults[0] : updateResults;
+    } catch (error) {
+      console.error('Error editing group message:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 撤回群组消息
+   */
+  async recallGroupMessage(messageId: RecordId | string, reason?: string) {
+    try {
+      const client = await this.getClient();
+      
+      // Check if message exists and user is the sender
+      const messageResults = await client.query(`SELECT * FROM ${String(messageId)}`);
+      const message = Array.isArray(messageResults) ? messageResults[0] : messageResults;
+      if (!message) {
+        throw new Error('消息不存在');
+      }
+      
+      if (message.sender_id !== '$auth.id') {
+        throw new Error('您只能撤回自己发送的消息');
+      }
+      
+      // Check if message is too old to recall (2 minutes)
+      const messageTime = new Date(message.created_at);
+      const now = new Date();
+      const diffInMinutes = (now.getTime() - messageTime.getTime()) / (1000 * 60);
+      
+      if (diffInMinutes > 2) {
+        throw new Error('消息发送时间超过2分钟，无法撤回');
+      }
+      
+      const updateQuery = `
+        UPDATE message SET 
+          content = '该消息已被撤回',
+          is_deleted = true,
+          updated_at = $updated_at,
+          metadata.is_recalled = true,
+          metadata.recalled_at = $updated_at,
+          metadata.recall_reason = $reason
+        WHERE id = $message_id
+        RETURN *
+      `;
+      
+      const updateResults = await client.query(updateQuery, {
+        message_id: typeof messageId === 'string' ? messageId : String(messageId),
+        reason: reason,
+        updated_at: new Date().toISOString()
+      });
+      
+      return Array.isArray(updateResults) ? updateResults[0] : updateResults;
+    } catch (error) {
+      console.error('Error recalling group message:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 转发消息到群组
+   */
+  async forwardMessageToGroup(originalMessageId: RecordId | string, targetGroupId: RecordId | string) {
+    try {
+      const client = await this.getClient();
+      
+      // Get original message
+      const originalResults = await client.query(`SELECT * FROM ${String(originalMessageId)}`);
+      const originalMessage = Array.isArray(originalResults) ? originalResults[0] : originalResults;
+      if (!originalMessage) {
+        throw new Error('原消息不存在');
+      }
+      
+      // Check membership in target group
+      const memberQuery = `
+        SELECT * FROM group_member 
+        WHERE group_id = $group_id AND user_id = $auth.id
+      `;
+      
+      const memberResults = await client.query(memberQuery, {
+        group_id: typeof targetGroupId === 'string' ? targetGroupId : String(targetGroupId)
+      });
+      
+      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
+      
+      if (!member) {
+        throw new Error('您不是目标群组成员');
+      }
+      
+      // Create forwarded message
+      const forwardedMessage = {
+        content: originalMessage.content,
+        message_type: originalMessage.message_type || 'TEXT',
+        group_id: typeof targetGroupId === 'string' ? new RecordId('message_group', targetGroupId.split(':')[1]) : targetGroupId,
+        sender_id: '$auth.id',
+        metadata: {
+          is_forwarded: true,
+          original_message_id: typeof originalMessageId === 'string' ? originalMessageId : String(originalMessageId),
+          original_sender_id: originalMessage.sender_id,
+          forwarded_at: new Date().toISOString()
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_deleted: false
+      };
+      
+      const [message] = await client.create('message', forwardedMessage);
+      return message;
+    } catch (error) {
+      console.error('Error forwarding message to group:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 批量转发消息
+   */
+  async batchForwardMessages(messageIds: (RecordId | string)[], targetGroupId: RecordId | string) {
+    try {
+      const client = await this.getClient();
+      
+      // Check membership in target group
+      const memberQuery = `
+        SELECT * FROM group_member 
+        WHERE group_id = $group_id AND user_id = $auth.id
+      `;
+      
+      const memberResults = await client.query(memberQuery, {
+        group_id: typeof targetGroupId === 'string' ? targetGroupId : String(targetGroupId)
+      });
+      
+      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
+      
+      if (!member) {
+        throw new Error('您不是目标群组成员');
+      }
+      
+      const forwardedMessages = [];
+      
+      for (const messageId of messageIds) {
+        const originalResults = await client.query(`SELECT * FROM ${String(messageId)}`);
+        const originalMessage = Array.isArray(originalResults) ? originalResults[0] : originalResults;
+        if (originalMessage) {
+          const forwardedMessage = {
+            content: originalMessage.content,
+            message_type: originalMessage.message_type || 'TEXT',
+            group_id: typeof targetGroupId === 'string' ? new RecordId('message_group', targetGroupId.split(':')[1]) : targetGroupId,
+            sender_id: '$auth.id',
+            metadata: {
+              is_forwarded: true,
+              original_message_id: typeof messageId === 'string' ? messageId : String(messageId),
+              original_sender_id: originalMessage.sender_id,
+              forwarded_at: new Date().toISOString()
+            },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            is_deleted: false
+          };
+          
+          const [message] = await client.create('message', forwardedMessage);
+          forwardedMessages.push(message);
+        }
+      }
+      
+      return forwardedMessages;
+    } catch (error) {
+      console.error('Error batch forwarding messages:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 保存群组消息草稿
+   */
+  async saveGroupMessageDraft(groupId: RecordId | string, content: string) {
+    try {
+      const client = await this.getClient();
+      
+      const draftData = {
+        group_id: typeof groupId === 'string' ? new RecordId('message_group', groupId.split(':')[1]) : groupId,
+        user_id: '$auth.id',
+        content: content,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Use merge to update existing draft or create new one
+      const query = `
+        UPSERT group_message_draft:($group_id, $user_id) SET content = $content, updated_at = $updated_at
+      `;
+      
+      await client.query(query, {
+        group_id: typeof groupId === 'string' ? groupId : String(groupId),
+        user_id: '$auth.id',
+        content: content,
+        updated_at: new Date().toISOString()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error saving group message draft:', error);
+      throw error;
+    }
+  }
+  
+  /**
+   * 获取群组消息草稿
+   */
+  async getGroupMessageDraft(groupId: RecordId | string) {
+    try {
+      const client = await this.getClient();
+      
+      const query = `
+        SELECT * FROM group_message_draft 
+        WHERE group_id = $group_id AND user_id = $auth.id
+      `;
+      
+      const draftResults = await client.query(query, {
+        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+      });
+      
+      const draft = Array.isArray(draftResults) ? draftResults[0] : draftResults;
+      return draft || { content: '' };
+    } catch (error) {
+      console.error('Error getting group message draft:', error);
+      return { content: '' };
+    }
+  }
+  
+  /**
+   * 清除群组消息草稿
+   */
+  async clearGroupMessageDraft(groupId: RecordId | string) {
+    try {
+      const client = await this.getClient();
+      
+      const query = `
+        DELETE FROM group_message_draft 
+        WHERE group_id = $group_id AND user_id = $auth.id
+      `;
+      
+      await client.query(query, {
+        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error clearing group message draft:', error);
+      throw error;
     }
   }
 }
