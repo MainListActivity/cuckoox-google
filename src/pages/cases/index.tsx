@@ -415,7 +415,7 @@ const CaseListPage: React.FC = () => {
     },
   ];
 
-  // ResponsiveTable 操作配置
+  // ResponsiveTable 操作配置 - 包含所有可能的操作
   const tableActions: ResponsiveTableAction[] = [
     {
       icon: mdiEyeOutline,
@@ -438,7 +438,29 @@ const CaseListPage: React.FC = () => {
       color: 'secondary',
       disabled: () => !permissions['case_modify_status'],
     },
+    {
+      icon: mdiFileDocumentOutline,
+      label: t('meeting_minutes', '会议纪要'),
+      onClick: (row: CaseItem) => {
+        setSelectedCase(row);
+        setMeetingMinutesOpen(true);
+      },
+      color: 'primary',
+      disabled: () => !permissions['case_view_detail'],
+      hideForRow: (row: CaseItem) => row.current_stage !== '债权人第一次会议',
+    },
   ];
+
+  // 生成会议纪要标题
+  const getMeetingMinutesTitle = (caseStage: string) => {
+    if (caseStage === '债权人第一次会议') {
+      return t('first_creditors_meeting_minutes_title', '第一次债权人会议纪要');
+    }
+    if (caseStage === '债权人第二次会议') {
+      return t('second_creditors_meeting_minutes_title', '第二次债权人会议纪要');
+    }
+    return t('meeting_minutes_generic_title', '会议纪要');
+  };
 
   // 筛选处理函数
   const handleFilterChange = (filterId: string, value: any) => {
@@ -742,7 +764,7 @@ const CaseListPage: React.FC = () => {
           open={meetingMinutesOpen}
           onClose={handleCloseMeetingMinutes}
           caseInfo={{ caseId: selectedCase.id, caseName: selectedCase.case_number }}
-          meetingTitle={t('meeting_minutes_generic_title', '会议纪要')}
+          meetingTitle={getMeetingMinutesTitle(selectedCase.current_stage)}
           onSave={handleSaveMeetingMinutes}
         />
       )}
