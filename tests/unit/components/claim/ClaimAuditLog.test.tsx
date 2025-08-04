@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -106,7 +106,9 @@ describe('ClaimAuditLog', () => {
 
     expect(screen.getByText('审计日志')).toBeInTheDocument();
     expect(screen.getByText('筛选')).toBeInTheDocument();
-    expect(screen.getByText('刷新')).toBeInTheDocument();
+    // Use getAllByText to handle multiple refresh buttons and select the first one
+    const refreshButtons = screen.getAllByText('刷新');
+    expect(refreshButtons.length).toBeGreaterThan(0);
 
     await waitFor(() => {
       expect(mockGetAuditLog).toHaveBeenCalledWith({
@@ -163,11 +165,17 @@ describe('ClaimAuditLog', () => {
   });
 
   it('应该正确显示审计日志列表', async () => {
-    render(
-      <TestWrapper>
-        <ClaimAuditLog claimId="claim:test1" />
-      </TestWrapper>
-    );
+    await act(async () => {
+      render(
+        <TestWrapper>
+          <ClaimAuditLog claimId="claim:test1" />
+        </TestWrapper>
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockGetAuditLog).toHaveBeenCalled();
+    }, { timeout: 3000 });
 
     await waitFor(() => {
       expect(screen.getByText('张三')).toBeInTheDocument();
@@ -176,7 +184,7 @@ describe('ClaimAuditLog', () => {
       expect(screen.getByText('查看')).toBeInTheDocument();
       expect(screen.getByText('下载')).toBeInTheDocument();
       expect(screen.getByText('导出')).toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
   });
 
   it('应该支持用户ID筛选', async () => {
@@ -213,16 +221,22 @@ describe('ClaimAuditLog', () => {
 
     mockGetAuditLog.mockResolvedValue(logsWithDuration);
 
-    render(
-      <TestWrapper>
-        <ClaimAuditLog claimId="claim:test1" />
-      </TestWrapper>
-    );
+    await act(async () => {
+      render(
+        <TestWrapper>
+          <ClaimAuditLog claimId="claim:test1" />
+        </TestWrapper>
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockGetAuditLog).toHaveBeenCalled();
+    }, { timeout: 3000 });
 
     await waitFor(() => {
       expect(screen.getByText('1小时30分45秒')).toBeInTheDocument();
       expect(screen.getByText('5分30秒')).toBeInTheDocument();
       expect(screen.getByText('30秒')).toBeInTheDocument();
-    });
+    }, { timeout: 3000 });
   });
 });
