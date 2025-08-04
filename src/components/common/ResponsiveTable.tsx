@@ -41,13 +41,14 @@ export interface ResponsiveTableColumn {
   priority?: 'high' | 'medium' | 'low'; // 用于移动端显示优先级
 }
 
-export interface ResponsiveTableAction {
+interface ResponsiveTableAction {
   icon: string;
   label: string;
   onClick: (row: any) => void;
   color?: 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success';
   disabled?: (row: any) => boolean;
   hideOnMobile?: boolean;
+  hideForRow?: (row: any) => boolean; // 新增：根据行数据条件隐藏操作
 }
 
 interface ResponsiveTableProps {
@@ -118,7 +119,10 @@ const ResponsiveTable: React.FC<ResponsiveTableProps> = ({
     const primaryColumns = getPrimaryColumns();
     const secondaryColumns = getSecondaryColumns();
     const isExpanded = expandedRows.has(index);
-    const visibleActions = actions.filter(action => !action.hideOnMobile);
+    const visibleActions = actions.filter(action => 
+      !action.hideOnMobile && 
+      !(action.hideForRow && action.hideForRow(row))
+    );
 
     return (
       <Card
@@ -316,7 +320,7 @@ const ResponsiveTable: React.FC<ResponsiveTableProps> = ({
                   {actions.length > 0 && (
                     <TableCell align="center">
                       <Stack direction="row" spacing={0.5} justifyContent="center">
-                        {actions.map((action, actionIndex) => (
+                        {actions.filter(action => !(action.hideForRow && action.hideForRow(row))).map((action, actionIndex) => (
                           <Tooltip key={actionIndex} title={action.label}>
                             <IconButton
                               size="small"
