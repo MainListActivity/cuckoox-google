@@ -4,6 +4,58 @@ import { render } from '../../utils/testUtils';
 import AudioCallInterface from '@/src/components/call/AudioCallInterface';
 import callManager, { CallSession, CallState, MediaState } from '@/src/services/callManager';
 
+// Mock AuthContext to provide required context for useWebRTCPermissions
+vi.mock('@/src/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    selectedCaseId: 'case:test',
+    user: { id: 'user:test', name: 'Test User', github_id: 'test' },
+    isLoggedIn: true,
+    hasRole: vi.fn(() => true),
+    useOperationPermission: vi.fn(() => ({
+      hasPermission: true,
+      isLoading: false,
+      error: null,
+    })),
+    useOperationPermissions: vi.fn(() => ({
+      permissions: {},
+      isLoading: false,
+      error: null,
+    })),
+    preloadOperationPermission: vi.fn(),
+    preloadOperationPermissions: vi.fn(),
+  }),
+}));
+
+// Mock useWebRTCPermissions directly to avoid dependency issues
+vi.mock('@/src/hooks/useWebRTCPermissions', () => ({
+  useWebRTCPermissions: () => ({
+    permissions: {
+      canToggleMicrophone: () => ({ hasPermission: true, isLoading: false, error: null }),
+      canToggleSpeaker: () => ({ hasPermission: true, isLoading: false, error: null }),
+      canToggleCamera: () => ({ hasPermission: true, isLoading: false, error: null }),
+      canShareScreen: () => ({ hasPermission: true, isLoading: false, error: null }),
+      canEndCall: () => ({ hasPermission: true, isLoading: false, error: null }),
+    },
+    preloadPermissionGroup: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+// Mock theme breakpoints
+vi.mock('@mui/material/useMediaQuery', () => ({
+  __esModule: true,
+  default: vi.fn(() => false),
+}));
+
+// Mock useResponsiveLayout
+vi.mock('@/src/hooks/useResponsiveLayout', () => ({
+  useResponsiveLayout: () => ({
+    isMobile: false,
+    isTablet: false,
+    isDesktop: true,
+    screenSize: 'desktop',
+  }),
+}));
+
 // Mock callManager
 vi.mock('@/src/services/callManager', () => ({
   default: {
