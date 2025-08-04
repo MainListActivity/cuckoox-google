@@ -725,3 +725,4 @@ class GroupManager {
 
 export const groupManager = new GroupManager();
 export default groupManager;
+export { GroupManager };
