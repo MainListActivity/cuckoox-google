@@ -94,6 +94,7 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
     getStoredAccessToken: vi.fn(),
     getAuthStatus: mockGetAuthStatus, // 添加getAuthStatus mock
   }),
+  useSurrealClient: () => mockSurrealClient,
   useDataService: () => mockDataService,
   useServiceWorkerComm: () => ({
     sendMessage: vi.fn(),
