@@ -39,6 +39,8 @@ import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import mediaFileHandler, { FileMetadata } from '@/src/services/mediaFileHandler';
 import { CallType } from '@/src/services/callManager';
 import { useWebRTCPermissions } from '@/src/hooks/useWebRTCPermissions';
+import { useGroupWebRTCPermissions } from '@/src/hooks/useGroupData';
+import { useAuth } from '@/src/contexts/AuthContext';
 
 // 聊天模式类型
 export type ChatMode = 'private' | 'group';
@@ -186,7 +188,7 @@ export interface ChatInputProps {
 
 const ChatInput: React.FC<ChatInputProps> = ({
   mode,
-  conversationId: _conversationId,
+  conversationId,
   onSendMessage,
   onStartCall,
   disabled = false,
@@ -201,13 +203,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { showSuccess, showError } = useSnackbar();
+  const { user } = useAuth();
   
-  // WebRTC权限检查
-  const { permissions, preloadPermissionGroup } = useWebRTCPermissions();
+  // WebRTC权限检查 - 根据聊天模式选择合适的Hook
+  const privatePermissions = useWebRTCPermissions();
+  const groupPermissions = useGroupWebRTCPermissions(
+    mode === 'group' ? conversationId : null, 
+    user?.id
+  );
+  
+  // 根据模式选择预加载函数
+  const preloadPermissionGroup = mode === 'group' ? null : privatePermissions.preloadPermissionGroup;
   
   // 获取具体通话权限状态
-  const canInitiateVoiceCall = permissions.canInitiateVoiceCall();
-  const canInitiateVideoCall = permissions.canInitiateVideoCall();
+  const hasVoiceCallPermission = mode === 'group' 
+    ? groupPermissions.canInitiateVoiceCall 
+    : privatePermissions.permissions.canInitiateVoiceCall().hasPermission;
+    
+  const hasVideoCallPermission = mode === 'group' 
+    ? groupPermissions.canInitiateVideoCall 
+    : privatePermissions.permissions.canInitiateVideoCall().hasPermission;
 
   // 输入状态
   const [inputText, setInputText] = useState(initialDraft);
@@ -489,8 +504,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   // 处理语音通话
   const handleVoiceCall = useCallback(() => {
-    // 检查语音通话权限
-    if (!canInitiateVoiceCall.hasPermission) {
+    if (!hasVoiceCallPermission) {
       showError('没有发起语音通话权限');
       return;
     }
@@ -500,12 +514,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } catch (error) {
       showError(`发起语音通话失败: ${(error as Error).message}`);
     }
-  }, [canInitiateVoiceCall, onStartCall, showError]);
+  }, [hasVoiceCallPermission, onStartCall, showError]);
 
   // 处理视频通话
   const handleVideoCall = useCallback(() => {
-    // 检查视频通话权限
-    if (!canInitiateVideoCall.hasPermission) {
+    if (!hasVideoCallPermission) {
       showError('没有发起视频通话权限');
       return;
     }
@@ -515,7 +528,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } catch (error) {
       showError(`发起视频通话失败: ${(error as Error).message}`);
     }
-  }, [canInitiateVideoCall, onStartCall, showError]);
+  }, [hasVideoCallPermission, onStartCall, showError]);
 
   // 清理定时器
   useEffect(() => {
@@ -526,18 +539,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
     };
   }, []);
 
-  // 预加载WebRTC权限
+  // 预加载WebRTC权限（仅私聊模式）
   useEffect(() => {
-    const loadPermissions = async () => {
-      try {
-        await preloadPermissionGroup('BASIC_CALLING');
-      } catch (error) {
-        console.error('权限预加载失败:', error);
-      }
-    };
+    if (mode === 'private' && preloadPermissionGroup) {
+      const loadPermissions = async () => {
+        try {
+          await preloadPermissionGroup('BASIC_CALLING');
+        } catch (error) {
+          console.error('权限预加载失败:', error);
+        }
+      };
 
-    loadPermissions();
-  }, [preloadPermissionGroup]);
+      loadPermissions();
+    }
+  }, [mode, preloadPermissionGroup]);
 
   // 渲染附件预览
   const renderAttachments = () => {
@@ -780,19 +795,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
         {callEnabled && !isMobile && (
           <>
             {/* 语音通话按钮 */}
-            {canInitiateVoiceCall.hasPermission && (
-              <Tooltip title={
-                canInitiateVoiceCall.hasPermission 
-                  ? "语音通话" 
-                  : "没有发起语音通话权限"
-              }>
+            {hasVoiceCallPermission && (
+              <Tooltip title="语音通话">
                 <IconButton
                   size="small"
                   onClick={handleVoiceCall}
-                  disabled={disabled || !canInitiateVoiceCall.hasPermission}
-                  sx={{
-                    opacity: canInitiateVoiceCall.hasPermission ? 1 : 0.5
-                  }}
+                  disabled={disabled}
                 >
                   <CallIcon />
                 </IconButton>
@@ -800,19 +808,12 @@ const ChatInput: React.FC<ChatInputProps> = ({
             )}
             
             {/* 视频通话按钮 */}
-            {canInitiateVideoCall.hasPermission && (
-              <Tooltip title={
-                canInitiateVideoCall.hasPermission 
-                  ? "视频通话" 
-                  : "没有发起视频通话权限"
-              }>
+            {hasVideoCallPermission && (
+              <Tooltip title="视频通话">
                 <IconButton
                   size="small"
                   onClick={handleVideoCall}
-                  disabled={disabled || !canInitiateVideoCall.hasPermission}
-                  sx={{
-                    opacity: canInitiateVideoCall.hasPermission ? 1 : 0.5
-                  }}
+                  disabled={disabled}
                 >
                   <VideoCallIcon />
                 </IconButton>

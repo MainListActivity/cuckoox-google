@@ -262,7 +262,7 @@ describe('ClaimSubmissionPage', () => {
     }, { timeout: 10000 });
     
     expect(screen.getByLabelText(/本金/)).toBeInTheDocument();
-  }, 15000);
+  }, 1000);
 
   // Validation Tests
   it('shows an error if required fields are empty on submit', async () => {
@@ -292,7 +292,7 @@ describe('ClaimSubmissionPage', () => {
     await waitFor(() => {
       expect(mockShowError).toHaveBeenCalledWith('请填写所有必填项');
     }, { timeout: 10000 });
-  }, 15000);
+  }, 1000);
 
   // Total Amount Calculation Test
   it('updates totalAmount when principal, interest, or otherFees change', async () => {
@@ -351,7 +351,7 @@ describe('ClaimSubmissionPage', () => {
     await waitFor(() => {
       expect(mockShowError).toHaveBeenCalledWith('请填写所有必填项');
     }, { timeout: 10000 });
-  }, 15000);
+  }, 1000);
 
   // Test navigation back to list
   it('navigates back to list when back button is clicked', async () => {

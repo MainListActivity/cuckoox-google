@@ -1,20 +1,19 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { RecordId, Uuid } from 'surrealdb';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
 import groupManager from '@/src/services/groupManager';
 import type { 
-  Group, 
   ExtendedGroup, 
-  GroupMember, 
   ExtendedGroupMember, 
   GroupListItem, 
   GroupSettings,
-  GroupStats,
   CreateGroupRequest,
-  UpdateGroupRequest 
+  UpdateGroupRequest,
+  GroupMemberRole
 } from '@/src/types/group';
+import { WEBRTC_PERMISSION_GROUPS } from '@/src/types/group';
 
 // 用户群组列表Hook
 export function useUserGroups(userId?: RecordId | string) {
@@ -22,7 +21,7 @@ export function useUserGroups(userId?: RecordId | string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { user } = useAuth();
-  const client = useSurrealClient();
+  const _client = useSurrealClient();
 
   const loadGroups = useCallback(async () => {
     try {
@@ -362,7 +361,7 @@ export function useGroupLiveUpdates(groupId: RecordId | string | null) {
       // 监听群组成员变化
       const query = `LIVE SELECT * FROM group_member WHERE group_id = type::thing('group', '${typeof groupId === 'string' ? groupId.split(':')[1] : String(groupId).split(':')[1]}')`;
       
-      const queryId = await client.live(query, (action: string, data: any) => {
+      const queryId = await client.live(query, (action: string, data: unknown) => {
         // 处理实时更新
         console.log('Group member update:', action, data);
         // 这里可以触发组件重新加载或更新状态
@@ -466,4 +465,164 @@ export function useGroupPermissions(groupId: RecordId | string | null, userId?: 
   }, [checkPermissions]);
 
   return permissions;
+}
+
+// 群组WebRTC权限检查Hook
+export function useGroupWebRTCPermissions(groupId: RecordId | string | null, userId?: RecordId | string) {
+  const [webrtcPermissions, setWebRTCPermissions] = useState<{
+    // 语音通话权限
+    canInitiateVoiceCall: boolean;
+    canAnswerVoiceCall: boolean;
+    
+    // 视频通话权限  
+    canInitiateVideoCall: boolean;
+    canAnswerVideoCall: boolean;
+    
+    // 群组通话权限
+    canCreateGroupCall: boolean;
+    canJoinGroupCall: boolean;
+    canManageGroupCall: boolean;
+    
+    // 媒体控制权限
+    canControlMicrophone: boolean;
+    canControlCamera: boolean;
+    canShareScreen: boolean;
+    canRecordCall: boolean;
+    
+    // 通话管理权限
+    canEndCall: boolean;
+    canRejectCall: boolean;
+    canInviteToCall: boolean;
+    canControlOthersMedia: boolean;
+    
+    // 角色信息
+    isOwner: boolean;
+    isAdmin: boolean;
+    role: GroupMemberRole | null;
+  }>({
+    canInitiateVoiceCall: false,
+    canAnswerVoiceCall: false,
+    canInitiateVideoCall: false,
+    canAnswerVideoCall: false,
+    canCreateGroupCall: false,
+    canJoinGroupCall: false,
+    canManageGroupCall: false,
+    canControlMicrophone: false,
+    canControlCamera: false,
+    canShareScreen: false,
+    canRecordCall: false,
+    canEndCall: false,
+    canRejectCall: false,
+    canInviteToCall: false,
+    canControlOthersMedia: false,
+    isOwner: false,
+    isAdmin: false,
+    role: null
+  });
+
+  const { user } = useAuth();
+  const client = useSurrealClient();
+
+  const checkWebRTCPermissions = useCallback(async () => {
+    if (!groupId || !client) return;
+
+    try {
+      const targetUserId = userId || user?.id;
+      if (!targetUserId) return;
+
+      // 查询群组成员信息和群组设置
+      const [memberResult, settingsResult] = await Promise.all([
+        client.query(`SELECT * FROM group_member WHERE group_id = $group_id AND user_id = $user_id`, {
+          group_id: typeof groupId === 'string' ? groupId : String(groupId),
+          user_id: targetUserId
+        }),
+        client.query(`SELECT * FROM group_settings WHERE group_id = $group_id`, {
+          group_id: typeof groupId === 'string' ? groupId : String(groupId)
+        })
+      ]);
+
+      const [member] = memberResult;
+      const [groupSettings] = settingsResult;
+
+      if (!member) {
+        // 用户不是群组成员，所有权限为false
+        return;
+      }
+
+      const isOwner = member.role === 'owner';
+      const isAdmin = member.role === 'admin' || isOwner;
+      const memberPermissions = member.permissions || {};
+
+      // 检查群组级别的WebRTC设置
+      const groupWebRTCEnabled = {
+        voiceCalls: groupSettings?.webrtc_voice_calls_enabled !== false,
+        videoCalls: groupSettings?.webrtc_video_calls_enabled !== false,
+        groupCalls: groupSettings?.webrtc_group_calls_enabled !== false,
+        screenSharing: groupSettings?.webrtc_screen_sharing_enabled !== false,
+        callRecording: groupSettings?.webrtc_call_recording_enabled === true
+      };
+
+      // 设置WebRTC权限（群组设置 && 个人权限）
+      setWebRTCPermissions({
+        // 语音通话权限
+        canInitiateVoiceCall: groupWebRTCEnabled.voiceCalls && (isOwner || memberPermissions.can_initiate_voice_call || false),
+        canAnswerVoiceCall: groupWebRTCEnabled.voiceCalls && (isOwner || memberPermissions.can_answer_voice_call || false),
+        
+        // 视频通话权限
+        canInitiateVideoCall: groupWebRTCEnabled.videoCalls && (isOwner || memberPermissions.can_initiate_video_call || false),
+        canAnswerVideoCall: groupWebRTCEnabled.videoCalls && (isOwner || memberPermissions.can_answer_video_call || false),
+        
+        // 群组通话权限
+        canCreateGroupCall: groupWebRTCEnabled.groupCalls && (isOwner || memberPermissions.can_create_group_call || false),
+        canJoinGroupCall: groupWebRTCEnabled.groupCalls && (isOwner || memberPermissions.can_join_group_call || false),
+        canManageGroupCall: groupWebRTCEnabled.groupCalls && (isOwner || memberPermissions.can_manage_group_call || false),
+        
+        // 媒体控制权限
+        canControlMicrophone: (isOwner || memberPermissions.can_control_microphone || false),
+        canControlCamera: (isOwner || memberPermissions.can_control_camera || false),
+        canShareScreen: groupWebRTCEnabled.screenSharing && (isOwner || memberPermissions.can_share_screen || false),
+        canRecordCall: groupWebRTCEnabled.callRecording && (isOwner || memberPermissions.can_record_call || false),
+        
+        // 通话管理权限
+        canEndCall: (isOwner || memberPermissions.can_end_call || false),
+        canRejectCall: (isOwner || memberPermissions.can_reject_call || false),
+        canInviteToCall: (isOwner || memberPermissions.can_invite_to_call || false),
+        canControlOthersMedia: (isOwner || memberPermissions.can_control_others_media || false),
+        
+        // 角色信息
+        isOwner,
+        isAdmin,
+        role: member.role as GroupMemberRole
+      });
+    } catch (error) {
+      console.error('Error checking group WebRTC permissions:', error);
+    }
+  }, [groupId, userId, user?.id, client]);
+
+  useEffect(() => {
+    checkWebRTCPermissions();
+  }, [checkWebRTCPermissions]);
+
+  // 提供权限检查的便捷方法
+  const hasPermission = useCallback((permission: keyof typeof webrtcPermissions) => {
+    return webrtcPermissions[permission] as boolean;
+  }, [webrtcPermissions]);
+
+  // 提供权限组检查方法
+  const hasPermissionGroup = useCallback((group: keyof typeof WEBRTC_PERMISSION_GROUPS) => {
+    const permissions = WEBRTC_PERMISSION_GROUPS[group];
+    return permissions.every(permission => {
+      // 映射权限名称到状态名称
+      const stateKey = permission.replace(/^can_/, '').replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+      const camelCaseKey = `can${stateKey.charAt(0).toUpperCase()}${stateKey.slice(1)}` as keyof typeof webrtcPermissions;
+      return webrtcPermissions[camelCaseKey] as boolean;
+    });
+  }, [webrtcPermissions]);
+
+  return {
+    ...webrtcPermissions,
+    hasPermission,
+    hasPermissionGroup,
+    refetch: checkWebRTCPermissions
+  };
 }

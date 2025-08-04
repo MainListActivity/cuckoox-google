@@ -59,7 +59,7 @@ import {
 import { RecordId } from 'surrealdb';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useGroupDetails, useGroupOperations, useGroupPermissions } from '@/src/hooks/useGroupData';
+import { useGroupDetails, useGroupOperations, useGroupPermissions, useGroupWebRTCPermissions } from '@/src/hooks/useGroupData';
 import type { ExtendedGroupMember, GroupMemberRole } from '@/src/types/group';
 
 interface GroupMemberListProps {
@@ -89,6 +89,12 @@ export default function GroupMemberList({
   const { group, members, isLoading, error, refetch } = useGroupDetails(groupId);
   const { removeMember, updateMemberRole, transferOwnership } = useGroupOperations();
   const permissions = useGroupPermissions(groupId, user?.id);
+  
+  // 群组WebRTC权限检查
+  const {
+    canInitiateVoiceCall,
+    canInitiateVideoCall
+  } = useGroupWebRTCPermissions(groupId, user?.id);
   
   // 本地状态
   const [searchQuery, setSearchQuery] = useState('');
@@ -347,23 +353,27 @@ export default function GroupMemberList({
                 
                 {!isMobile && (
                   <>
-                    <Tooltip title="语音通话">
-                      <IconButton
-                        size="small"
-                        onClick={() => onStartCall?.(member.user_id, 'audio')}
-                      >
-                        <CallIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    {canInitiateVoiceCall && (
+                      <Tooltip title="语音通话">
+                        <IconButton
+                          size="small"
+                          onClick={() => onStartCall?.(member.user_id, 'audio')}
+                        >
+                          <CallIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     
-                    <Tooltip title="视频通话">
-                      <IconButton
-                        size="small"
-                        onClick={() => onStartCall?.(member.user_id, 'video')}
-                      >
-                        <VideoCallIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    {canInitiateVideoCall && (
+                      <Tooltip title="视频通话">
+                        <IconButton
+                          size="small"
+                          onClick={() => onStartCall?.(member.user_id, 'video')}
+                        >
+                          <VideoCallIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </>
                 )}
               </>

@@ -57,7 +57,7 @@ import {
 import { RecordId } from 'surrealdb';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useGroupDetails, useGroupOperations, useGroupPermissions } from '@/src/hooks/useGroupData';
+import { useGroupDetails, useGroupOperations, useGroupPermissions, useGroupWebRTCPermissions } from '@/src/hooks/useGroupData';
 import type { ExtendedGroup, ExtendedGroupMember, GroupMemberRole } from '@/src/types/group';
 
 interface GroupInfoPanelProps {
@@ -92,6 +92,13 @@ export default function GroupInfoPanel({
   const { group, members, settings, isLoading, error, refetch } = useGroupDetails(groupId);
   const { updateGroup, removeMember, updateMemberRole, transferOwnership, leaveGroup } = useGroupOperations();
   const permissions = useGroupPermissions(groupId, user?.id);
+  
+  // 群组WebRTC权限检查
+  const {
+    canInitiateVoiceCall,
+    canInitiateVideoCall,
+    canCreateGroupCall
+  } = useGroupWebRTCPermissions(groupId, user?.id);
   
   // 本地状态
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -556,7 +563,7 @@ export default function GroupInfoPanel({
                 variant="outlined"
                 startIcon={<CallIcon />}
                 onClick={() => onStartCall?.('audio')}
-                disabled={!permissions.canSendMessage}
+                disabled={!permissions.canSendMessage || !canInitiateVoiceCall || !canCreateGroupCall}
               >
                 语音通话
               </Button>
@@ -567,7 +574,7 @@ export default function GroupInfoPanel({
                 variant="outlined"
                 startIcon={<VideoCallIcon />}
                 onClick={() => onStartCall?.('video')}
-                disabled={!permissions.canSendMessage}
+                disabled={!permissions.canSendMessage || !canInitiateVideoCall || !canCreateGroupCall}
               >
                 视频通话
               </Button>
