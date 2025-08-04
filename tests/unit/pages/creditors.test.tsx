@@ -407,7 +407,7 @@ describe('Creditors Module Tests', () => {
         // Wait for loading to complete
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         // Check if the table is rendered (may have multiple tables due to pagination)
         expect(screen.getAllByRole('table').length).toBeGreaterThanOrEqual(1);
@@ -430,7 +430,7 @@ describe('Creditors Module Tests', () => {
         // Wait for initial load
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         const searchInput = screen.getByLabelText('search_creditors_label');
         
@@ -482,7 +482,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         // Find and click a checkbox for a specific creditor
         const checkboxes = screen.getAllByRole('checkbox');
@@ -501,7 +501,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         const printButton = screen.getByText('print_waybill_button');
         expect(printButton).toBeDisabled();
@@ -520,7 +520,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         const checkboxes = screen.getAllByRole('checkbox');
         const selectAllCheckbox = checkboxes[0]; // Header checkbox
@@ -542,7 +542,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         // Check for pagination elements
         expect(screen.getByText('table_pagination_rows_per_page')).toBeInTheDocument();
@@ -569,7 +569,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         const nextPageButton = screen.getByLabelText('table_pagination_next_page_aria_label');
         
@@ -593,7 +593,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         const addButton = screen.getByText('add_single_creditor_button');
         
@@ -611,7 +611,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         // Find edit buttons (they have aria-label="edit creditor")
         const editButtons = screen.getAllByLabelText('edit creditor');
@@ -630,7 +630,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         // Find delete buttons (they have aria-label="delete creditor")
         const deleteButtons = screen.getAllByLabelText('delete creditor');
@@ -651,7 +651,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         // This test verifies the component can handle successful creation
         // The actual creation logic would be tested in the dialog component tests
@@ -665,7 +665,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         // This test verifies the component can handle successful deletion
         // The actual deletion logic would be tested when the delete dialog is confirmed
@@ -680,7 +680,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         const batchImportButton = screen.getByText('batch_import_creditors_button');
         
@@ -714,7 +714,7 @@ describe('Creditors Module Tests', () => {
         
         await waitFor(() => {
           expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-        }, { timeout: 15000 });
+        }, { timeout: 1000 });
 
         expect(screen.getByText('add_single_creditor_button')).toBeInTheDocument();
         expect(screen.getByText('batch_import_creditors_button')).toBeInTheDocument();
@@ -871,7 +871,7 @@ describe('Creditors Module Tests', () => {
       // Wait for data to load
       await waitFor(() => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-      }, { timeout: 15000 });
+      }, { timeout: 1000 });
 
       // Select a creditor
       const checkboxes = screen.getAllByRole('checkbox');
@@ -896,7 +896,7 @@ describe('Creditors Module Tests', () => {
       
       await waitFor(() => {
         expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
-      }, { timeout: 15000 });
+      }, { timeout: 1000 });
 
       // Perform search
       const searchInput = screen.getByLabelText('search_creditors_label');

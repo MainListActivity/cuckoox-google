@@ -99,6 +99,6 @@ global.URL.revokeObjectURL = vi.fn();
 
 // Increase timeout for async operations
 vi.setConfig({
-  testTimeout: 15000,
-  hookTimeout: 10000,
+  testTimeout: 1000,
+  hookTimeout: 500,
 });
