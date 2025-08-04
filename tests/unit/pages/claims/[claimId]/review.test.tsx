@@ -137,11 +137,11 @@ vi.mock('@/src/hooks/useResponsiveLayout', () => ({
 // Mock MobileOptimizedLayout
 vi.mock('@/src/components/mobile/MobileOptimizedLayout', () => ({
     __esModule: true,
-    default: vi.fn(({ children, title, showBackButton, onBackClick, fabConfig }) => (
+    default: vi.fn(({ children, title, showBackButton, onBack, fabConfig }) => (
         <div data-testid="mobile-optimized-layout">
             <div data-testid="mobile-header">
                 {showBackButton && (
-                    <button onClick={onBackClick} data-testid="mobile-back-button">
+                    <button onClick={onBack} data-testid="mobile-back-button">
                         Back
                     </button>
                 )}
@@ -810,7 +810,11 @@ describe('ClaimReviewDetailPage', () => {
 
         it('mobile back button should work correctly', async () => {
             const mockHistoryBack = vi.fn();
-            vi.stubGlobal('history', { ...window.history, back: mockHistoryBack });
+            // Mock window.history.back directly
+            Object.defineProperty(window.history, 'back', {
+                value: mockHistoryBack,
+                writable: true
+            });
 
             await act(async () => {
                 renderComponent();
@@ -826,8 +830,6 @@ describe('ClaimReviewDetailPage', () => {
             });
 
             expect(mockHistoryBack).toHaveBeenCalled();
-
-            vi.unstubAllGlobals();
         });
     });
 
