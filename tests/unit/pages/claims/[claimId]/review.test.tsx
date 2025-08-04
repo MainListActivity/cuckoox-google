@@ -159,7 +159,7 @@ vi.mock('@/src/components/mobile/MobileOptimizedLayout', () => ({
 
 describe('ClaimReviewDetailPage', () => {
     // Mock useResponsiveLayout hook
-    const mockUseResponsiveLayout = vi.mocked(useResponsiveLayout);
+    const _mockUseResponsiveLayout = vi.mocked(useResponsiveLayout);
 
     beforeEach(() => {
         vi.clearAllMocks();
