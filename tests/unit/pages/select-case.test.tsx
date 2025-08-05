@@ -16,6 +16,7 @@ import { render } from '../utils/testUtils';
 import CaseSelectionPage from '@/src/pages/select-case';
 import { AuthContext, AuthContextType, AppUser, Case } from '@/src/contexts/AuthContext';
 import { SurrealContextValue } from '@/src/contexts/SurrealProvider';
+import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
 import { RecordId } from 'surrealdb';
 
 // Mock i18n
@@ -92,7 +93,14 @@ let mockSurrealContextValue: SurrealContextValue;
 
 // Utility function to render with providers
 const renderWithProviders = (ui: React.ReactElement) => {
-  return render(ui, { initialEntries: ['/select-case'] });
+  return render(
+    <AuthContext.Provider value={mockAuthContextValue}>
+      <SnackbarProvider>
+        {ui}
+      </SnackbarProvider>
+    </AuthContext.Provider>,
+    { initialEntries: ['/select-case'] }
+  );
 };
 
 describe('CaseSelectionPage', () => {
