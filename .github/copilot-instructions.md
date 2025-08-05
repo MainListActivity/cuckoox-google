@@ -57,7 +57,7 @@ class SomeService {
 ### Essential Commands
 - **Package Manager**: Uses `bun` (not npm/yarn)
 - **Development**: `bun run dev` (includes Service Worker hot reload)
-- **Testing**: `bun run test:run` (Vitest), `bun run test:e2e` (Playwright)  , 运行单个测试文件：`bun run test:run -- src/tests/unit/your-test-file.ts`
+- **Testing**: `bun run test:run` (Vitest), `bun run test:e2e` (Playwright)  , 运行单个测试文件：`bun run test:run -- tests/unit/pages/login.test.tsx`
 - **Type Checking**: Strict TypeScript with `@/*` path aliases mapping to project root
 
 ### Technology Stack Specifics
