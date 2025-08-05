@@ -45,18 +45,18 @@
 -  [x] usePermission.test.ts
 
 ## 服务测试 (Services)
-- callManager.test.ts
-- caseMemberService.test.ts
-- claimAuditService.test.ts
-- claimOperationService.test.ts
-- claimStatusFlowService.test.ts
-- claimVersionService.test.ts
-- groupManager.test.ts
-- mediaFileHandler.test.ts
-- menuService-fixed.test.ts
+-  [x] callManager.test.ts
+-  [x] caseMemberService.test.ts
+-  [x] claimAuditService.test.ts
+-  [x] claimOperationService.test.ts
+-  [x] claimStatusFlowService.test.ts
+-  [x] claimVersionService.test.ts
+-  [x] groupManager.test.ts
+-  [x] mediaFileHandler.test.ts
+-  [x] menuService-fixed.test.ts
 - messageService.test.ts
-- networkAdaptation.test.ts
-- roleService.test.ts
+-  [x] networkAdaptation.test.ts
+-  [x] roleService.test.ts
 - rtcConfigManager.test.ts
 - rtcConfigService.test.ts
 - signalingService.test.ts
@@ -65,21 +65,20 @@
 - webrtcManager-fixed.test.ts
 
 ## Worker测试 (Workers)
+-  [x] data-cache-manager-auth-variables.test.ts
+-  [x] enhanced-query-handler.test.ts
 - cache-logger.test.ts
-- data-cache-manager-auth-variables.test.ts
 - data-cache-manager-autosync.test.ts
-- enhanced-query-handler.test.ts
 - offline-manager.test.ts
 - page-aware-subscription-manager.test.ts
-- performance-monitor.test.ts
-- simple-test.test.ts
-- sw-surreal-token-refresh.test.ts
 - tenant-database-manager.test.ts
-- token-manager.test.ts
+-  [x] performance-monitor.test.ts
+-  [x] sw-surreal-token-refresh.test.ts
+-  [x] token-manager.test.ts
 
 ## 工具测试 (Utils)
-- tenantHistory.test.ts
-- touchTargetUtils.test.ts
+-  [x] tenantHistory.test.ts
+-  [x] touchTargetUtils.test.ts
 
 ## 测试统计
 - 总测试套件数: 396

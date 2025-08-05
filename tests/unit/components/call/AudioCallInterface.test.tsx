@@ -73,8 +73,9 @@ const TestAudioCallInterface = React.lazy(() =>
       const handleMute = async () => {
         try {
           setIsLoading(true);
+          // 获取mock的callManager
           const { default: callManager } = await import('@/src/services/callManager');
-          callManager.toggleMute(props.callId);
+          await callManager.toggleMute(props.callId);
         } catch (error) {
           props.onError?.(error);
         } finally {
@@ -86,7 +87,7 @@ const TestAudioCallInterface = React.lazy(() =>
         try {
           setIsLoading(true);
           const { default: callManager } = await import('@/src/services/callManager');
-          callManager.toggleSpeaker(props.callId);
+          await callManager.toggleSpeaker(props.callId);
         } catch (error) {
           props.onError?.(error);
         } finally {
@@ -409,13 +410,19 @@ describe('AudioCallInterface', () => {
       });
 
       const endCallButton = screen.getByLabelText('结束通话');
-      fireEvent.click(endCallButton);
+      
+      act(() => {
+        fireEvent.click(endCallButton);
+      });
       
       await waitFor(() => {
         expect(screen.getByText('确定要结束当前通话吗？')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '结束通话' })).toBeInTheDocument();
       });
+      
+      expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
+      // 对话框中的确认按钮 - 有3个"结束通话"文本：主界面按钮、对话框标题、对话框按钮
+      const confirmButtons = screen.getAllByText('结束通话');
+      expect(confirmButtons.length).toBe(3);
     });
 
     it('应该能够确认结束通话', async () => {
@@ -431,15 +438,23 @@ describe('AudioCallInterface', () => {
 
       // 点击结束通话按钮
       const endCallButton = screen.getByLabelText('结束通话');
-      fireEvent.click(endCallButton);
       
+      act(() => {
+        fireEvent.click(endCallButton);
+      });
+      
+      // 等待对话框出现
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: '结束通话' })).toBeInTheDocument();
+        expect(screen.getByText('确定要结束当前通话吗？')).toBeInTheDocument();
       });
 
-      // 确认结束通话
-      const confirmButton = screen.getByRole('button', { name: '结束通话' });
-      fireEvent.click(confirmButton);
+      // 找到确认按钮 - 有两个"结束通话"按钮，我们要最后一个（对话框中的）
+      const confirmButtons = screen.getAllByText('结束通话');
+      const confirmButton = confirmButtons[confirmButtons.length - 1];
+      
+      act(() => {
+        fireEvent.click(confirmButton);
+      });
       
       await waitFor(() => {
         expect(mockCallManager.endCall).toHaveBeenCalledWith('test-call-id', '用户主动结束');
@@ -562,15 +577,23 @@ describe('AudioCallInterface', () => {
 
       // 点击结束通话按钮
       const endCallButton = screen.getByLabelText('结束通话');
-      fireEvent.click(endCallButton);
       
+      act(() => {
+        fireEvent.click(endCallButton);
+      });
+      
+      // 等待对话框出现
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: '结束通话' })).toBeInTheDocument();
+        expect(screen.getByText('确定要结束当前通话吗？')).toBeInTheDocument();
       });
 
-      // 确认结束通话
-      const confirmButton = screen.getByRole('button', { name: '结束通话' });
-      fireEvent.click(confirmButton);
+      // 找到确认按钮 - 有两个"结束通话"按钮，我们要最后一个（对话框中的）
+      const confirmButtons = screen.getAllByText('结束通话');
+      const confirmButton = confirmButtons[confirmButtons.length - 1];
+      
+      act(() => {
+        fireEvent.click(confirmButton);
+      });
       
       await waitFor(() => {
         expect(defaultProps.onError).toHaveBeenCalledWith(testError);
@@ -580,7 +603,7 @@ describe('AudioCallInterface', () => {
 
   describe('加载状态', () => {
     it('应该在操作期间禁用按钮', async () => {
-      let resolveToggleMute: (value: boolean) => void;
+      let resolveToggleMute: ((value: boolean) => void) | undefined;
       mockCallManager.toggleMute.mockImplementation(() => {
         return new Promise<boolean>(resolve => {
           resolveToggleMute = resolve;
@@ -598,16 +621,24 @@ describe('AudioCallInterface', () => {
       });
 
       const muteButton = screen.getByLabelText('静音');
-      fireEvent.click(muteButton);
       
-      // 按钮应该被禁用
-      expect(muteButton).toBeDisabled();
+      act(() => {
+        fireEvent.click(muteButton);
+      });
+      
+      // 等待按钮被禁用
+      await waitFor(() => {
+        expect(muteButton).toBeDisabled();
+      });
       
       // 完成操作
       act(() => {
-        resolveToggleMute!(true);
+        if (resolveToggleMute) {
+          resolveToggleMute(true);
+        }
       });
       
+      // 等待按钮重新启用
       await waitFor(() => {
         expect(muteButton).not.toBeDisabled();
       });
