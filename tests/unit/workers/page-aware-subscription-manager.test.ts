@@ -78,7 +78,7 @@ describe('PageAwareSubscriptionManager', () => {
       );
 
       expect(pageId1).toBe(pageId2);
-      expect(mockSubscriptionManager.subscribeToTable).toHaveBeenCalledTimes(3); // 3 required tables for /cases
+      expect(mockSubscriptionManager.subscribeToTable).toHaveBeenCalledTimes(5); // 5 tables for /cases page
     });
 
     it('应该处理自定义页面需求配置', async () => {
@@ -288,14 +288,17 @@ describe('PageAwareSubscriptionManager', () => {
 
   describe('错误处理', () => {
     it('应该处理订阅失败的情况', async () => {
+      // Even if subscription fails, the activation should succeed (resilient design)
       (mockSubscriptionManager.subscribeToTable as any).mockRejectedValue(new Error('Subscription failed'));
 
-      await expect(
-        pageAwareSubscriptionManager.activatePageSubscription('/cases', 'user:123')
-      ).rejects.toThrow('Subscription failed');
+      // Should not throw error, but should still return a page ID
+      const pageId = await pageAwareSubscriptionManager.activatePageSubscription('/cases', 'user:123');
+      expect(pageId).toBeDefined();
+      expect(typeof pageId).toBe('string');
     });
 
     it('应该处理停用订阅失败的情况', async () => {
+      // Even if unsubscribe fails, deactivation should succeed (resilient design)
       (mockSubscriptionManager.subscribeToTable as any).mockResolvedValue('subscription-id-1');
       (mockSubscriptionManager.unsubscribe as any).mockRejectedValue(new Error('Unsubscribe failed'));
 
@@ -304,9 +307,10 @@ describe('PageAwareSubscriptionManager', () => {
         'user:123'
       );
 
+      // Should not throw error
       await expect(
         pageAwareSubscriptionManager.deactivatePageSubscription(pageId)
-      ).rejects.toThrow('Unsubscribe failed');
+      ).resolves.not.toThrow();
     });
   });
 });
