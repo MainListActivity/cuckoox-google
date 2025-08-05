@@ -16,21 +16,8 @@ jobs:
         with:
           bun-version: latest
       - name: Install dependencies
-        run: bun install --registry=https://registry.npmjs.org
+        run: bun install
       - name: Build
-        run: bun run build:sw&bun run build
+        run: bun run build
       - name: Test
-        run: bun test || bun run test
-  bun-ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-      - name: Install dependencies
-        run: bun install --registry=https://registry.npmjs.org
-      - name: Build
-        run: bun run build:sw&bun run build
-      - name: Test
-        run: bun test || bun run test
+        run: bun run test:run

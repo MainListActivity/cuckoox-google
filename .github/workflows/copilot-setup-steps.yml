@@ -23,6 +23,4 @@ jobs:
       - name: Install dependencies
         run: bun install
       - name: Build
-        run: bun run build:sw&bun run build
-      - name: Test
-        run: bun test || bun run test
+        run: bun run build

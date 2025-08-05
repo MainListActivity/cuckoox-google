@@ -27,11 +27,11 @@
 -  [x] create.test.tsx
 -  [x] creditors.test.tsx
 -  [x] index.test.tsx
-- login.test.tsx
+-  [x] login.test.tsx
 - messages.test.tsx
-- review.test.tsx
-- select-case.test.tsx
-- submit.test.tsx
+-  [x] review.test.tsx
+-  [x] select-case.test.tsx
+-  [x] submit.test.tsx
 
 ## 上下文测试 (Contexts)
 - AdminMenuTest.test.tsx
