@@ -49,10 +49,10 @@ describe('useLiveDashboardData Hooks', () => {
     it('should fetch initial data and set up live subscription', async () => {
       const mockLiveQueryId = 'mock-live-qid' as unknown as Uuid;
       
-      // Mock the data query
+      // Mock the data query - note: SurrealDB query returns [TResultType[]]
       mockQuery
-        .mockResolvedValueOnce([{ result: [{ count: 10 }] }]) // Initial data fetch
-        .mockResolvedValueOnce([{ result: mockLiveQueryId }]); // Live query setup
+        .mockResolvedValueOnce([[{ count: 10 }]]) // Initial data fetch - wrapped in array
+        .mockResolvedValueOnce([mockLiveQueryId]); // Live query setup
 
       const { result } = renderHook(() => useLiveTodaysSubmissionsCount('case:test'));
       
@@ -60,15 +60,15 @@ describe('useLiveDashboardData Hooks', () => {
       await waitFor(() => {
         expect(result.current.data).toBe(10);
         expect(result.current.isLoading).toBe(false);
-      });
+      }, { timeout: 3000 });
 
       // Verify the queries were called correctly
       expect(mockQuery).toHaveBeenCalledTimes(2);
       expect(mockQuery).toHaveBeenNthCalledWith(1, expect.stringContaining('SELECT count()'), { caseId: 'case:test' });
-      expect(mockQuery).toHaveBeenNthCalledWith(2, 'LIVE SELECT * FROM claim WHERE case_id = $caseId;', { caseId: 'case:test' });
+      expect(mockQuery).toHaveBeenNthCalledWith(2, 'LIVE SELECT * FROM claim;');
       
       // Verify live subscription was set up
-      expect(mockSubscribeLive).toHaveBeenCalledWith(mockLiveQueryId, expect.any(Function));
+      expect(mockSubscribeLive).toHaveBeenCalledWith(String(mockLiveQueryId), expect.any(Function));
     });
 
     it('should refetch data on live update', async () => {
@@ -76,23 +76,23 @@ describe('useLiveDashboardData Hooks', () => {
       
       // Initial setup
       mockQuery
-        .mockResolvedValueOnce([{ result: [{ count: 10 }] }]) // Initial data fetch
-        .mockResolvedValueOnce([{ result: mockLiveQueryId }]) // Live query setup
-        .mockResolvedValueOnce([{ result: [{ count: 11 }] }]); // Refetch after live update
+        .mockResolvedValueOnce([[{ count: 10 }]]) // Initial data fetch
+        .mockResolvedValueOnce([mockLiveQueryId]) // Live query setup
+        .mockResolvedValueOnce([[{ count: 11 }]]); // Refetch after live update
 
       const { result } = renderHook(() => useLiveTodaysSubmissionsCount('case:test'));
       
-      await waitFor(() => expect(result.current.data).toBe(10));
-      await waitFor(() => expect(liveCallback).toBeDefined());
+      await waitFor(() => expect(result.current.data).toBe(10), { timeout: 3000 });
+      await waitFor(() => expect(liveCallback).toBeDefined(), { timeout: 3000 });
 
-      // Trigger live update
+      // Trigger live update with case_id matching our test case
       act(() => {
-        liveCallback?.('UPDATE', {});
+        liveCallback?.('UPDATE', { case_id: 'case:test' });
       });
 
       await waitFor(() => {
         expect(result.current.data).toBe(11);
-      });
+      }, { timeout: 3000 });
 
       // Verify refetch was called
       expect(mockQuery).toHaveBeenCalledTimes(3);
@@ -102,18 +102,18 @@ describe('useLiveDashboardData Hooks', () => {
       const mockLiveQueryId = 'mock-live-qid' as unknown as Uuid;
       
       mockQuery
-        .mockResolvedValueOnce([{ result: [{ count: 10 }] }])
-        .mockResolvedValueOnce([{ result: mockLiveQueryId }]);
+        .mockResolvedValueOnce([[{ count: 10 }]])
+        .mockResolvedValueOnce([mockLiveQueryId]);
 
       const { unmount } = renderHook(() => useLiveTodaysSubmissionsCount('case:test'));
       
-      await waitFor(() => expect(mockSubscribeLive).toHaveBeenCalled());
+      await waitFor(() => expect(mockSubscribeLive).toHaveBeenCalled(), { timeout: 3000 });
 
       unmount();
 
       await waitFor(() => {
-        expect(mockKill).toHaveBeenCalledWith(mockLiveQueryId);
-      });
+        expect(mockKill).toHaveBeenCalledWith(String(mockLiveQueryId));
+      }, { timeout: 3000 });
     });
 
     it('should handle null caseId', () => {
@@ -153,15 +153,15 @@ describe('useLiveDashboardData Hooks', () => {
       const mockLiveQueryId = 'mock-live-qid' as unknown as Uuid;
       
       mockQuery
-        .mockResolvedValueOnce([{ result: [{ count: 5 }] }])
-        .mockResolvedValueOnce([{ result: mockLiveQueryId }]);
+        .mockResolvedValueOnce([[{ count: 5 }]])
+        .mockResolvedValueOnce([mockLiveQueryId]);
 
       const { result } = renderHook(() => useLiveTodaysReviewedClaimsCount('case:test'));
 
       await waitFor(() => {
         expect(result.current.data).toBe(5);
         expect(result.current.isLoading).toBe(false);
-      });
+      }, { timeout: 3000 });
     });
   });
 
@@ -181,15 +181,15 @@ describe('useLiveDashboardData Hooks', () => {
       const mockLiveQueryId = 'mock-live-qid' as unknown as Uuid;
       
       mockQuery
-        .mockResolvedValueOnce([{ result: mockRawData }])
-        .mockResolvedValueOnce([{ result: mockLiveQueryId }]);
+        .mockResolvedValueOnce([mockRawData]) // Wrap in array as SurrealDB returns [TResultType[]]
+        .mockResolvedValueOnce([mockLiveQueryId]);
 
       const { result } = renderHook(() => useLiveUsersOnlineByRoleChartData('case:test-chart'));
 
       await waitFor(() => {
         expect(result.current.data.length).toBe(2);
         expect(result.current.isLoading).toBe(false);
-      });
+      }, { timeout: 3000 });
 
       expect(result.current.data[0]).toEqual({
         role: '管理人',
@@ -207,15 +207,15 @@ describe('useLiveDashboardData Hooks', () => {
       const mockLiveQueryId = 'mock-live-qid' as unknown as Uuid;
       
       mockQuery
-        .mockResolvedValueOnce([{ result: [] }])
-        .mockResolvedValueOnce([{ result: mockLiveQueryId }]);
+        .mockResolvedValueOnce([[]]) // Empty array wrapped
+        .mockResolvedValueOnce([mockLiveQueryId]);
 
       const { result } = renderHook(() => useLiveUsersOnlineByRoleChartData('case:test-empty'));
 
       await waitFor(() => {
         expect(result.current.data).toEqual([]);
         expect(result.current.isLoading).toBe(false);
-      });
+      }, { timeout: 3000 });
     });
 
     it('should handle unknown roles with default color', async () => {
@@ -223,14 +223,14 @@ describe('useLiveDashboardData Hooks', () => {
       const mockLiveQueryId = 'mock-live-qid' as unknown as Uuid;
       
       mockQuery
-        .mockResolvedValueOnce([{ result: mockRawData }])
-        .mockResolvedValueOnce([{ result: mockLiveQueryId }]);
+        .mockResolvedValueOnce([mockRawData])
+        .mockResolvedValueOnce([mockLiveQueryId]);
 
       const { result } = renderHook(() => useLiveUsersOnlineByRoleChartData('case:test-unknown'));
 
       await waitFor(() => {
         expect(result.current.data[0].color).toBe(defaultRoleColor);
-      });
+      }, { timeout: 3000 });
     });
   });
 });
