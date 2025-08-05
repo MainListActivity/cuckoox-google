@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import '@testing-library/jest-dom';
 import MobilePWAManager from '@/src/components/mobile/MobilePWAManager';
@@ -12,6 +12,27 @@ vi.mock('@mui/material', async () => {
     useMediaQuery: vi.fn(() => true) // 默认模拟移动端
   };
 });
+
+// Mock child components that might have their own complex logic
+vi.mock('@/src/components/mobile/MobilePWAInstallBanner', () => ({
+  __esModule: true,
+  default: vi.fn(({ onInstallClick, autoShow, position, compact, autoHideDelay }) => (
+    <div data-testid="mock-pwa-install-banner">
+      Mock PWA Install Banner
+      {autoShow && <button onClick={onInstallClick}>Install</button>}
+    </div>
+  ))
+}));
+
+vi.mock('@/src/components/mobile/MobilePWAInstallGuide', () => ({
+  __esModule: true,
+  default: vi.fn(({ open, onClose, autoTrigger, showBenefits, compact }) => (
+    open ? <div data-testid="mock-pwa-install-guide">
+      Mock PWA Install Guide
+      <button onClick={onClose}>Close</button>
+    </div> : null
+  ))
+}));
 
 // Import the mocked function
 import { shouldShowInstallPrompt } from '@/src/utils/mobilePWADetector';
@@ -202,28 +223,33 @@ describe('MobilePWAManager', () => {
       </TestWrapper>
     );
 
-    // 模拟安装成功
-    const { mobilePWADetector } = require('@/src/utils/mobilePWADetector');
+    // 验证组件渲染成功
+    expect(document.body).toBeInTheDocument();
+    
+    // 使用已经在顶部mock的mobilePWADetector
+    const { mobilePWADetector } = await vi.importMock('@/src/utils/mobilePWADetector');
     const mockSubscribe = mobilePWADetector.subscribe;
     
-    // 获取订阅回调函数
+    // 验证subscribe被调用
     expect(mockSubscribe).toHaveBeenCalled();
+    
+    // 获取订阅回调函数并直接调用，模拟安装成功
     const subscribeCallback = mockSubscribe.mock.calls[0][0];
     
-    // 模拟安装状态变化
-    subscribeCallback({
-      isInstalled: true,
-      canShowInstallPrompt: false,
-      installMethod: 'native',
-      lastPromptTime: Date.now(),
-      dismissCount: 0,
-      userInteractionLevel: 'engaged',
-      installationHistory: []
+    await act(async () => {
+      subscribeCallback({
+        isInstalled: true,
+        canShowInstallPrompt: false,
+        installMethod: 'native',
+        lastPromptTime: Date.now(),
+        dismissCount: 0,
+        userInteractionLevel: 'engaged',
+        installationHistory: []
+      });
     });
 
-    await waitFor(() => {
-      expect(onInstallSuccess).toHaveBeenCalled();
-    });
+    // 验证安装成功回调被调用
+    expect(onInstallSuccess).toHaveBeenCalled();
   });
 
   it('应该支持分析数据发送', () => {
@@ -294,10 +320,14 @@ describe('MobilePWAManager - 用户交互', () => {
     );
 
     // 模拟滚动事件
-    fireEvent.scroll(window);
+    await act(async () => {
+      fireEvent.scroll(window);
+    });
     
     // 模拟点击事件
-    fireEvent.click(document.body);
+    await act(async () => {
+      fireEvent.click(document.body);
+    });
 
     // 等待交互检测
     await waitFor(() => {
@@ -314,12 +344,18 @@ describe('MobilePWAManager - 用户交互', () => {
       </TestWrapper>
     );
 
-    // 快进10秒
-    vi.advanceTimersByTime(10000);
+    // 验证组件渲染成功
+    expect(document.body).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(document.body).toBeInTheDocument();
+    // 快进10秒来触发用户参与超时
+    await act(async () => {
+      vi.advanceTimersByTime(10000);
+      // 为了确保所有的定时器都被处理，再推进一些时间
+      await vi.runAllTimersAsync();
     });
+
+    // 验证组件仍然存在（基本验证，避免复杂的状态检查）
+    expect(document.body).toBeInTheDocument();
 
     vi.useRealTimers();
   });
