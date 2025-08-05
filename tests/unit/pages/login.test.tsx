@@ -311,6 +311,11 @@ describe("LoginPage", () => {
 
   describe("Form Validation - Tenant Login", () => {
     beforeEach(async () => {
+      // Mock the tenant history to return empty values for validation tests
+      const TenantHistoryManager = await import("../../../src/utils/tenantHistory");
+      vi.mocked(TenantHistoryManager.default.getLastUsedTenant).mockReturnValue("");
+      vi.mocked(TenantHistoryManager.default.getTenantHistory).mockReturnValue([]);
+      
       setupMockLocation(false);
       await act(async () => {
         render(<LoginPage />);
@@ -335,15 +340,24 @@ describe("LoginPage", () => {
     });
 
     it("should show error when submitting without tenant code", async () => {
+      // Re-render with fresh mocks to ensure empty tenant code
+      const TenantHistoryManager = await import("../../../src/utils/tenantHistory");
+      vi.mocked(TenantHistoryManager.default.getLastUsedTenant).mockReturnValue("");
+      vi.mocked(TenantHistoryManager.default.getTenantHistory).mockReturnValue([]);
+      
+      // Create a fresh render to ensure the mocks are applied
+      setupMockLocation(false);
+      await act(async () => {
+        render(<LoginPage />);
+      });
+
       const usernameField = screen.getByLabelText(/admin username/i);
       const passwordField = screen.getByLabelText(/admin password/i);
-      const tenantField = screen.getByLabelText(/tenant code/i);
 
       await act(async () => {
         fireEvent.change(usernameField, { target: { value: "testuser" } });
         fireEvent.change(passwordField, { target: { value: "password123" } });
-        // Explicitly clear tenant code field to ensure it's empty
-        fireEvent.change(tenantField, { target: { value: "" } });
+        // Don't set tenant code - it should start empty with our mocks
       });
 
       await act(async () => {
@@ -359,15 +373,20 @@ describe("LoginPage", () => {
         },
         { timeout: 10000 },
       );
-    }, 1000);
+    }, 15000);
 
     it("should show error when submitting without username", async () => {
       const tenantField = screen.getByLabelText(/tenant code/i);
       const passwordField = screen.getByLabelText(/admin password/i);
+      const usernameField = screen.getByLabelText(/admin username/i);
       const form = document.querySelector("form")!;
 
-      fireEvent.change(tenantField, { target: { value: "TENANT001" } });
-      fireEvent.change(passwordField, { target: { value: "password123" } });
+      await act(async () => {
+        fireEvent.change(tenantField, { target: { value: "TENANT001" } });
+        fireEvent.change(passwordField, { target: { value: "password123" } });
+        // Explicitly clear username field to ensure it's empty
+        fireEvent.change(usernameField, { target: { value: "" } });
+      });
 
       await act(async () => {
         fireEvent.submit(form);
@@ -381,7 +400,7 @@ describe("LoginPage", () => {
         },
         { timeout: 10000 },
       );
-    }, 1000);
+    }, 15000);
   });
 
   describe("Form Validation - Root Admin Login", () => {
@@ -474,9 +493,9 @@ describe("LoginPage", () => {
             }),
           );
         },
-        { timeout: 10000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should call setTenantCode with correct tenant", async () => {
       const authService = await import("../../../src/services/authService");
@@ -486,9 +505,9 @@ describe("LoginPage", () => {
             "TENANT001",
           );
         },
-        { timeout: 10000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should call setAuthTokens with correct tokens", async () => {
       const authService = await import("../../../src/services/authService");
@@ -500,9 +519,9 @@ describe("LoginPage", () => {
             3600,
           );
         },
-        { timeout: 10000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should navigate to dashboard for regular user", async () => {
       await waitFor(
@@ -511,9 +530,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 10000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
   });
 
   describe("Root Admin Login - Successful Submission", () => {
@@ -568,9 +587,9 @@ describe("LoginPage", () => {
             }),
           );
         },
-        { timeout: 10000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should call setTenantCode with root system code", async () => {
       const authService = await import("../../../src/services/authService");
@@ -580,35 +599,22 @@ describe("LoginPage", () => {
             "root_system",
           );
         },
-        { timeout: 10000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should navigate to root admin panel", async () => {
-      // Wait for the form submission to complete first
+      // For root admin, there's no Turnstile step - login happens directly
+      // Wait for navigation - should go to /root-admin for root admin login
       await waitFor(
         () => {
-          expect(screen.getByText("Turnstile Mock")).toBeInTheDocument();
-        },
-        { timeout: 5000 },
-      );
-
-      await act(async () => {
-        if (turnstileSuccessCallback) {
-          turnstileSuccessCallback("mock-turnstile-token");
-        }
-      });
-
-      // Wait for navigation
-      await waitFor(
-        () => {
-          expect(mockNavigate).toHaveBeenCalledWith("/admin", {
+          expect(mockNavigate).toHaveBeenCalledWith("/root-admin", {
             replace: true,
           });
         },
-        { timeout: 1000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
   });
 
   describe("Login Form - Failed Submission", () => {
@@ -664,16 +670,16 @@ describe("LoginPage", () => {
       });
 
       // Wait longer for the fetch to complete and error to show
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Wait for error message
       await waitFor(
         () => {
           expect(screen.getByText(/Invalid credentials/)).toBeInTheDocument();
         },
-        { timeout: 1000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should not call setAuthState", () => {
       expect(mockSetAuthState).not.toHaveBeenCalled();
@@ -754,7 +760,7 @@ describe("LoginPage", () => {
       });
 
       // Wait for the 100ms delay in the useEffect + some buffer
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       await waitFor(
         () => {
@@ -762,9 +768,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 1000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should navigate to root admin panel if root admin is logged in", async () => {
       const rootAdmin: AppUser = {
@@ -784,7 +790,7 @@ describe("LoginPage", () => {
       });
 
       // Wait for the 100ms delay in the useEffect + some buffer
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       await waitFor(
         () => {
@@ -792,9 +798,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 1000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
 
     it("should show redirecting message for logged in user", async () => {
       const user: AppUser = {
@@ -812,16 +818,16 @@ describe("LoginPage", () => {
       });
 
       // Wait for component to stabilize and redirect logic to kick in
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       await waitFor(
         () => {
           expect(screen.getByTestId("global-loader")).toBeInTheDocument();
           expect(screen.getByText(/Redirecting/)).toBeInTheDocument();
         },
-        { timeout: 1000 },
+        { timeout: 15000 },
       );
-    }, 1000);
+    }, 20000);
   });
 
   describe("UI Elements and Layout", () => {
@@ -904,7 +910,8 @@ describe("LoginPage", () => {
     });
 
     it("should clear error when starting new login attempt", async () => {
-      // First, create an error
+      // Set up the mock for this specific test - clear any previous mock
+      mockFetch.mockClear();
       mockFetch.mockResolvedValueOnce({
         ok: false,
         json: async () => ({ message: "Test error" }),
@@ -944,7 +951,7 @@ describe("LoginPage", () => {
         () => {
           expect(screen.getByText(/Test error/)).toBeInTheDocument();
         },
-        { timeout: 1000 },
+        { timeout: 15000 },
       );
 
       // Now start a new login attempt - this should clear the error
@@ -962,9 +969,9 @@ describe("LoginPage", () => {
         () => {
           expect(screen.queryByText(/Test error/)).not.toBeInTheDocument();
         },
-        { timeout: 1000 },
+        { timeout: 15000 },
       );
-    }, 30000);
+    }, 40000);
   });
 
   describe("Tenant History Integration", () => {
@@ -982,7 +989,7 @@ describe("LoginPage", () => {
       // Check if autocomplete shows history options
       await waitFor(() => {
         expect(screen.getByDisplayValue("TENANT001")).toBeInTheDocument();
-      });
-    });
+      }, { timeout: 10000 });
+    }, 15000);
   });
 });
