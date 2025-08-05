@@ -24,8 +24,8 @@
 -  [x] [claimId].test.tsx
 -  [x] attachment.test.tsx
 -  [x] create-claim-attachments.test.tsx
-- create.test.tsx
-- creditors.test.tsx
+-  [x] create.test.tsx
+-  [x] creditors.test.tsx
 -  [x] index.test.tsx
 - login.test.tsx
 - messages.test.tsx
