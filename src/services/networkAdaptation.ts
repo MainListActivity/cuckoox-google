@@ -297,7 +297,8 @@ class NetworkAdaptation {
     let availableOutgoingBitrate = 0;
     let availableIncomingBitrate = 0;
 
-    stats.forEach((report) => {
+    if (stats && typeof stats.forEach === 'function') {
+      stats.forEach((report) => {
       switch (report.type) {
         case 'inbound-rtp':
           if (report.mediaType === 'video' || report.mediaType === 'audio') {
@@ -327,7 +328,8 @@ class NetworkAdaptation {
           }
           break;
       }
-    });
+      });
+    }
 
     return {
       bytesReceived,
@@ -458,7 +460,7 @@ class NetworkAdaptation {
   /**
    * 判断是否应该触发自适应调整
    */
-  private shouldTriggerAdaptation(qualityLevel: NetworkQualityLevel, _metrics: NetworkQualityMetrics): boolean {
+  private shouldTriggerAdaptation(qualityLevel: NetworkQualityLevel, metrics: NetworkQualityMetrics): boolean {
     if (!this.currentQualityState) return true; // 首次设置
 
     // 如果质量级别有显著变化

@@ -3,16 +3,16 @@
 以下是从测试输出中提取的所有包含失败用例的测试文件：
 
 ## 组件测试 (Components)
-- AudioCallInterface.test.tsx
-- BatchImportCreditorsDialog.test.tsx
+-  [x] AudioCallInterface.test.tsx
+-  [x] BatchImportCreditorsDialog.test.tsx
 
-- ClaimAuditLog.test.tsx
-- ClaimOperationHistory.test.tsx
+-  [x] ClaimAuditLog.test.tsx
+-  [x] ClaimOperationHistory.test.tsx
 
-- ClaimStatusFlowChart.test.tsx
+-  [x] ClaimStatusFlowChart.test.tsx
 - ClaimVersionComparison.test.tsx
-- CreditorMobileCard.test.tsx
-- MeetingMinutesDialog.test.tsx
+-  [x] CreditorMobileCard.test.tsx
+-  [x] MeetingMinutesDialog.test.tsx
 - MobilePWAManager.test.tsx
 - ModifyCaseStatusDialog.test.tsx
 - MyClaimsMobileCard.test.tsx

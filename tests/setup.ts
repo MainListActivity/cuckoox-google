@@ -43,6 +43,15 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
+// Mock MUI's useMediaQuery to work with matchMedia
+vi.mock('@mui/material/useMediaQuery', () => ({
+  __esModule: true,
+  default: vi.fn((query) => {
+    // Return false for all media queries in tests
+    return false;
+  }),
+}));
+
 // Mock ResizeObserver
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),

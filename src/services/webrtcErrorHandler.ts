@@ -192,9 +192,14 @@ class WebRTCErrorHandler {
    * 处理WebRTC错误
    */
   handleError(
-    error: Error | DOMException | RTCError | string,
+    error: Error | DOMException | RTCError | string | null | undefined,
     context?: WebRTCErrorDetails['context']
   ): WebRTCErrorDetails {
+    // 处理null/undefined错误
+    if (error === null || error === undefined) {
+      error = String(error);
+    }
+    
     const errorDetails = this.classifyError(error, context);
     
     // 记录错误
@@ -584,7 +589,7 @@ class WebRTCErrorHandler {
     const details: string[] = [];
 
     // 错误基本信息
-    if (typeof error === 'object') {
+    if (typeof error === 'object' && error !== null) {
       details.push(`Error Type: ${error.constructor.name}`);
       details.push(`Error Name: ${(error as any).name || 'Unknown'}`);
       details.push(`Error Message: ${error.message || error.toString()}`);
@@ -600,9 +605,22 @@ class WebRTCErrorHandler {
       details.push(`Error Message: ${error}`);
     }
 
-    // 上下文信息
+    // 上下文信息 - 处理循环引用
     if (context) {
-      details.push(`Context: ${JSON.stringify(context, null, 2)}`);
+      try {
+        const contextString = JSON.stringify(context, (key, value) => {
+          // 处理循环引用
+          if (typeof value === 'object' && value !== null) {
+            if (this.hasCircularReference(value)) {
+              return '[Circular Reference]';
+            }
+          }
+          return value;
+        }, 2);
+        details.push(`Context: ${contextString}`);
+      } catch (error) {
+        details.push(`Context: [Unable to serialize - ${(error as Error).message}]`);
+      }
     }
 
     // 浏览器信息
@@ -616,6 +634,29 @@ class WebRTCErrorHandler {
     details.push(`getDisplayMedia Supported: ${!!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)}`);
 
     return details.join('\n');
+  }
+
+  /**
+   * 检查对象是否有循环引用
+   */
+  private hasCircularReference(obj: any, seen = new WeakSet()): boolean {
+    if (obj === null || typeof obj !== 'object') {
+      return false;
+    }
+    
+    if (seen.has(obj)) {
+      return true;
+    }
+    
+    seen.add(obj);
+    
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key) && this.hasCircularReference(obj[key], seen)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /**
@@ -735,27 +776,33 @@ class WebRTCErrorHandler {
     const errorId = error.context?.errorId || 'unknown';
     
     // 设置重试定时器
-    const timer = setTimeout(() => {
-      this.retryTimers.delete(errorId);
+    try {
+      const timer = setTimeout(() => {
+        this.retryTimers.delete(errorId);
+        
+        // 更新重试次数
+        const updatedContext = {
+          ...error.context,
+          retryAttempt: currentAttempt
+        };
+        
+        // 触发重试事件
+        this.listeners.onRetryAttempt?.(
+          { ...error, context: updatedContext },
+          currentAttempt
+        );
+        
+        // 这里应该触发实际的重试逻辑
+        // 由于这是一个通用的错误处理器，具体的重试逻辑应该由调用方实现
+        
+      }, retryDelay);
       
-      // 更新重试次数
-      const updatedContext = {
-        ...error.context,
-        retryAttempt: currentAttempt
-      };
-      
-      // 触发重试事件
-      this.listeners.onRetryAttempt?.(
-        { ...error, context: updatedContext },
-        currentAttempt
-      );
-      
-      // 这里应该触发实际的重试逻辑
-      // 由于这是一个通用的错误处理器，具体的重试逻辑应该由调用方实现
-      
-    }, retryDelay);
-    
-    this.retryTimers.set(errorId, timer);
+      this.retryTimers.set(errorId, timer);
+    } catch (timerError) {
+      // 如果设置定时器失败，直接触发恢复失败
+      console.error('Failed to setup retry timer:', timerError);
+      this.listeners.onRecoveryFailed?.(error);
+    }
   }
 
   /**
@@ -820,6 +867,17 @@ class WebRTCErrorHandler {
    */
   clearErrorHistory(): void {
     this.errorHistory.length = 0;
+    this.resolutionStartTimes.clear();
+    
+    // 重新初始化统计信息
+    this.errorStatistics = {
+      totalErrors: 0,
+      errorsByType: {} as Record<WebRTCErrorType, number>,
+      errorsBySeverity: {} as Record<ErrorSeverity, number>,
+      recentErrors: [],
+      averageResolutionTime: 0
+    };
+    
     this.initializeStatistics();
   }
 
@@ -876,6 +934,17 @@ class WebRTCErrorHandler {
     this.errorHistory.length = 0;
     this.resolutionStartTimes.clear();
     this.listeners = {};
+    
+    // 重置统计信息
+    this.errorStatistics = {
+      totalErrors: 0,
+      errorsByType: {} as Record<WebRTCErrorType, number>,
+      errorsBySeverity: {} as Record<ErrorSeverity, number>,
+      recentErrors: [],
+      averageResolutionTime: 0
+    };
+    
+    this.initializeStatistics();
     
     console.log('WebRTCErrorHandler: 销毁完成');
   }
