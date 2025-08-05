@@ -697,7 +697,15 @@ class WebRTCErrorHandler {
       [WebRTCErrorType.CONFERENCE_ENDED]: 0
     };
 
-    return retryConfig[errorType] || this.config.maxRetryAttempts;
+    const errorTypeRetries = retryConfig[errorType] !== undefined ? retryConfig[errorType] : this.config.maxRetryAttempts;
+    
+    // 只有当全局配置被明确设置为0时（表示完全禁用重试），才强制覆盖错误类型特定的配置
+    if (this.config.maxRetryAttempts === 0) {
+      return 0;
+    }
+    
+    // 否则使用错误类型特定的重试次数
+    return errorTypeRetries;
   }
 
   /**
