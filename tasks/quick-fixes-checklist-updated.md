@@ -39,10 +39,10 @@
 
 ## Hook测试 (Hooks)
 -  [x] useCaseParticipants.test.ts
-- useLiveDashboardData.test.ts
-- useLiveMeetingData.test.ts
-- useMessageCenterData.test.ts
-- usePermission.test.ts
+-  [x] useLiveDashboardData.test.ts
+-  [x] useLiveMeetingData.test.ts
+-  [x] useMessageCenterData.test.ts
+-  [x] usePermission.test.ts
 
 ## 服务测试 (Services)
 - callManager.test.ts
