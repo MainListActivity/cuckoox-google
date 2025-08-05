@@ -13,12 +13,12 @@
 - ClaimVersionComparison.test.tsx
 -  [x] CreditorMobileCard.test.tsx
 -  [x] MeetingMinutesDialog.test.tsx
-- MobilePWAManager.test.tsx
-- ModifyCaseStatusDialog.test.tsx
-- MyClaimsMobileCard.test.tsx
-- PrintWaybillsDialog.test.tsx
-- RichTextEditor.test.tsx
-- Turnstile.test.tsx
+-  [x] MobilePWAManager.test.tsx
+-  [x] ModifyCaseStatusDialog.test.tsx
+-  [x] MyClaimsMobileCard.test.tsx
+-  [x] PrintWaybillsDialog.test.tsx
+-  [x] RichTextEditor.test.tsx
+-  [x] Turnstile.test.tsx
 
 ## 页面测试 (Pages)
 - [claimId].test.tsx

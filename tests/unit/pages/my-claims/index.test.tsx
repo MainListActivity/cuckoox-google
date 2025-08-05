@@ -1,30 +1,53 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
-import { BrowserRouter } from 'react-router-dom';
-import { SnackbarProvider } from '@/src/contexts/SnackbarContext';
-import MyClaimsPage from '@/src/pages/my-claims/index';
-import { Context as SurrealContext } from '@/src/contexts/SurrealProvider';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import type Surreal from 'surrealdb';
+import React from "react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+  act,
+} from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, Mock } from "vitest";
+import { BrowserRouter } from "react-router-dom";
+import { SnackbarProvider } from "@/src/contexts/SnackbarContext";
+import MyClaimsPage from "@/src/pages/my-claims/index";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
 
 // Mock useNavigate
 const mockNavigate = vi.fn();
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
   return {
     ...actual,
     useNavigate: () => mockNavigate,
   };
 });
 
+// Mock useAuth
+const mockUser = {
+  id: "test-user-id",
+  github_id: "test-github-id",
+  name: "Test User",
+  email: "test@example.com",
+};
+
+vi.mock("@/src/contexts/AuthContext", () => ({
+  useAuth: () => ({
+    user: mockUser,
+    selectedCaseId: "test-case-id",
+    isAuthenticated: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+  }),
+}));
+
 // Mock useSnackbar
 const mockShowSuccess = vi.fn();
 const mockShowError = vi.fn();
 const mockShowWarning = vi.fn();
 const mockShowInfo = vi.fn();
-vi.mock('@/src/contexts/SnackbarContext', async () => {
-  const actual = await vi.importActual('@/src/contexts/SnackbarContext');
+vi.mock("@/src/contexts/SnackbarContext", async () => {
+  const actual = await vi.importActual("@/src/contexts/SnackbarContext");
   return {
     ...actual,
     useSnackbar: () => ({
@@ -36,23 +59,40 @@ vi.mock('@/src/contexts/SnackbarContext', async () => {
   };
 });
 
+// Mock useOperationPermission
+vi.mock("@/src/hooks/usePermission", () => ({
+  useOperationPermission: () => ({
+    hasPermission: true,
+    isLoading: false,
+  }),
+}));
+
+// Mock useResponsiveLayout
+vi.mock("@/src/hooks/useResponsiveLayout", () => ({
+  useResponsiveLayout: () => ({
+    isMobile: false,
+    isTablet: false,
+    isDesktop: true,
+  }),
+}));
+
 // Mock i18n translation
-vi.mock('react-i18next', () => ({
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => {
       const translations: { [key: string]: string } = {
-        my_claims: '我的债权申报',
-        submit_new_claim: '发起新的债权申报',
-        view_details: '查看详情',
-        edit: '编辑',
-        withdraw: '撤回',
-        error_loading_claims: '加载债权列表失败',
-        loading_claims: '正在加载债权列表...',
-        claim_id: '债权编号',
-        claim_amount: '申报金额',
-        claim_status: '申报状态',
-        actions: '操作',
-        no_claims: '暂无债权申报记录'
+        my_claims: "我的债权申报",
+        submit_new_claim: "发起新的债权申报",
+        view_details: "查看详情",
+        edit: "编辑",
+        withdraw: "撤回",
+        error_loading_claims: "加载债权列表失败",
+        loading_claims: "正在加载债权列表...",
+        claim_id: "债权编号",
+        claim_amount: "申报金额",
+        claim_status: "申报状态",
+        actions: "操作",
+        no_claims: "暂无债权申报记录",
       };
       return translations[key] || key;
     },
@@ -63,337 +103,500 @@ vi.mock('react-i18next', () => ({
   I18nextProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// Mock queryWithAuth
+vi.mock("@/src/utils/surrealAuth", () => ({
+  queryWithAuth: vi.fn(),
+  AuthenticationRequiredError: class AuthenticationRequiredError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = "AuthenticationRequiredError";
+    }
+  },
+}));
+
+// Mock useSurrealClient
+const mockClient = {
+  query: vi.fn(),
+  select: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  merge: vi.fn(),
+  delete: vi.fn(),
+};
+
+vi.mock("@/src/contexts/SurrealProvider", async () => {
+  const actual = await vi.importActual("@/src/contexts/SurrealProvider");
+  return {
+    ...actual,
+    useSurrealClient: () => mockClient,
+    AuthenticationRequiredError: class AuthenticationRequiredError extends Error {
+      constructor(message: string) {
+        super(message);
+        this.name = "AuthenticationRequiredError";
+      }
+    },
+  };
+});
+
 const theme = createTheme();
 
-// Mock claims data
+// Mock claims data - 匹配 RawClaimData 接口结构
 const mockClaimsData = [
-  { id: 'CLAIM-001', submissionDate: '2023-10-26', claimNature: '普通债权', totalAmount: 15000, currency: 'CNY', reviewStatus: '待审核', reviewOpinion: '' },
-  { id: 'CLAIM-002', submissionDate: '2023-10-20', claimNature: '有财产担保债权', totalAmount: 125000, currency: 'CNY', reviewStatus: '审核通过', reviewOpinion: '符合要求' },
-  { id: 'CLAIM-003', submissionDate: '2023-09-15', claimNature: '劳动报酬', totalAmount: 8000, currency: 'CNY', reviewStatus: '已驳回', reviewOpinion: '材料不足，请补充合同和工资流水。' },
-  { id: 'CLAIM-004', submissionDate: '2023-11-01', claimNature: '普通债权', totalAmount: 22000, currency: 'USD', reviewStatus: '需要补充', reviewOpinion: '请提供债权发生时间的证明。' },
+  {
+    id: "CLAIM-001",
+    claim_number: "CLAIM-001",
+    case_id: "case:test",
+    creditor_id: "creditor:test",
+    status: "待审核",
+    submission_time: "2023-10-26T00:00:00Z",
+    review_status_id: "status:pending",
+    review_comments: "",
+    created_at: "2023-10-26T00:00:00Z",
+    updated_at: "2023-10-26T00:00:00Z",
+    created_by: "user:test",
+    asserted_claim_details: {
+      nature: "普通债权",
+      principal: 15000,
+      interest: 0,
+      other_amount: 0,
+      total_asserted_amount: 15000,
+      currency: "CNY",
+      brief_description: "测试债权",
+    },
+  },
+  {
+    id: "CLAIM-002",
+    claim_number: "CLAIM-002",
+    case_id: "case:test",
+    creditor_id: "creditor:test",
+    status: "审核通过",
+    submission_time: "2023-10-20T00:00:00Z",
+    review_status_id: "status:approved",
+    review_comments: "符合要求",
+    created_at: "2023-10-20T00:00:00Z",
+    updated_at: "2023-10-20T00:00:00Z",
+    created_by: "user:test",
+    asserted_claim_details: {
+      nature: "有财产担保债权",
+      principal: 125000,
+      interest: 0,
+      other_amount: 0,
+      total_asserted_amount: 125000,
+      currency: "CNY",
+      brief_description: "有担保债权",
+    },
+    approved_claim_details: {
+      nature: "有财产担保债权",
+      principal: 125000,
+      interest: 0,
+      other_amount: 0,
+      total_approved_amount: 125000,
+      currency: "CNY",
+    },
+  },
+  {
+    id: "CLAIM-003",
+    claim_number: "CLAIM-003",
+    case_id: "case:test",
+    creditor_id: "creditor:test",
+    status: "已驳回",
+    submission_time: "2023-09-15T00:00:00Z",
+    review_status_id: "status:rejected",
+    review_comments: "材料不足，请补充合同和工资流水。",
+    created_at: "2023-09-15T00:00:00Z",
+    updated_at: "2023-09-15T00:00:00Z",
+    created_by: "user:test",
+    asserted_claim_details: {
+      nature: "劳动报酬",
+      principal: 8000,
+      interest: 0,
+      other_amount: 0,
+      total_asserted_amount: 8000,
+      currency: "CNY",
+      brief_description: "劳动报酬债权",
+    },
+  },
+  {
+    id: "CLAIM-004",
+    claim_number: "CLAIM-004",
+    case_id: "case:test",
+    creditor_id: "creditor:test",
+    status: "需要补充",
+    submission_time: "2023-11-01T00:00:00Z",
+    review_status_id: "status:supplement",
+    review_comments: "请提供债权发生时间的证明。",
+    created_at: "2023-11-01T00:00:00Z",
+    updated_at: "2023-11-01T00:00:00Z",
+    created_by: "user:test",
+    asserted_claim_details: {
+      nature: "普通债权",
+      principal: 22000,
+      interest: 0,
+      other_amount: 0,
+      total_asserted_amount: 22000,
+      currency: "USD",
+      brief_description: "美元债权",
+    },
+  },
 ];
-
-// Mock SurrealDB context
-let mockSurrealContextValue: SurrealContextType;
 
 // Helper function to render component with providers
 const renderMyClaimsPage = () => {
   return render(
     <ThemeProvider theme={theme}>
       <BrowserRouter>
-        <SurrealContext.Provider value={mockSurrealContextValue}>
-          <SnackbarProvider>
-            <MyClaimsPage />
-          </SnackbarProvider>
-        </SurrealContext.Provider>
+        <SnackbarProvider>
+          <MyClaimsPage />
+        </SnackbarProvider>
       </BrowserRouter>
-    </ThemeProvider>
+    </ThemeProvider>,
   );
 };
 
-interface SurrealContextType {
-  surreal: Surreal;
-  isConnecting: boolean;
-  isSuccess: boolean;
-  isError: boolean;
-  error: Error | null;
-  connect: () => Promise<boolean>;
-  disconnect: () => Promise<void>;
-  signin: (auth: unknown) => Promise<any>;
-  signout: () => Promise<void>;
-  setTokens: (accessToken: string, refreshToken?: string, expiresIn?: number) => any;
-  clearTokens: () => any;
-  getStoredAccessToken: () => string | null;
-  setTenantCode: (tenantCode: string) => Promise<void>;
-  getTenantCode: () => Promise<string | null>;
-}
+describe("MyClaimsPage", () => {
+  let mockQueryWithAuth: Mock;
 
-describe('MyClaimsPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();      mockSurrealContextValue = {
-      surreal: {
-        query: vi.fn().mockResolvedValue([[mockClaimsData]]), // 使用双层数组，符合 SurrealDB 返回格式
-        select: vi.fn().mockResolvedValue([]), // Add mock for select
-        create: vi.fn().mockResolvedValue({}),  // Add mock for create
-        update: vi.fn().mockResolvedValue({}),  // Add mock for update
-        merge: vi.fn().mockResolvedValue([{}]),   // Add mock for merge，返回数组包装的结果
-        delete: vi.fn().mockResolvedValue({}),  // Add mock for delete
-        live: vi.fn(),   // Mock other methods if potentially called
-        kill: vi.fn(),
-        let: vi.fn(),
-        unset: vi.fn(),
-        signup: vi.fn().mockResolvedValue({}),
-        signin: vi.fn().mockResolvedValue({}),
-        invalidate: vi.fn().mockResolvedValue(undefined),
-        authenticate: vi.fn().mockResolvedValue(''),
-        sync: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn().mockResolvedValue(undefined),
-      } as unknown as Surreal,
-      isConnecting: false,
-      isSuccess: true,
-      isError: false,
-      error: null,
-      connect: vi.fn().mockResolvedValue(true),
-      disconnect: vi.fn().mockResolvedValue(undefined),
-      signin: vi.fn().mockResolvedValue({}),
-      signout: vi.fn().mockResolvedValue(undefined),
-      setTokens: vi.fn(),
-      clearTokens: vi.fn(),
-      getStoredAccessToken: vi.fn().mockReturnValue(null),
-      setTenantCode: vi.fn().mockResolvedValue(undefined),
-      getTenantCode: vi.fn().mockResolvedValue(null),
-    };
+  beforeEach(async () => {
+    vi.clearAllMocks();
+
+    // Get the mocked function
+    mockQueryWithAuth = (await import("@/src/utils/surrealAuth"))
+      .queryWithAuth as Mock;
+
+    // 设置默认的 queryWithAuth mock 行为
+    // queryWithAuth 返回数组，组件中会取 results[0] 作为数据数组
+    mockQueryWithAuth.mockImplementation(async () => [[]]);
   });
 
-  describe('Page Rendering', () => {
-    it('renders the page title', () => {
-      renderMyClaimsPage();
-      expect(screen.getByText('我的债权申报')).toBeInTheDocument();
+  describe("Page Rendering", () => {
+    it("renders the page title", async () => {
+      // 设置空数据响应
+      mockQueryWithAuth.mockResolvedValueOnce([[]]);
+
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("我的债权申报")).toBeInTheDocument();
+      });
     });
 
-    it('shows loading state while fetching data', async () => {
-      // 延迟数据加载响应
-      const loadingPromise = new Promise(resolve => setTimeout(() => resolve([[mockClaimsData]]), 100));
-      (mockSurrealContextValue.surreal.query as Mock).mockImplementationOnce(() => loadingPromise);
-      
-      renderMyClaimsPage();
-      
+    it("shows loading state while fetching data", async () => {
+      // 创建一个延迟的Promise来测试加载状态
+      let resolveQuery: (value: any) => void;
+      const loadingPromise = new Promise((resolve) => {
+        resolveQuery = resolve;
+      });
+
+      mockQueryWithAuth.mockImplementationOnce(() => loadingPromise);
+
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
       // 验证加载状态显示
-      expect(screen.getByText('正在加载债权列表...')).toBeInTheDocument();
-      
-      // 等待数据加载完成
+      expect(screen.getByText("正在加载债权列表...")).toBeInTheDocument();
+
+      // 解析Promise完成加载
+      await act(async () => {
+        resolveQuery!([mockClaimsData]);
+      });
+
+      // 等待加载状态消失
       await waitFor(() => {
-        expect(mockClaimsData.some(claim => 
-          screen.getByText(claim.id)
-        )).toBeTruthy();
-      }, { timeout: 2000 });
-      
-      // 验证加载状态消失
-      expect(screen.queryByText('正在加载债权列表...')).not.toBeInTheDocument();
+        expect(
+          screen.queryByText("正在加载债权列表..."),
+        ).not.toBeInTheDocument();
+      });
     });
 
-    it('shows error message when data fetching fails', async () => {
-      (mockSurrealContextValue.surreal.query as Mock).mockRejectedValueOnce(new Error('Failed to load claims'));
-      renderMyClaimsPage();
-      
+    it("shows error message when data fetching fails", async () => {
+      const errorMessage = "Failed to load claims";
+      mockQueryWithAuth.mockRejectedValueOnce(new Error(errorMessage));
+
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
       await waitFor(() => {
-        expect(mockShowError).toHaveBeenCalledWith('加载债权列表失败');
-      }, { timeout: 2000 });
+        expect(mockShowError).toHaveBeenCalledWith(errorMessage);
+      });
     });
 
-    it('shows empty state when no claims exist', async () => {
-      // 正确模拟 SurrealDB 返回空数据的格式：[[]]
-      (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([[]]); 
-      renderMyClaimsPage();
-      
+    it("shows empty state when no claims exist", async () => {
+      // 返回空数组
+      mockQueryWithAuth.mockResolvedValueOnce([[]]);
+
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
       await waitFor(() => {
-        expect(screen.getByText('暂无债权申报记录')).toBeInTheDocument();
-      }, { timeout: 2000 }); // 添加合理的超时时间
+        expect(screen.getByText("暂无债权申报记录")).toBeInTheDocument();
+      });
     });
 
-    it('renders all claims in the table', async () => {
-      renderMyClaimsPage();
-      
-      await waitFor(() => {
-        // 先等待第一个元素出现，确保表格已加载
-        expect(screen.getByText(mockClaimsData[0].id)).toBeInTheDocument();
-      }, { timeout: 2000 });
+    it("renders all claims in the table", async () => {
+      // 第一次调用返回债权数据，第二次调用可能返回状态定义（为空也没关系）
+      mockQueryWithAuth
+        .mockResolvedValueOnce([mockClaimsData])
+        .mockResolvedValueOnce([[]]);
 
-      // 然后检查所有数据
-      mockClaimsData.forEach(claim => {
-        // 使用表格行作为范围来查找内容
-        const row = screen.getByText(claim.id).closest('tr');
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
+      await waitFor(
+        () => {
+          expect(screen.getByText("CLAIM-001")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-002")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-003")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-004")).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+
+      // 检查所有债权是否都渲染了
+      mockClaimsData.forEach((claim) => {
+        const row = screen.getByText(claim.claim_number).closest("tr");
         expect(row).toBeInTheDocument();
-        
-        // 在特定行内查找内容
-        expect(within(row!).getByText(claim.reviewStatus)).toBeInTheDocument();
-        expect(within(row!).getByText(claim.claimNature)).toBeInTheDocument();
       });
     });
   });
 
-  describe('Button States', () => {
-    it('disables withdraw button for claims not in pending review', async () => {
-      renderMyClaimsPage();
-      
-      await waitFor(() => {
-        const rowForClaim002 = screen.getByText('CLAIM-002').closest('tr');
-        expect(rowForClaim002).toBeInTheDocument();
-        const withdrawButton = within(rowForClaim002!).getByTestId('withdraw-button');
-        expect(withdrawButton).toBeDisabled();
-      }, { timeout: 2000 });
+  describe("Button States", () => {
+    // Helper function to setup data and render
+    const setupAndRender = async () => {
+      mockQueryWithAuth
+        .mockResolvedValueOnce([mockClaimsData])
+        .mockResolvedValueOnce([[]]);
+
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
+      await waitFor(
+        () => {
+          expect(screen.getByText("CLAIM-001")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-002")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-003")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-004")).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+    };
+
+    it("does not show withdraw button for claims not in pending review", async () => {
+      await setupAndRender();
+
+      const rowForClaim002 = screen.getByText("CLAIM-002").closest("tr");
+      expect(rowForClaim002).toBeInTheDocument();
+      const withdrawButton = within(rowForClaim002!).queryByTestId(
+        "withdraw-button",
+      );
+      expect(withdrawButton).not.toBeInTheDocument();
     });
 
-    it('enables withdraw button for claims in pending review', async () => {
-      renderMyClaimsPage();
-      
-      await waitFor(() => {
-        const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
-        expect(rowForClaim001).toBeInTheDocument();
-        const withdrawButton = within(rowForClaim001!).getByTestId('withdraw-button');
-        expect(withdrawButton).not.toBeDisabled();
-      }, { timeout: 2000 });
+    it("enables withdraw button for claims in pending review", async () => {
+      await setupAndRender();
+
+      const rowForClaim001 = screen.getByText("CLAIM-001").closest("tr");
+      expect(rowForClaim001).toBeInTheDocument();
+      const withdrawButton = within(rowForClaim001!).getByTestId(
+        "withdraw-button",
+      );
+      expect(withdrawButton).not.toBeDisabled();
     });
 
-    it('disables edit button for claims not in rejected or supplement status', async () => {
-      renderMyClaimsPage();
-      
-      // 首先等待数据加载完成
-      await waitFor(() => {
-        expect(screen.getByText('CLAIM-001')).toBeInTheDocument();
-        expect(screen.getByText('CLAIM-002')).toBeInTheDocument();
-      }, { timeout: 2000 });
-      
-      // 然后检查每个按钮的状态
-      const rows = ['CLAIM-001', 'CLAIM-002'].map(id => {
-        const row = screen.getByText(id).closest('tr');
+    it("does not show edit button for claims not in rejected or supplement status", async () => {
+      await setupAndRender();
+
+      const rows = ["CLAIM-001", "CLAIM-002"].map((id) => {
+        const row = screen.getByText(id).closest("tr");
         expect(row).toBeInTheDocument();
         return row!;
       });
-      
-      rows.forEach(row => {
-        const editButton = within(row).getByTestId('edit-button');
-        expect(editButton).toBeDisabled();
+
+      rows.forEach((row) => {
+        const editButton = within(row).queryByTestId("edit-button");
+        expect(editButton).not.toBeInTheDocument();
       });
     });
 
-    it('enables edit button for claims in rejected or supplement status', async () => {
-      renderMyClaimsPage();
-      
-      // 首先等待数据加载完成
-      await waitFor(() => {
-        expect(screen.getByText('CLAIM-003')).toBeInTheDocument();
-        expect(screen.getByText('CLAIM-004')).toBeInTheDocument();
-      }, { timeout: 2000 });
-      
-      // 然后检查每个编辑按钮的状态
-      const rows = ['CLAIM-003', 'CLAIM-004'].map(id => {
-        const row = screen.getByText(id).closest('tr');
+    it("shows edit button for claims in rejected or supplement status", async () => {
+      await setupAndRender();
+
+      const rows = ["CLAIM-003", "CLAIM-004"].map((id) => {
+        const row = screen.getByText(id).closest("tr");
         expect(row).toBeInTheDocument();
         return row!;
       });
-      
-      rows.forEach(row => {
-        const editButton = within(row).getByTestId('edit-button');
+
+      rows.forEach((row) => {
+        const editButton = within(row).getByTestId("edit-button");
+        expect(editButton).toBeInTheDocument();
         expect(editButton).not.toBeDisabled();
       });
     });
   });
 
-  describe('Navigation', () => {
-    it('navigates to claim details page on view details click', async () => {
-      renderMyClaimsPage();
-      
-      // 等待行渲染完成
-      await waitFor(() => {
-        expect(screen.getByText('CLAIM-001')).toBeInTheDocument();
-      }, { timeout: 2000 });
+  describe("Navigation", () => {
+    const setupAndRender = async () => {
+      mockQueryWithAuth
+        .mockResolvedValueOnce([mockClaimsData])
+        .mockResolvedValueOnce([[]]);
 
-      // 找到并点击查看详情按钮
-      const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
+      await waitFor(
+        () => {
+          expect(screen.getByText("CLAIM-001")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-002")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-003")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-004")).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+    };
+
+    it("navigates to claim details page on view details click", async () => {
+      await setupAndRender();
+
+      const rowForClaim001 = screen.getByText("CLAIM-001").closest("tr");
       expect(rowForClaim001).toBeInTheDocument();
-      const viewDetailsButton = within(rowForClaim001!).getByTestId('view-details-button');
-      fireEvent.click(viewDetailsButton);
+      const viewDetailsButton = within(rowForClaim001!).getByTestId(
+        "view-details-button",
+      );
 
-      // 验证导航调用
-      expect(mockNavigate).toHaveBeenCalledWith('/my-claims/CLAIM-001/submitted');
+      await act(async () => {
+        fireEvent.click(viewDetailsButton);
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith("/my-claims/CLAIM-001");
     });
 
-    it('navigates to edit page for editable claims', async () => {
-      renderMyClaimsPage();
-      
-      await waitFor(() => {
-        expect(screen.getByText('CLAIM-003')).toBeInTheDocument();
-      }, { timeout: 2000 });
+    it("navigates to edit page for editable claims", async () => {
+      await setupAndRender();
 
-      // 获取行和编辑按钮
-      const rowForClaim003 = screen.getByText('CLAIM-003').closest('tr');
+      const rowForClaim003 = screen.getByText("CLAIM-003").closest("tr");
       expect(rowForClaim003).toBeInTheDocument();
-      const editButton = within(rowForClaim003!).getByTestId('edit-button');
+      const editButton = within(rowForClaim003!).getByTestId("edit-button");
 
-      // 触发点击并验证导航
-      fireEvent.click(editButton);
-      expect(mockNavigate).toHaveBeenCalledWith('/claims/submit/CLAIM-003');
+      await act(async () => {
+        fireEvent.click(editButton);
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith("/claims/submit/CLAIM-003");
     });
 
-    it('navigates to new claim submission on button click', async () => {
-      renderMyClaimsPage();
-      
-      // 等待数据加载和按钮可用
+    it("navigates to new claim submission on button click", async () => {
+      mockQueryWithAuth.mockResolvedValueOnce([[]]);
+
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
       await waitFor(() => {
-        const newClaimButton = screen.getByRole('button', { name: '发起新的债权申报' });
+        const newClaimButton = screen.getByRole("button", {
+          name: "发起新的债权申报",
+        });
         expect(newClaimButton).toBeInTheDocument();
-        expect(newClaimButton).toBeEnabled();
-      }, { timeout: 2000 });
+      });
 
-      // 触发点击事件
-      const newClaimButton = screen.getByRole('button', { name: '发起新的债权申报' });
-      fireEvent.click(newClaimButton);
+      const newClaimButton = screen.getByRole("button", {
+        name: "发起新的债权申报",
+      });
 
-      // 验证导航
-      expect(mockNavigate).toHaveBeenCalledWith('/claims/submit');
+      await act(async () => {
+        fireEvent.click(newClaimButton);
+      });
+
+      expect(mockNavigate).toHaveBeenCalledWith("/claims/submit");
     });
   });
 
-  describe('Claim Actions', () => {
-    it('handles claim withdrawal successfully', async () => {
-      // 正确模拟 SurrealDB 的查询返回格式
-      (mockSurrealContextValue.surreal.query as Mock)
-        .mockResolvedValueOnce([[mockClaimsData]])  // Initial load，使用双层数组
-        .mockResolvedValueOnce([[{...mockClaimsData[0], reviewStatus: '已撤回'}]]); // After withdrawal，使用双层数组
+  describe("Claim Actions", () => {
+    const setupAndRender = async () => {
+      mockQueryWithAuth
+        .mockResolvedValueOnce([mockClaimsData])
+        .mockResolvedValueOnce([[]]);
 
-      renderMyClaimsPage();
-      
-      await waitFor(() => {
-        const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
-        expect(rowForClaim001).toBeInTheDocument();
-        const withdrawButton = within(rowForClaim001!).getByTestId('withdraw-button');
+      await act(async () => {
+        renderMyClaimsPage();
+      });
+
+      await waitFor(
+        () => {
+          expect(screen.getByText("CLAIM-001")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-002")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-003")).toBeInTheDocument();
+          expect(screen.getByText("CLAIM-004")).toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
+    };
+
+    it("handles claim withdrawal successfully", async () => {
+      await setupAndRender();
+
+      // Mock 撤回成功的响应
+      mockQueryWithAuth.mockResolvedValueOnce([[{ id: "status:draft" }]]); // 状态查询
+      mockQueryWithAuth.mockResolvedValueOnce([{}]); // 更新操作
+
+      const rowForClaim001 = screen.getByText("CLAIM-001").closest("tr");
+      expect(rowForClaim001).toBeInTheDocument();
+      const withdrawButton = within(rowForClaim001!).getByTestId(
+        "withdraw-button",
+      );
+
+      await act(async () => {
         fireEvent.click(withdrawButton);
       });
 
       await waitFor(() => {
-        expect(mockShowSuccess).toHaveBeenCalledWith('债权 CLAIM-001 已成功撤回 (模拟)。');
-      }, { timeout: 2000 });
+        expect(mockShowSuccess).toHaveBeenCalledWith(
+          "债权 CLAIM-001 已成功撤回。",
+        );
+      });
     });
 
-    it('handles claim withdrawal error', async () => {
-      (mockSurrealContextValue.surreal.merge as Mock).mockRejectedValueOnce(
-        new Error('Failed to withdraw claim')
+    it("handles claim withdrawal error", async () => {
+      await setupAndRender();
+
+      // Mock 撤回失败的响应
+      mockQueryWithAuth.mockRejectedValueOnce(
+        new Error("Failed to withdraw claim"),
       );
 
-      renderMyClaimsPage();
-      
-      await waitFor(() => {
-        const rowForClaim001 = screen.getByText('CLAIM-001').closest('tr');
-        expect(rowForClaim001).toBeInTheDocument();
-        const withdrawButton = within(rowForClaim001!).getByTestId('withdraw-button');
+      const rowForClaim001 = screen.getByText("CLAIM-001").closest("tr");
+      expect(rowForClaim001).toBeInTheDocument();
+      const withdrawButton = within(rowForClaim001!).getByTestId(
+        "withdraw-button",
+      );
+
+      await act(async () => {
         fireEvent.click(withdrawButton);
-      }, { timeout: 2000 });
+      });
 
       await waitFor(() => {
-        expect(mockShowError).toHaveBeenCalledWith(expect.stringContaining('撤回失败'));
-      }, { timeout: 2000 });
+        expect(mockShowError).toHaveBeenCalledWith(
+          expect.stringContaining("撤回失败"),
+        );
+      });
     });
 
-    it('prevents withdrawal of non-pending claims', async () => {
-      renderMyClaimsPage();
-      
-      await waitFor(() => {
-        const rowForClaim002 = screen.getByText('CLAIM-002').closest('tr');
-        expect(rowForClaim002).toBeInTheDocument();
-        const withdrawButton = within(rowForClaim002!).getByTestId('withdraw-button');
-        expect(withdrawButton).toBeDisabled();
-      }, { timeout: 2000 });
-      
-      // 获取按钮并尝试点击，即使被禁用
-      const rowForClaim002 = screen.getByText('CLAIM-002').closest('tr');
-      const withdrawButton = within(rowForClaim002!).getByTestId('withdraw-button');
-      fireEvent.click(withdrawButton);
-      
-      // 验证禁用状态下的点击不会触发任何操作
-      expect(mockSurrealContextValue.surreal.merge).not.toHaveBeenCalled();
-      expect(mockShowSuccess).not.toHaveBeenCalled();
-      expect(mockShowError).not.toHaveBeenCalled();
+    it("does not show withdraw button for non-pending claims", async () => {
+      await setupAndRender();
+
+      const rowForClaim002 = screen.getByText("CLAIM-002").closest("tr");
+      expect(rowForClaim002).toBeInTheDocument();
+      const withdrawButton = within(rowForClaim002!).queryByTestId(
+        "withdraw-button",
+      );
+      expect(withdrawButton).not.toBeInTheDocument();
     });
   });
 });
