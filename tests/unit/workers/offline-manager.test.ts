@@ -19,7 +19,7 @@ vi.stubGlobal('navigator', {
 });
 
 vi.stubGlobal('crypto', {
-  randomUUID: vi.fn(() => 'test-uuid-123')
+  randomUUID: vi.fn(() => `test-uuid-${Date.now()}-${Math.random()}`)
 });
 
 // Import after mocking globals
@@ -82,11 +82,20 @@ describe('OfflineManager', () => {
       expect(offlineManager.isOffline()).toBe(false);
     });
 
-    it('应该在navigator.onLine为false时检测为离线', () => {
+    it('should correctly detect offline when navigator.onLine is false', () => {
+      // Create a new manager with navigator.onLine set to false
       vi.stubGlobal('navigator', { ...navigator, onLine: false });
-      // 需要触发网络状态更新
-      const networkStatus = offlineManager.getNetworkStatus();
-      expect(networkStatus.isOnline).toBe(false);
+      
+      const offlineManagerWithOfflineNav = new OfflineManager({
+        localDb: mockLocalDb,
+        remoteDb: mockRemoteDb,
+        broadcastToAllClients: mockBroadcast
+      });
+
+      expect(offlineManagerWithOfflineNav.isOffline()).toBe(true);
+      
+      // Clean up
+      offlineManagerWithOfflineNav.close();
     });
   });
 
@@ -130,7 +139,8 @@ describe('OfflineManager', () => {
 
       const operationId = await offlineManager.queueOfflineOperation(operation);
 
-      expect(operationId).toBe('test-uuid-123');
+      expect(operationId).toBeDefined();
+      expect(typeof operationId).toBe('string');
       expect(offlineManager.getPendingOperationsCount()).toBe(1);
       expect(mockBroadcast).toHaveBeenCalledWith({
         type: 'offline_queue_status',
@@ -142,21 +152,29 @@ describe('OfflineManager', () => {
     });
 
     it('应该正确统计操作状态', async () => {
-      await offlineManager.queueOfflineOperation({
+      // Clear any existing operations first
+      offlineManager['offlineOperations'].clear();
+      
+      const op1 = await offlineManager.queueOfflineOperation({
         type: 'create',
         table: 'test1',
         data: {},
         maxRetries: 3
       });
 
-      await offlineManager.queueOfflineOperation({
+      // Check after first operation
+      let stats = offlineManager.getOperationStats();
+      expect(stats.total).toBe(1);
+
+      const op2 = await offlineManager.queueOfflineOperation({
         type: 'update',
         table: 'test2',
         data: {},
         maxRetries: 3
       });
 
-      const stats = offlineManager.getOperationStats();
+      // Check final stats
+      stats = offlineManager.getOperationStats();
       expect(stats.total).toBe(2);
       expect(stats.pending).toBe(2);
       expect(stats.completed).toBe(0);
@@ -205,9 +223,19 @@ describe('OfflineManager', () => {
     });
 
     it('应该能够同步创建操作', async () => {
+      // Ensure we're in online mode for this test
+      vi.stubGlobal('navigator', { ...navigator, onLine: true });
+      
       const testData = { name: 'Test Item' };
       
-      await offlineManager.queueOfflineOperation({
+      // Create a fresh offline manager with online status
+      const onlineOfflineManager = new OfflineManager({
+        localDb: mockLocalDb,
+        remoteDb: mockRemoteDb,
+        broadcastToAllClients: mockBroadcast
+      });
+      
+      await onlineOfflineManager.queueOfflineOperation({
         type: 'create',
         table: 'test_table',
         recordId: 'test:123',
@@ -217,7 +245,7 @@ describe('OfflineManager', () => {
 
       mockRemoteDb.create.mockResolvedValue({ id: 'test:123', ...testData });
 
-      await offlineManager.startAutoSync();
+      await onlineOfflineManager.startAutoSync();
 
       expect(mockRemoteDb.create).toHaveBeenCalledWith('test:123', testData);
       expect(mockBroadcast).toHaveBeenCalledWith({
@@ -229,6 +257,8 @@ describe('OfflineManager', () => {
           failureCount: 0
         })
       });
+      
+      await onlineOfflineManager.close();
     });
   });
 

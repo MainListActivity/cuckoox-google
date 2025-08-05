@@ -79,7 +79,11 @@ describe('DataCacheManager Auto Sync', () => {
         'has_member',
         'menu_metadata',
         'operation_button',
-        'user_personal_data'
+        'user_personal_data',
+        'claim_operation_log',
+        'claim_version_history',
+        'claim_status_flow',
+        'claim_access_log'
       ];
       
       expect(AUTO_SYNC_TABLES).toEqual(expectedTables);
