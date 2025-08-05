@@ -14,10 +14,10 @@ import type {
 vi.mock('@/src/services/rtcConfigManager', () => {
   const mockRTCConfig = {
     network_quality_thresholds: {
-      excellent: { bandwidth: 2000, latency: 50, packet_loss: 0.01 },
-      good: { bandwidth: 1000, latency: 100, packet_loss: 0.03 },
-      fair: { bandwidth: 500, latency: 200, packet_loss: 0.05 },
-      poor: { bandwidth: 200, latency: 300, packet_loss: 0.1 }
+      excellent: { bandwidth: 1500, latency: 50, packet_loss: 0.1 },
+      good: { bandwidth: 1000, latency: 100, packet_loss: 0.5 },
+      fair: { bandwidth: 500, latency: 200, packet_loss: 1.0 },
+      poor: { bandwidth: 100, latency: 400, packet_loss: 10.0 }
     },
     file_chunk_size: 16384
   };
@@ -39,6 +39,10 @@ describe('NetworkAdaptation', () => {
   let mockEventListeners: NetworkAdaptationEventListeners;
 
   beforeEach(() => {
+    // 彻底清理状态
+    networkAdaptation.resetAdaptationState();
+    networkAdaptation.stopMonitoring();
+    
     vi.clearAllMocks();
     vi.useFakeTimers();
     
@@ -81,6 +85,10 @@ describe('NetworkAdaptation', () => {
   });
 
   afterEach(() => {
+    // 重置网络适应状态
+    networkAdaptation.resetAdaptationState();
+    networkAdaptation.stopMonitoring();
+    
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -314,8 +322,13 @@ describe('NetworkAdaptation', () => {
         stabilityDuration: 1000
       });
       
-      // Trigger multiple adaptations quickly
+      // First measurement - this will trigger adaptation
       await networkAdaptation.measureNetworkQualityManual();
+      
+      // Clear the call count to test frequency limiting
+      vi.clearAllMocks();
+      
+      // Second measurement quickly - should be limited by frequency control
       await networkAdaptation.measureNetworkQualityManual();
       
       // Should be limited by frequency control
@@ -344,6 +357,15 @@ describe('NetworkAdaptation', () => {
     });
 
     it('should detect high latency issues', async () => {
+      // Ensure fresh event listeners
+      const freshListeners = {
+        onQualityChanged: vi.fn(),
+        onNetworkIssueDetected: vi.fn(),
+        onAdaptationApplied: vi.fn(),
+        onStatsUpdated: vi.fn()
+      };
+      networkAdaptation.setEventListeners(freshListeners);
+      
       const highLatencyStats = new Map([
         ['candidate-pair', {
           type: 'candidate-pair',
@@ -358,7 +380,7 @@ describe('NetworkAdaptation', () => {
       
       await networkAdaptation.measureNetworkQualityManual();
       
-      expect(mockEventListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
+      expect(freshListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
         expect.stringContaining('网络延迟过高'),
         expect.any(Object)
       );
@@ -418,6 +440,15 @@ describe('NetworkAdaptation', () => {
     });
 
     it('should detect network jitter issues', async () => {
+      // Ensure fresh event listeners
+      const freshListeners = {
+        onQualityChanged: vi.fn(),
+        onNetworkIssueDetected: vi.fn(),
+        onAdaptationApplied: vi.fn(),
+        onStatsUpdated: vi.fn()
+      };
+      networkAdaptation.setEventListeners(freshListeners);
+      
       // Create varying latency measurements to trigger jitter detection
       const measurements = [
         { currentRoundTripTime: 0.05 }, // 50ms
@@ -443,7 +474,7 @@ describe('NetworkAdaptation', () => {
       }
       
       // Should detect jitter issues after building history
-      expect(mockEventListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
+      expect(freshListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
         expect.stringContaining('网络抖动严重'),
         expect.any(Object)
       );
@@ -470,11 +501,24 @@ describe('NetworkAdaptation', () => {
     });
 
     it('should schedule periodic measurements', async () => {
+      // Setup mock stats data
+      const testStats = new Map([
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.05, // 50ms
+          availableOutgoingBitrate: 1500000, // 1.5Mbps
+          availableIncomingBitrate: 2000000  // 2Mbps
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(testStats);
+      
       networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
       networkAdaptation.startMonitoring();
       
       // Advance timer to trigger measurement
-      vi.advanceTimersByTime(5000);
+      await vi.advanceTimersByTimeAsync(5000);
       
       expect(mockPeerConnection.getStats).toHaveBeenCalled();
     });

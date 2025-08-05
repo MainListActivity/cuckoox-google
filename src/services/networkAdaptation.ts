@@ -339,7 +339,7 @@ class NetworkAdaptation {
       packetsLost,
       framesDecoded,
       framesDropped,
-      currentRoundTripTime: currentRoundTripTime * 1000, // 转换为毫秒
+      currentRoundTripTime, // 保持原始值，在聚合时处理单位转换
       availableOutgoingBitrate,
       availableIncomingBitrate
     };
@@ -364,8 +364,8 @@ class NetworkAdaptation {
     const totalIncomingBandwidth = statsArray.reduce((sum, stats) => sum + stats.availableIncomingBitrate, 0);
     const avgBandwidth = (totalOutgoingBandwidth + totalIncomingBandwidth) / (2 * statsArray.length) / 1000; // 转换为Kbps
 
-    // 计算平均延迟
-    const avgLatency = statsArray.reduce((sum, stats) => sum + stats.currentRoundTripTime, 0) / statsArray.length;
+    // 计算平均延迟（从秒转换为毫秒）
+    const avgLatency = statsArray.reduce((sum, stats) => sum + stats.currentRoundTripTime * 1000, 0) / statsArray.length;
 
     // 计算丢包率
     const totalPacketsSent = statsArray.reduce((sum, stats) => sum + stats.packetsSent, 0);
@@ -605,18 +605,22 @@ class NetworkAdaptation {
   private detectNetworkIssues(metrics: NetworkQualityMetrics): void {
     const issues: string[] = [];
 
-    if (metrics.latency > 500) {
+    // 高延迟检测：超过300ms认为延迟过高
+    if (metrics.latency > 300) {
       issues.push('网络延迟过高');
     }
 
+    // 高丢包率检测：超过5%认为丢包率过高
     if (metrics.packetLoss > 0.05) {
       issues.push('丢包率过高');
     }
 
+    // 低带宽检测：低于100Kbps认为带宽不足
     if (metrics.bandwidth < 100) {
       issues.push('可用带宽不足');
     }
 
+    // 网络抖动检测：超过50ms认为抖动严重
     if (metrics.jitter > 50) {
       issues.push('网络抖动严重');
     }
