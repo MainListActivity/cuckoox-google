@@ -187,10 +187,10 @@ class RTCConfigService {
       signal_expiry: 3600000,       // 信令1小时过期
       message_recall_timeout: 120,  // 消息撤回时限(秒)
       network_quality_thresholds: {
-        excellent: { bandwidth: 1500, latency: 50, packet_loss: 0.1 },
-        good: { bandwidth: 1000, latency: 100, packet_loss: 0.5 },
-        fair: { bandwidth: 500, latency: 200, packet_loss: 1.0 },
-        poor: { bandwidth: 100, latency: 400, packet_loss: 10.0 }
+        excellent: { bandwidth: 1500, latency: 50, packet_loss: 0.001 },
+        good: { bandwidth: 1000, latency: 100, packet_loss: 0.005 },
+        fair: { bandwidth: 500, latency: 200, packet_loss: 0.01 },
+        poor: { bandwidth: 100, latency: 400, packet_loss: 0.1 }
       },
       video_quality: {
         low: { width: 320, height: 240, framerate: 15, bitrate: 150000 },

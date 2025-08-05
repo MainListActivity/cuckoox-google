@@ -721,18 +721,26 @@ describe('VideoCallInterface', () => {
       );
       
       await waitFor(() => {
+        expect(screen.getByTestId('video-call-interface')).toBeInTheDocument();
         expect(screen.getByLabelText('结束通话')).toBeInTheDocument();
       });
 
       const endCallButton = screen.getByLabelText('结束通话');
-      fireEvent.click(endCallButton);
+      
+      act(() => {
+        fireEvent.click(endCallButton);
+      });
       
       await waitFor(() => {
-        expect(screen.getByText('结束视频通话')).toBeInTheDocument();
         expect(screen.getByText('确定要结束当前视频通话吗？')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '结束通话' })).toBeInTheDocument();
       });
+      
+      expect(screen.getByText('结束视频通话')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
+      
+      // 检查有两个"结束通话"按钮 - 主界面按钮和对话框按钮
+      const endCallButtons = screen.getAllByText('结束通话');
+      expect(endCallButtons.length).toBe(2);
     });
 
     it('应该能够确认结束通话', async () => {
@@ -748,15 +756,23 @@ describe('VideoCallInterface', () => {
 
       // 点击结束通话按钮
       const endCallButton = screen.getByLabelText('结束通话');
-      fireEvent.click(endCallButton);
       
+      act(() => {
+        fireEvent.click(endCallButton);
+      });
+      
+      // 等待对话框出现
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: '结束通话' })).toBeInTheDocument();
+        expect(screen.getByText('确定要结束当前视频通话吗？')).toBeInTheDocument();
       });
 
-      // 确认结束通话
-      const confirmButton = screen.getByRole('button', { name: '结束通话' });
-      fireEvent.click(confirmButton);
+      // 找到确认按钮 - 有两个"结束通话"按钮，我们要对话框中的那个
+      const confirmButtons = screen.getAllByText('结束通话');
+      const confirmButton = confirmButtons[confirmButtons.length - 1];
+      
+      act(() => {
+        fireEvent.click(confirmButton);
+      });
       
       await waitFor(() => {
         expect(mockCallManager.endCall).toHaveBeenCalledWith('test-video-call-id', '用户主动结束');
@@ -903,15 +919,23 @@ describe('VideoCallInterface', () => {
 
       // 点击结束通话按钮
       const endCallButton = screen.getByLabelText('结束通话');
-      fireEvent.click(endCallButton);
       
+      act(() => {
+        fireEvent.click(endCallButton);
+      });
+      
+      // 等待对话框出现
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: '结束通话' })).toBeInTheDocument();
+        expect(screen.getByText('确定要结束当前视频通话吗？')).toBeInTheDocument();
       });
 
-      // 确认结束通话
-      const confirmButton = screen.getByRole('button', { name: '结束通话' });
-      fireEvent.click(confirmButton);
+      // 找到确认按钮 - 有两个"结束通话"按钮，我们要对话框中的那个
+      const confirmButtons = screen.getAllByText('结束通话');
+      const confirmButton = confirmButtons[confirmButtons.length - 1];
+      
+      act(() => {
+        fireEvent.click(confirmButton);
+      });
       
       await waitFor(() => {
         expect(defaultProps.onError).toHaveBeenCalledWith(new Error('没有结束通话权限'));
@@ -1057,15 +1081,23 @@ describe('VideoCallInterface', () => {
 
       // 点击结束通话按钮
       const endCallButton = screen.getByLabelText('结束通话');
-      fireEvent.click(endCallButton);
       
+      act(() => {
+        fireEvent.click(endCallButton);
+      });
+      
+      // 等待对话框出现
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: '结束通话' })).toBeInTheDocument();
+        expect(screen.getByText('确定要结束当前视频通话吗？')).toBeInTheDocument();
       });
 
-      // 确认结束通话
-      const confirmButton = screen.getByRole('button', { name: '结束通话' });
-      fireEvent.click(confirmButton);
+      // 找到确认按钮 - 有两个"结束通话"按钮，我们要对话框中的那个
+      const confirmButtons = screen.getAllByText('结束通话');
+      const confirmButton = confirmButtons[confirmButtons.length - 1];
+      
+      act(() => {
+        fireEvent.click(confirmButton);
+      });
       
       await waitFor(() => {
         expect(defaultProps.onError).toHaveBeenCalledWith(testError);
