@@ -2,18 +2,22 @@ import React from 'react';
 import { waitFor, act } from '@testing-library/react';
 import { render } from '../utils/testUtils';
 import { AuthProvider, useAuth } from '@/src/contexts/AuthContext';
-import { SurrealProvider } from '@/src/contexts/SurrealProvider';
 import { vi, describe, beforeEach, it, expect, afterEach } from 'vitest';
+import { queryWithAuth } from '@/src/utils/surrealAuth';
+import { menuService } from '@/src/services/menuService';
 
 // Mock authService
 vi.mock('@/src/services/authService', () => ({
   default: {
     getUser: vi.fn().mockResolvedValue(null), // No OIDC user
     logoutRedirect: vi.fn(),
+    setSurrealClient: vi.fn(),
+    loginRedirect: vi.fn(),
+    handleLoginRedirect: vi.fn(),
   },
 }));
 
-// Mock SurrealDB client
+// Mock SurrealDB client and provider
 const mockSurrealClient = {
   query: vi.fn(),
   select: vi.fn(),
@@ -24,6 +28,67 @@ const mockSurrealClient = {
   close: vi.fn(),
   signin: vi.fn().mockResolvedValue(true),
 };
+
+const mockDataService = {
+  setClient: vi.fn(),
+  query: vi.fn(),
+  select: vi.fn(),
+  merge: vi.fn(),
+  getUser: vi.fn(),
+  updateUser: vi.fn(),
+  getCase: vi.fn(),
+  getCases: vi.fn(),
+  updateCase: vi.fn(),
+  createCase: vi.fn(),
+  deleteCase: vi.fn(),
+};
+
+const mockGetAuthStatus = vi.fn();
+
+// Mock SurrealProvider components and hooks
+vi.mock('@/src/contexts/SurrealProvider', () => ({
+  SurrealProvider: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="mock-surreal-provider">{children}</div>
+  ),
+  useSurreal: () => ({
+    client: mockSurrealClient,
+    isConnected: true,
+    isLoading: false,
+    error: null,
+    dbInfo: null,
+    connect: vi.fn(),
+    signout: mockSurrealClient.signout,
+    setTokens: vi.fn(),
+    clearTokens: vi.fn(),
+    getStoredAccessToken: vi.fn(),
+    getAuthStatus: mockGetAuthStatus,
+  }),
+  useSurrealClient: () => mockSurrealClient,
+  useDataService: () => mockDataService,
+  useServiceWorkerComm: () => ({
+    sendMessage: vi.fn(),
+    isAvailable: vi.fn().mockReturnValue(true),
+    waitForReady: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
+// Mock menuService
+vi.mock('@/src/services/menuService', () => ({
+  menuService: {
+    loadUserMenus: vi.fn(),
+    getUserMenus: vi.fn(),
+    hasOperationPermission: vi.fn(),
+    hasMenuPermission: vi.fn(),
+    setClient: vi.fn(),
+    setDataService: vi.fn(),
+  },
+}));
+
+// Mock surrealAuth utility
+vi.mock('@/src/utils/surrealAuth', () => ({
+  queryWithAuth: vi.fn(),
+  mutateWithAuth: vi.fn(),
+}));
 
 // Test component to access auth context
 const TestComponent = ({ onMount }: { onMount?: (auth: any) => void }) => {
@@ -53,6 +118,19 @@ describe('Admin Menu Permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    
+    // Setup default mock implementations
+    (queryWithAuth as any).mockImplementation(async (client: any, sql: string) => {
+      if (sql.includes('select * from menu_metadata')) {
+        return []; // Default empty menu
+      }
+      if (sql.includes('SELECT * FROM user_case_role')) {
+        return []; // Default empty roles
+      }
+      return null;
+    });
+    
+    (menuService.loadUserMenus as any).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -68,9 +146,27 @@ describe('Admin Menu Permissions', () => {
       email: 'admin@example.com',
     };
 
+    // Mock menu items for admin
+    const adminMenuItems = [
+      { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard' },
+      { id: 'cases', path: '/cases', labelKey: 'nav_case_management', iconName: 'mdiBriefcase' },
+      { id: 'case_members', path: '/case-members', labelKey: 'nav_case_members', iconName: 'mdiAccountMultiple' },
+      { id: 'creditors', path: '/creditors', labelKey: 'nav_creditor_management', iconName: 'mdiAccountCash' },
+      { id: 'claims_list', path: '/claims-list', labelKey: 'nav_claims_list', iconName: 'mdiClipboardList' },
+      { id: 'my_claims', path: '/my-claims', labelKey: 'nav_my_claims', iconName: 'mdiClipboardAccount' },
+      { id: 'claims_submit', path: '/claims-submit', labelKey: 'nav_claims_submit', iconName: 'mdiClipboardPlus' },
+      { id: 'online_meetings', path: '/online-meetings', labelKey: 'nav_online_meetings', iconName: 'mdiVideo' },
+      { id: 'messages', path: '/messages', labelKey: 'nav_messages', iconName: 'mdiMessage' },
+      { id: 'admin_home', path: '/admin', labelKey: 'nav_system_management', iconName: 'mdiCog' },
+    ];
+
+    // Mock menuService.loadUserMenus to return admin menu items
+    (menuService.loadUserMenus as any).mockResolvedValue(adminMenuItems);
+
     // Mock SurrealDB responses
     mockSurrealClient.select.mockResolvedValue([adminUser]);
     mockSurrealClient.query.mockResolvedValue([[]]); // Empty user_case_role for admin
+    mockGetAuthStatus.mockResolvedValue(true);
 
     let authContext: any;
 
@@ -93,13 +189,6 @@ describe('Admin Menu Permissions', () => {
     // Wait for user to be set
     await waitFor(() => {
       expect(getByTestId('user-id')).toHaveTextContent('--admin--');
-    });
-
-    // For admin user, we need to wait for the menu to be loaded
-    // The fetchAndUpdateMenuPermissions should be called automatically for admin users
-    // Let's add a small delay to ensure the effect runs
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 600)); // Wait for mock delay
     });
 
     // Wait for menu to load
@@ -138,7 +227,15 @@ describe('Admin Menu Permissions', () => {
       email: 'user@example.com',
     };
 
-    // Mock user with only creditor_representative role
+    // Mock user with only creditor_representative role and corresponding menu items
+    const creditorMenuItems = [
+      { id: 'dashboard', path: '/dashboard', labelKey: 'nav_dashboard', iconName: 'mdiViewDashboard' },
+      { id: 'my_claims', path: '/my-claims', labelKey: 'nav_my_claims', iconName: 'mdiClipboardAccount' },
+      { id: 'claims_submit', path: '/claims-submit', labelKey: 'nav_claims_submit', iconName: 'mdiClipboardPlus' },
+      { id: 'online_meetings', path: '/online-meetings', labelKey: 'nav_online_meetings', iconName: 'mdiVideo' },
+      { id: 'messages', path: '/messages', labelKey: 'nav_messages', iconName: 'mdiMessage' },
+    ];
+
     const userCaseRoleData = [{
       id: 'user_case_role:123',
       user_id: 'user:12345',
@@ -154,8 +251,12 @@ describe('Admin Menu Permissions', () => {
       },
     }];
 
+    // Mock menuService.loadUserMenus to return filtered menu items
+    (menuService.loadUserMenus as any).mockResolvedValue(creditorMenuItems);
+
     mockSurrealClient.select.mockResolvedValue([regularUser]);
     mockSurrealClient.query.mockResolvedValue([userCaseRoleData]);
+    mockGetAuthStatus.mockResolvedValue(true);
 
     let authContext: any;
 
