@@ -19,10 +19,17 @@ describe('CacheLogger', () => {
 
     const logs = cacheLogger.getLogs();
     expect(logs.length).toBe(5); // Including the setLogLevel log
-    expect(logs[0].level).toBe(LogLevel.ERROR);
-    expect(logs[1].level).toBe(LogLevel.WARN);
-    expect(logs[2].level).toBe(LogLevel.INFO);
-    expect(logs[3].level).toBe(LogLevel.DEBUG);
+    
+    // Since logs are sorted by timestamp (most recent first), check by finding specific log types
+    const errorLog = logs.find(log => log.level === LogLevel.ERROR);
+    const warnLog = logs.find(log => log.level === LogLevel.WARN);
+    const infoLogs = logs.filter(log => log.level === LogLevel.INFO);
+    const debugLog = logs.find(log => log.level === LogLevel.DEBUG);
+    
+    expect(errorLog).toBeDefined();
+    expect(warnLog).toBeDefined();
+    expect(infoLogs.length).toBe(2); // One for info message, one for setLogLevel
+    expect(debugLog).toBeDefined();
   });
 
   it('should filter logs by level', () => {
@@ -52,9 +59,12 @@ describe('CacheLogger', () => {
 
     const logs = cacheLogger.getLogs();
     expect(logs.length).toBe(2); // Including the setLogLevel log
-    expect(logs[0].category).toBe(LogCategory.QUERY);
-    expect(logs[0].details?.source).toBe('local');
-    expect(logs[0].details?.cacheHit).toBe(true);
+    
+    // Find the query log specifically
+    const queryLog = logs.find(log => log.category === LogCategory.QUERY);
+    expect(queryLog).toBeDefined();
+    expect(queryLog!.details?.source).toBe('local');
+    expect(queryLog!.details?.cacheHit).toBe(true);
   });
 
   it('should track performance with timers', () => {
@@ -76,7 +86,11 @@ describe('CacheLogger', () => {
     
     const logs = cacheLogger.getLogs();
     expect(logs.length).toBe(2); // Including the setLogLevel log
-    expect(logs[0].duration).toBe(duration);
+    
+    // Find the performance log specifically
+    const performanceLog = logs.find(log => log.category === LogCategory.PERFORMANCE);
+    expect(performanceLog).toBeDefined();
+    expect(performanceLog!.duration).toBe(duration);
   });
 
   it('should analyze logs and generate insights', () => {

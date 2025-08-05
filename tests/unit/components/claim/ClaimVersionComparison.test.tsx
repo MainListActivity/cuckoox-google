@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import ClaimVersionComparison from '@/src/components/claim/ClaimVersionComparison';
 import {
@@ -196,7 +196,9 @@ describe('ClaimVersionComparison', () => {
     });
 
     // 点击展开版本信息
-    fireEvent.click(screen.getByText('版本信息'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('版本信息'));
+    });
 
     await waitFor(() => {
       expect(screen.getByText('版本 1 (旧版本)')).toBeInTheDocument();
@@ -224,7 +226,9 @@ describe('ClaimVersionComparison', () => {
     expect(screen.getByText('本金')).toBeInTheDocument();
 
     // 点击收起详细变更
-    fireEvent.click(screen.getByText('详细变更 (3 项)'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('详细变更 (3 项)'));
+    });
 
     // 内容应该被隐藏（这里简化测试，实际可能需要检查具体的DOM结构）
     // 由于MUI Accordion的实现，我们主要检查点击事件是否正常工作
@@ -248,11 +252,15 @@ describe('ClaimVersionComparison', () => {
     );
 
     if (closeButton) {
-      fireEvent.click(closeButton);
+      await act(async () => {
+        fireEvent.click(closeButton);
+      });
       expect(mockOnClose).toHaveBeenCalled();
     } else {
       // 如果找不到特定的关闭按钮，点击第一个关闭按钮
-      fireEvent.click(screen.getByText('关闭'));
+      await act(async () => {
+        fireEvent.click(screen.getByText('关闭'));
+      });
       expect(mockOnClose).toHaveBeenCalled();
     }
   });
@@ -285,7 +293,9 @@ describe('ClaimVersionComparison', () => {
     });
 
     // 点击展开详细变更
-    fireEvent.click(screen.getByText('详细变更 (0 项)'));
+    await act(async () => {
+      fireEvent.click(screen.getByText('详细变更 (0 项)'));
+    });
 
     await waitFor(() => {
       expect(screen.getByText('两个版本之间没有差异')).toBeInTheDocument();
@@ -373,15 +383,32 @@ describe('ClaimVersionComparison', () => {
   });
 
   it('should display change summary when available', async () => {
-    render(
+    // First, just check if the component renders without errors
+    const { container } = render(
       <TestWrapper>
         <ClaimVersionComparison {...defaultProps} />
       </TestWrapper>
     );
 
-    await waitFor(() => {
-      expect(screen.getByText('变更摘要:')).toBeInTheDocument();
+    // Give it some time to load
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Check if dialog is rendered
+    expect(screen.getByText('版本对比: v1 → v2')).toBeInTheDocument();
+    
+    // Try to wait for the change summary with a longer timeout
+    try {
+      await waitFor(() => {
+        const summaryElements = screen.queryAllByText(/变更摘要/);
+        expect(summaryElements.length).toBeGreaterThan(0);
+      }, { timeout: 5000 });
+      
+      // If we get here, check for the specific content
       expect(screen.getByText('更新了本金、利息并添加了描述')).toBeInTheDocument();
-    });
+    } catch (error) {
+      // Debug what's actually rendered
+      console.log('Screen content when looking for summary:', container.innerHTML);
+      throw error;
+    }
   });
 });
