@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -31,7 +31,6 @@ import {
   TimelineOppositeContent,} from '@mui/lab';
 import {
   mdiCheckCircleOutline,
-  mdiCloseCircleOutline,
   mdiClockOutline,
   mdiArrowRightBoldOutline,
   mdiEyeOutline,
@@ -83,7 +82,7 @@ const ClaimStatusFlowChart: React.FC<ClaimStatusFlowChartProps> = ({
   const [selectedFlow, setSelectedFlow] = useState<StatusFlowDetail | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
-  const statusFlowService = new ClaimStatusFlowService(client);
+  const statusFlowService = useMemo(() => new ClaimStatusFlowService(client), [client]);
 
   // 状态流转类型映射
   const transitionTypeLabels: Record<TransitionType, string> = {
@@ -126,7 +125,7 @@ const ClaimStatusFlowChart: React.FC<ClaimStatusFlowChartProps> = ({
   };
 
   // 加载状态流转历史
-  const loadStatusFlows = async () => {
+  const loadStatusFlows = useCallback(async () => {
     if (!claimId) return;
 
     setLoading(true);
@@ -149,10 +148,10 @@ const ClaimStatusFlowChart: React.FC<ClaimStatusFlowChartProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [claimId, statusFlowService]);
 
   // 获取状态名称（简化处理，实际应该从状态定义中获取）
-  const getStatusName = (statusId: string | any): string => {
+  const getStatusName = (statusId: string | unknown): string => {
     if (typeof statusId === 'string') {
       // 从ID中提取状态名称
       const parts = statusId.split(':');
@@ -164,7 +163,7 @@ const ClaimStatusFlowChart: React.FC<ClaimStatusFlowChartProps> = ({
   // 初始加载
   useEffect(() => {
     loadStatusFlows();
-  }, [claimId]);
+  }, [loadStatusFlows]);
 
   // 处理刷新
   const handleRefresh = () => {

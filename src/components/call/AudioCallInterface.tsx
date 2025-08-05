@@ -232,7 +232,7 @@ const AudioCallInterface: React.FC<AudioCallInterfaceProps> = ({
   /**
    * 处理远程流接收
    */
-  const handleRemoteStreamReceived = useCallback((sessionCallId: string, userId: string, stream: MediaStream) => {
+  const handleRemoteStreamReceived = useCallback((sessionCallId: string, _userId: string, stream: MediaStream) => {
     if (sessionCallId !== callId) return;
 
     // setRemoteStream(stream);

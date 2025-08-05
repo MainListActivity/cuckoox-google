@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -76,7 +76,7 @@ const ClaimVersionComparison: React.FC<ClaimVersionComparisonProps> = ({
   const [toVersionData, setToVersionData] = useState<ClaimVersionHistory | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['changes']));
 
-  const versionService = new ClaimVersionService(client);
+  const versionService = useMemo(() => new ClaimVersionService(client), [client]);
 
   // 加载版本对比数据
   useEffect(() => {

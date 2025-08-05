@@ -177,8 +177,8 @@ describe('ClaimStatusFlowChart', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('用户操作')).toBeInTheDocument();
-    });
+      expect(screen.getByText('创建债权申报')).toBeInTheDocument();
+    }, { timeout: 2000 });
 
     // 检查不同类型的操作
     expect(screen.getAllByText('用户操作')).toHaveLength(2); // 创建和提交
@@ -338,11 +338,11 @@ describe('ClaimStatusFlowChart', () => {
       expect(screen.getByText('创建债权申报')).toBeInTheDocument();
     });
 
-    // 检查状态名称是否正确提取和显示
-    expect(screen.getByText('draft')).toBeInTheDocument();
-    expect(screen.getByText('submitted')).toBeInTheDocument();
-    expect(screen.getByText('under_review')).toBeInTheDocument();
-    expect(screen.getByText('approved')).toBeInTheDocument();
+    // 检查状态名称是否正确提取和显示，使用 getAllByText 来处理可能的重复元素
+    expect(screen.getAllByText('draft').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('submitted').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('under_review').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('approved').length).toBeGreaterThan(0);
   });
 
   it('should call service with correct parameters', async () => {

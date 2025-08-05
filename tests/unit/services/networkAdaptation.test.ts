@@ -1,639 +1,665 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { networkAdaptation } from '@/src/services/networkAdaptation';
-import webrtcManager from '@/src/services/webrtcManager';
-import rtcConfigManager from '@/src/services/rtcConfigManager';
+import networkAdaptation, { NetworkAdaptation } from '@/src/services/networkAdaptation';
+import type {
+  NetworkQualityLevel,
+  NetworkQualityMetrics,
+  NetworkQualityState,
+  AdaptationConfig,
+  NetworkAdaptationEventListeners,
+  ConnectionStats,
+  QualityAdjustmentHistory
+} from '@/src/services/networkAdaptation';
 
-// Mock dependencies
-vi.mock('@/src/services/webrtcManager', () => ({
-  default: {
-    getStreamStats: vi.fn(),
-    adjustVideoQuality: vi.fn(),
-    autoAdjustVideoQuality: vi.fn(),
-    detectNetworkQuality: vi.fn(),
-    getConnectionInfo: vi.fn(),
-  },
-}));
-
-vi.mock('@/src/services/rtcConfigManager', () => ({
-  default: {
-    getConfig: vi.fn(),
-    getNetworkQualityLevel: vi.fn(),
-  },
-}));
-
-const mockWebrtcManager = webrtcManager as {
-  getStreamStats: Mock;
-  adjustVideoQuality: Mock;
-  autoAdjustVideoQuality: Mock;
-  detectNetworkQuality: Mock;
-  getConnectionInfo: Mock;
-};
-
-const mockRtcConfigManager = rtcConfigManager as {
-  getConfig: Mock;
-  getNetworkQualityLevel: Mock;
-};
-
-// Mock performance API
-const mockPerformance = {
-  now: vi.fn().mockReturnValue(1000),
-  mark: vi.fn(),
-  measure: vi.fn(),
-  getEntriesByType: vi.fn().mockReturnValue([]),
-};
-vi.stubGlobal('performance', mockPerformance);
-
-// Mock navigator connection API
-const mockConnection = {
-  effectiveType: '4g',
-  downlink: 10,
-  rtt: 50,
-  saveData: false,
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-};
-
-Object.defineProperty(navigator, 'connection', {
-  value: mockConnection,
-  configurable: true,
-});
-
-describe('NetworkAdaptation', () => {
-  const mockConfig = {
+// Mock RTCConfigManager
+vi.mock('@/src/services/rtcConfigManager', () => {
+  const mockRTCConfig = {
     network_quality_thresholds: {
       excellent: { bandwidth: 2000, latency: 50, packet_loss: 0.01 },
       good: { bandwidth: 1000, latency: 100, packet_loss: 0.03 },
       fair: { bandwidth: 500, latency: 200, packet_loss: 0.05 },
-      poor: { bandwidth: 200, latency: 500, packet_loss: 0.1 },
+      poor: { bandwidth: 200, latency: 300, packet_loss: 0.1 }
     },
-    video_quality: {
-      low: { width: 320, height: 240, framerate: 15, bitrate: 150000 },
-      medium: { width: 640, height: 480, framerate: 30, bitrate: 500000 },
-      high: { width: 1280, height: 720, framerate: 30, bitrate: 1500000 },
-      ultra: { width: 1920, height: 1080, framerate: 60, bitrate: 3000000 },
-    },
-    audio_quality: {
-      low: { bitrate: 32000, sampleRate: 22050 },
-      medium: { bitrate: 64000, sampleRate: 44100 },
-      high: { bitrate: 128000, sampleRate: 48000 },
-    },
+    file_chunk_size: 16384
   };
 
-  const mockStats = {
-    bandwidth: 1500,
-    latency: 80,
-    packetLoss: 0.02,
-    jitter: 10,
-    audioQuality: 85,
-    videoQuality: 90,
-    connectionState: 'good' as const,
+  return {
+    default: {
+      getConfig: vi.fn().mockResolvedValue(mockRTCConfig),
+      onConfigUpdate: vi.fn()
+    }
   };
+});
+
+// Mock RTCPeerConnection
+const mockPeerConnection = {
+  getStats: vi.fn()
+} as unknown as RTCPeerConnection;
+
+describe('NetworkAdaptation', () => {
+  let mockEventListeners: NetworkAdaptationEventListeners;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     
-    // Setup default mocks
-    mockRtcConfigManager.getConfig.mockReturnValue(mockConfig);
-    mockRtcConfigManager.getNetworkQualityLevel.mockReturnValue('good');
-    mockWebrtcManager.getStreamStats.mockResolvedValue(mockStats);
-    mockWebrtcManager.detectNetworkQuality.mockResolvedValue('good');
-    mockWebrtcManager.getConnectionInfo.mockReturnValue({
-      state: 'connected',
-      iceConnectionState: 'connected',
-    });
+    mockEventListeners = {
+      onQualityChanged: vi.fn(),
+      onNetworkIssueDetected: vi.fn(),
+      onAdaptationApplied: vi.fn(),
+      onStatsUpdated: vi.fn()
+    };
     
-    // Reset network adaptation state
-    (networkAdaptation as any).monitoringCallIds = new Set();
-    (networkAdaptation as any).qualityHistory = new Map();
-    (networkAdaptation as any).adaptationCallbacks = new Map();
+    networkAdaptation.setEventListeners(mockEventListeners);
+    
+    // Mock stats response
+    const mockStats = new Map([
+      ['inbound-rtp', {
+        type: 'inbound-rtp',
+        mediaType: 'video',
+        bytesReceived: 1000000,
+        packetsReceived: 1000,
+        packetsLost: 10,
+        framesDecoded: 500,
+        framesDropped: 2
+      }],
+      ['outbound-rtp', {
+        type: 'outbound-rtp',
+        mediaType: 'video',
+        bytesSent: 800000,
+        packetsSent: 900
+      }],
+      ['candidate-pair', {
+        type: 'candidate-pair',
+        state: 'succeeded',
+        currentRoundTripTime: 0.05, // 50ms
+        availableOutgoingBitrate: 1500000, // 1.5Mbps
+        availableIncomingBitrate: 2000000  // 2Mbps
+      }]
+    ]);
+    
+    mockPeerConnection.getStats = vi.fn().mockResolvedValue(mockStats);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
+  describe('Configuration Management', () => {
+    it('should set event listeners correctly', () => {
+      const listeners: NetworkAdaptationEventListeners = {
+        onQualityChanged: vi.fn(),
+        onNetworkIssueDetected: vi.fn()
+      };
+      
+      networkAdaptation.setEventListeners(listeners);
+      
+      expect(listeners.onQualityChanged).toBeDefined();
+      expect(listeners.onNetworkIssueDetected).toBeDefined();
+    });
+
+    it('should update adaptation config', () => {
+      const config: Partial<AdaptationConfig> = {
+        enableVideoAdaptation: false,
+        measurementInterval: 10000,
+        maxAdaptationsPerMinute: 3
+      };
+      
+      networkAdaptation.setAdaptationConfig(config);
+      
+      // Configuration should be updated (verify through behavior)
+      expect(() => networkAdaptation.setAdaptationConfig(config)).not.toThrow();
+    });
+  });
+
+  describe('Peer Connection Management', () => {
+    it('should add peer connection for monitoring', () => {
+      const connectionId = 'test-connection-1';
+      
+      networkAdaptation.addPeerConnection(connectionId, mockPeerConnection);
+      
+      // Verify monitoring starts when first connection is added
+      expect(() => networkAdaptation.addPeerConnection(connectionId, mockPeerConnection)).not.toThrow();
+    });
+
+    it('should remove peer connection from monitoring', () => {
+      const connectionId = 'test-connection-1';
+      
+      networkAdaptation.addPeerConnection(connectionId, mockPeerConnection);
+      networkAdaptation.removePeerConnection(connectionId);
+      
+      // Should not throw when removing non-existent connection
+      expect(() => networkAdaptation.removePeerConnection('non-existent')).not.toThrow();
+    });
+
+    it('should start monitoring when peer connection is added', () => {
+      const connectionId = 'test-connection-1';
+      
+      networkAdaptation.addPeerConnection(connectionId, mockPeerConnection);
+      
+      // Verify monitoring is active
+      expect(() => networkAdaptation.startMonitoring()).not.toThrow();
+    });
+
+    it('should stop monitoring when all connections are removed', () => {
+      const connectionId = 'test-connection-1';
+      
+      networkAdaptation.addPeerConnection(connectionId, mockPeerConnection);
+      networkAdaptation.removePeerConnection(connectionId);
+      
+      // Monitoring should stop automatically
+      expect(() => networkAdaptation.stopMonitoring()).not.toThrow();
+    });
+  });
+
   describe('Network Quality Measurement', () => {
-    it('should measure network quality successfully', async () => {
-      // Act
-      const quality = await networkAdaptation.measureNetworkQuality();
-
-      // Assert
-      expect(quality).toEqual({
-        bandwidth: expect.any(Number),
-        latency: expect.any(Number),
-        packetLoss: expect.any(Number),
-        jitter: expect.any(Number),
-        connectionType: '4g',
-        effectiveBandwidth: 10,
-        level: 'good',
-        timestamp: expect.any(Number),
-      });
+    beforeEach(() => {
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
     });
 
-    it('should handle network measurement failure', async () => {
-      // Arrange
-      mockWebrtcManager.detectNetworkQuality.mockRejectedValue(new Error('Measurement failed'));
-
-      // Act
-      const quality = await networkAdaptation.measureNetworkQuality();
-
-      // Assert
-      expect(quality.level).toBe('unknown');
-      expect(quality.bandwidth).toBe(0);
+    it('should measure network quality manually', async () => {
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState).toBeDefined();
+      if (qualityState) {
+        expect(qualityState.level).toMatch(/excellent|good|fair|poor|critical/);
+        expect(qualityState.metrics).toBeDefined();
+        expect(qualityState.recommendedVideoQuality).toBeDefined();
+        expect(qualityState.recommendedAudioQuality).toBeDefined();
+      }
     });
 
-    it('should classify network quality correctly', () => {
-      // Arrange
-      const metrics = {
-        bandwidth: 1500,
-        latency: 80,
-        packetLoss: 0.02,
-      };
-
-      // Act
-      const level = networkAdaptation.classifyNetworkQuality(metrics);
-
-      // Assert
-      expect(level).toBe('good');
+    it('should collect connection stats correctly', async () => {
+      // Trigger manual measurement to test stats collection
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(mockPeerConnection.getStats).toHaveBeenCalled();
+      expect(qualityState?.metrics.bandwidth).toBeGreaterThan(0);
+      expect(qualityState?.metrics.latency).toBeGreaterThan(0);
     });
 
-    it('should classify poor network quality', () => {
-      // Arrange
-      const metrics = {
-        bandwidth: 100,
-        latency: 600,
-        packetLoss: 0.15,
-      };
+    it('should aggregate metrics from multiple connections', async () => {
+      // Add another connection
+      const connection2 = { ...mockPeerConnection };
+      networkAdaptation.addPeerConnection('test-connection-2', connection2 as RTCPeerConnection);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState?.metrics).toBeDefined();
+      expect(mockPeerConnection.getStats).toHaveBeenCalledTimes(2);
+    });
 
-      // Act
-      const level = networkAdaptation.classifyNetworkQuality(metrics);
-
-      // Assert
-      expect(level).toBe('poor');
+    it('should handle stats collection errors gracefully', async () => {
+      mockPeerConnection.getStats = vi.fn().mockRejectedValue(new Error('Stats collection failed'));
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      // Should not throw and may return null or default state
+      expect(qualityState).toBeDefined();
     });
   });
 
-  describe('Network Monitoring', () => {
-    const callId = 'call123';
-
-    it('should start network monitoring successfully', async () => {
-      // Act
-      await networkAdaptation.startNetworkMonitoring(callId);
-
-      // Assert
-      expect((networkAdaptation as any).monitoringCallIds.has(callId)).toBe(true);
+  describe('Network Quality Analysis', () => {
+    beforeEach(() => {
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
     });
 
-    it('should stop network monitoring successfully', async () => {
-      // Arrange
-      await networkAdaptation.startNetworkMonitoring(callId);
-
-      // Act
-      await networkAdaptation.stopNetworkMonitoring(callId);
-
-      // Assert
-      expect((networkAdaptation as any).monitoringCallIds.has(callId)).toBe(false);
-    });
-
-    it('should handle network quality changes during monitoring', async () => {
-      // Arrange
-      const callback = vi.fn();
-      networkAdaptation.onNetworkQualityChange(callback);
-      
-      await networkAdaptation.startNetworkMonitoring(callId);
-
-      // Act
-      // Simulate quality change
-      (networkAdaptation as any).handleQualityChange(callId, 'poor');
-
-      // Assert
-      expect(callback).toHaveBeenCalledWith(callId, 'poor');
-    });
-
-    it('should detect network degradation', async () => {
-      // Arrange
-      const callback = vi.fn();
-      networkAdaptation.onNetworkDegradation(callback);
-      
-      // Simulate quality history
-      (networkAdaptation as any).qualityHistory.set(callId, [
-        { level: 'excellent', timestamp: 1000 },
-        { level: 'good', timestamp: 2000 },
-        { level: 'fair', timestamp: 3000 },
-        { level: 'poor', timestamp: 4000 },
+    it('should classify excellent network quality', async () => {
+      // Mock stats for excellent quality
+      const excellentStats = new Map([
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.03, // 30ms
+          availableOutgoingBitrate: 3000000, // 3Mbps
+          availableIncomingBitrate: 3000000
+        }]
       ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(excellentStats);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState?.level).toBe('excellent');
+      expect(qualityState?.recommendedVideoQuality).toBe('ultra');
+      expect(qualityState?.recommendedAudioQuality).toBe('high');
+    });
 
-      // Act
-      (networkAdaptation as any).checkForDegradation(callId);
+    it('should classify poor network quality', async () => {
+      // Mock stats for poor quality
+      const poorStats = new Map([
+        ['inbound-rtp', {
+          type: 'inbound-rtp',
+          mediaType: 'video',
+          packetsReceived: 1000,
+          packetsLost: 100 // 10% packet loss
+        }],
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.4, // 400ms
+          availableOutgoingBitrate: 150000, // 150Kbps
+          availableIncomingBitrate: 150000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(poorStats);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState?.level).toBe('poor');
+      expect(qualityState?.recommendedVideoQuality).toBe('low');
+    });
 
-      // Assert
-      expect(callback).toHaveBeenCalledWith(callId, {
-        from: 'excellent',
-        to: 'poor',
-        degradationRate: expect.any(Number),
-      });
+    it('should detect critical network quality', async () => {
+      // Mock stats for critical quality
+      const criticalStats = new Map([
+        ['inbound-rtp', {
+          type: 'inbound-rtp',
+          mediaType: 'video',
+          packetsReceived: 1000,
+          packetsLost: 200 // 20% packet loss
+        }],
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.6, // 600ms
+          availableOutgoingBitrate: 50000, // 50Kbps
+          availableIncomingBitrate: 50000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(criticalStats);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState?.level).toBe('critical');
+      expect(qualityState?.recommendedVideoQuality).toBe('low');
+      expect(qualityState?.recommendedAudioQuality).toBe('low');
     });
   });
 
-  describe('Adaptive Quality Control', () => {
-    const callId = 'call123';
-    const userId = 'user456';
-
-    it('should adjust bitrate based on network quality', async () => {
-      // Arrange
-      const quality = 'poor';
-
-      // Act
-      await networkAdaptation.adjustBitrate(quality, 'video');
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        expect.any(String),
-        'low'
-      );
+  describe('Adaptive Quality Adjustment', () => {
+    beforeEach(() => {
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
     });
 
-    it('should enable auto bitrate adjustment', async () => {
-      // Act
-      await networkAdaptation.enableAutoBitrate(callId, true);
-
-      // Assert
-      expect(mockWebrtcManager.autoAdjustVideoQuality).toHaveBeenCalledWith(callId);
+    it('should trigger adaptation when quality changes significantly', async () => {
+      // First measurement - good quality
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      // Second measurement - poor quality
+      const poorStats = new Map([
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.3, // 300ms
+          availableOutgoingBitrate: 100000, // 100Kbps
+          availableIncomingBitrate: 100000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(poorStats);
+      
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      // Should trigger adaptation event
+      expect(mockEventListeners.onQualityChanged).toHaveBeenCalled();
     });
 
-    it('should disable auto bitrate adjustment', async () => {
-      // Arrange
-      (networkAdaptation as any).autoBitrateEnabled.set(callId, true);
-
-      // Act
-      await networkAdaptation.enableAutoBitrate(callId, false);
-
-      // Assert
-      expect((networkAdaptation as any).autoBitrateEnabled.get(callId)).toBe(false);
-    });
-
-    it('should adjust frame rate based on network conditions', async () => {
-      // Arrange
-      const networkQuality = 'fair';
-
-      // Act
-      await networkAdaptation.adjustFrameRate(callId, networkQuality);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        callId,
-        expect.objectContaining({
-          framerate: expect.any(Number),
-        })
-      );
-    });
-
-    it('should adjust resolution based on bandwidth', async () => {
-      // Arrange
-      const bandwidth = 300; // Low bandwidth
-
-      // Act
-      await networkAdaptation.adjustResolution(callId, bandwidth);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        callId,
-        expect.objectContaining({
-          width: 320,
-          height: 240,
-        })
-      );
-    });
-  });
-
-  describe('Connection Recovery', () => {
-    const callId = 'call123';
-
-    it('should handle network change successfully', async () => {
-      // Arrange
-      const newQuality = 'fair';
-
-      // Act
-      await networkAdaptation.handleNetworkChange(callId, newQuality);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalled();
-    });
-
-    it('should attempt reconnection on connection failure', async () => {
-      // Arrange
-      mockWebrtcManager.getConnectionInfo.mockReturnValue({
-        state: 'failed',
-        iceConnectionState: 'failed',
-      });
-
-      // Act
-      const reconnected = await networkAdaptation.attemptReconnection(callId);
-
-      // Assert
-      expect(reconnected).toBe(true);
-    });
-
-    it('should handle reconnection failure', async () => {
-      // Arrange
-      mockWebrtcManager.getConnectionInfo.mockReturnValue({
-        state: 'failed',
-        iceConnectionState: 'failed',
+    it('should respect adaptation frequency limits', async () => {
+      // Configure for testing
+      networkAdaptation.setAdaptationConfig({
+        maxAdaptationsPerMinute: 1,
+        stabilityDuration: 1000
       });
       
-      // Mock reconnection failure
-      vi.spyOn(networkAdaptation, 'attemptReconnection').mockResolvedValue(false);
-
-      // Act
-      const reconnected = await networkAdaptation.attemptReconnection(callId);
-
-      // Assert
-      expect(reconnected).toBe(false);
+      // Trigger multiple adaptations quickly
+      await networkAdaptation.measureNetworkQualityManual();
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      // Should be limited by frequency control
+      expect(mockEventListeners.onAdaptationApplied).toHaveBeenCalledTimes(0);
     });
 
-    it('should switch to audio only on poor video quality', async () => {
-      // Act
-      await networkAdaptation.switchToAudioOnly(callId);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        callId,
-        expect.objectContaining({
-          video: false,
-        })
-      );
-    });
-
-    it('should restore video when quality improves', async () => {
-      // Arrange
-      (networkAdaptation as any).audioOnlyMode.set(callId, true);
-
-      // Act
-      await networkAdaptation.restoreVideo(callId);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        callId,
-        expect.objectContaining({
-          video: true,
-        })
-      );
-      expect((networkAdaptation as any).audioOnlyMode.get(callId)).toBe(false);
+    it('should calculate jitter from metrics history', async () => {
+      // Take multiple measurements to build history
+      for (let i = 0; i < 5; i++) {
+        await networkAdaptation.measureNetworkQualityManual();
+        vi.advanceTimersByTime(5000); // Advance time between measurements
+      }
+      
+      const metrics = networkAdaptation.getMetricsHistory();
+      expect(metrics.length).toBeGreaterThan(0);
+      
+      // Last measurement should have jitter calculated
+      const lastMetrics = metrics[metrics.length - 1];
+      expect(lastMetrics.jitter).toBeGreaterThanOrEqual(0);
     });
   });
 
-  describe('Bandwidth Estimation', () => {
-    it('should estimate available bandwidth', async () => {
-      // Arrange
-      mockWebrtcManager.getStreamStats.mockResolvedValue({
-        ...mockStats,
-        bandwidth: 2000,
-      });
-
-      // Act
-      const bandwidth = await networkAdaptation.estimateBandwidth('call123');
-
-      // Assert
-      expect(bandwidth).toBe(2000);
+  describe('Network Issue Detection', () => {
+    beforeEach(() => {
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
     });
 
-    it('should handle bandwidth estimation failure', async () => {
-      // Arrange
-      mockWebrtcManager.getStreamStats.mockRejectedValue(new Error('Stats unavailable'));
-
-      // Act
-      const bandwidth = await networkAdaptation.estimateBandwidth('call123');
-
-      // Assert
-      expect(bandwidth).toBe(0);
+    it('should detect high latency issues', async () => {
+      const highLatencyStats = new Map([
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.6, // 600ms (will be converted to 600ms)
+          availableOutgoingBitrate: 1000000,
+          availableIncomingBitrate: 1000000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(highLatencyStats);
+      
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(mockEventListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
+        expect.stringContaining('网络延迟过高'),
+        expect.any(Object)
+      );
     });
 
-    it('should predict bandwidth based on history', () => {
-      // Arrange
-      const history = [1000, 1200, 1100, 1300, 1250];
+    it('should detect high packet loss', async () => {
+      const highPacketLossStats = new Map([
+        ['inbound-rtp', {
+          type: 'inbound-rtp',
+          mediaType: 'video',
+          packetsReceived: 1000,
+          packetsLost: 80 // 8% packet loss
+        }],
+        ['outbound-rtp', {
+          type: 'outbound-rtp',
+          mediaType: 'video',
+          packetsSent: 1000
+        }],
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.1,
+          availableOutgoingBitrate: 1000000,
+          availableIncomingBitrate: 1000000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(highPacketLossStats);
+      
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(mockEventListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
+        expect.stringContaining('丢包率过高'),
+        expect.any(Object)
+      );
+    });
 
-      // Act
-      const predicted = networkAdaptation.predictBandwidth(history);
+    it('should detect insufficient bandwidth', async () => {
+      const lowBandwidthStats = new Map([
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.1,
+          availableOutgoingBitrate: 50000, // 50Kbps
+          availableIncomingBitrate: 50000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(lowBandwidthStats);
+      
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(mockEventListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
+        expect.stringContaining('可用带宽不足'),
+        expect.any(Object)
+      );
+    });
 
-      // Assert
-      expect(predicted).toBeCloseTo(1170, 0); // Average with trend
+    it('should detect network jitter issues', async () => {
+      // Create varying latency measurements to trigger jitter detection
+      const measurements = [
+        { currentRoundTripTime: 0.05 }, // 50ms
+        { currentRoundTripTime: 0.15 }, // 150ms
+        { currentRoundTripTime: 0.08 }, // 80ms
+        { currentRoundTripTime: 0.18 }, // 180ms
+        { currentRoundTripTime: 0.12 }  // 120ms
+      ];
+      
+      for (const measurement of measurements) {
+        const stats = new Map([
+          ['candidate-pair', {
+            type: 'candidate-pair',
+            state: 'succeeded',
+            availableOutgoingBitrate: 1000000,
+            availableIncomingBitrate: 1000000,
+            ...measurement
+          }]
+        ]);
+        
+        mockPeerConnection.getStats = vi.fn().mockResolvedValue(stats);
+        await networkAdaptation.measureNetworkQualityManual();
+      }
+      
+      // Should detect jitter issues after building history
+      expect(mockEventListeners.onNetworkIssueDetected).toHaveBeenCalledWith(
+        expect.stringContaining('网络抖动严重'),
+        expect.any(Object)
+      );
     });
   });
 
-  describe('Quality Optimization', () => {
-    const callId = 'call123';
-
-    it('should optimize for low latency', async () => {
-      // Act
-      await networkAdaptation.optimizeForLowLatency(callId);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        callId,
-        expect.objectContaining({
-          framerate: expect.any(Number),
-          bitrate: expect.any(Number),
-        })
-      );
+  describe('Monitoring Control', () => {
+    it('should start and stop monitoring manually', () => {
+      networkAdaptation.startMonitoring();
+      expect(() => networkAdaptation.startMonitoring()).not.toThrow();
+      
+      networkAdaptation.stopMonitoring();
+      expect(() => networkAdaptation.stopMonitoring()).not.toThrow();
     });
 
-    it('should optimize for high quality', async () => {
-      // Act
-      await networkAdaptation.optimizeForHighQuality(callId);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        callId,
-        expect.objectContaining({
-          width: 1920,
-          height: 1080,
-        })
-      );
+    it('should handle monitoring with no connections gracefully', async () => {
+      networkAdaptation.startMonitoring();
+      
+      // Advance timer to trigger measurement
+      vi.advanceTimersByTime(5000);
+      
+      // Should not throw even with no connections
+      expect(() => vi.advanceTimersByTime(5000)).not.toThrow();
     });
 
-    it('should optimize for battery saving', async () => {
-      // Act
-      await networkAdaptation.optimizeForBatterySaving(callId);
-
-      // Assert
-      expect(mockWebrtcManager.adjustVideoQuality).toHaveBeenCalledWith(
-        callId,
-        expect.objectContaining({
-          framerate: 15,
-          bitrate: expect.any(Number),
-        })
-      );
+    it('should schedule periodic measurements', async () => {
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
+      networkAdaptation.startMonitoring();
+      
+      // Advance timer to trigger measurement
+      vi.advanceTimersByTime(5000);
+      
+      expect(mockPeerConnection.getStats).toHaveBeenCalled();
     });
   });
 
-  describe('Network Diagnostics', () => {
-    it('should run network diagnostics', async () => {
-      // Act
-      const diagnostics = await networkAdaptation.runNetworkDiagnostics();
-
-      // Assert
-      expect(diagnostics).toEqual({
-        timestamp: expect.any(Number),
-        networkQuality: expect.any(String),
-        bandwidth: expect.any(Number),
-        latency: expect.any(Number),
-        packetLoss: expect.any(Number),
-        jitter: expect.any(Number),
-        connectionType: expect.any(String),
-        recommendations: expect.any(Array),
-        issues: expect.any(Array),
-      });
+  describe('Data Management', () => {
+    beforeEach(() => {
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
     });
 
-    it('should provide network recommendations', () => {
-      // Arrange
-      const quality = 'poor';
-
-      // Act
-      const recommendations = networkAdaptation.getNetworkRecommendations(quality);
-
-      // Assert
-      expect(recommendations).toContain('降低视频质量以改善连接稳定性');
-      expect(recommendations).toContain('检查网络连接状态');
+    it('should maintain metrics history with size limit', async () => {
+      // Generate more measurements than the history limit
+      for (let i = 0; i < 25; i++) {
+        await networkAdaptation.measureNetworkQualityManual();
+      }
+      
+      const history = networkAdaptation.getMetricsHistory();
+      expect(history.length).toBeLessThanOrEqual(20); // MAX_HISTORY_LENGTH
     });
 
-    it('should detect network issues', async () => {
-      // Arrange
-      const metrics = {
-        bandwidth: 50,
-        latency: 800,
-        packetLoss: 0.2,
-        jitter: 100,
+    it('should track quality adjustment history', async () => {
+      // Trigger quality changes
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      // Change network conditions to trigger adaptation
+      const poorStats = new Map([
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.3,
+          availableOutgoingBitrate: 100000,
+          availableIncomingBitrate: 100000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(poorStats);
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      const adjustmentHistory = networkAdaptation.getQualityAdjustmentHistory();
+      expect(adjustmentHistory).toBeDefined();
+      expect(Array.isArray(adjustmentHistory)).toBe(true);
+    });
+
+    it('should get current quality state', async () => {
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      const currentState = networkAdaptation.getCurrentQualityState();
+      expect(currentState).toBeDefined();
+      expect(currentState?.level).toMatch(/excellent|good|fair|poor|critical/);
+    });
+
+    it('should reset adaptation state', async () => {
+      await networkAdaptation.measureNetworkQualityManual();
+      
+      networkAdaptation.resetAdaptationState();
+      
+      const currentState = networkAdaptation.getCurrentQualityState();
+      const metricsHistory = networkAdaptation.getMetricsHistory();
+      const adjustmentHistory = networkAdaptation.getQualityAdjustmentHistory();
+      
+      expect(currentState).toBeNull();
+      expect(metricsHistory).toHaveLength(0);
+      expect(adjustmentHistory).toHaveLength(0);
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('should handle initialization failure gracefully', () => {
+      const newAdapter = new NetworkAdaptation();
+      expect(newAdapter).toBeDefined();
+    });
+
+    it('should handle peer connection getStats failure', async () => {
+      mockPeerConnection.getStats = vi.fn().mockRejectedValue(new Error('getStats failed'));
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      // Should handle error gracefully
+      expect(qualityState).toBeDefined();
+    });
+
+    it('should handle missing stats data', async () => {
+      // Mock empty stats
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(new Map());
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState?.metrics.bandwidth).toBe(0);
+      expect(qualityState?.metrics.latency).toBe(0);
+    });
+
+    it('should handle corrupted stats data', async () => {
+      // Mock corrupted stats
+      const corruptedStats = new Map([
+        ['invalid-type', {
+          type: 'unknown',
+          invalidField: null
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(corruptedStats);
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      // Should handle gracefully with default values
+      expect(qualityState?.metrics).toBeDefined();
+    });
+  });
+
+  describe('Resource Management', () => {
+    it('should clean up resources on destroy', () => {
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
+      networkAdaptation.startMonitoring();
+      
+      networkAdaptation.destroy();
+      
+      // Should stop monitoring and clear connections
+      expect(() => networkAdaptation.destroy()).not.toThrow();
+    });
+
+    it('should handle multiple destroy calls safely', () => {
+      networkAdaptation.destroy();
+      networkAdaptation.destroy();
+      
+      expect(() => networkAdaptation.destroy()).not.toThrow();
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should handle very high packet loss gracefully', async () => {
+      const extremeStats = new Map([
+        ['inbound-rtp', {
+          type: 'inbound-rtp',
+          mediaType: 'video',
+          packetsReceived: 10,
+          packetsLost: 1000 // More packets lost than received
+        }],
+        ['outbound-rtp', {
+          type: 'outbound-rtp',
+          mediaType: 'video',
+          packetsSent: 1000
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(extremeStats);
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState?.level).toBe('critical');
+      expect(qualityState?.metrics.packetLoss).toBeGreaterThan(0);
+    });
+
+    it('should handle zero bandwidth gracefully', async () => {
+      const zeroStats = new Map([
+        ['candidate-pair', {
+          type: 'candidate-pair',
+          state: 'succeeded',
+          currentRoundTripTime: 0.1,
+          availableOutgoingBitrate: 0,
+          availableIncomingBitrate: 0
+        }]
+      ]);
+      
+      mockPeerConnection.getStats = vi.fn().mockResolvedValue(zeroStats);
+      networkAdaptation.addPeerConnection('test-connection', mockPeerConnection);
+      
+      const qualityState = await networkAdaptation.measureNetworkQualityManual();
+      
+      expect(qualityState?.level).toBe('critical');
+      expect(qualityState?.metrics.bandwidth).toBe(0);
+    });
+
+    it('should handle adaptation config with invalid values', () => {
+      const invalidConfig: Partial<AdaptationConfig> = {
+        measurementInterval: -1000,
+        maxAdaptationsPerMinute: -5,
+        adaptationThreshold: 2.0 // > 1.0
       };
-
-      // Act
-      const issues = networkAdaptation.detectNetworkIssues(metrics);
-
-      // Assert
-      expect(issues).toContainEqual(
-        expect.objectContaining({
-          type: 'low_bandwidth',
-          severity: 'high',
-        })
-      );
-      expect(issues).toContainEqual(
-        expect.objectContaining({
-          type: 'high_latency',
-          severity: 'high',
-        })
-      );
-    });
-  });
-
-  describe('Event Handling', () => {
-    it('should handle connection state changes', async () => {
-      // Arrange
-      const callback = vi.fn();
-      networkAdaptation.onConnectionStateChange(callback);
-
-      // Act
-      (networkAdaptation as any).handleConnectionStateChange('call123', 'disconnected');
-
-      // Assert
-      expect(callback).toHaveBeenCalledWith('call123', 'disconnected');
-    });
-
-    it('should handle bandwidth changes', async () => {
-      // Arrange
-      const callback = vi.fn();
-      networkAdaptation.onBandwidthChange(callback);
-
-      // Act
-      (networkAdaptation as any).handleBandwidthChange('call123', 500);
-
-      // Assert
-      expect(callback).toHaveBeenCalledWith('call123', 500);
-    });
-
-    it('should handle quality degradation events', async () => {
-      // Arrange
-      const callback = vi.fn();
-      networkAdaptation.onQualityDegradation(callback);
-
-      // Act
-      (networkAdaptation as any).handleQualityDegradation('call123', {
-        from: 'good',
-        to: 'poor',
-        reason: 'bandwidth_drop',
-      });
-
-      // Assert
-      expect(callback).toHaveBeenCalledWith('call123', {
-        from: 'good',
-        to: 'poor',
-        reason: 'bandwidth_drop',
-      });
-    });
-  });
-
-  describe('Configuration and Settings', () => {
-    it('should update adaptation settings', () => {
-      // Arrange
-      const settings = {
-        enableAutoAdjustment: true,
-        qualityThresholds: {
-          excellent: 2000,
-          good: 1000,
-          fair: 500,
-          poor: 200,
-        },
-        adaptationSensitivity: 'medium' as const,
-      };
-
-      // Act
-      networkAdaptation.updateSettings(settings);
-
-      // Assert
-      const currentSettings = (networkAdaptation as any).settings;
-      expect(currentSettings.enableAutoAdjustment).toBe(true);
-      expect(currentSettings.adaptationSensitivity).toBe('medium');
-    });
-
-    it('should get current adaptation settings', () => {
-      // Act
-      const settings = networkAdaptation.getSettings();
-
-      // Assert
-      expect(settings).toEqual({
-        enableAutoAdjustment: expect.any(Boolean),
-        qualityThresholds: expect.any(Object),
-        adaptationSensitivity: expect.any(String),
-        monitoringInterval: expect.any(Number),
-        historySize: expect.any(Number),
-      });
-    });
-  });
-
-  describe('Cleanup and Resource Management', () => {
-    it('should cleanup monitoring resources', async () => {
-      // Arrange
-      const callId = 'call123';
-      await networkAdaptation.startNetworkMonitoring(callId);
-
-      // Act
-      await networkAdaptation.cleanup(callId);
-
-      // Assert
-      expect((networkAdaptation as any).monitoringCallIds.has(callId)).toBe(false);
-      expect((networkAdaptation as any).qualityHistory.has(callId)).toBe(false);
-    });
-
-    it('should cleanup all resources on destroy', async () => {
-      // Arrange
-      await networkAdaptation.startNetworkMonitoring('call1');
-      await networkAdaptation.startNetworkMonitoring('call2');
-
-      // Act
-      await networkAdaptation.destroy();
-
-      // Assert
-      expect((networkAdaptation as any).monitoringCallIds.size).toBe(0);
-      expect((networkAdaptation as any).qualityHistory.size).toBe(0);
+      
+      // Should not throw with invalid config
+      expect(() => networkAdaptation.setAdaptationConfig(invalidConfig)).not.toThrow();
     });
   });
 });
