@@ -1,6 +1,6 @@
 import React from 'react';
-import { screen, fireEvent } from '@testing-library/react';
-import { vi } from 'vitest';
+import { screen, fireEvent, cleanup } from '@testing-library/react';
+import { vi, beforeEach } from 'vitest';
 import { render } from '../../utils/testUtils';
 import MyClaimsMobileCard, { Claim } from '@/src/components/mobile/MyClaimsMobileCard';
 
@@ -30,6 +30,7 @@ describe('MyClaimsMobileCard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cleanup(); // Clean up DOM between tests
   });
 
   it('should render claim information correctly', () => {
@@ -55,7 +56,7 @@ describe('MyClaimsMobileCard', () => {
       reviewStatus: '审核通过' as const,
     };
 
-    render(
+    const { unmount } = render(
       <MyClaimsMobileCard
         claim={claimWithApproval}
         {...mockHandlers}
@@ -63,11 +64,14 @@ describe('MyClaimsMobileCard', () => {
       />
     );
 
-    // Need to expand to see approved amount
-    const expandButton = screen.getByLabelText('展开详情');
-    fireEvent.click(expandButton);
+    // Need to expand to see approved amount - use getAllByLabelText and pick the first one
+    const expandButtons = screen.getAllByLabelText('展开详情');
+    fireEvent.click(expandButtons[0]);
 
     expect(screen.getByText('¥80,000')).toBeInTheDocument();
+    
+    // Clean up after test
+    unmount();
   });
 
   it('should handle view details action', () => {
@@ -150,7 +154,7 @@ describe('MyClaimsMobileCard', () => {
   });
 
   it('should expand and collapse details', async () => {
-    render(
+    const { unmount } = render(
       <MyClaimsMobileCard
         claim={mockClaim}
         {...mockHandlers}
@@ -158,25 +162,29 @@ describe('MyClaimsMobileCard', () => {
       />
     );
 
-    // Find expand button
-    const expandButton = screen.getByLabelText('展开详情');
-    expect(expandButton).toBeInTheDocument();
+    // Find expand button - use getAllByLabelText and pick the first one
+    const expandButtons = screen.getAllByLabelText('展开详情');
+    expect(expandButtons[0]).toBeInTheDocument();
 
     // Expand
-    fireEvent.click(expandButton);
+    fireEvent.click(expandButtons[0]);
 
     // Now review opinion should be visible
     expect(screen.getByText('需要补充材料')).toBeInTheDocument();
 
-    // Check that button text changed to collapse
-    const collapseButton = screen.getByLabelText('收起详情');
-    expect(collapseButton).toBeInTheDocument();
+    // Check that button text changed to collapse - use getAllByLabelText for collapse buttons
+    const collapseButtons = screen.getAllByLabelText('收起详情');
+    expect(collapseButtons[0]).toBeInTheDocument();
 
     // Collapse
-    fireEvent.click(collapseButton);
+    fireEvent.click(collapseButtons[0]);
 
     // Check that button text changed back to expand
-    expect(screen.getByLabelText('展开详情')).toBeInTheDocument();
+    const newExpandButtons = screen.getAllByLabelText('展开详情');
+    expect(newExpandButtons[0]).toBeInTheDocument();
+    
+    // Clean up after test
+    unmount();
   });
 
   it('should display correct status chip colors', () => {
