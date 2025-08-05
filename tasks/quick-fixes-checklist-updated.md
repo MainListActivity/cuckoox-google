@@ -21,12 +21,12 @@
 -  [x] Turnstile.test.tsx
 
 ## 页面测试 (Pages)
-- [claimId].test.tsx
-- attachment.test.tsx
-- create-claim-attachments.test.tsx
+-  [x] [claimId].test.tsx
+-  [x] attachment.test.tsx
+-  [x] create-claim-attachments.test.tsx
 - create.test.tsx
 - creditors.test.tsx
-- index.test.tsx
+-  [x] index.test.tsx
 - login.test.tsx
 - messages.test.tsx
 - review.test.tsx
