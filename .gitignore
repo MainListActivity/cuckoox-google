@@ -45,3 +45,5 @@ coverage/
 public/sw/
 
 test-results
+
+bun.lock*
