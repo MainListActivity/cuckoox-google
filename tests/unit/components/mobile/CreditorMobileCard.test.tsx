@@ -31,6 +31,15 @@ describe('CreditorMobileCard', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
   });
 
   it('should render creditor information correctly', () => {

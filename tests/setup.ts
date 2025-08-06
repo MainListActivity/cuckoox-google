@@ -91,6 +91,14 @@ vi.mock("@mui/material/styles", async (importOriginal) => {
         down: vi.fn().mockReturnValue("@media (max-width:9999px)"),
         between: vi.fn().mockReturnValue("@media (min-width:0px) and (max-width:9999px)"),
         only: vi.fn().mockReturnValue("@media (min-width:0px) and (max-width:9999px)"),
+        values: {
+          xs: 0,
+          sm: 600,
+          md: 900,
+          lg: 1200,
+          xl: 1536,
+        },
+        keys: ['xs', 'sm', 'md', 'lg', 'xl'],
       },
       palette: {
         mode: 'light',
@@ -98,6 +106,41 @@ vi.mock("@mui/material/styles", async (importOriginal) => {
         secondary: { main: '#dc004e' },
       },
       spacing: vi.fn().mockImplementation((...args) => args.map(arg => `${arg * 8}px`).join(' ')),
+      shape: {
+        borderRadius: 4,
+      },
+      typography: {
+        fontSize: 14,
+        htmlFontSize: 16,
+        fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+      },
+      shadows: Array(25).fill('none'),
+      transitions: {
+        duration: {
+          shortest: 150,
+          shorter: 200,
+          short: 250,
+          standard: 300,
+          complex: 375,
+          enteringScreen: 225,
+          leavingScreen: 195,
+        },
+        easing: {
+          easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
+          easeOut: 'cubic-bezier(0.0, 0, 0.2, 1)',
+          easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
+          sharp: 'cubic-bezier(0.4, 0, 0.6, 1)',
+        },
+      },
+      zIndex: {
+        mobileStepper: 1000,
+        speedDial: 1050,
+        appBar: 1100,
+        drawer: 1200,
+        modal: 1300,
+        snackbar: 1400,
+        tooltip: 1500,
+      },
     }),
   };
 });
@@ -198,7 +241,37 @@ Object.defineProperty(window, 'location', {
 });
 
 // Global cleanup for all tests to prevent cross-contamination
-import { afterEach } from "vitest";
+import { afterEach, beforeEach } from "vitest";
+
+// Store original objects to restore them
+const originalMatchMedia = window.matchMedia;
+const originalHTMLVideoElement = global.HTMLVideoElement;
+const originalRequestFullscreen = document.documentElement.requestFullscreen;
+const originalExitFullscreen = document.exitFullscreen;
+
+beforeEach(() => {
+  // Reset global mocks to ensure clean state
+  vi.clearAllMocks();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  
+  // Ensure window.matchMedia is properly mocked
+  if (!window.matchMedia || typeof window.matchMedia !== 'function') {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(), // deprecated
+        removeListener: vi.fn(), // deprecated
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  }
+});
 
 afterEach(() => {
   // Clear all mocks, timers, and modules
@@ -210,6 +283,59 @@ afterEach(() => {
   // Reset window.location.href to default
   (window.location as any).href = '';
   (window.location as any).pathname = '/';
+  
+  // Reset window.matchMedia to original or ensure proper mock
+  try {
+    if (originalMatchMedia) {
+      Object.defineProperty(window, "matchMedia", {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+    
+    // Re-establish the mock for consistency
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(), // deprecated
+        removeListener: vi.fn(), // deprecated
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  } catch (e) {
+    // Fallback - just ensure we have a working mock
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  }
+  
+  // Reset HTMLVideoElement if modified
+  if (originalHTMLVideoElement) {
+    global.HTMLVideoElement = originalHTMLVideoElement;
+  }
+  
+  // Reset fullscreen APIs if modified
+  if (originalRequestFullscreen) {
+    document.documentElement.requestFullscreen = originalRequestFullscreen;
+  }
+  if (originalExitFullscreen) {
+    document.exitFullscreen = originalExitFullscreen;
+  }
   
   // Clean up DOM elements to prevent component duplication
   try {
