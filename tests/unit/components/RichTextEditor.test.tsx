@@ -181,6 +181,12 @@ describe("RichTextEditor", () => {
 
     // Use fake timers to control setTimeout/setInterval
     vi.useFakeTimers();
+    
+    // Ensure useMediaQuery is properly mocked for cross-contamination
+    vi.doMock('@mui/material/useMediaQuery', () => ({
+      __esModule: true,
+      default: vi.fn().mockReturnValue(false),
+    }));
 
     // Setup mock for uploadFile
     const { uploadFile } = await import("@/src/services/fileUploadService");
@@ -193,9 +199,15 @@ describe("RichTextEditor", () => {
   });
 
   afterEach(() => {
+    // Clear all mocks
+    vi.clearAllMocks();
+    
     // Clean up timers
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    
+    // Reset any module-level state
+    vi.resetModules();
   });
 
   it("renders editor with basic props", async () => {

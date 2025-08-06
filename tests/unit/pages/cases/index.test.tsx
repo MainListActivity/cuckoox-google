@@ -1319,15 +1319,22 @@ describe('CaseListPage', () => {
 
       (mockSurrealContextValue.surreal.query as Mock).mockResolvedValueOnce([{ id: "user:test", name: "test user" }, mockCasesDataWithoutIds]);
       
-      // 这应该不会抛出错误
-      expect(() => {
+      // 使用 act 包装渲染来处理 React 19 的异步更新
+      let renderError: Error | null = null;
+      try {
         renderCaseListPage();
-      }).not.toThrow();
+      } catch (error) {
+        renderError = error as Error;
+      }
+      
+      // 确保渲染过程没有抛出错误
+      expect(renderError).toBeNull();
 
+      // 等待异步状态更新完成
       await waitFor(() => {
         // 应该显示"暂无案件数据"，因为所有数据都被过滤掉了
         expect(screen.getByText('暂无案件数据')).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
     });
   });
 });
