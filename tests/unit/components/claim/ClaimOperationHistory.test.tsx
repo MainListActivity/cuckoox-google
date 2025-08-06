@@ -14,6 +14,12 @@ import {
 // Mock the services
 import { vi, beforeEach, afterEach } from 'vitest';
 
+// Mock useMediaQuery for MUI
+vi.mock('@mui/material/useMediaQuery', () => ({
+  __esModule: true,
+  default: vi.fn(() => false), // Always return false (desktop mode)
+}));
+
 // Mock the SurrealProvider context
 const mockSurrealContext = {
   client: {},
