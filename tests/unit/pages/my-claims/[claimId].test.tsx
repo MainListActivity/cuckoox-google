@@ -1,10 +1,7 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'; // Added fireEvent
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BrowserRouter } from 'react-router-dom';
-import { I18nextProvider } from 'react-i18next';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import i18n from '@/src/i18n'; // Adjusted path
+import { screen, waitFor, fireEvent } from '@testing-library/react'; // Removed render, Added fireEvent
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render } from '../../utils/testUtils'; // Use testUtils render
 import SubmittedClaimDetailPage from '@/src/pages/my-claims/[claimId]'; // Adjusted path
 import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
 
@@ -67,18 +64,10 @@ describe('SubmittedClaimDetailPage', () => {
     mockClaimId = 'MOCK-CLAIM-ID-123'; 
   });
 
-  const theme = createTheme();
+  // Note: Global cleanup is handled in tests/setup.ts
 
   const renderComponent = () => {
-    render(
-      <BrowserRouter>
-        <ThemeProvider theme={theme}>
-          <I18nextProvider i18n={i18n}>
-            <SubmittedClaimDetailPage />
-          </I18nextProvider>
-        </ThemeProvider>
-      </BrowserRouter>
-    );
+    render(<SubmittedClaimDetailPage />);
   };
 
   // Rendering & Data Loading Tests

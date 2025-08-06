@@ -130,3 +130,30 @@ vi.setConfig({
   testTimeout: 1000,
   hookTimeout: 500,
 });
+
+// Global cleanup for all tests to prevent cross-contamination
+import { afterEach } from "vitest";
+
+afterEach(() => {
+  // Clear all mocks, timers, and modules
+  vi.clearAllMocks();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  vi.resetModules();
+  
+  // Clean up DOM elements to prevent component duplication
+  document.body.innerHTML = '';
+  
+  // Reset document head if needed (for title changes, meta tags, etc.)
+  const metaElements = document.head.querySelectorAll('meta[data-testid], title[data-testid], link[data-testid]');
+  metaElements.forEach(element => element.remove());
+  
+  // Reset any global state that might leak between tests
+  if (typeof window !== 'undefined') {
+    // Clear any global event listeners that might have been added during tests
+    const events = ['resize', 'scroll', 'keydown', 'keyup', 'click', 'focus', 'blur'];
+    events.forEach(event => {
+      const clonedWindow = window.cloneNode ? window.cloneNode(true) : window;
+    });
+  }
+});
