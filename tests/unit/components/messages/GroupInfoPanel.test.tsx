@@ -3,19 +3,24 @@ import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { render } from '../../utils/testUtils';
 import React from 'react';
 
-// Mock window.matchMedia
+// Store original values for cleanup
+const originalMatchMedia = window.matchMedia;
+
+// Mock window.matchMedia with proper cleanup
+const mockMatchMedia = vi.fn().mockImplementation(query => ({
+  matches: query.includes('(orientation: landscape)') ? false : true,
+  media: query,
+  onchange: null,
+  addListener: vi.fn(),
+  removeListener: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(),
+}));
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: query.includes('(orientation: landscape)') ? false : true,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
+  value: mockMatchMedia,
 });
 
 // Mock modules
@@ -35,15 +40,13 @@ vi.mock('@/src/hooks/useGroupData', () => ({
 }));
 
 // 创建简化的测试组件
-const TestGroupInfoPanel = React.lazy(() => 
-  Promise.resolve({
-    default: (props: any) => {
-      const [showEditDialog, setShowEditDialog] = React.useState(false);
-      const [showLeaveConfirm, setShowLeaveConfirm] = React.useState(false);
-      const [showMemberMenu, setShowMemberMenu] = React.useState<string | null>(null);
-      const [editingGroup, setEditingGroup] = React.useState(false);
-      const [newGroupName, setNewGroupName] = React.useState('');
-      const [newGroupDescription, setNewGroupDescription] = React.useState('');
+const TestGroupInfoPanel = (props: any) => {
+  const [showEditDialog, setShowEditDialog] = React.useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = React.useState(false);
+  const [showMemberMenu, setShowMemberMenu] = React.useState<string | null>(null);
+  const [editingGroup, setEditingGroup] = React.useState(false);
+  const [newGroupName, setNewGroupName] = React.useState('');
+  const [newGroupDescription, setNewGroupDescription] = React.useState('');
       
       const group = props.mockGroup || {
         id: 'group:test-group',
@@ -389,8 +392,12 @@ const TestGroupInfoPanel = React.lazy(() =>
           })
         ]
       });
-    }
-  })
+    };
+
+const TestGroupInfoPanelWithSuspense = (props: any) => (
+  <React.Suspense fallback={<div>Loading...</div>}>
+    <TestGroupInfoPanel {...props} />
+  </React.Suspense>
 );
 
 describe('GroupInfoPanel', () => {
@@ -425,6 +432,9 @@ describe('GroupInfoPanel', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    
+    // Reset window.matchMedia mock
+    mockMatchMedia.mockClear();
     
     // Get mocked instances
     mockUseAuth = (await import('@/src/contexts/AuthContext')).useAuth;
@@ -490,13 +500,33 @@ describe('GroupInfoPanel', () => {
     });
   });
 
+  afterEach(() => {
+    // Clean up all mocks and timers
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    
+    // Clear all module mocks to ensure no state leakage
+    vi.resetModules();
+    
+    // Reset any global state that might have been modified
+    if (originalMatchMedia) {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+    
+    // Reset window.matchMedia mock for next test
+    mockMatchMedia.mockClear();
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: mockMatchMedia,
+    });
+  });
+
   describe('组件渲染', () => {
     it('应该正确渲染基本组件结构', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('group-info-panel')).toBeInTheDocument();
@@ -506,11 +536,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该显示群组基本信息', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('group-basic-info')).toBeInTheDocument();
@@ -523,11 +549,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该显示操作按钮', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('group-actions')).toBeInTheDocument();
@@ -541,11 +563,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该显示群组设置信息', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('group-info-panel')).toBeInTheDocument();
@@ -563,11 +581,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该显示成员列表', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('members-list')).toBeInTheDocument();
@@ -584,11 +598,7 @@ describe('GroupInfoPanel', () => {
 
   describe('群组操作', () => {
     it('应该能够触发编辑群组', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('编辑群组')).toBeInTheDocument();
@@ -607,11 +617,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够保存群组编辑', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       // 打开编辑对话框
       const editButton = screen.getByLabelText('编辑群组');
@@ -651,11 +657,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够取消群组编辑', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       // 打开编辑对话框
       const editButton = screen.getByLabelText('编辑群组');
@@ -675,11 +677,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够发起语音通话', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('语音通话')).toBeInTheDocument();
@@ -692,11 +690,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够发起视频通话', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('视频通话')).toBeInTheDocument();
@@ -709,11 +703,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够邀请成员', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('邀请成员')).toBeInTheDocument();
@@ -726,11 +716,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够打开群组设置', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('群组设置')).toBeInTheDocument();
@@ -743,11 +729,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够离开群组', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('离开群组')).toBeInTheDocument();
@@ -774,11 +756,7 @@ describe('GroupInfoPanel', () => {
 
   describe('成员管理', () => {
     it('应该能够发起私聊', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('私聊群主')).toBeInTheDocument();
@@ -791,11 +769,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够打开成员管理菜单', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('管理管理员')).toBeInTheDocument();
@@ -814,11 +788,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够提升成员为管理员', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       // 打开成员管理菜单
       const manageButton = screen.getByLabelText('管理管理员');
@@ -838,11 +808,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够移出群组成员', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       // 打开成员管理菜单
       const manageButton = screen.getByLabelText('管理管理员');
@@ -861,11 +827,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该能够关闭成员管理菜单', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       // 打开成员管理菜单
       const manageButton = screen.getByLabelText('管理管理员');
@@ -894,11 +856,7 @@ describe('GroupInfoPanel', () => {
         }
       };
 
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...propsWithoutEditPermission} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...propsWithoutEditPermission} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('group-info-panel')).toBeInTheDocument();
@@ -920,11 +878,7 @@ describe('GroupInfoPanel', () => {
         }
       };
 
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...propsWithoutAudioPermission} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...propsWithoutAudioPermission} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('group-info-panel')).toBeInTheDocument();
@@ -946,11 +900,7 @@ describe('GroupInfoPanel', () => {
         }
       };
 
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...propsWithoutManagePermission} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...propsWithoutManagePermission} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('group-info-panel')).toBeInTheDocument();
@@ -969,11 +919,7 @@ describe('GroupInfoPanel', () => {
 
   describe('表单验证', () => {
     it('应该在群组名称为空时禁用保存按钮', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       // 打开编辑对话框
       const editButton = screen.getByLabelText('编辑群组');
@@ -993,11 +939,7 @@ describe('GroupInfoPanel', () => {
     });
 
     it('应该在群组名称只有空格时禁用保存按钮', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       // 打开编辑对话框
       const editButton = screen.getByLabelText('编辑群组');
@@ -1019,11 +961,7 @@ describe('GroupInfoPanel', () => {
 
   describe('导航回调', () => {
     it('应该能够调用返回回调', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestGroupInfoPanel {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestGroupInfoPanelWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('返回')).toBeInTheDocument();
