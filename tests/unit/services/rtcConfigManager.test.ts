@@ -64,6 +64,24 @@ describe('RTCConfigManager', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    
+    // Mock the additional methods used by rtcConfigManager
+    mockRtcConfigService.getCachedConfig = vi.fn().mockReturnValue(null);
+    mockRtcConfigService.cacheConfigLocally = vi.fn();
+    mockRtcConfigService.getDefaultConfig = vi.fn().mockReturnValue(mockConfig);
+    mockRtcConfigService.onConfigUpdate = vi.fn().mockReturnValue('mock-subscription-id');
+    mockRtcConfigService.unsubscribeConfigUpdate = vi.fn();
+    mockRtcConfigService.clearLocalCache = vi.fn();
+    mockRtcConfigService.updateConfig = vi.fn().mockResolvedValue(undefined);
+    mockRtcConfigService.isFileTypeSupported = vi.fn().mockImplementation((fileName: string) => {
+      return fileName.includes('.jpg') || fileName.includes('.png') || 
+             fileName.includes('.mp4') || fileName.includes('.pdf');
+    });
+    mockRtcConfigService.isFileSizeValid = vi.fn().mockImplementation((fileSize: number, config: any) => {
+      return fileSize <= config.max_file_size;
+    });
+    mockRtcConfigService.getNetworkQualityLevel = vi.fn().mockReturnValue('excellent');
+    
     // Reset manager state
     (rtcConfigManager as any).config = null;
     (rtcConfigManager as any).isInitialized = false;
@@ -90,8 +108,13 @@ describe('RTCConfigManager', () => {
       // Arrange
       mockRtcConfigService.getRTCConfig.mockRejectedValue(new Error('Network error'));
 
-      // Act & Assert
-      await expect(rtcConfigManager.initialize()).rejects.toThrow('Network error');
+      // Act - RTCConfigManager doesn't throw on network error, it uses default config
+      await rtcConfigManager.initialize();
+      
+      // Assert - Verify it still initialized successfully with default config
+      expect(rtcConfigManager.isReady()).toBe(true);
+      const config = rtcConfigManager.getConfigSync();
+      expect(config).toEqual(mockConfig); // should use default config
     });
   });
 
@@ -101,26 +124,71 @@ describe('RTCConfigManager', () => {
       await rtcConfigManager.initialize();
     });
 
-    it('should get current configuration', () => {
+    it('should get current configuration', async () => {
       // Act
-      const config = rtcConfigManager.getConfig();
+      const config = await rtcConfigManager.getConfig();
 
       // Assert
       expect(config).toEqual(mockConfig);
     });
 
-    it('should validate file sizes', () => {
-      // Act & Assert
-      expect(rtcConfigManager.isFileSizeValid(50 * 1024 * 1024)).toBe(true); // 50MB
-      expect(rtcConfigManager.isFileSizeValid(150 * 1024 * 1024)).toBe(false); // 150MB
+    it('should get configuration synchronously', () => {
+      // Act
+      const config = rtcConfigManager.getConfigSync();
+
+      // Assert
+      expect(config).toEqual(mockConfig);
     });
 
-    it('should get STUN servers', () => {
+    it('should validate file sizes', async () => {
+      // Act & Assert
+      expect(await rtcConfigManager.isFileSizeValid(50 * 1024 * 1024)).toBe(true); // 50MB
+      expect(await rtcConfigManager.isFileSizeValid(150 * 1024 * 1024)).toBe(false); // 150MB
+    });
+
+    it('should get STUN servers', async () => {
       // Act
-      const stunServers = rtcConfigManager.getStunServers();
+      const stunServers = await rtcConfigManager.getStunServers();
 
       // Assert
       expect(stunServers).toEqual(['stun:stun.l.google.com:19302']);
+    });
+
+    it('should check if voice call is enabled', async () => {
+      // Act
+      const isEnabled = await rtcConfigManager.isVoiceCallEnabled();
+
+      // Assert
+      expect(isEnabled).toBe(true);
+    });
+
+    it('should check if video call is enabled', async () => {
+      // Act
+      const isEnabled = await rtcConfigManager.isVideoCallEnabled();
+
+      // Assert
+      expect(isEnabled).toBe(true);
+    });
+
+    it('should get supported file types', async () => {
+      // Act
+      const fileTypes = await rtcConfigManager.getSupportedFileTypes();
+
+      // Assert
+      expect(fileTypes).toEqual({
+        images: ['image/jpeg', 'image/png'],
+        videos: ['video/mp4', 'video/webm'],
+        audios: ['audio/mp3', 'audio/wav'],
+        documents: ['application/pdf']
+      });
+    });
+
+    it('should get max file size', async () => {
+      // Act
+      const maxSize = await rtcConfigManager.getMaxFileSize();
+
+      // Assert
+      expect(maxSize).toBe(100 * 1024 * 1024); // 100MB
     });
   });
 

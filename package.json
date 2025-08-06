@@ -61,6 +61,7 @@
     "@typescript-eslint/eslint-plugin": "^8.34.1",
     "@typescript-eslint/parser": "^8.34.1",
     "@vitejs/plugin-react": "^4.5.2",
+    "@vitest/ui": "3.2.4",
     "autoprefixer": "^10.4.21",
     "eslint": "^8.57.1",
     "eslint-plugin-react-hooks": "^5.2.0",
@@ -73,8 +74,8 @@
     "tsx": "^4.7.2",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "vite-plugin-top-level-await": "^1.5.0",
     "vite-plugin-pwa": "^1.0.2",
+    "vite-plugin-top-level-await": "^1.5.0",
     "vitest": "^3.2.4",
     "workbox-window": "^7.3.0"
   }
