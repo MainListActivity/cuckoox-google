@@ -359,6 +359,10 @@ describe('CallManager', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
   });
 
   describe('initialization', () => {

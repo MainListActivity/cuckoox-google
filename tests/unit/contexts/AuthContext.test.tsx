@@ -281,6 +281,11 @@ describe('AuthContext', () => {
 
   afterEach(() => {
     localStorageMock.clear();
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    document.body.innerHTML = '';
   });
 
   describe('初始化和基本状态', () => {

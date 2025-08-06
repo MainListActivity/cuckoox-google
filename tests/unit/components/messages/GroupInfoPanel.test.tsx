@@ -501,9 +501,13 @@ describe('GroupInfoPanel', () => {
     // Clean up all mocks and timers
     vi.clearAllMocks();
     vi.clearAllTimers();
+    vi.useRealTimers();
     
     // Clear all module mocks to ensure no state leakage
     vi.resetModules();
+    
+    // Reset document state
+    document.body.innerHTML = '';
     
     // Reset any global state that might have been modified back to original
     if (originalMatchMedia) {

@@ -44,9 +44,12 @@ const AllTheProviders: React.FC<AllTheProvidersProps> = ({
   queryClient = createTestQueryClient(),
   initialEntries = ['/']
 }) => {
+  // Create a fresh queryClient for each test to avoid state leakage
+  const testQueryClient = React.useMemo(() => queryClient || createTestQueryClient(), [queryClient]);
+  
   return (
-    <BrowserRouter key={initialEntries.join(',')}>
-      <QueryClientProvider client={queryClient}>
+    <BrowserRouter key={`${Date.now()}-${Math.random()}`}>
+      <QueryClientProvider client={testQueryClient}>
         <ThemeProvider theme={testTheme}>
           <MockSurrealProvider>
             {children}

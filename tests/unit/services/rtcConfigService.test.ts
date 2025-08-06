@@ -103,6 +103,11 @@ describe('RTCConfigService', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    mockLocalStorage.clear();
   });
 
   describe('getRTCConfig', () => {

@@ -32,6 +32,11 @@ describe('Turnstile Component', () => {
   afterEach(() => {
     // Clean up
     delete (window as any).turnstile;
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    document.body.innerHTML = '';
   });
 
   it('renders loading state initially', () => {
