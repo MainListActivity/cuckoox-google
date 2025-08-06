@@ -286,6 +286,14 @@ describe('AuthContext', () => {
     vi.useRealTimers();
     vi.resetModules();
     document.body.innerHTML = '';
+    
+    // Reset window.location to prevent JSDOM navigation errors
+    (window.location as any).href = '';
+    (window.location as any).pathname = '/';
+    
+    // Reset all global objects that might have been modified
+    delete (window as any).gtag;
+    delete (window as any).dataLayer;
   });
 
   describe('初始化和基本状态', () => {
