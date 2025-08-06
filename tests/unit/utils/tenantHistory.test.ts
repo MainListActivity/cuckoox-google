@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import TenantHistoryManager from '@/src/utils/tenantHistory';
 
 // Mock localStorage
@@ -15,6 +15,14 @@ global.localStorage = localStorageMock;
 describe('TenantHistoryManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    localStorageMock.clear();
   });
 
   describe('getTenantHistory', () => {

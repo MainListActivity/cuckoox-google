@@ -12,7 +12,7 @@ import {
 } from '@/src/types/claimTracking';
 
 // Mock the services
-import { vi } from 'vitest';
+import { vi, beforeEach, afterEach } from 'vitest';
 
 // Mock the SurrealProvider context
 const mockSurrealContext = {
@@ -103,6 +103,14 @@ describe('ClaimOperationHistory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOperationHistory.mockResolvedValue(mockOperations);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    document.body.innerHTML = '';
   });
 
   it('should render operation history list', async () => {

@@ -246,6 +246,10 @@ describe('MediaFileHandler', () => {
   
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
   });
   
   describe('Initialization', () => {

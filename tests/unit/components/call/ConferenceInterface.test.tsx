@@ -767,6 +767,14 @@ describe("ConferenceInterface", () => {
     mockCallManager.endCall.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    document.body.innerHTML = '';
+  });
+
   describe("组件渲染", () => {
     it("应该正确渲染基本组件结构", async () => {
       render(

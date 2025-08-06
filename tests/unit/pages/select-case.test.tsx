@@ -1,5 +1,20 @@
 // tests/unit/pages/select-case.test.tsx
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Mock window.matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: query.includes('(orientation: landscape)') ? false : true,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
 
 // Mock SurrealProvider first, before other imports
 import { 
@@ -133,6 +148,14 @@ describe('CaseSelectionPage', () => {
         query: vi.fn().mockResolvedValue([{ success: true }, mockCases]),  // queryWithAuth format
       }
     });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    document.body.innerHTML = '';
   });
 
   it('renders loading state initially when AuthContext isLoading is true', () => {
