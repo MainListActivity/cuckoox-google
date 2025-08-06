@@ -6,23 +6,6 @@ import React from 'react';
 // Store original values for cleanup
 const originalMatchMedia = window.matchMedia;
 
-// Mock window.matchMedia with proper cleanup
-const mockMatchMedia = vi.fn().mockImplementation(query => ({
-  matches: query.includes('(orientation: landscape)') ? false : true,
-  media: query,
-  onchange: null,
-  addListener: vi.fn(),
-  removeListener: vi.fn(),
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  dispatchEvent: vi.fn(),
-}));
-
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: mockMatchMedia,
-});
-
 // Mock modules
 vi.mock('@/src/contexts/AuthContext', () => ({
   useAuth: vi.fn(),
@@ -433,8 +416,22 @@ describe('GroupInfoPanel', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     
-    // Reset window.matchMedia mock
-    mockMatchMedia.mockClear();
+    // Setup fresh window.matchMedia mock for this test
+    const mockMatchMedia = vi.fn().mockImplementation(query => ({
+      matches: query.includes('(orientation: landscape)') ? false : true,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: mockMatchMedia,
+    });
     
     // Get mocked instances
     mockUseAuth = (await import('@/src/contexts/AuthContext')).useAuth;
@@ -508,20 +505,13 @@ describe('GroupInfoPanel', () => {
     // Clear all module mocks to ensure no state leakage
     vi.resetModules();
     
-    // Reset any global state that might have been modified
+    // Reset any global state that might have been modified back to original
     if (originalMatchMedia) {
       Object.defineProperty(window, 'matchMedia', {
         writable: true,
         value: originalMatchMedia,
       });
     }
-    
-    // Reset window.matchMedia mock for next test
-    mockMatchMedia.mockClear();
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      value: mockMatchMedia,
-    });
   });
 
   describe('组件渲染', () => {
