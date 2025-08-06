@@ -1,14 +1,13 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render } from '../../utils/testUtils'; // Use unified testUtils render
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
-import { ThemeProvider } from '@mui/material/styles';
+import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
 import { RecordId } from 'surrealdb';
 import AddCaseMemberDialog from '@/src/components/case/AddCaseMemberDialog';
 import { createUserAndAddToCase } from '@/src/services/caseMemberService';
 import { getCaseMemberRoles } from '@/src/services/roleService';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
-import { createTheme } from '@mui/material/styles';
 
 // Mock modules
 vi.mock('@/src/services/roleService');
@@ -51,14 +50,7 @@ const mockRoles = [
 const mockClient = {};
 const mockCaseId = new RecordId('case', 'test-case-id');
 
-const renderWithTheme = (component: React.ReactElement) => {
-  const theme = createTheme();
-  return render(
-    <ThemeProvider theme={theme}>
-      {component}
-    </ThemeProvider>
-  );
-};
+// Note: renderWithTheme is now handled by unified testUtils
 
 describe('AddCaseMemberDialog', () => {
   beforeEach(() => {
@@ -76,9 +68,7 @@ describe('AddCaseMemberDialog', () => {
     });
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+  // Note: Global cleanup is handled in tests/setup.ts
 
   it('renders correctly when open is true', async () => {
     await act(async () => {
@@ -634,7 +624,7 @@ describe('AddCaseMemberDialog', () => {
 
   it('renders dialog with all form fields', async () => {
     await act(async () => {
-      renderWithTheme(
+      render(
         <AddCaseMemberDialog
           open={true}
           onClose={mockOnClose}
@@ -665,7 +655,7 @@ describe('AddCaseMemberDialog', () => {
 
   it('loads and displays roles from database', async () => {
     await act(async () => {
-      renderWithTheme(
+      render(
         <AddCaseMemberDialog
           open={true}
           onClose={mockOnClose}
@@ -706,7 +696,7 @@ describe('AddCaseMemberDialog', () => {
     );
 
     await act(async () => {
-      renderWithTheme(
+      render(
         <AddCaseMemberDialog
           open={true}
           onClose={mockOnClose}
@@ -729,7 +719,7 @@ describe('AddCaseMemberDialog', () => {
 
   it('validates required fields', async () => {
     await act(async () => {
-      renderWithTheme(
+      render(
         <AddCaseMemberDialog
           open={true}
           onClose={mockOnClose}
@@ -768,7 +758,7 @@ describe('AddCaseMemberDialog', () => {
     mockCreateUserAndAddToCase.mockResolvedValue(mockNewMember);
 
     await act(async () => {
-      renderWithTheme(
+      render(
         <AddCaseMemberDialog
           open={true}
           onClose={mockOnClose}
@@ -830,7 +820,7 @@ describe('AddCaseMemberDialog', () => {
     mockGetCaseMemberRoles.mockRejectedValue(new Error('Failed to load roles'));
 
     await act(async () => {
-      renderWithTheme(
+      render(
         <AddCaseMemberDialog
           open={true}
           onClose={mockOnClose}
@@ -846,7 +836,7 @@ describe('AddCaseMemberDialog', () => {
   });
 
   it('resets form when dialog is closed and reopened', async () => {
-    const { rerender } = renderWithTheme(
+    const { rerender } = render(
       <AddCaseMemberDialog
         open={true}
         onClose={mockOnClose}

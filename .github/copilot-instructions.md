@@ -108,6 +108,12 @@ This system prioritizes real-time collaboration, offline functionality, and comp
 - 对于surraldb的查询 **只允许** mock service worker，**永远不要**mock上层服务代码
 - fetch可以直接mock
 
+## 测试隔离规则
+- **全局对象重置**：每个测试的 `afterEach` 中必须重置所有修改的全局对象（`window.matchMedia`、`HTMLVideoElement`、`document.requestFullscreen` 等）回原始值
+- **完全清理机制**：必须执行 `vi.clearAllMocks()`、`vi.clearAllTimers()`、`vi.useRealTimers()`、`vi.resetModules()` 和 `document.body.innerHTML = ''`
+- **异步操作处理**：对于有异步状态更新的操作，必须使用 `act()` 包装并适当增加 `waitFor` 超时时间，分离验证步骤避免竞态条件
+- **Provider状态隔离**：在 testUtils 中为 `BrowserRouter` 使用唯一 key，确保每个测试有独立的 Provider 状态，避免组件重复渲染问题
+
 ## 重要约定
 - **永远不要**修改超时时间配置，当前配置的超时时间完全够用。
 - 你需要确保修改后的代码能够通过所有单元测试。
