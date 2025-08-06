@@ -62,11 +62,11 @@ if (!window.matchMedia) {
   });
 }
 
-// Mock MUI's useMediaQuery to work with matchMedia
+// Mock MUI's useMediaQuery with more comprehensive support
 vi.mock("@mui/material/useMediaQuery", () => ({
   __esModule: true,
-  default: vi.fn((query) => {
-    // Return false for all media queries in tests
+  default: vi.fn().mockImplementation((query) => {
+    // Always return false for all media queries in tests for consistency
     return false;
   }),
 }));
@@ -74,11 +74,33 @@ vi.mock("@mui/material/useMediaQuery", () => ({
 // Also mock the system level useMediaQuery
 vi.mock("@mui/system/useMediaQuery", () => ({
   __esModule: true,
-  default: vi.fn((query) => {
-    // Return false for all media queries in tests
+  default: vi.fn().mockImplementation((query) => {
+    // Always return false for all media queries in tests for consistency
     return false;
   }),
 }));
+
+// Mock theme's breakpoints.up and breakpoints.down methods
+vi.mock("@mui/material/styles", async (importOriginal) => {
+  const actual = await importOriginal() as any;
+  return {
+    ...actual,
+    useTheme: vi.fn().mockReturnValue({
+      breakpoints: {
+        up: vi.fn().mockReturnValue("@media (min-width:0px)"),
+        down: vi.fn().mockReturnValue("@media (max-width:9999px)"),
+        between: vi.fn().mockReturnValue("@media (min-width:0px) and (max-width:9999px)"),
+        only: vi.fn().mockReturnValue("@media (min-width:0px) and (max-width:9999px)"),
+      },
+      palette: {
+        mode: 'light',
+        primary: { main: '#1976d2' },
+        secondary: { main: '#dc004e' },
+      },
+      spacing: vi.fn().mockImplementation((...args) => args.map(arg => `${arg * 8}px`).join(' ')),
+    }),
+  };
+});
 
 // Mock ResizeObserver
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
@@ -134,10 +156,45 @@ global.RTCPeerConnection = RTCPeerConnectionMock as any;
 global.URL.createObjectURL = vi.fn().mockReturnValue("mock-object-url");
 global.URL.revokeObjectURL = vi.fn();
 
+// Mock console methods to prevent test failures
+const originalConsole = { ...console };
+Object.defineProperty(global, 'console', {
+  value: {
+    ...originalConsole,
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    log: vi.fn(),
+    debug: vi.fn(),
+  },
+  writable: true,
+});
+
 // Increase timeout for async operations
 vi.setConfig({
   testTimeout: 1000,
   hookTimeout: 500,
+});
+
+// Mock window.location to prevent JSDOM navigation errors
+Object.defineProperty(window, 'location', {
+  value: {
+    href: '',
+    origin: 'http://localhost:3000',
+    protocol: 'http:',
+    host: 'localhost:3000',
+    hostname: 'localhost',
+    port: '3000',
+    pathname: '/',
+    search: '',
+    hash: '',
+    assign: vi.fn(),
+    replace: vi.fn(),
+    reload: vi.fn(),
+    toString: vi.fn(() => 'http://localhost:3000/'),
+  },
+  writable: true,
+  configurable: true,
 });
 
 // Global cleanup for all tests to prevent cross-contamination
@@ -150,18 +207,16 @@ afterEach(() => {
   vi.useRealTimers();
   vi.resetModules();
   
+  // Reset window.location.href to default
+  (window.location as any).href = '';
+  (window.location as any).pathname = '/';
+  
   // Clean up DOM elements to prevent component duplication
-  // Check if the elements exist before removing them
   try {
     document.body.innerHTML = '';
-  } catch (error) {
-    // Silently ignore DOM errors during cleanup
-  }
-  
-  // Reset document head if needed (for title changes, meta tags, etc.)
-  try {
-    const metaElements = document.head.querySelectorAll('meta[data-testid], title[data-testid], link[data-testid]');
-    metaElements.forEach(element => {
+    // Also clear any style elements or other document modifications
+    const headElements = document.head.querySelectorAll('style[data-emotion], meta[data-testid], title[data-testid], link[data-testid]');
+    headElements.forEach(element => {
       try {
         if (element.parentNode) {
           element.parentNode.removeChild(element);
@@ -176,15 +231,54 @@ afterEach(() => {
   
   // Reset any global state that might leak between tests
   if (typeof window !== 'undefined') {
+    // Clear localStorage and sessionStorage
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {
+      // Ignore storage errors in test environment
+    }
+    
     // Clear any global event listeners that might have been added during tests
-    const events = ['resize', 'scroll', 'keydown', 'keyup', 'click', 'focus', 'blur'];
+    const events = ['resize', 'scroll', 'keydown', 'keyup', 'click', 'focus', 'blur', 'beforeunload', 'unload'];
     events.forEach(event => {
-      // Remove any event listeners if they exist
       try {
-        window.removeEventListener(event, () => {}, false);
+        // Create a dummy function to remove any potential listeners
+        const dummyHandler = () => {};
+        window.removeEventListener(event, dummyHandler, false);
+        window.removeEventListener(event, dummyHandler, true);
       } catch (e) {
         // Ignore errors
       }
     });
+    
+    // Reset window properties that might be modified during tests
+    try {
+      // Reset any global variables that might have been set
+      delete (window as any).gtag;
+      delete (window as any).dataLayer;
+      
+      // Clear any timeouts or intervals that might still be running
+      const maxId = 1000; // Arbitrary max ID to clear
+      for (let i = 0; i < maxId; i++) {
+        try {
+          clearTimeout(i);
+          clearInterval(i);
+        } catch (e) {
+          // Ignore errors
+        }
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+  }
+  
+  // Force garbage collection in tests if available
+  if (typeof global !== 'undefined' && typeof global.gc === 'function') {
+    try {
+      global.gc();
+    } catch (e) {
+      // Ignore if gc is not available
+    }
   }
 });

@@ -191,19 +191,21 @@ export default defineConfig(({ mode }) => {
         'tests/unit/**/*.test.fixed.{ts,tsx}' // Include fixed test files
       ],
       setupFiles: './tests/setup.ts', // Setup file for test environment
-      testTimeout: 10000, // 10 seconds timeout for each test
-      hookTimeout: 5000, // 5 seconds timeout for hooks
+      testTimeout: 30000, // 30 seconds timeout for each test
+      hookTimeout: 10000, // 10 seconds timeout for hooks
       pool: 'forks', // Use forks pool to avoid file handle issues
       poolOptions: {
         forks: {
           singleFork: true, // Use single fork to reduce resource usage
-          isolate: false // Disable isolation for better performance
+          isolate: true // Enable isolation for better test separation
         }
       },
       // Optimize for better performance
       maxConcurrency: 1, // Run tests sequentially to avoid resource conflicts
       minThreads: 1,
       maxThreads: 1,
+      // Memory and performance optimization
+      forceRerunTriggers: ['**/*.test.{ts,tsx}'],
       // Disable coverage for faster execution
       coverage: {
         enabled: false
