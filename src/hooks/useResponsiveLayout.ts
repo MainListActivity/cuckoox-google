@@ -24,20 +24,40 @@ interface ResponsiveLayoutState {
 export const useResponsiveLayout = (): ResponsiveLayoutState => {
   const theme = useTheme();
   
-  // MUI断点检测
-  const isXs = useMediaQuery(theme.breakpoints.only('xs'));
-  const isSm = useMediaQuery(theme.breakpoints.only('sm'));
-  const isMd = useMediaQuery(theme.breakpoints.only('md'));
-  const isLg = useMediaQuery(theme.breakpoints.only('lg'));
-  const isXl = useMediaQuery(theme.breakpoints.only('xl'));
+  // Safe media query function that handles test environment
+  const safeUseMediaQuery = (query: string | (() => string), fallback: boolean = false): boolean => {
+    try {
+      const mediaQuery = typeof query === 'function' ? query() : query;
+      return useMediaQuery(mediaQuery);
+    } catch (error) {
+      // Fallback for test environment
+      if (typeof window !== 'undefined' && window.matchMedia && typeof window.matchMedia === 'function') {
+        try {
+          const mediaQuery = typeof query === 'function' ? query() : query;
+          const mediaQueryResult = window.matchMedia(mediaQuery);
+          return mediaQueryResult ? mediaQueryResult.matches : fallback;
+        } catch (e) {
+          return fallback; // Ultimate fallback
+        }
+      }
+      return fallback;
+    }
+  };
+  
+  // MUI断点检测 - with safe fallbacks
+  const isXs = safeUseMediaQuery(() => theme?.breakpoints?.only?.('xs') || '(max-width:600px)', false);
+  const isSm = safeUseMediaQuery(() => theme?.breakpoints?.only?.('sm') || '(min-width:600px) and (max-width:900px)', false);
+  const isMd = safeUseMediaQuery(() => theme?.breakpoints?.only?.('md') || '(min-width:900px) and (max-width:1200px)', false);
+  const isLg = safeUseMediaQuery(() => theme?.breakpoints?.only?.('lg') || '(min-width:1200px) and (max-width:1536px)', false);
+  const isXl = safeUseMediaQuery(() => theme?.breakpoints?.only?.('xl') || '(min-width:1536px)', false);
   
   // 设备类型检测
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isTablet = useMediaQuery(theme.breakpoints.between('md', 'lg'));
-  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
+  const isMobile = safeUseMediaQuery(() => theme?.breakpoints?.down?.('md') || '(max-width:900px)', false);
+  const isTablet = safeUseMediaQuery(() => theme?.breakpoints?.between?.('md', 'lg') || '(min-width:900px) and (max-width:1200px)', false);
+  const isDesktop = safeUseMediaQuery(() => theme?.breakpoints?.up?.('lg') || '(min-width:1200px)', true);
   
   // 屏幕尺寸检测
-  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const isSmallScreen = safeUseMediaQuery(() => theme?.breakpoints?.down?.('sm') || '(max-width:600px)', false);
   const isLargeScreen = useMediaQuery(theme.breakpoints.up('xl'));
 
   // 视口尺寸状态

@@ -75,8 +75,13 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
       isMobile = useMediaQuery(theme?.breakpoints?.down ? theme.breakpoints.down('md') : '(max-width:900px)');
     } catch (error) {
       // Fallback for test environment
-      if (typeof window !== 'undefined' && window.matchMedia) {
-        isMobile = window.matchMedia('(max-width:900px)').matches;
+      if (typeof window !== 'undefined' && window.matchMedia && typeof window.matchMedia === 'function') {
+        try {
+          const mediaQueryResult = window.matchMedia('(max-width:900px)');
+          isMobile = mediaQueryResult ? mediaQueryResult.matches : false;
+        } catch (e) {
+          isMobile = false; // Ultimate fallback
+        }
       }
     }
     
