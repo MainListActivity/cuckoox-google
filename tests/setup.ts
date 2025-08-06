@@ -284,6 +284,20 @@ afterEach(() => {
   (window.location as any).href = '';
   (window.location as any).pathname = '/';
   
+  // Force complete cleanup of React internals
+  // This helps prevent context and state leakage between tests
+  try {
+    // Clear all React fiber references
+    const fiberRootNodes = document.querySelectorAll('[data-reactroot], [data-react-checksum]');
+    fiberRootNodes.forEach(node => {
+      if (node.parentNode) {
+        node.parentNode.removeChild(node);
+      }
+    });
+  } catch (e) {
+    // Ignore cleanup errors
+  }
+  
   // Reset window.matchMedia to original or ensure proper mock
   try {
     if (originalMatchMedia) {
