@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run --reporter=verbose",
     "test:ui": "vitest --ui",
-    "test:run": "vitest run --reporter=verbose --run",
+    "test:run": "vitest run --run",
     "test:e2e": "playwright test"
   },
   "dependencies": {

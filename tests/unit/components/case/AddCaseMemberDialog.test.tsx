@@ -2,7 +2,7 @@ import React from 'react';
 import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { render } from '../../utils/testUtils'; // Use unified testUtils render
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 import { RecordId } from 'surrealdb';
 import AddCaseMemberDialog from '@/src/components/case/AddCaseMemberDialog';
 import { createUserAndAddToCase } from '@/src/services/caseMemberService';
@@ -15,7 +15,30 @@ vi.mock('@/src/services/caseMemberService');
 vi.mock('@/src/contexts/SurrealProvider');
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, fallback: string) => fallback,
+    t: (key: string, fallback?: string) => {
+      const translations: Record<string, string> = {
+        'create_user_and_add_to_case': '创建用户并添加到案件',
+        'username_label': '用户名',
+        'username_helper': '用户登录时使用的用户名',
+        'cancel_button': '取消',
+        'create_user_and_add': '创建用户并添加',
+        'password_label': '密码',
+        'email_label': '邮箱',
+        'name_label': '姓名',
+        'role_label': '角色',
+        'loading': '加载中...',
+        'username_required': '用户名不能为空',
+        'username_min_length': '用户名至少需要3个字符',
+        'username_invalid': '用户名只能包含字母、数字和下划线',
+        'password_required': '密码不能为空',
+        'password_min_length': '密码至少需要6个字符',
+        'email_required': '邮箱不能为空',
+        'email_invalid': '邮箱格式不正确',
+        'name_required': '姓名不能为空',
+        'role_required': '请选择角色',
+      };
+      return translations[key] || fallback || key;
+    },
   }),
 }));
 
@@ -68,7 +91,10 @@ describe('AddCaseMemberDialog', () => {
     });
   });
 
-  // Note: Global cleanup is handled in tests/setup.ts
+  afterEach(() => {
+    vi.clearAllMocks();
+    document.body.innerHTML = '';
+  });
 
   it('renders correctly when open is true', async () => {
     await act(async () => {
