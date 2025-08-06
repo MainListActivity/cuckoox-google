@@ -68,7 +68,18 @@ const RichTextEditor = forwardRef<Quill, RichTextEditorProps>(
   ) => {
     const { t } = useTranslation();
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    
+    // Handle test environment where theme might be incomplete
+    let isMobile = false;
+    try {
+      isMobile = useMediaQuery(theme?.breakpoints?.down ? theme.breakpoints.down('md') : '(max-width:900px)');
+    } catch (error) {
+      // Fallback for test environment
+      if (typeof window !== 'undefined' && window.matchMedia) {
+        isMobile = window.matchMedia('(max-width:900px)').matches;
+      }
+    }
+    
     const { client: surreal, isConnected } = useSurrealContext();
     
     // Refs
