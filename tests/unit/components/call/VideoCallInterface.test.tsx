@@ -3,34 +3,45 @@ import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { render } from '../../utils/testUtils';
 import React from 'react';
 
-// Mock window.matchMedia
+// Store original values for cleanup
+const originalMatchMedia = window.matchMedia;
+const originalRequestFullscreen = document.documentElement.requestFullscreen;
+const originalExitFullscreen = document.exitFullscreen;
+const originalHTMLVideoElement = global.HTMLVideoElement;
+
+// Mock window.matchMedia with proper cleanup
+const mockMatchMedia = vi.fn().mockImplementation(query => ({
+  matches: query.includes('(orientation: landscape)') ? false : true,
+  media: query,
+  onchange: null,
+  addListener: vi.fn(),
+  removeListener: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(),
+}));
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: query.includes('(orientation: landscape)') ? false : true,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
+  value: mockMatchMedia,
 });
 
-// Mock DOM API
+// Mock DOM API with proper cleanup tracking
+const mockRequestFullscreen = vi.fn().mockResolvedValue(undefined);
+const mockExitFullscreen = vi.fn().mockResolvedValue(undefined);
+
 Object.defineProperty(document.documentElement, 'requestFullscreen', {
   writable: true,
-  value: vi.fn()
+  value: mockRequestFullscreen
 });
 
 Object.defineProperty(document, 'exitFullscreen', {
   writable: true,
-  value: vi.fn()
+  value: mockExitFullscreen
 });
 
-// Mock HTMLVideoElement
-vi.stubGlobal('HTMLVideoElement', vi.fn().mockImplementation(() => ({
+// Mock HTMLVideoElement with proper cleanup
+const mockHTMLVideoElement = vi.fn().mockImplementation(() => ({
   play: vi.fn().mockResolvedValue(undefined),
   pause: vi.fn(),
   load: vi.fn(),
@@ -42,7 +53,9 @@ vi.stubGlobal('HTMLVideoElement', vi.fn().mockImplementation(() => ({
   muted: false,
   videoWidth: 640,
   videoHeight: 480,
-})));
+}));
+
+vi.stubGlobal('HTMLVideoElement', mockHTMLVideoElement);
 
 // Mock modules
 vi.mock('@/src/services/callManager', () => ({
@@ -67,15 +80,13 @@ vi.mock('@/src/hooks/useWebRTCPermissions', () => ({
 }));
 
 // 创建简化的测试组件，避免复杂的MUI和媒体查询问题
-const TestVideoCallInterface = React.lazy(() => 
-  Promise.resolve({
-    default: (props: any) => {
-      const [isLoading, setIsLoading] = React.useState(false);
-      const [showEndCallConfirm, setShowEndCallConfirm] = React.useState(false);
-      const [showCameraMenu, setShowCameraMenu] = React.useState(false);
-      const [showQualityMenu, setShowQualityMenu] = React.useState(false);
-      const [displayMode, setDisplayMode] = React.useState('normal');
-      const [currentVideoQuality, setCurrentVideoQuality] = React.useState('auto');
+const TestVideoCallInterface = (props: any) => {
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [showEndCallConfirm, setShowEndCallConfirm] = React.useState(false);
+  const [showCameraMenu, setShowCameraMenu] = React.useState(false);
+  const [showQualityMenu, setShowQualityMenu] = React.useState(false);
+  const [displayMode, setDisplayMode] = React.useState('normal');
+  const [currentVideoQuality, setCurrentVideoQuality] = React.useState('auto');
       
       const handleToggleMute = async () => {
         // 检查权限
@@ -316,8 +327,12 @@ const TestVideoCallInterface = React.lazy(() =>
           })
         ]
       });
-    }
-  })
+    };
+
+const TestVideoCallInterfaceWithSuspense = (props: any) => (
+  <React.Suspense fallback={<div>Loading...</div>}>
+    <TestVideoCallInterface {...props} />
+  </React.Suspense>
 );
 
 describe('VideoCallInterface', () => {
@@ -338,6 +353,12 @@ describe('VideoCallInterface', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    
+    // Reset all mocks
+    mockMatchMedia.mockClear();
+    mockRequestFullscreen.mockClear();
+    mockExitFullscreen.mockClear();
+    mockHTMLVideoElement.mockClear();
     
     // Get mocked instances
     mockCallManager = (await import('@/src/services/callManager')).default;
@@ -403,13 +424,68 @@ describe('VideoCallInterface', () => {
     mockCallManager.endCall.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    // Clean up all mocks and timers
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    
+    // Clear all module mocks to ensure no state leakage
+    vi.resetModules();
+    
+    // Reset global objects to original values
+    if (originalMatchMedia) {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+    
+    if (originalRequestFullscreen) {
+      Object.defineProperty(document.documentElement, 'requestFullscreen', {
+        writable: true,
+        value: originalRequestFullscreen
+      });
+    }
+    
+    if (originalExitFullscreen) {
+      Object.defineProperty(document, 'exitFullscreen', {
+        writable: true,
+        value: originalExitFullscreen
+      });
+    }
+    
+    if (originalHTMLVideoElement) {
+      vi.stubGlobal('HTMLVideoElement', originalHTMLVideoElement);
+    }
+    
+    // Reset mocks for next test
+    mockMatchMedia.mockClear();
+    mockRequestFullscreen.mockClear();
+    mockExitFullscreen.mockClear();
+    mockHTMLVideoElement.mockClear();
+    
+    // Restore clean mock state
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: mockMatchMedia,
+    });
+    
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      writable: true,
+      value: mockRequestFullscreen
+    });
+    
+    Object.defineProperty(document, 'exitFullscreen', {
+      writable: true,
+      value: mockExitFullscreen
+    });
+    
+    vi.stubGlobal('HTMLVideoElement', mockHTMLVideoElement);
+  });
+
   describe('组件渲染', () => {
     it('应该正确渲染基本组件结构', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByText('视频通话中')).toBeInTheDocument();
@@ -420,11 +496,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该显示通话类型信息', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByText('一对一通话 · 视频通话')).toBeInTheDocument();
@@ -432,11 +504,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该渲染本地和远程视频元素', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('local-video')).toBeInTheDocument();
@@ -445,11 +513,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该显示视频质量信息', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByText('视频质量: auto')).toBeInTheDocument();
@@ -457,11 +521,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该显示显示模式信息', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByText('显示模式: normal')).toBeInTheDocument();
@@ -471,11 +531,7 @@ describe('VideoCallInterface', () => {
 
   describe('媒体控制按钮', () => {
     it('应该显示所有控制按钮', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('静音')).toBeInTheDocument();
@@ -487,11 +543,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该显示显示模式控制按钮', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('进入全屏')).toBeInTheDocument();
@@ -500,11 +552,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该显示视频质量设置按钮', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('视频质量设置')).toBeInTheDocument();
@@ -514,11 +562,7 @@ describe('VideoCallInterface', () => {
 
   describe('用户交互', () => {
     it('应该能够切换静音状态', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('静音')).toBeInTheDocument();
@@ -533,11 +577,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够切换摄像头状态', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('关闭摄像头')).toBeInTheDocument();
@@ -552,11 +592,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够开始屏幕共享', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('开始屏幕共享')).toBeInTheDocument();
@@ -571,11 +607,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够切换摄像头', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('切换摄像头')).toBeInTheDocument();
@@ -590,17 +622,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够触发全屏功能', async () => {
-      const mockRequestFullscreen = vi.fn();
-      Object.defineProperty(document.documentElement, 'requestFullscreen', {
-        writable: true,
-        value: mockRequestFullscreen
-      });
-
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('进入全屏')).toBeInTheDocument();
@@ -616,11 +638,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够切换到画中画模式', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('画中画模式')).toBeInTheDocument();
@@ -635,11 +653,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够打开视频质量设置菜单', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('视频质量设置')).toBeInTheDocument();
@@ -660,11 +674,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够调整视频质量到高清', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('视频质量设置')).toBeInTheDocument();
@@ -687,11 +697,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够调整视频质量到自动', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('视频质量设置')).toBeInTheDocument();
@@ -714,11 +720,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该显示结束通话确认对话框', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByTestId('video-call-interface')).toBeInTheDocument();
@@ -744,11 +746,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够确认结束通话', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('结束通话')).toBeInTheDocument();
@@ -780,11 +778,7 @@ describe('VideoCallInterface', () => {
     });
 
     it('应该能够取消结束通话', async () => {
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('结束通话')).toBeInTheDocument();
@@ -820,11 +814,7 @@ describe('VideoCallInterface', () => {
         }
       };
 
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...propsWithoutMicPermission} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...propsWithoutMicPermission} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('静音')).toBeInTheDocument();
@@ -849,11 +839,7 @@ describe('VideoCallInterface', () => {
         }
       };
 
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...propsWithoutCameraPermission} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...propsWithoutCameraPermission} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('关闭摄像头')).toBeInTheDocument();
@@ -878,11 +864,7 @@ describe('VideoCallInterface', () => {
         }
       };
 
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...propsWithoutScreenSharePermission} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...propsWithoutScreenSharePermission} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('开始屏幕共享')).toBeInTheDocument();
@@ -907,11 +889,7 @@ describe('VideoCallInterface', () => {
         }
       };
 
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...propsWithoutEndCallPermission} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...propsWithoutEndCallPermission} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('结束通话')).toBeInTheDocument();
@@ -950,11 +928,7 @@ describe('VideoCallInterface', () => {
         throw testError;
       });
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('静音')).toBeInTheDocument();
@@ -974,11 +948,7 @@ describe('VideoCallInterface', () => {
         throw testError;
       });
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('关闭摄像头')).toBeInTheDocument();
@@ -996,11 +966,7 @@ describe('VideoCallInterface', () => {
       const testError = new Error('屏幕共享失败');
       mockCallManager.startScreenShare.mockRejectedValue(testError);
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('开始屏幕共享')).toBeInTheDocument();
@@ -1018,11 +984,7 @@ describe('VideoCallInterface', () => {
       const testError = new Error('切换摄像头失败');
       mockCallManager.switchCamera.mockRejectedValue(testError);
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('切换摄像头')).toBeInTheDocument();
@@ -1040,11 +1002,7 @@ describe('VideoCallInterface', () => {
       const testError = new Error('视频质量调整失败');
       mockCallManager.adjustVideoQuality.mockRejectedValue(testError);
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('视频质量设置')).toBeInTheDocument();
@@ -1069,11 +1027,7 @@ describe('VideoCallInterface', () => {
       const testError = new Error('结束通话失败');
       mockCallManager.endCall.mockRejectedValue(testError);
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('结束通话')).toBeInTheDocument();
@@ -1114,11 +1068,7 @@ describe('VideoCallInterface', () => {
         });
       });
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('静音')).toBeInTheDocument();
@@ -1150,11 +1100,7 @@ describe('VideoCallInterface', () => {
         });
       });
       
-      render(
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <TestVideoCallInterface {...defaultProps} />
-        </React.Suspense>
-      );
+      render(<TestVideoCallInterfaceWithSuspense {...defaultProps} />);
       
       await waitFor(() => {
         expect(screen.getByLabelText('视频质量设置')).toBeInTheDocument();
