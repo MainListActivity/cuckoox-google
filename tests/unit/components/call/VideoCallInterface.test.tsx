@@ -302,6 +302,7 @@ describe('VideoCallInterface', () => {
 
   let mockCallManager: any;
   let mockUseWebRTCPermissions: any;
+  let mockRequestFullscreen: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -318,7 +319,7 @@ describe('VideoCallInterface', () => {
       dispatchEvent: vi.fn(),
     }));
     
-    const mockRequestFullscreen = vi.fn().mockResolvedValue(undefined);
+    mockRequestFullscreen = vi.fn().mockResolvedValue(undefined);
     const mockExitFullscreen = vi.fn().mockResolvedValue(undefined);
     const mockHTMLVideoElement = vi.fn().mockImplementation(() => ({
       play: vi.fn().mockResolvedValue(undefined),
@@ -419,9 +420,13 @@ describe('VideoCallInterface', () => {
     // Clean up all mocks and timers
     vi.clearAllMocks();
     vi.clearAllTimers();
+    vi.useRealTimers();
     
     // Clear all module mocks to ensure no state leakage
     vi.resetModules();
+    
+    // Reset document state
+    document.body.innerHTML = '';
     
     // Reset global objects to original values only
     if (originalMatchMedia) {
@@ -596,12 +601,18 @@ describe('VideoCallInterface', () => {
       });
 
       const fullscreenButton = screen.getByLabelText('进入全屏');
-      fireEvent.click(fullscreenButton);
+      
+      await act(async () => {
+        fireEvent.click(fullscreenButton);
+      });
       
       await waitFor(() => {
         expect(mockRequestFullscreen).toHaveBeenCalled();
+      }, { timeout: 2000 });
+      
+      await waitFor(() => {
         expect(screen.getByText('显示模式: fullscreen')).toBeInTheDocument();
-      });
+      }, { timeout: 2000 });
     });
 
     it('应该能够切换到画中画模式', async () => {

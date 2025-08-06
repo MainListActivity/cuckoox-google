@@ -1,6 +1,6 @@
 import React from "react";
 import { screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render } from "../utils/testUtils";
 import LoginPage from "@/src/pages/login";
 import { AppUser } from "@/src/contexts/AuthContext";
@@ -205,6 +205,14 @@ describe("LoginPage", () => {
     mockFetch.mockClear();
     mockServiceWorkerAuth = false;
     setupMockAuth(false, false, null);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    document.body.innerHTML = '';
   });
 
   describe("Tenant Login View (Default)", () => {

@@ -148,6 +148,11 @@ describe('MobilePWAManager', () => {
 
   afterEach(() => {
     vi.resetAllMocks();
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    document.body.innerHTML = '';
   });
 
   it('应该在移动端环境下渲染', () => {

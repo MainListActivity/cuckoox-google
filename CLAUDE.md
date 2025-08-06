@@ -157,6 +157,14 @@ import { Grid } from '@mui/material';
 - 重连失败3次后触发数据库重建
 - 前端reconnect()调用SW的force_reconnect
 
+# 单元测试防污染规则
+
+## 测试隔离规则
+- **全局对象重置**：每个测试的 `afterEach` 中必须重置所有修改的全局对象（`window.matchMedia`、`HTMLVideoElement`、`document.requestFullscreen` 等）回原始值
+- **完全清理机制**：必须执行 `vi.clearAllMocks()`、`vi.clearAllTimers()`、`vi.useRealTimers()`、`vi.resetModules()` 和 `document.body.innerHTML = ''`
+- **异步操作处理**：对于有异步状态更新的操作，必须使用 `act()` 包装并适当增加 `waitFor` 超时时间，分离验证步骤避免竞态条件
+- **Provider状态隔离**：在 testUtils 中为 `BrowserRouter` 使用唯一 key，确保每个测试有独立的 Provider 状态，避免组件重复渲染问题
+
 # surrreal查询语法
 
 #### IF-ELSE 语句必须用 `END` 结尾
