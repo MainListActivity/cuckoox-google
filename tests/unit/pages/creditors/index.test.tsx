@@ -224,9 +224,7 @@ describe("Creditors Module Tests", () => {
     );
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+  // Note: Global cleanup is handled in tests/setup.ts
 
   // 新增：产品规范测试 - 自动导航功能
   describe("Auto Navigation (Product Requirement)", () => {
