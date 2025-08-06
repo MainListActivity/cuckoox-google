@@ -44,7 +44,7 @@ const PageContainer: React.FC<PageContainerProps> = ({
       default:
         // 默认背景：使用主题的默认背景色
         return {
-          backgroundColor: theme.palette.background.default,
+          backgroundColor: theme?.palette?.background?.default || '#ffffff',
           minHeight: '100%', // 改为 100% 避免高度叠加
         };
     }

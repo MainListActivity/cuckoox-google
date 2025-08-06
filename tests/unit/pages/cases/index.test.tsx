@@ -324,6 +324,22 @@ describe('CaseListPage', () => {
     };
   });
 
+  afterEach(() => {
+    // Clean up all mocks and timers
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    
+    // Clean up DOM completely
+    document.body.innerHTML = '';
+    
+    // Clear any global state
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  });
+
   describe('Page Rendering', () => {
     it('renders page title and description', async () => {
       renderCaseListPage();
