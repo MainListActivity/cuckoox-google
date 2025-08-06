@@ -71,6 +71,15 @@ vi.mock("@mui/material/useMediaQuery", () => ({
   }),
 }));
 
+// Also mock the system level useMediaQuery
+vi.mock("@mui/system/useMediaQuery", () => ({
+  __esModule: true,
+  default: vi.fn((query) => {
+    // Return false for all media queries in tests
+    return false;
+  }),
+}));
+
 // Mock ResizeObserver
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
@@ -142,18 +151,40 @@ afterEach(() => {
   vi.resetModules();
   
   // Clean up DOM elements to prevent component duplication
-  document.body.innerHTML = '';
+  // Check if the elements exist before removing them
+  try {
+    document.body.innerHTML = '';
+  } catch (error) {
+    // Silently ignore DOM errors during cleanup
+  }
   
   // Reset document head if needed (for title changes, meta tags, etc.)
-  const metaElements = document.head.querySelectorAll('meta[data-testid], title[data-testid], link[data-testid]');
-  metaElements.forEach(element => element.remove());
+  try {
+    const metaElements = document.head.querySelectorAll('meta[data-testid], title[data-testid], link[data-testid]');
+    metaElements.forEach(element => {
+      try {
+        if (element.parentNode) {
+          element.parentNode.removeChild(element);
+        }
+      } catch (e) {
+        // Ignore removal errors
+      }
+    });
+  } catch (error) {
+    // Silently ignore DOM errors during cleanup
+  }
   
   // Reset any global state that might leak between tests
   if (typeof window !== 'undefined') {
     // Clear any global event listeners that might have been added during tests
     const events = ['resize', 'scroll', 'keydown', 'keyup', 'click', 'focus', 'blur'];
     events.forEach(event => {
-      const clonedWindow = window.cloneNode ? window.cloneNode(true) : window;
+      // Remove any event listeners if they exist
+      try {
+        window.removeEventListener(event, () => {}, false);
+      } catch (e) {
+        // Ignore errors
+      }
     });
   }
 });
