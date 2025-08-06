@@ -9,54 +9,6 @@ const originalRequestFullscreen = document.documentElement.requestFullscreen;
 const originalExitFullscreen = document.exitFullscreen;
 const originalHTMLVideoElement = global.HTMLVideoElement;
 
-// Mock window.matchMedia with proper cleanup
-const mockMatchMedia = vi.fn().mockImplementation(query => ({
-  matches: query.includes('(orientation: landscape)') ? false : true,
-  media: query,
-  onchange: null,
-  addListener: vi.fn(),
-  removeListener: vi.fn(),
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  dispatchEvent: vi.fn(),
-}));
-
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: mockMatchMedia,
-});
-
-// Mock DOM API with proper cleanup tracking
-const mockRequestFullscreen = vi.fn().mockResolvedValue(undefined);
-const mockExitFullscreen = vi.fn().mockResolvedValue(undefined);
-
-Object.defineProperty(document.documentElement, 'requestFullscreen', {
-  writable: true,
-  value: mockRequestFullscreen
-});
-
-Object.defineProperty(document, 'exitFullscreen', {
-  writable: true,
-  value: mockExitFullscreen
-});
-
-// Mock HTMLVideoElement with proper cleanup
-const mockHTMLVideoElement = vi.fn().mockImplementation(() => ({
-  play: vi.fn().mockResolvedValue(undefined),
-  pause: vi.fn(),
-  load: vi.fn(),
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  requestPictureInPicture: vi.fn().mockResolvedValue(undefined),
-  srcObject: null,
-  volume: 1,
-  muted: false,
-  videoWidth: 640,
-  videoHeight: 480,
-}));
-
-vi.stubGlobal('HTMLVideoElement', mockHTMLVideoElement);
-
 // Mock modules
 vi.mock('@/src/services/callManager', () => ({
   default: {
@@ -354,11 +306,50 @@ describe('VideoCallInterface', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     
-    // Reset all mocks
-    mockMatchMedia.mockClear();
-    mockRequestFullscreen.mockClear();
-    mockExitFullscreen.mockClear();
-    mockHTMLVideoElement.mockClear();
+    // Setup fresh mocks for this test
+    const mockMatchMedia = vi.fn().mockImplementation(query => ({
+      matches: query.includes('(orientation: landscape)') ? false : true,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    
+    const mockRequestFullscreen = vi.fn().mockResolvedValue(undefined);
+    const mockExitFullscreen = vi.fn().mockResolvedValue(undefined);
+    const mockHTMLVideoElement = vi.fn().mockImplementation(() => ({
+      play: vi.fn().mockResolvedValue(undefined),
+      pause: vi.fn(),
+      load: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      requestPictureInPicture: vi.fn().mockResolvedValue(undefined),
+      srcObject: null,
+      volume: 1,
+      muted: false,
+      videoWidth: 640,
+      videoHeight: 480,
+    }));
+    
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: mockMatchMedia,
+    });
+    
+    Object.defineProperty(document.documentElement, 'requestFullscreen', {
+      writable: true,
+      value: mockRequestFullscreen
+    });
+    
+    Object.defineProperty(document, 'exitFullscreen', {
+      writable: true,
+      value: mockExitFullscreen
+    });
+    
+    vi.stubGlobal('HTMLVideoElement', mockHTMLVideoElement);
     
     // Get mocked instances
     mockCallManager = (await import('@/src/services/callManager')).default;
@@ -432,7 +423,7 @@ describe('VideoCallInterface', () => {
     // Clear all module mocks to ensure no state leakage
     vi.resetModules();
     
-    // Reset global objects to original values
+    // Reset global objects to original values only
     if (originalMatchMedia) {
       Object.defineProperty(window, 'matchMedia', {
         writable: true,
@@ -457,30 +448,6 @@ describe('VideoCallInterface', () => {
     if (originalHTMLVideoElement) {
       vi.stubGlobal('HTMLVideoElement', originalHTMLVideoElement);
     }
-    
-    // Reset mocks for next test
-    mockMatchMedia.mockClear();
-    mockRequestFullscreen.mockClear();
-    mockExitFullscreen.mockClear();
-    mockHTMLVideoElement.mockClear();
-    
-    // Restore clean mock state
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      value: mockMatchMedia,
-    });
-    
-    Object.defineProperty(document.documentElement, 'requestFullscreen', {
-      writable: true,
-      value: mockRequestFullscreen
-    });
-    
-    Object.defineProperty(document, 'exitFullscreen', {
-      writable: true,
-      value: mockExitFullscreen
-    });
-    
-    vi.stubGlobal('HTMLVideoElement', mockHTMLVideoElement);
   });
 
   describe('组件渲染', () => {
