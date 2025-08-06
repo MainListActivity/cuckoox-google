@@ -47,8 +47,11 @@ const AllTheProviders: React.FC<AllTheProvidersProps> = ({
   // Create a fresh queryClient for each test to avoid state leakage
   const testQueryClient = React.useMemo(() => queryClient || createTestQueryClient(), [queryClient]);
   
+  // Use a unique key to ensure complete provider isolation
+  const uniqueKey = React.useMemo(() => `test-${Date.now()}-${Math.random()}`, []);
+  
   return (
-    <BrowserRouter key={`${Date.now()}-${Math.random()}`}>
+    <BrowserRouter key={uniqueKey}>
       <QueryClientProvider client={testQueryClient}>
         <ThemeProvider theme={testTheme}>
           <MockSurrealProvider>
