@@ -1,107 +1,34 @@
-import React, { ReactElement } from 'react';
-import { render, RenderOptions } from '@testing-library/react';
-import { ThemeProvider } from '@mui/material/styles';
-import { BrowserRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+import { render } from '@testing-library/react';
 import { vi } from 'vitest';
-import { createTheme } from '@mui/material/styles';
-// Mock SurrealProvider
-const MockSurrealProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <div data-testid="mock-surreal-provider">{children}</div>;
+
+// 最简单的渲染helper - 不使用任何provider
+export const simpleRender = (ui: React.ReactElement) => {
+  return render(ui);
 };
 
-// Create a test theme
-const testTheme = createTheme({
-  palette: {
-    mode: 'light',
-    primary: {
-      main: '#1976d2',
-    },
-  },
-});
-
-// Create a test query client
-const createTestQueryClient = () => new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-      gcTime: 0,
-    },
-    mutations: {
-      retry: false,
-    },
-  },
-});
-
-interface AllTheProvidersProps {
-  children: React.ReactNode;
-  queryClient?: QueryClient;
-  initialEntries?: string[];
-}
-
-const AllTheProviders: React.FC<AllTheProvidersProps> = ({
-  children,
-  queryClient = createTestQueryClient(),
-  initialEntries = ['/']
-}) => {
-  // Create a fresh queryClient for each test to avoid state leakage
-  const testQueryClient = React.useMemo(() => queryClient || createTestQueryClient(), [queryClient]);
-  
-  // Use a unique key to ensure complete provider isolation
-  const uniqueKey = React.useMemo(() => `test-${Date.now()}-${Math.random()}`, []);
-  
-  return (
-    <BrowserRouter key={uniqueKey}>
-      <QueryClientProvider client={testQueryClient}>
-        <ThemeProvider theme={testTheme}>
-          <MockSurrealProvider>
-            {children}
-          </MockSurrealProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
-  );
-};
-
-interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
-  queryClient?: QueryClient;
-  initialEntries?: string[];
-}
-
-const customRender = (
-  ui: ReactElement,
-  options: CustomRenderOptions = {}
-) => {
-  const { queryClient, initialEntries, ...renderOptions } = options;
-  
-  // Ensure we have a clean container for each test
-  const container = document.createElement('div');
-  document.body.appendChild(container);
-
-  return render(ui, {
-    container,
-    wrapper: ({ children }) => (
-      <AllTheProviders
-        queryClient={queryClient}
-        initialEntries={initialEntries}
-      >
-        {children}
-      </AllTheProviders>
-    ),
-    ...renderOptions,
-  });
-};
-
-// Mock react-i18next
+// Mock hooks
 export const mockUseTranslation = () => ({
-  t: (key: string, fallback?: string) => fallback || key,
-  i18n: {
-    changeLanguage: vi.fn(),
-    language: 'zh-CN',
+  t: (key: string) => {
+    const translations: Record<string, string> = {
+      'create_user_and_add_to_case': '创建用户并添加到案件',
+      'username_label': '用户名',
+      'cancel_button': '取消',
+      'create_user_and_add': '创建用户并添加',
+      'password_label': '密码',
+      'email_label': '邮箱',
+      'display_name_label': '显示姓名',
+      'role_in_case_label': '在案件中的角色',
+      'username_required': '用户名不能为空',
+      'password_required': '密码不能为空',
+      'email_required': '邮箱不能为空',
+      'name_required': '姓名不能为空',
+      'email_invalid': '邮箱格式不正确',
+    };
+    return translations[key] || key;
   },
 });
 
-// Mock react-router-dom hooks
 export const mockUseNavigate = vi.fn();
 export const mockUseLocation = vi.fn(() => ({
   pathname: '/',
@@ -111,16 +38,5 @@ export const mockUseLocation = vi.fn(() => ({
 }));
 export const mockUseParams = vi.fn(() => ({}));
 
-// Helper to wait for async operations
-export const waitForAsyncOperations = () => new Promise(resolve => setTimeout(resolve, 0));
-
-// Helper to create mock RecordId
-export const createMockRecordId = (table: string, id: string) => ({
-  tb: table,
-  id: { String: id },
-  toString: () => `${table}:${id}`,
-});
-
 // Export everything from testing-library
 export * from '@testing-library/react';
-export { customRender as render };

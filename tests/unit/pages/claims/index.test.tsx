@@ -35,6 +35,191 @@ vi.mock('../../../../src/contexts/SnackbarContext', async () => {
     };
 });
 
+// Mock data for the test - matching actual RawClaimData structure
+const mockAuthResult = { id: 'user-123', authenticated: true };
+const mockClaimsData = [
+  {
+    id: 'claim001',
+    claim_number: 'CL-2023-001',
+    case_id: 'case-123',
+    creditor_id: 'cred-1',
+    status: 'submitted',
+    review_status_id: 'status-1',
+    reviewer_id: 'reviewer-1',
+    review_time: '2023-12-01T10:00:00Z',
+    review_comments: '部分通过，金额调整',
+    asserted_claim_details: {
+      nature: '货款',
+      principal: 100000,
+      interest: 30000,
+      other_amount: 20000,
+      total_asserted_amount: 150000,
+      attachment_doc_id: 'doc-1'
+    },
+    approved_claim_details: {
+      nature: '货款',
+      principal: 50000,
+      interest: 15000,
+      other_amount: 10000,
+      total_approved_amount: 75000,
+      approved_attachment_doc_id: 'approved-doc-1'
+    }
+  },
+  {
+    id: 'claim002',
+    claim_number: 'CL-2023-002', 
+    case_id: 'case-123',
+    creditor_id: 'cred-2',
+    status: 'approved',
+    review_status_id: 'status-2',
+    reviewer_id: 'reviewer-1',
+    review_time: '2023-12-01T11:00:00Z',
+    review_comments: '审核通过',
+    asserted_claim_details: {
+      nature: '工资',
+      principal: 50000,
+      interest: 15000,
+      other_amount: 10000,
+      total_asserted_amount: 75000,
+      attachment_doc_id: null
+    },
+    approved_claim_details: {
+      nature: '工资',
+      principal: 50000,
+      interest: 15000,
+      other_amount: 10000,
+      total_approved_amount: 75000,
+      approved_attachment_doc_id: null
+    }
+  },
+  {
+    id: 'claim003',
+    claim_number: 'CL-2023-003',
+    case_id: 'case-123',
+    creditor_id: 'cred-3', 
+    status: 'pending',
+    review_status_id: 'status-3',
+    reviewer_id: null,
+    review_time: null,
+    review_comments: null,
+    asserted_claim_details: {
+      nature: '借款',
+      principal: 40000,
+      interest: 8000,
+      other_amount: 2000,
+      total_asserted_amount: 50000,
+      attachment_doc_id: 'doc-3'
+    },
+    approved_claim_details: null
+  }
+];
+
+const mockStatsData = [
+  // Basic stats - should match our mock data totals
+  [{ total_claims: 3, total_asserted_amount: 275000, total_confirmed_amount: 150000 }],
+  // Status distribution  
+  [
+    { status: '待审核', count: 1 },
+    { status: '审核通过', count: 1 },
+    { status: '部分通过', count: 1 }
+  ],
+  // Reviewed stats
+  [{ reviewed_claims: 2 }]
+];
+
+// Mock creditors data that matches claim creditor_ids
+const mockCreditorsData = [
+  { id: 'cred-1', name: 'Acme Corp', type: 'organization', legal_id: '123456789', contact_person_name: 'John Doe', contact_phone: '13800138000', contact_address: '北京市朝阳区' },
+  { id: 'cred-2', name: 'Jane Smith', type: 'individual', legal_id: '330101199001012345', contact_person_name: 'Jane Smith', contact_phone: '13900139000', contact_address: '上海市浦东新区' },
+  { id: 'cred-3', name: 'Beta LLC', type: 'organization', legal_id: '987654321', contact_person_name: 'Bob Wilson', contact_phone: '13700137000', contact_address: '深圳市南山区' }
+];
+
+// Mock review status definitions
+const mockReviewStatusData = [
+  { id: 'status-1', name: '部分通过', description: '部分审核通过', display_order: 3, is_active: true },
+  { id: 'status-2', name: '审核通过', description: '完全审核通过', display_order: 4, is_active: true },
+  { id: 'status-3', name: '待审核', description: '等待审核', display_order: 1, is_active: true }
+];
+
+// Mock reviewers data
+const mockReviewersData = [
+  { id: 'reviewer-1', name: '张审核员' }
+];
+
+// Mock SurrealProvider
+vi.mock('@/src/contexts/SurrealProvider', () => ({
+  useSurreal: () => ({
+    client: {
+      query: vi.fn().mockImplementation((sql: string, params?: any) => {
+        console.log('Mock SQL Query:', sql, 'Params:', params);
+        
+        // Detect complex combined query with multiple statements
+        if (sql.includes('return $auth;') && sql.includes('FROM claim') && sql.includes('count()')) {
+          // This is the main claims query with auth, data, and count
+          console.log('Main claims query detected, returning mockClaimsData:', mockClaimsData);
+          return Promise.resolve([
+            mockAuthResult, // auth result
+            mockClaimsData, // claims data
+            [{ total: 3 }]   // count result
+          ]);
+        } else if (sql.includes('FROM creditor') && sql.includes('WHERE id IN')) {
+          // Creditor lookup query - queryWithAuth returns results[1], so creditorResults = results[1]
+          // creditors = creditorResults[0] expects creditorResults to be [creditors]
+          return Promise.resolve([mockAuthResult, [mockCreditorsData]]);
+        } else if (sql.includes('FROM claim_review_status_definition')) {
+          // Review status lookup query
+          return Promise.resolve([mockAuthResult, [mockReviewStatusData]]);
+        } else if (sql.includes('FROM user') && sql.includes('WHERE id IN')) {
+          // Reviewers lookup query
+          return Promise.resolve([mockAuthResult, [mockReviewersData]]);
+        } else if (sql.includes('count()') && sql.includes('FROM claim')) {
+          // Stats queries
+          return Promise.resolve([mockAuthResult, ...mockStatsData]);
+        } else {
+          // Default query
+          console.log('No specific match, defaulting for query:', sql);
+          return Promise.resolve([mockAuthResult, []]);
+        }
+      }),
+    },
+    isConnected: true,
+  }),
+  useSurrealClient: () => ({
+    query: vi.fn().mockImplementation((sql: string, params?: any) => {
+      if (sql.includes('return $auth;SELECT') && sql.includes('FROM claim') && sql.includes('count()')) {
+        return Promise.resolve([
+          mockAuthResult,
+          mockClaimsData,
+          [{ total: 3 }]
+        ]);
+      } else if (sql.includes('FROM creditor') && sql.includes('WHERE id IN')) {
+        return Promise.resolve([mockAuthResult, [mockCreditorsData]]);
+      } else if (sql.includes('FROM claim_review_status_definition')) {
+        return Promise.resolve([mockAuthResult, [mockReviewStatusData]]);
+      } else if (sql.includes('FROM user') && sql.includes('WHERE id IN')) {
+        return Promise.resolve([mockAuthResult, [mockReviewersData]]);
+      } else if (sql.includes('count()')) {
+        return Promise.resolve([mockAuthResult, ...mockStatsData]);
+      } else {
+        return Promise.resolve([mockAuthResult, []]);
+      }
+    }),
+  }),
+}));
+
+// Mock AuthContext
+vi.mock('@/src/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'user-123', github_id: 'admin-user' },
+    selectedCaseId: 'case-123',
+    isAuthenticated: true,
+    useOperationPermission: (operationId: string) => ({
+      hasPermission: true,
+      isLoading: false,
+    }),
+  }),
+}));
+
 // Mock AdminCreateClaimBasicInfoDialog
 vi.mock('../../../../src/components/admin/claims/AdminCreateClaimBasicInfoDialog', () => ({
     __esModule: true,

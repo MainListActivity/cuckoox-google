@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import AdminPage from '@/src/pages/admin/index';
 import { ThemeProvider, createTheme } from '@mui/material/styles'; // For Theme context
 import { adminSections } from '@/src/pages/admin/index'; // Import adminSections if it's exported, otherwise redefine or mock
@@ -29,9 +30,11 @@ const theme = createTheme(); // Basic theme for rendering MUI components
 describe('AdminPage', () => {
   beforeEach(() => {
     render(
-      <ThemeProvider theme={theme}>
-        <AdminPage />
-      </ThemeProvider>
+      <BrowserRouter>
+        <ThemeProvider theme={theme}>
+          <AdminPage />
+        </ThemeProvider>
+      </BrowserRouter>
     );
   });
 
