@@ -172,8 +172,9 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
         } else if (sql.includes('FROM user') && sql.includes('WHERE id IN')) {
           // Reviewers lookup query
           return Promise.resolve([mockAuthResult, [mockReviewersData]]);
-        } else if (sql.includes('count()') && sql.includes('FROM claim')) {
-          // Stats queries
+        } else if (sql.includes('return $auth;') && sql.includes('math::sum') && sql.includes('GROUP BY') && sql.includes('GROUP ALL')) {
+          // Stats queries - matches the complex statistics query by detecting SQL patterns
+          console.log('Stats query detected in useSurreal, returning mockStatsData:', mockStatsData);
           return Promise.resolve([mockAuthResult, ...mockStatsData]);
         } else {
           // Default query
@@ -186,21 +187,34 @@ vi.mock('@/src/contexts/SurrealProvider', () => ({
   }),
   useSurrealClient: () => ({
     query: vi.fn().mockImplementation((sql: string, params?: any) => {
-      if (sql.includes('return $auth;SELECT') && sql.includes('FROM claim') && sql.includes('count()')) {
+      console.log('useSurrealClient Mock SQL Query:', sql, 'Params:', params);
+      
+      // Detect complex combined query with multiple statements
+      if (sql.includes('return $auth;') && sql.includes('FROM claim') && sql.includes('count()')) {
+        // This is the main claims query with auth, data, and count
+        console.log('Main claims query detected in useSurrealClient, returning mockClaimsData:', mockClaimsData);
         return Promise.resolve([
-          mockAuthResult,
-          mockClaimsData,
-          [{ total: 3 }]
+          mockAuthResult, // auth result
+          mockClaimsData, // claims data
+          [{ total: 3 }]   // count result
         ]);
       } else if (sql.includes('FROM creditor') && sql.includes('WHERE id IN')) {
+        // Creditor lookup query - queryWithAuth returns results[1], so creditorResults = results[1]
+        // creditors = creditorResults[0] expects creditorResults to be [creditors]
         return Promise.resolve([mockAuthResult, [mockCreditorsData]]);
       } else if (sql.includes('FROM claim_review_status_definition')) {
+        // Review status lookup query
         return Promise.resolve([mockAuthResult, [mockReviewStatusData]]);
       } else if (sql.includes('FROM user') && sql.includes('WHERE id IN')) {
+        // Reviewers lookup query
         return Promise.resolve([mockAuthResult, [mockReviewersData]]);
-      } else if (sql.includes('count()')) {
+      } else if (sql.includes('return $auth;') && sql.includes('math::sum') && sql.includes('GROUP BY') && sql.includes('GROUP ALL')) {
+        // Stats queries - matches the complex statistics query by detecting SQL patterns
+        console.log('Stats query detected, returning mockStatsData:', mockStatsData);
         return Promise.resolve([mockAuthResult, ...mockStatsData]);
       } else {
+        // Default query
+        console.log('No specific match in useSurrealClient, defaulting for query:', sql);
         return Promise.resolve([mockAuthResult, []]);
       }
     }),
