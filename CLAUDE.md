@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Always respond in Chinese-simplified.
 
+注意在任务完成前根据mcp-feedback-enhanced工具的要求进行工具调用
+
 ## Development Commands
 
 This is a React + TypeScript + Vite application using Bun as the package manager.
