@@ -84,9 +84,13 @@ describe('WebRTCErrorHandler', () => {
     });
 
     it('should classify DOMException OverconstrainedError correctly', () => {
-      const error = new DOMException('Constraints not satisfied', 'OverconstrainedError');
+      const error = {
+        name: 'OverconstrainedError',
+        message: 'Constraints not satisfied'
+      } as DOMException;
       
       const errorDetails = webrtcErrorHandler.handleError(error);
+      console.log('DEBUG: errorDetails for OverconstrainedError', errorDetails);
       
       expect(errorDetails.type).toBe(WebRTCErrorType.MEDIA_DEVICE_ERROR);
       expect(errorDetails.severity).toBe(ErrorSeverity.LOW);

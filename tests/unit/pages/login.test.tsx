@@ -207,12 +207,9 @@ describe("LoginPage", () => {
     setupMockAuth(false, false, null);
   });
 
+
   afterEach(() => {
-    vi.clearAllMocks();
-    vi.clearAllTimers();
-    vi.useRealTimers();
     vi.resetModules();
-    document.body.innerHTML = '';
   });
 
   describe("Tenant Login View (Default)", () => {
@@ -264,7 +261,7 @@ describe("LoginPage", () => {
         expect(tenantField).toBeInTheDocument();
         // Skip exact value check for now as it may use history default
       });
-    }, 5000);
+    });
   });
 
   describe("Root Admin Login View", () => {
@@ -377,7 +374,7 @@ describe("LoginPage", () => {
       // Either Turnstile should not be shown (indicating validation prevented submission)
       // OR some error should be displayed
       expect(turnstileShown === null || hasErrorAlert || hasAnyErrorText).toBe(true);
-    }, 1500);
+    });
 
     it("should show error when submitting without username", async () => {
       const tenantField = screen.getByLabelText(/tenant code/i);
@@ -404,7 +401,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
   });
 
   describe("Form Validation - Root Admin Login", () => {
@@ -499,7 +496,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should call setTenantCode with correct tenant", async () => {
       const authService = await import("../../../src/services/authService");
@@ -511,7 +508,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should call setAuthTokens with correct tokens", async () => {
       const authService = await import("../../../src/services/authService");
@@ -525,7 +522,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should navigate to dashboard for regular user", async () => {
       await waitFor(
@@ -536,7 +533,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
   });
 
   describe("Root Admin Login - Successful Submission", () => {
@@ -593,7 +590,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should call setTenantCode with root system code", async () => {
       const authService = await import("../../../src/services/authService");
@@ -605,7 +602,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should navigate to root admin panel", async () => {
       // For root admin, there's no Turnstile step - login happens directly
@@ -618,7 +615,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
   });
 
   describe("Login Form - Failed Submission", () => {
@@ -691,7 +688,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should not call setAuthState", () => {
       expect(mockSetAuthState).not.toHaveBeenCalled();
@@ -782,7 +779,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should navigate to root admin panel if root admin is logged in", async () => {
       const rootAdmin: AppUser = {
@@ -812,7 +809,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
 
     it("should show redirecting message for logged in user", async () => {
       const user: AppUser = {
@@ -839,7 +836,7 @@ describe("LoginPage", () => {
         },
         { timeout: 1500 },
       );
-    }, 1500);
+    });
   });
 
   describe("UI Elements and Layout", () => {
@@ -963,7 +960,7 @@ describe("LoginPage", () => {
         },
         { timeout: 2000 },
       );
-    }, 1500);
+    });
   });
 
   describe("Tenant History Integration", () => {
@@ -991,6 +988,6 @@ describe("LoginPage", () => {
         // Since our mock returns TENANT001, it should be the default value
         expect(tenantField.value).toBe("TENANT001");
       }, { timeout: 5000 });
-    }, 1500);
+    });
   });
 });

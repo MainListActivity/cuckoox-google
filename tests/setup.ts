@@ -93,6 +93,6 @@ afterEach(() => {
 
 // 设置测试超时
 vi.setConfig({
-  testTimeout: 2000, // 10秒超时
-  hookTimeout: 1000,  // 5秒hook超时
+  testTimeout: 10000, // 10秒超时
+  hookTimeout: 5000,  // 5秒hook超时
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/src/i18n'; // Adjust path
@@ -146,80 +146,7 @@ const mockReviewersData = [
   { id: 'reviewer-1', name: '张审核员' }
 ];
 
-// Mock SurrealProvider
-vi.mock('@/src/contexts/SurrealProvider', () => ({
-  useSurreal: () => ({
-    client: {
-      query: vi.fn().mockImplementation((sql: string, params?: any) => {
-        console.log('Mock SQL Query:', sql, 'Params:', params);
-        
-        // Detect complex combined query with multiple statements
-        if (sql.includes('return $auth;') && sql.includes('FROM claim') && sql.includes('count()')) {
-          // This is the main claims query with auth, data, and count
-          console.log('Main claims query detected, returning mockClaimsData:', mockClaimsData);
-          return Promise.resolve([
-            mockAuthResult, // auth result
-            mockClaimsData, // claims data
-            [{ total: 3 }]   // count result
-          ]);
-        } else if (sql.includes('FROM creditor') && sql.includes('WHERE id IN')) {
-          // Creditor lookup query - queryWithAuth returns results[1], so creditorResults = results[1]
-          // creditors = creditorResults[0] expects creditorResults to be [creditors]
-          return Promise.resolve([mockAuthResult, [mockCreditorsData]]);
-        } else if (sql.includes('FROM claim_review_status_definition')) {
-          // Review status lookup query
-          return Promise.resolve([mockAuthResult, [mockReviewStatusData]]);
-        } else if (sql.includes('FROM user') && sql.includes('WHERE id IN')) {
-          // Reviewers lookup query
-          return Promise.resolve([mockAuthResult, [mockReviewersData]]);
-        } else if (sql.includes('return $auth;') && sql.includes('math::sum') && sql.includes('GROUP BY') && sql.includes('GROUP ALL')) {
-          // Stats queries - matches the complex statistics query by detecting SQL patterns
-          console.log('Stats query detected in useSurreal, returning mockStatsData:', mockStatsData);
-          return Promise.resolve([mockAuthResult, ...mockStatsData]);
-        } else {
-          // Default query
-          console.log('No specific match, defaulting for query:', sql);
-          return Promise.resolve([mockAuthResult, []]);
-        }
-      }),
-    },
-    isConnected: true,
-  }),
-  useSurrealClient: () => ({
-    query: vi.fn().mockImplementation((sql: string, params?: any) => {
-      console.log('useSurrealClient Mock SQL Query:', sql, 'Params:', params);
-      
-      // Detect complex combined query with multiple statements
-      if (sql.includes('return $auth;') && sql.includes('FROM claim') && sql.includes('count()')) {
-        // This is the main claims query with auth, data, and count
-        console.log('Main claims query detected in useSurrealClient, returning mockClaimsData:', mockClaimsData);
-        return Promise.resolve([
-          mockAuthResult, // auth result
-          mockClaimsData, // claims data
-          [{ total: 3 }]   // count result
-        ]);
-      } else if (sql.includes('FROM creditor') && sql.includes('WHERE id IN')) {
-        // Creditor lookup query - queryWithAuth returns results[1], so creditorResults = results[1]
-        // creditors = creditorResults[0] expects creditorResults to be [creditors]
-        return Promise.resolve([mockAuthResult, [mockCreditorsData]]);
-      } else if (sql.includes('FROM claim_review_status_definition')) {
-        // Review status lookup query
-        return Promise.resolve([mockAuthResult, [mockReviewStatusData]]);
-      } else if (sql.includes('FROM user') && sql.includes('WHERE id IN')) {
-        // Reviewers lookup query
-        return Promise.resolve([mockAuthResult, [mockReviewersData]]);
-      } else if (sql.includes('return $auth;') && sql.includes('math::sum') && sql.includes('GROUP BY') && sql.includes('GROUP ALL')) {
-        // Stats queries - matches the complex statistics query by detecting SQL patterns
-        console.log('Stats query detected, returning mockStatsData:', mockStatsData);
-        return Promise.resolve([mockAuthResult, ...mockStatsData]);
-      } else {
-        // Default query
-        console.log('No specific match in useSurrealClient, defaulting for query:', sql);
-        return Promise.resolve([mockAuthResult, []]);
-      }
-    }),
-  }),
-}));
+vi.mock('@/src/contexts/SurrealProvider');
 
 // Mock AuthContext
 vi.mock('@/src/contexts/AuthContext', () => ({
@@ -250,9 +177,57 @@ vi.mock('../../../../src/components/admin/claims/AdminCreateClaimBasicInfoDialog
 }));
 
 
+import { useSurreal, useSurrealClient } from '@/src/contexts/SurrealProvider';
+
+const mockUseSurreal = useSurreal as vi.Mock;
+const mockUseSurrealClient = useSurrealClient as vi.Mock;
+
+const mockQuery = vi.fn();
+const mockClientQuery = vi.fn();
+
 describe('ClaimListPage (Admin Claim Review)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+
+        // Reset the implementation of the mock query functions before each test
+        mockQuery.mockImplementation((sql: string, params?: any) => {
+            if (sql.includes('return $auth;') && sql.includes('FROM claim') && sql.includes('count()')) {
+                return Promise.resolve([mockAuthResult, mockClaimsData, [{ total: 3 }]]);
+            } else if (sql.includes('FROM creditor')) {
+                return Promise.resolve([mockAuthResult, [mockCreditorsData]]);
+            } else if (sql.includes('FROM claim_review_status_definition')) {
+                return Promise.resolve([mockAuthResult, [mockReviewStatusData]]);
+            } else if (sql.includes('FROM user')) {
+                return Promise.resolve([mockAuthResult, [mockReviewersData]]);
+            } else if (sql.includes('math::sum')) {
+                return Promise.resolve([mockAuthResult, ...mockStatsData]);
+            }
+            return Promise.resolve([mockAuthResult, []]);
+        });
+
+        mockClientQuery.mockImplementation((sql: string, params?: any) => {
+            if (sql.includes('return $auth;') && sql.includes('FROM claim') && sql.includes('count()')) {
+                return Promise.resolve([mockAuthResult, mockClaimsData, [{ total: 3 }]]);
+            } else if (sql.includes('FROM creditor')) {
+                return Promise.resolve([mockAuthResult, [mockCreditorsData]]);
+            } else if (sql.includes('FROM claim_review_status_definition')) {
+                return Promise.resolve([mockAuthResult, [mockReviewStatusData]]);
+            } else if (sql.includes('FROM user')) {
+                return Promise.resolve([mockAuthResult, [mockReviewersData]]);
+            } else if (sql.includes('math::sum')) {
+                return Promise.resolve([mockAuthResult, ...mockStatsData]);
+            }
+            return Promise.resolve([mockAuthResult, []]);
+        });
+
+        mockUseSurreal.mockReturnValue({
+            client: { query: mockQuery },
+            isConnected: true,
+        });
+
+        mockUseSurrealClient.mockReturnValue({
+            query: mockClientQuery,
+        });
     });
 
     const renderComponent = () => {
