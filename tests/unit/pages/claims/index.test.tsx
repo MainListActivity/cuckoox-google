@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BrowserRouter } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '@/src/i18n'; // Adjust path
@@ -253,24 +253,44 @@ vi.mock('../../../../src/components/admin/claims/AdminCreateClaimBasicInfoDialog
 describe('ClaimListPage (Admin Claim Review)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        // 清理DOM
+        document.body.innerHTML = '';
     });
 
-    const renderComponent = () => {
-        render(
-            <BrowserRouter>
-                <I18nextProvider i18n={i18n}>
-                    <SnackbarProvider>
-                        <ClaimListPage />
-                    </SnackbarProvider>
-                </I18nextProvider>
-            </BrowserRouter>
-        );
+    afterEach(() => {
+        vi.clearAllMocks();
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        vi.resetModules();
+        // 强制清理DOM
+        document.body.innerHTML = '';
+    });
+
+    const renderComponent = async () => {
+        await act(async () => {
+            render(
+                <BrowserRouter key={`claims-test-${Date.now()}`}>
+                    <I18nextProvider i18n={i18n}>
+                        <SnackbarProvider>
+                            <ClaimListPage />
+                        </SnackbarProvider>
+                    </I18nextProvider>
+                </BrowserRouter>
+            );
+        });
     };
 
     // Rendering Tests
-    it('renders MUI table, toolbar elements, and mock data', () => {
-        renderComponent();
-        expect(screen.getByText('债权申报与审核 (管理员)')).toBeInTheDocument(); // Page Title
+    it('renders MUI table, toolbar elements, and mock data', async () => {
+        await renderComponent();
+        
+        // Wait for component to render and data to load
+        await waitFor(() => {
+            expect(screen.getByText('债权申报与审核 (管理员)')).toBeInTheDocument(); // Page Title
+        });
+        
         expect(screen.getByLabelText(/搜索债权人\/编号\/联系人/)).toBeInTheDocument(); // Search
         expect(screen.getByLabelText(/审核状态/)).toBeInTheDocument(); // Filter
         expect(screen.getByRole('button', { name: /创建债权/i })).toBeInTheDocument();
@@ -289,16 +309,23 @@ describe('ClaimListPage (Admin Claim Review)', () => {
 
     // Interactions Tests
     it('filters claims based on search term', async () => {
-        renderComponent();
+        await renderComponent();
+        
         const searchInput = screen.getByLabelText(/搜索债权人\/编号\/联系人/);
 
-        fireEvent.change(searchInput, { target: { value: 'Acme' } });
+        await act(async () => {
+            fireEvent.change(searchInput, { target: { value: 'Acme' } });
+        });
+        
         await waitFor(() => {
             expect(screen.getByText('Acme Corp (组织)')).toBeInTheDocument();
             expect(screen.queryByText('Jane Smith (个人)')).not.toBeInTheDocument();
         });
 
-        fireEvent.change(searchInput, { target: { value: 'CL-2023-002' } });
+        await act(async () => {
+            fireEvent.change(searchInput, { target: { value: 'CL-2023-002' } });
+        });
+        
         await waitFor(() => {
             expect(screen.queryByText('Acme Corp (组织)')).not.toBeInTheDocument();
             expect(screen.getByText('Jane Smith (个人)')).toBeInTheDocument();
@@ -307,13 +334,19 @@ describe('ClaimListPage (Admin Claim Review)', () => {
     });
 
     it('filters claims based on status dropdown', async () => {
-        renderComponent();
+        await renderComponent();
         const filterSelect = screen.getByLabelText(/审核状态/);
 
-        fireEvent.mouseDown(filterSelect);
+        await act(async () => {
+            fireEvent.mouseDown(filterSelect);
+        });
+        
         // MUI Select options are usually in a Popover/Menu, need to wait for them
         const pendingOption = await screen.findByRole('option', { name: '待审核' });
-        fireEvent.click(pendingOption);
+        
+        await act(async () => {
+            fireEvent.click(pendingOption);
+        });
 
         await waitFor(() => {
             // Assuming 'Beta LLC' is '待审核'
