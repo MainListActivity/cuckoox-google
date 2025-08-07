@@ -1,10 +1,34 @@
 import React from 'react';
-import { render } from '@testing-library/react';
+import { render as rtlRender, RenderOptions } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { I18nextProvider } from 'react-i18next';
 import { vi } from 'vitest';
+import i18n from '@/src/i18n';
+
+// 创建唯一key以确保每个测试都有独立的Provider状态
+let routerKey = 0;
+
+// 增强的渲染函数，确保每次渲染都是完全独立的
+const render = (ui: React.ReactElement, options?: RenderOptions) => {
+  // 为每个测试生成唯一的key，避免Provider状态污染
+  const uniqueKey = `test-render-${++routerKey}-${Date.now()}`;
+  
+  const AllTheProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    return (
+      <BrowserRouter key={uniqueKey}>
+        <I18nextProvider i18n={i18n}>
+          {children}
+        </I18nextProvider>
+      </BrowserRouter>
+    );
+  };
+
+  return rtlRender(ui, { wrapper: AllTheProviders, ...options });
+};
 
 // 最简单的渲染helper - 不使用任何provider
 export const simpleRender = (ui: React.ReactElement) => {
-  return render(ui);
+  return rtlRender(ui);
 };
 
 // Mock hooks
@@ -38,5 +62,6 @@ export const mockUseLocation = vi.fn(() => ({
 }));
 export const mockUseParams = vi.fn(() => ({}));
 
-// Export everything from testing-library
+// Export enhanced render as default and all testing-library functions
+export { render };
 export * from '@testing-library/react';

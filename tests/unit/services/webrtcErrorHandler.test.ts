@@ -84,7 +84,15 @@ describe('WebRTCErrorHandler', () => {
     });
 
     it('should classify DOMException OverconstrainedError correctly', () => {
-      const error = new DOMException('Constraints not satisfied', 'OverconstrainedError');
+      // 确保DOMException存在并可用
+      const DOMExceptionClass = globalThis.DOMException || class extends Error {
+        constructor(message: string, name: string) {
+          super(message);
+          this.name = name;
+        }
+      };
+      
+      const error = new DOMExceptionClass('Constraints not satisfied', 'OverconstrainedError');
       
       const errorDetails = webrtcErrorHandler.handleError(error);
       

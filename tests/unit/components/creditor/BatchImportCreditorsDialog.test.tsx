@@ -1,6 +1,6 @@
 import React from 'react';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '../../utils/testUtils';
 import BatchImportCreditorsDialog from '@/src/pages/creditors/BatchImportCreditorsDialog'; // 修正路径
 
@@ -10,22 +10,37 @@ const mockOnImport = vi.fn();
 describe('BatchImportCreditorsDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    // 清理DOM
+    document.body.innerHTML = '';
   });
 
-  const renderDialog = (open = true, isImporting = false) => {
-    render(
-      <BatchImportCreditorsDialog
-        open={open}
-        onClose={mockOnClose}
-        onImport={mockOnImport}
-        isImporting={isImporting}
-      />
-    );
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.resetModules();
+    // 强制清理DOM
+    document.body.innerHTML = '';
+  });
+
+  const renderDialog = async (open = true, isImporting = false) => {
+    await act(async () => {
+      render(
+        <BatchImportCreditorsDialog
+          open={open}
+          onClose={mockOnClose}
+          onImport={mockOnImport}
+          isImporting={isImporting}
+        />
+      );
+    });
   };
 
   // Rendering Tests
-  it('renders correctly with download link and file selection button', () => {
-    renderDialog();
+  it('renders correctly with download link and file selection button', async () => {
+    await renderDialog();
     expect(screen.getByText('批量导入债权人')).toBeInTheDocument(); // Title
     const downloadLink = screen.getByText('下载导入模板 (.csv)');
     expect(downloadLink).toBeInTheDocument();
@@ -37,18 +52,19 @@ describe('BatchImportCreditorsDialog', () => {
 
   // File Selection Tests
   it('selecting a file updates the UI and enables the import button', async () => {
-    renderDialog();
+    await renderDialog();
     const fileInput = screen.getByRole('button', { name: '选择文件' }).previousSibling as HTMLInputElement; // Input is hidden
     
     const testFile = new File(['test content'], 'test.csv', { type: 'text/csv' });
 
     // Simulate file selection
-    // For hidden inputs, directly dispatching change event on the input is more reliable
-    Object.defineProperty(fileInput, 'files', {
-        value: [testFile],
-        writable: false,
+    await act(async () => {
+      Object.defineProperty(fileInput, 'files', {
+          value: [testFile],
+          writable: false,
+      });
+      fireEvent.change(fileInput);
     });
-    fireEvent.change(fileInput);
 
     await waitFor(() => {
       expect(screen.getByText(`已选文件: ${testFile.name}`)).toBeInTheDocument();
@@ -58,24 +74,29 @@ describe('BatchImportCreditorsDialog', () => {
 
   // onImport Callback Test
   it('calls onImport with the selected file when "Start Import" is clicked', async () => {
-    renderDialog();
+    await renderDialog();
     const fileInput = screen.getByRole('button', { name: '选择文件' }).previousSibling as HTMLInputElement;
     const testFile = new File(['(类别,名称,ID,联系人姓名,联系方式,地址)\n组织,TestFile,FileID001,File Contact,123,File Address'], 'test_import.csv', { type: 'text/csv' });
 
-    Object.defineProperty(fileInput, 'files', { value: [testFile] });
-    fireEvent.change(fileInput);
+    await act(async () => {
+      Object.defineProperty(fileInput, 'files', { value: [testFile] });
+      fireEvent.change(fileInput);
+    });
     
     const importButton = screen.getByRole('button', { name: '开始导入' });
     await waitFor(() => expect(importButton).not.toBeDisabled());
-    fireEvent.click(importButton);
+    
+    await act(async () => {
+      fireEvent.click(importButton);
+    });
 
     expect(mockOnImport).toHaveBeenCalledTimes(1);
     expect(mockOnImport).toHaveBeenCalledWith(testFile);
   });
 
   // Loading State Test
-  it('shows loading state and disables button when isImporting is true', () => {
-    renderDialog(true, true); // open=true, isImporting=true
+  it('shows loading state and disables button when isImporting is true', async () => {
+    await renderDialog(true, true); // open=true, isImporting=true
     
     const importButton = screen.getByRole('button', { name: '导入中...' });
     expect(importButton).toBeInTheDocument();
@@ -88,26 +109,30 @@ describe('BatchImportCreditorsDialog', () => {
   });
 
   // onClose Callback Test
-  it('calls onClose when the Cancel button is clicked', () => {
-    renderDialog();
+  it('calls onClose when the Cancel button is clicked', async () => {
+    await renderDialog();
     // The cancel button might just be text "取消" or an icon, depending on MUI Dialog structure
     // Assuming it's a button with text '取消'
     const cancelButton = screen.getByRole('button', { name: '取消' });
-    fireEvent.click(cancelButton);
+    
+    await act(async () => {
+      fireEvent.click(cancelButton);
+    });
+    
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
   // 新增测试用例：测试文件类型验证
   it('accepts CSV, XLS, and XLSX file types', async () => {
-    renderDialog();
+    await renderDialog();
     const fileInput = screen.getByRole('button', { name: '选择文件' }).previousSibling as HTMLInputElement;
     
     expect(fileInput).toHaveAttribute('accept', '.csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel');
   });
 
   // 新增测试用例：测试模板下载功能
-  it('provides template download with correct attributes', () => {
-    renderDialog();
+  it('provides template download with correct attributes', async () => {
+    await renderDialog();
     const downloadLink = screen.getByText('下载导入模板 (.csv)');
     const linkElement = downloadLink.closest('a');
     
@@ -116,8 +141,8 @@ describe('BatchImportCreditorsDialog', () => {
   });
 
   // 新增测试用例：测试导入步骤说明
-  it('displays import steps clearly', () => {
-    renderDialog();
+  it('displays import steps clearly', async () => {
+    await renderDialog();
     
     expect(screen.getByText('步骤 1: 下载模板文件')).toBeInTheDocument();
     expect(screen.getByText('步骤 2: 选择已填写数据的文件')).toBeInTheDocument();
@@ -127,13 +152,15 @@ describe('BatchImportCreditorsDialog', () => {
 
   // 新增测试用例：测试对话框关闭时清理状态
   it('clears selected file when dialog is closed', async () => {
-    renderDialog();
+    await renderDialog();
     const fileInput = screen.getByRole('button', { name: '选择文件' }).previousSibling as HTMLInputElement;
     const testFile = new File(['test content'], 'test.csv', { type: 'text/csv' });
 
     // Select a file
-    Object.defineProperty(fileInput, 'files', { value: [testFile] });
-    fireEvent.change(fileInput);
+    await act(async () => {
+      Object.defineProperty(fileInput, 'files', { value: [testFile] });
+      fireEvent.change(fileInput);
+    });
 
     await waitFor(() => {
       expect(screen.getByText(`已选文件: ${testFile.name}`)).toBeInTheDocument();
@@ -141,22 +168,25 @@ describe('BatchImportCreditorsDialog', () => {
 
     // Close dialog
     const cancelButton = screen.getByRole('button', { name: '取消' });
-    fireEvent.click(cancelButton);
+    
+    await act(async () => {
+      fireEvent.click(cancelButton);
+    });
 
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
   // 新增测试用例：测试导入过程中的UI状态
-  it('disables cancel button during import', () => {
-    renderDialog(true, true); // open=true, isImporting=true
+  it('disables cancel button during import', async () => {
+    await renderDialog(true, true); // open=true, isImporting=true
     
     const cancelButton = screen.getByRole('button', { name: '取消' });
     expect(cancelButton).toBeDisabled();
   });
 
   // 新增测试用例：测试无文件选择时的状态
-  it('shows appropriate message when no file is selected', () => {
-    renderDialog();
+  it('shows appropriate message when no file is selected', async () => {
+    await renderDialog();
     
     expect(screen.getByText('未选择文件')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始导入' })).toBeDisabled();

@@ -1,10 +1,8 @@
 import React from 'react';
-import { screen, fireEvent } from '@testing-library/react';
-import { vi } from 'vitest';
+import { screen, fireEvent, act } from '@testing-library/react';
+import { vi, beforeEach, afterEach } from 'vitest';
 import { render } from '../../utils/testUtils';
 import CreditorMobileCard, { Creditor } from '@/src/components/mobile/CreditorMobileCard';
-
-// Remove MockWrapper as we now use testUtils
 
 describe('CreditorMobileCard', () => {
   const mockCreditor: Creditor = {
@@ -33,6 +31,8 @@ describe('CreditorMobileCard', () => {
     vi.clearAllMocks();
     vi.clearAllTimers();
     vi.useRealTimers();
+    // 清理DOM
+    document.body.innerHTML = '';
   });
 
   afterEach(() => {
@@ -40,18 +40,22 @@ describe('CreditorMobileCard', () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.resetModules();
+    // 强制清理DOM
+    document.body.innerHTML = '';
   });
 
-  it('should render creditor information correctly', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+  it('should render creditor information correctly', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     expect(screen.getByText('测试债权人')).toBeInTheDocument();
     expect(screen.getByText('123456789012345678')).toBeInTheDocument();
@@ -62,131 +66,155 @@ describe('CreditorMobileCard', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
-  it('should render organization type correctly', () => {
+  it('should render organization type correctly', async () => {
     const orgCreditor = {
       ...mockCreditor,
       type: '组织' as const,
       name: '测试公司',
     };
 
-    render(
-      <CreditorMobileCard
-        creditor={orgCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={orgCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     expect(screen.getByText('组织')).toBeInTheDocument();
     expect(screen.getByText('测试公司')).toBeInTheDocument();
   });
 
-  it('should handle selection change', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+  it('should handle selection change', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     const checkbox = screen.getByRole('checkbox');
-    fireEvent.click(checkbox);
+    
+    await act(async () => {
+      fireEvent.click(checkbox);
+    });
 
     expect(mockHandlers.onSelectionChange).toHaveBeenCalledWith('creditor-1', true);
   });
-
-  it('should show selected state correctly', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={true}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+  it('should show selected state correctly', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={true}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     const checkbox = screen.getByRole('checkbox');
     expect(checkbox).toBeChecked();
   });
 
-  it('should handle edit action when permitted', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={false}
-      />
-    );
+  it('should handle edit action when permitted', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={false}
+        />
+      );
+    });
 
     const editButton = screen.getByLabelText('编辑债权人');
-    fireEvent.click(editButton);
+    
+    await act(async () => {
+      fireEvent.click(editButton);
+    });
 
     expect(mockHandlers.onEdit).toHaveBeenCalledWith(mockCreditor);
   });
 
-  it('should not show edit button when not permitted', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={false}
-        canDelete={true}
-      />
-    );
+  it('should not show edit button when not permitted', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={false}
+          canDelete={true}
+        />
+      );
+    });
 
     expect(screen.queryByLabelText('编辑债权人')).not.toBeInTheDocument();
   });
 
-  it('should handle delete action when permitted', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={false}
-        canDelete={true}
-      />
-    );
+  it('should handle delete action when permitted', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={false}
+          canDelete={true}
+        />
+      );
+    });
 
     const deleteButton = screen.getByLabelText('删除债权人');
-    fireEvent.click(deleteButton);
+    
+    await act(async () => {
+      fireEvent.click(deleteButton);
+    });
 
     expect(mockHandlers.onDelete).toHaveBeenCalledWith(mockCreditor);
   });
 
-  it('should not show delete button when not permitted', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={false}
-      />
-    );
+  it('should not show delete button when not permitted', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={false}
+        />
+      );
+    });
 
     expect(screen.queryByLabelText('删除债权人')).not.toBeInTheDocument();
   });
 
-  it('should handle view claims action when creditor has claims', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+  it('should handle view claims action when creditor has claims', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     // Find the claims summary section and click on it
     const claimsCount = screen.getByText('2');
@@ -194,55 +222,65 @@ describe('CreditorMobileCard', () => {
     expect(claimsSection).toBeInTheDocument();
     
     // Click on the claims section
-    fireEvent.click(claimsSection!);
+    await act(async () => {
+      fireEvent.click(claimsSection!);
+    });
 
     expect(mockHandlers.onViewClaims).toHaveBeenCalledWith(mockCreditor);
   });
 
-  it('should not make claims clickable when creditor has no claims', () => {
+  it('should not make claims clickable when creditor has no claims', async () => {
     const creditorNoClaims = {
       ...mockCreditor,
       claim_count: 0,
       total_claim_amount: 0,
     };
 
-    const { container } = render(
-      <CreditorMobileCard
-        creditor={creditorNoClaims}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={creditorNoClaims}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     const claimsCount = screen.getByText('0');
     const claimsSection = claimsCount.closest('div');
     
     // Click on the claims section
-    fireEvent.click(claimsSection!);
+    await act(async () => {
+      fireEvent.click(claimsSection!);
+    });
 
     // Should not trigger onViewClaims for creditors with no claims
     expect(mockHandlers.onViewClaims).not.toHaveBeenCalled();
   });
 
-  it('should expand and collapse details', () => {
-    render(
-      <CreditorMobileCard
-        creditor={mockCreditor}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+  it('should expand and collapse details', async () => {
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={mockCreditor}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     // Find expand button
     const expandButton = screen.getByLabelText('展开详情');
     expect(expandButton).toBeInTheDocument();
 
     // Expand
-    fireEvent.click(expandButton);
+    await act(async () => {
+      fireEvent.click(expandButton);
+    });
 
     // Now detailed information should be visible
     expect(screen.getByText('联系地址')).toBeInTheDocument();
@@ -254,32 +292,36 @@ describe('CreditorMobileCard', () => {
     expect(collapseButton).toBeInTheDocument();
 
     // Collapse
-    fireEvent.click(collapseButton);
+    await act(async () => {
+      fireEvent.click(collapseButton);
+    });
 
     // Check that button text changed back to expand
     expect(screen.getByLabelText('展开详情')).toBeInTheDocument();
   });
 
-  it('should display correct currency formatting', () => {
+  it('should display correct currency formatting', async () => {
     const creditorLargeAmount = {
       ...mockCreditor,
       total_claim_amount: 1234567.89,
     };
 
-    render(
-      <CreditorMobileCard
-        creditor={creditorLargeAmount}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={creditorLargeAmount}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     expect(screen.getByText('¥1,234,567.89')).toBeInTheDocument();
   });
 
-  it('should handle missing contact information gracefully', () => {
+  it('should handle missing contact information gracefully', async () => {
     const creditorMinimalInfo = {
       ...mockCreditor,
       contact_person_name: '',
@@ -287,15 +329,17 @@ describe('CreditorMobileCard', () => {
       address: '',
     };
 
-    render(
-      <CreditorMobileCard
-        creditor={creditorMinimalInfo}
-        isSelected={false}
-        {...mockHandlers}
-        canEdit={true}
-        canDelete={true}
-      />
-    );
+    await act(async () => {
+      render(
+        <CreditorMobileCard
+          creditor={creditorMinimalInfo}
+          isSelected={false}
+          {...mockHandlers}
+          canEdit={true}
+          canDelete={true}
+        />
+      );
+    });
 
     // Should still render main information
     expect(screen.getByText('测试债权人')).toBeInTheDocument();
