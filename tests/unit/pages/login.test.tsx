@@ -208,11 +208,32 @@ describe("LoginPage", () => {
   });
 
   afterEach(() => {
+    // 保存原始状态以备下次测试使用
+    const originalMatchMedia = window.matchMedia;
+    
     vi.clearAllMocks();
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.resetModules();
-    document.body.innerHTML = '';
+    
+    // 重置全局状态
+    mockServiceWorkerAuth = false;
+    turnstileSuccessCallback = null;
+    
+    // 恢复window.matchMedia mock
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: originalMatchMedia || vi.fn().mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
   });
 
   describe("Tenant Login View (Default)", () => {
@@ -767,12 +788,22 @@ describe("LoginPage", () => {
       setupMockLocation(true, { from: { pathname: "/dashboard" } });
       setupMockAuth(true, false, regularUser, true);
 
+      // 确保service worker也返回认证状态
+      mockServiceWorkerComm.sendMessage.mockImplementation((message: any) => {
+        if (message === "get_connection_state" || message.type === "CHECK_AUTH") {
+          return Promise.resolve({ isAuthenticated: true });
+        }
+        return Promise.resolve({ isAuthenticated: false });
+      });
+
       await act(async () => {
         render(<LoginPage />);
       });
 
       // Wait for the 100ms delay in the useEffect + some buffer
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      });
 
       await waitFor(
         () => {
@@ -780,9 +811,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 1500 },
+        { timeout: 1000 },
       );
-    }, 1500);
+    });
 
     it("should navigate to root admin panel if root admin is logged in", async () => {
       const rootAdmin: AppUser = {
@@ -797,12 +828,22 @@ describe("LoginPage", () => {
       // Set up proper auth state for admin user
       setupMockAuth(true, false, rootAdmin, true);
 
+      // 确保service worker也返回认证状态
+      mockServiceWorkerComm.sendMessage.mockImplementation((message: any) => {
+        if (message === "get_connection_state" || message.type === "CHECK_AUTH") {
+          return Promise.resolve({ isAuthenticated: true });
+        }
+        return Promise.resolve({ isAuthenticated: false });
+      });
+
       await act(async () => {
         render(<LoginPage />);
       });
 
       // Wait for the 100ms delay in the useEffect + some buffer
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      });
 
       await waitFor(
         () => {
@@ -810,9 +851,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 1500 },
+        { timeout: 1000 },
       );
-    }, 1500);
+    });
 
     it("should show redirecting message for logged in user", async () => {
       const user: AppUser = {
@@ -825,21 +866,27 @@ describe("LoginPage", () => {
       setupMockLocation(true, { from: { pathname: "/dashboard" } });
       setupMockAuth(true, false, user, true);
 
+      // 确保service worker也返回认证状态
+      mockServiceWorkerComm.sendMessage.mockImplementation((message: any) => {
+        if (message === "get_connection_state" || message.type === "CHECK_AUTH") {
+          return Promise.resolve({ isAuthenticated: true });
+        }
+        return Promise.resolve({ isAuthenticated: false });
+      });
+
       await act(async () => {
         render(<LoginPage />);
       });
 
-      // Wait for component to stabilize and redirect logic to kick in
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
+      // 立即检查重定向消息，因为认证用户应该立即显示
       await waitFor(
         () => {
           expect(screen.getByTestId("global-loader")).toBeInTheDocument();
           expect(screen.getByText(/Redirecting/)).toBeInTheDocument();
         },
-        { timeout: 1500 },
+        { timeout: 1000 },
       );
-    }, 1500);
+    });
   });
 
   describe("UI Elements and Layout", () => {
