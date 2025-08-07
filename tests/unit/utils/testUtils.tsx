@@ -73,8 +73,13 @@ const customRender = (
   options: CustomRenderOptions = {}
 ) => {
   const { queryClient, initialEntries, ...renderOptions } = options;
+  
+  // Ensure we have a clean container for each test
+  const container = document.createElement('div');
+  document.body.appendChild(container);
 
   return render(ui, {
+    container,
     wrapper: ({ children }) => (
       <AllTheProviders
         queryClient={queryClient}

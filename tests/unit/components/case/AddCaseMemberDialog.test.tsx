@@ -91,10 +91,7 @@ describe('AddCaseMemberDialog', () => {
     });
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-    document.body.innerHTML = '';
-  });
+  // Use global cleanup only - individual test cleanup is causing DOM issues
 
   it('renders correctly when open is true', async () => {
     await act(async () => {

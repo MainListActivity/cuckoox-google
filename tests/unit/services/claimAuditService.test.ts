@@ -363,6 +363,14 @@ describe('ClaimAuditService', () => {
     });
 
     test('getClientInfo 应该返回客户端信息', () => {
+      // Mock navigator object
+      Object.defineProperty(global, 'navigator', {
+        value: {
+          userAgent: 'Mozilla/5.0 (Test Browser)'
+        },
+        writable: true
+      });
+
       const service = new ClaimAuditService(mockClient);
       const getClientInfo = (service as any).getClientInfo.bind(service);
 
