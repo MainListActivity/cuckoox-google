@@ -91,15 +91,19 @@ describe('MessageService', () => {
       if (query.includes('SELECT * FROM user:')) {
         return Promise.resolve([{ id: new RecordId('user', 'target-user') }]);
       }
-      // 模拟群组成员检查
-      if (query.includes('SELECT * FROM message_group_member WHERE') || 
-          query.includes('SELECT * FROM group_member WHERE')) {
+      // 模拟任何涉及group_member的查询
+      if (query.includes('group_member') && 
+          (query.includes('WHERE') || query.includes('FROM group_member'))) {
         return Promise.resolve([{ 
-          id: new RecordId('message_group_member', 'test-member'),
+          id: new RecordId('group_member', 'test-member'),
           group_id: new RecordId('message_group', 'test-group'),
           user_id: mockAuthResult.id,
-          role: 'ADMIN',
-          permissions: ['send_message', 'pin_message']
+          role: 'admin',
+          permissions: {
+            can_send_message: true,
+            can_pin_message: true,
+            can_manage_settings: true
+          }
         }]);
       }
       // 模拟会话参与者检查
@@ -1097,11 +1101,15 @@ describe('MessageService', () => {
 
       // Assert
       expect(mockClient.query).toHaveBeenCalledWith(
-        expect.stringContaining('UPSERT'),
-        expect.objectContaining({
-          group_id: groupId,
-          draft_content: draftContent,
-        })
+        `
+        UPSERT group_message_draft:($group_id, $user_id) SET content = $content, updated_at = $updated_at
+      `,
+        {
+          group_id: String(groupId),
+          user_id: '$auth.id',
+          content: draftContent,
+          updated_at: expect.any(String)
+        }
       );
     });
 
@@ -1114,8 +1122,8 @@ describe('MessageService', () => {
         if (query.includes('return $auth;')) {
           return Promise.resolve([mockAuthResult]);
         }
-        if (query.includes('draft_content')) {
-          return Promise.resolve([{ draft_content: draftContent }]);
+        if (query.includes('group_message_draft')) {
+          return Promise.resolve([{ content: draftContent }]);
         }
         return Promise.resolve([]);
       });
@@ -1124,7 +1132,7 @@ describe('MessageService', () => {
       const result = await messageService.getGroupMessageDraft(groupId);
 
       // Assert
-      expect(result).toBe(draftContent);
+      expect(result.content).toBe(draftContent);
     });
 
     it('应该成功清除群组消息草稿', async () => {
@@ -1143,10 +1151,13 @@ describe('MessageService', () => {
 
       // Assert
       expect(mockClient.query).toHaveBeenCalledWith(
-        expect.stringContaining('DELETE'),
-        expect.objectContaining({
-          group_id: groupId,
-        })
+        `
+        DELETE FROM group_message_draft 
+        WHERE group_id = $group_id AND user_id = $auth.id
+      `,
+        {
+          group_id: String(groupId),
+        }
       );
     });
   });

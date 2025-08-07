@@ -104,6 +104,8 @@ vi.mock("@mui/material/styles", async (importOriginal) => {
         mode: 'light',
         primary: { main: '#1976d2' },
         secondary: { main: '#dc004e' },
+        text: { primary: '#000000', secondary: '#666666' },
+        background: { default: '#ffffff', paper: '#ffffff' },
       },
       spacing: vi.fn().mockImplementation((...args) => args.map(arg => `${arg * 8}px`).join(' ')),
       shape: {
@@ -213,6 +215,128 @@ Object.defineProperty(global, 'console', {
   writable: true,
 });
 
+// Mock DOM methods that MUI components might use
+Object.defineProperty(Element.prototype, 'addEventListener', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(Element.prototype, 'removeEventListener', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+
+// Mock getBoundingClientRect
+Object.defineProperty(Element.prototype, 'getBoundingClientRect', {
+  value: vi.fn().mockReturnValue({
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+  }),
+  writable: true,
+  configurable: true,
+});
+
+// Mock getComputedStyle
+global.getComputedStyle = vi.fn().mockReturnValue({
+  display: 'block',
+  width: '100px',
+  height: '100px',
+  getPropertyValue: vi.fn().mockReturnValue(''),
+});
+
+// Mock document methods
+Object.defineProperty(document, 'createEvent', {
+  value: vi.fn().mockReturnValue({
+    initEvent: vi.fn(),
+  }),
+  writable: true,
+  configurable: true,
+});
+
+// Mock MutationObserver
+global.MutationObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  disconnect: vi.fn(),
+  takeRecords: vi.fn(),
+}));
+
+// Mock createPortal to avoid portal-related DOM issues
+// Note: Don't mock react-dom entirely as it breaks rendering
+
+// Mock additional DOM APIs that MUI components might use
+Object.defineProperty(document, 'querySelector', {
+  value: vi.fn().mockReturnValue(null),
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(document, 'querySelectorAll', {
+  value: vi.fn().mockReturnValue([]),
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(document, 'getElementById', {
+  value: vi.fn().mockReturnValue(null),
+  writable: true,
+  configurable: true,
+});
+
+// Mock document.body methods
+Object.defineProperty(document.body, 'appendChild', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(document.body, 'removeChild', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+
+// Mock scrollIntoView
+Object.defineProperty(Element.prototype, 'scrollIntoView', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+
+// Mock focus and blur
+Object.defineProperty(HTMLElement.prototype, 'focus', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(HTMLElement.prototype, 'blur', {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+
+// Mock dataset
+Object.defineProperty(HTMLElement.prototype, 'dataset', {
+  value: {},
+  writable: true,
+  configurable: true,
+});
+
+// Mock closest method
+Object.defineProperty(Element.prototype, 'closest', {
+  value: vi.fn().mockReturnValue(null),
+  writable: true,
+  configurable: true,
+});
+
 // Increase timeout for async operations
 vi.setConfig({
   testTimeout: 1000,
@@ -239,6 +363,20 @@ Object.defineProperty(window, 'location', {
   writable: true,
   configurable: true,
 });
+
+// Ensure DOM is properly initialized
+if (typeof document !== 'undefined' && !document.body) {
+  const html = document.createElement('html');
+  const head = document.createElement('head');
+  const body = document.createElement('body');
+  
+  html.appendChild(head);
+  html.appendChild(body);
+  
+  if (document.documentElement) {
+    document.documentElement.replaceWith(html);
+  }
+}
 
 // Global cleanup for all tests to prevent cross-contamination
 import { afterEach, beforeEach } from "vitest";
@@ -353,12 +491,23 @@ afterEach(() => {
   
   // Clean up DOM elements to prevent component duplication
   try {
-    document.body.innerHTML = '';
+    // Ensure document.body exists before cleanup
+    if (!document.body) {
+      const body = document.createElement('body');
+      document.documentElement.appendChild(body);
+    }
+    
+    // Basic cleanup without destroying essential DOM structure
+    if (document.body) {
+      // Clear only the content, don't touch the body element itself
+      document.body.innerHTML = '';
+    }
+    
     // Also clear any style elements or other document modifications
     const headElements = document.head.querySelectorAll('style[data-emotion], meta[data-testid], title[data-testid], link[data-testid]');
     headElements.forEach(element => {
       try {
-        if (element.parentNode) {
+        if (element && element.parentNode) {
           element.parentNode.removeChild(element);
         }
       } catch (e) {
