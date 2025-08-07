@@ -263,7 +263,9 @@ const ClaimListPage: React.FC = () => {
 
         // 处理状态分布
         const statusMap: Record<string, number> = {};
-        statusDistribution.forEach((item: any) => {
+        // 确保 statusDistribution 是数组
+        const statusArray = Array.isArray(statusDistribution) ? statusDistribution : [];
+        statusArray.forEach((item: any) => {
           if (item.status) {
             statusMap[item.status] = item.count || 0;
           }
