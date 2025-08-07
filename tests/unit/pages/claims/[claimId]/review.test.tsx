@@ -514,7 +514,7 @@ describe('ClaimReviewDetailPage', () => {
             expect(screen.getByText('审核通过，材料齐全。')).toBeInTheDocument();
 
             confirmSpy.mockRestore();
-        }, 10000);
+        }, 1500);
 
         it('does not submit if user cancels confirmation dialog', async () => {
             await act(async () => {
@@ -566,7 +566,7 @@ describe('ClaimReviewDetailPage', () => {
             expect(screen.getByText('填写审核意见与认定金额')).toBeInTheDocument();
 
             confirmSpy.mockRestore();
-        }, 10000);
+        }, 1500);
     });
 
     // Error Handling Tests

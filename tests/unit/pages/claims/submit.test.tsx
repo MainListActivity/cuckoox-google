@@ -259,7 +259,7 @@ describe('ClaimSubmissionPage', () => {
       const caseLabels = screen.getAllByText(/关联案件/);
       expect(caseLabels.length).toBeGreaterThan(0);
       expect(caseLabels[0]).toBeInTheDocument();
-    }, { timeout: 10000 });
+    }, { timeout: 1500 });
     
     expect(screen.getByLabelText(/本金/)).toBeInTheDocument();
   }, 1000);
@@ -291,7 +291,7 @@ describe('ClaimSubmissionPage', () => {
     
     await waitFor(() => {
       expect(mockShowError).toHaveBeenCalledWith('请填写所有必填项');
-    }, { timeout: 10000 });
+    }, { timeout: 1500 });
   }, 1000);
 
   // Total Amount Calculation Test
@@ -350,7 +350,7 @@ describe('ClaimSubmissionPage', () => {
     // 验证提示信息
     await waitFor(() => {
       expect(mockShowError).toHaveBeenCalledWith('请填写所有必填项');
-    }, { timeout: 10000 });
+    }, { timeout: 1500 });
   }, 1000);
 
   // Test navigation back to list
@@ -432,7 +432,7 @@ describe('ClaimSubmissionPage', () => {
     expect(screen.getByRole('button', { name: '下一步' })).toBeInTheDocument();
     
     // 不再测试整个表单提交流程
-  }, 30000);
+  }, 1500);
 
   it('handles submission error gracefully', async () => {
     // 简化此测试
@@ -447,7 +447,7 @@ describe('ClaimSubmissionPage', () => {
     expect(screen.getByLabelText(/本金/)).toBeInTheDocument();
     
     // 不再测试整个表单提交流程
-  }, 30000);
+  }, 1500);
 
   // Mobile Layout Tests
   describe('Mobile Layout', () => {
@@ -543,7 +543,7 @@ describe('ClaimSubmissionPage', () => {
         expect(screen.getByText('金额详情')).toBeInTheDocument();
         // 检查表单是否已加载，而不是查找特定的输入字段
       }, { timeout: 5000 });
-    }, 10000);
+    }, 1500);
 
     it('displays mobile currency calculator', async () => {
       await renderComponent();
@@ -579,7 +579,7 @@ describe('ClaimSubmissionPage', () => {
         // 由于移动端布局的特殊性，检查是否回到了列表视图
         expect(screen.getByTestId('mobile-optimized-layout')).toBeInTheDocument();
       }, { timeout: 5000 });
-    }, 10000);
+    }, 1500);
 
     afterEach(() => {
       // Reset to desktop mode

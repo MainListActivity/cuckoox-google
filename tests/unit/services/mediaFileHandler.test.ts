@@ -331,7 +331,7 @@ describe('MediaFileHandler', () => {
       expect(result.metadata.totalChunks).toBeGreaterThan(1);
       expect(result.chunks).toBeTruthy();
       expect(result.chunks.length).toBe(result.metadata.totalChunks);
-    }, 10000);
+    }, 1500);
     
     it('should reassemble file from chunks successfully', async () => {
       const originalFile = createMockFile('test.pdf', 'application/pdf', 100 * 1024);
@@ -503,7 +503,7 @@ describe('MediaFileHandler', () => {
       expect(progress).toBeTruthy();
       expect(progress!.transferId).toBe(metadata.transferId);
       expect(progress!.status).toBe('preparing');
-    }, 10000);
+    }, 1500);
     
     it('should update transfer status', async () => {
       const testFile = createMockFile('test.jpeg', 'image/jpeg', 50 * 1024);
@@ -517,7 +517,7 @@ describe('MediaFileHandler', () => {
       
       const progress = mediaFileHandler.getTransferProgress(metadata.transferId);
       expect(progress!.status).toBe('transferring');
-    }, 10000);
+    }, 1500);
     
     it('should handle transfer completion', async () => {
       const testFile = createMockFile('test.pdf', 'application/pdf', 75 * 1024);
@@ -642,7 +642,7 @@ describe('MediaFileHandler', () => {
       expect(activeTransfers).toHaveLength(2);
       expect(activeTransfers[0].fileName).toBe('file1.jpeg');
       expect(activeTransfers[1].fileName).toBe('file2.pdf');
-    }, 10000);
+    }, 1500);
     
     it('should clear all transfers', async () => {
       const testFile = createMockFile('test.mp3', 'audio/mp3', 75 * 1024);
