@@ -241,7 +241,7 @@ describe("Creditors Module Tests", () => {
         () => {
           expect(screen.getByText("债权人管理")).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       // Verify that user with permission can see management buttons
@@ -264,7 +264,7 @@ describe("Creditors Module Tests", () => {
         () => {
           expect(screen.getByText("债权人管理")).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
     });
   });
@@ -292,7 +292,7 @@ describe("Creditors Module Tests", () => {
         () => {
           expect(screen.getByText("债权人管理")).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       await waitFor(
@@ -319,7 +319,7 @@ describe("Creditors Module Tests", () => {
           expect(printButtons[0]).toBeInTheDocument();
         });
       }
-    }, 15000);
+    }, 1500);
 
     it("hides management functions for debt representative role", async () => {
       mockHasRole.mockImplementation((role: string) => {
@@ -341,7 +341,7 @@ describe("Creditors Module Tests", () => {
         () => {
           expect(screen.getByText("债权人管理")).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       // Wait for data to load
@@ -359,7 +359,7 @@ describe("Creditors Module Tests", () => {
       expect(
         screen.queryByRole("button", { name: "批量导入债权人" }),
       ).not.toBeInTheDocument();
-    }, 15000);
+    }, 1500);
 
     it("shows read-only view for users without management permissions", async () => {
       mockHasRole.mockReturnValue(false); // No permissions
@@ -379,7 +379,7 @@ describe("Creditors Module Tests", () => {
         () => {
           expect(screen.getByText("债权人管理")).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       // Should show data but no action buttons
@@ -401,7 +401,7 @@ describe("Creditors Module Tests", () => {
       expect(
         screen.queryByRole("button", { name: /打印快递单号/ }),
       ).not.toBeInTheDocument();
-    }, 15000);
+    }, 1500);
   });
 
   // 新增：产品规范测试 - 案件状态控制
@@ -417,7 +417,7 @@ describe("Creditors Module Tests", () => {
         () => {
           expect(screen.getByText("债权人管理")).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       // Should always show management buttons regardless of case stage
@@ -443,7 +443,7 @@ describe("Creditors Module Tests", () => {
             screen.getByRole("button", { name: "添加单个债权人" }),
           ).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       // Click add creditor button
@@ -474,7 +474,7 @@ describe("Creditors Module Tests", () => {
             screen.getByRole("button", { name: "批量导入债权人" }),
           ).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       // Click batch import button
@@ -496,7 +496,7 @@ describe("Creditors Module Tests", () => {
         () => {
           expect(screen.getByText("Acme Corporation")).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
 
       // Select a creditor
@@ -535,7 +535,7 @@ describe("Creditors Module Tests", () => {
           () => {
             expect(screen.getByText("债权人管理")).toBeInTheDocument();
           },
-          { timeout: 10000 },
+          { timeout: 1500 },
         );
 
         expect(
@@ -1020,7 +1020,7 @@ describe("Creditors Module Tests", () => {
           () => {
             expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
           },
-          { timeout: 10000 },
+          { timeout: 1500 },
         );
 
         expect(
@@ -1069,7 +1069,7 @@ describe("Creditors Module Tests", () => {
           () => {
             expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
           },
-          { timeout: 10000 },
+          { timeout: 1500 },
         );
 
         // Print button should not be visible when no permissions

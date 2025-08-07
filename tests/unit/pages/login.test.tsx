@@ -377,7 +377,7 @@ describe("LoginPage", () => {
       // Either Turnstile should not be shown (indicating validation prevented submission)
       // OR some error should be displayed
       expect(turnstileShown === null || hasErrorAlert || hasAnyErrorText).toBe(true);
-    }, 10000);
+    }, 1500);
 
     it("should show error when submitting without username", async () => {
       const tenantField = screen.getByLabelText(/tenant code/i);
@@ -402,9 +402,9 @@ describe("LoginPage", () => {
             screen.getByText(/Username and password are required/),
           ).toBeInTheDocument();
         },
-        { timeout: 10000 },
+        { timeout: 1500 },
       );
-    }, 15000);
+    }, 1500);
   });
 
   describe("Form Validation - Root Admin Login", () => {
@@ -497,9 +497,9 @@ describe("LoginPage", () => {
             }),
           );
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should call setTenantCode with correct tenant", async () => {
       const authService = await import("../../../src/services/authService");
@@ -509,9 +509,9 @@ describe("LoginPage", () => {
             "TENANT001",
           );
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should call setAuthTokens with correct tokens", async () => {
       const authService = await import("../../../src/services/authService");
@@ -523,9 +523,9 @@ describe("LoginPage", () => {
             3600,
           );
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should navigate to dashboard for regular user", async () => {
       await waitFor(
@@ -534,9 +534,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
   });
 
   describe("Root Admin Login - Successful Submission", () => {
@@ -591,9 +591,9 @@ describe("LoginPage", () => {
             }),
           );
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should call setTenantCode with root system code", async () => {
       const authService = await import("../../../src/services/authService");
@@ -603,9 +603,9 @@ describe("LoginPage", () => {
             "root_system",
           );
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should navigate to root admin panel", async () => {
       // For root admin, there's no Turnstile step - login happens directly
@@ -616,9 +616,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
   });
 
   describe("Login Form - Failed Submission", () => {
@@ -689,9 +689,9 @@ describe("LoginPage", () => {
           
           expect(hasErrorText).toBeTruthy();
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should not call setAuthState", () => {
       expect(mockSetAuthState).not.toHaveBeenCalled();
@@ -780,9 +780,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should navigate to root admin panel if root admin is logged in", async () => {
       const rootAdmin: AppUser = {
@@ -810,9 +810,9 @@ describe("LoginPage", () => {
             replace: true,
           });
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
 
     it("should show redirecting message for logged in user", async () => {
       const user: AppUser = {
@@ -837,9 +837,9 @@ describe("LoginPage", () => {
           expect(screen.getByTestId("global-loader")).toBeInTheDocument();
           expect(screen.getByText(/Redirecting/)).toBeInTheDocument();
         },
-        { timeout: 15000 },
+        { timeout: 1500 },
       );
-    }, 20000);
+    }, 1500);
   });
 
   describe("UI Elements and Layout", () => {
@@ -963,7 +963,7 @@ describe("LoginPage", () => {
         },
         { timeout: 2000 },
       );
-    }, 10000);
+    }, 1500);
   });
 
   describe("Tenant History Integration", () => {
@@ -991,6 +991,6 @@ describe("LoginPage", () => {
         // Since our mock returns TENANT001, it should be the default value
         expect(tenantField.value).toBe("TENANT001");
       }, { timeout: 5000 });
-    }, 10000);
+    }, 1500);
   });
 });
