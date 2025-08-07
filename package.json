@@ -12,6 +12,7 @@
     "test": "vitest run --reporter=verbose",
     "test:ui": "vitest --ui",
     "test:run": "vitest run --run",
+    "test:simple": "vitest run --run --reporter=./tests/reporters/file-status-reporter.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {
