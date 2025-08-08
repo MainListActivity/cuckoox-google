@@ -987,7 +987,7 @@ DEFINE FIELD created_at ON system_config TYPE datetime DEFAULT time::now() READO
 DEFINE FIELD updated_at ON system_config TYPE datetime READONLY VALUE time::now() PERMISSIONS FULL;
 
 DEFINE INDEX system_config_key_idx ON system_config FIELDS config_key UNIQUE;
-
+DEFINE INDEX system_config_value_idx ON system_config FIELDS config_value;
 -- 群组消息已读状态表  
 DEFINE TABLE message_read_status TYPE NORMAL SCHEMAFULL PERMISSIONS 
   FOR select WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
