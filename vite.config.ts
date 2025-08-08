@@ -179,13 +179,15 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": fileURLToPath(new URL(".", import.meta.url)),
-        // 确保只有一个版本的React相关包
-        "react": require.resolve("react"),
-        "react-dom": require.resolve("react-dom"),
-        "react-i18next": require.resolve("react-i18next"),
-        "@emotion/react": require.resolve("@emotion/react"),
-        "@emotion/styled": require.resolve("@emotion/styled"),
       },
+      // 使用 dedupe 来确保只加载单实例，避免通过 alias 指向具体文件导致子路径解析失败
+      dedupe: [
+        "react",
+        "react-dom",
+        "@emotion/react",
+        "@emotion/styled",
+        "react-i18next",
+      ],
     },
     esbuild: {
       supported: {
