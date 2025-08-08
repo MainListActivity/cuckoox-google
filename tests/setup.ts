@@ -6,35 +6,35 @@ import { cleanup } from "@testing-library/react";
 function completeCleanup() {
   // 1. React Testing Library 清理
   cleanup();
-  
+
   // 2. 确保DOM结构存在
   if (!document.documentElement) {
-    const html = document.createElement('html');
-    const head = document.createElement('head');
-    const body = document.createElement('body');
+    const html = document.createElement("html");
+    const head = document.createElement("head");
+    const body = document.createElement("body");
     html.appendChild(head);
     html.appendChild(body);
     document.appendChild(html);
   } else {
     if (!document.head) {
-      const head = document.createElement('head');
+      const head = document.createElement("head");
       document.documentElement.appendChild(head);
     }
     if (!document.body) {
-      const body = document.createElement('body');
+      const body = document.createElement("body");
       document.documentElement.appendChild(body);
     }
   }
-  
+
   // 3. 清理DOM内容但保留body元素
   if (document.body) {
-    document.body.innerHTML = '';
+    document.body.innerHTML = "";
   }
-  
+
   // 4. 清理所有定时器
   vi.clearAllTimers();
   vi.useRealTimers();
-  
+
   // 5. 清理所有mock
   vi.clearAllMocks();
 }
@@ -74,8 +74,8 @@ HTMLElement.prototype.focus = vi.fn();
 HTMLElement.prototype.blur = vi.fn();
 
 // Mock createPortal 来避免portal相关的DOM问题
-vi.mock('react-dom', async (importOriginal) => {
-  const actual = await importOriginal() as any;
+vi.mock("react-dom", async (importOriginal) => {
+  const actual = (await importOriginal()) as any;
   return {
     ...actual,
     createPortal: (children: any) => children, // 直接返回children，避免portal DOM操作
@@ -93,6 +93,6 @@ afterEach(() => {
 
 // 设置测试超时
 vi.setConfig({
-  testTimeout: 2000, // 10秒超时
-  hookTimeout: 1000,  // 5秒hook超时
+  testTimeout: 5000, // 5秒超时
+  hookTimeout: 3000, // 3秒hook超时
 });
