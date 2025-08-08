@@ -178,7 +178,7 @@ class SignalingService {
       // 监听发送给当前用户参与的群组的信令
       const groupSignalUuid = await client.live(
         `SELECT webrtc_signal.* FROM webrtc_signal 
-         WHERE group_id IN (SELECT group_id FROM group_member WHERE user_id = $user_id) 
+         WHERE group_id IN $user_id->group_member->message_group 
          AND processed = false 
          ORDER BY created_at DESC`,
         (action: string, result: SignalMessage) => {

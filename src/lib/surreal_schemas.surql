@@ -438,17 +438,14 @@ DEFINE INDEX message_group_case_idx ON message_group FIELDS case_id;
 DEFINE INDEX message_group_type_idx ON message_group FIELDS group_type;
 
 -- ------------------------------
--- TABLE: group_member (WebRTC群组成员)
+-- TABLE: group_member (WebRTC群组成员关系表)
 -- ------------------------------
 
-DEFINE TABLE group_member TYPE NORMAL SCHEMAFULL PERMISSIONS 
-  FOR select WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
-  FOR create WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
-  FOR update WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
-  FOR delete WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin';
-
-DEFINE FIELD group_id ON group_member TYPE record<message_group> PERMISSIONS FULL;
-DEFINE FIELD user_id ON group_member TYPE record<user> PERMISSIONS FULL;
+DEFINE TABLE group_member TYPE RELATION IN user OUT message_group SCHEMAFULL PERMISSIONS 
+  FOR select WHERE in = $auth.id OR $auth.id->group_member[WHERE role IN ['owner', 'admin']]->message_group OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id->group_member[WHERE role IN ['owner', 'admin']]->message_group OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR update WHERE in = $auth.id OR $auth.id->group_member[WHERE role IN ['owner', 'admin']]->message_group OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id->group_member[WHERE role IN ['owner', 'admin']]->message_group OR $auth.id->has_role->role.name CONTAINS 'admin';
 DEFINE FIELD role ON group_member TYPE string DEFAULT 'member' ASSERT $value INSIDE ['owner', 'admin', 'member'] PERMISSIONS FULL;
 DEFINE FIELD joined_at ON group_member TYPE datetime DEFAULT time::now() PERMISSIONS FULL;
 DEFINE FIELD last_read_at ON group_member TYPE option<datetime> PERMISSIONS FULL;
@@ -457,9 +454,11 @@ DEFINE FIELD nickname ON group_member TYPE option<string> PERMISSIONS FULL;
 DEFINE FIELD created_at ON group_member TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
 DEFINE FIELD updated_at ON group_member TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
 
-DEFINE INDEX group_member_unique ON group_member FIELDS group_id, user_id UNIQUE;
-DEFINE INDEX group_member_user_idx ON group_member FIELDS user_id;
-DEFINE INDEX group_member_group_role_idx ON group_member FIELDS group_id, role;ant FIELDS conversation_id, user_id UNIQUE;
+DEFINE INDEX group_member_unique ON group_member COLUMNS in, out UNIQUE;
+DEFINE INDEX group_member_user_idx ON group_member FIELDS in;
+DEFINE INDEX group_member_group_role_idx ON group_member FIELDS out, role;
+
+-- 群组成员关系表索引已完成
 DEFINE INDEX conversation_participant_user_idx ON conversation_participant FIELDS user_id;
 DEFINE INDEX conversation_participant_unread_idx ON conversation_participant FIELDS user_id, unread_count;
 
@@ -1015,6 +1014,23 @@ DEFINE FIELD last_read_time ON group_read_position TYPE datetime DEFAULT time::n
 DEFINE FIELD unread_count ON group_read_position TYPE int DEFAULT 0 PERMISSIONS FULL;
 
 DEFINE INDEX group_read_position_unique ON group_read_position FIELDS group_id, user_id UNIQUE;
+
+-- ------------------------------
+-- 用户参与会话 (user <-> conversation 关系)  
+-- ------------------------------
+DEFINE TABLE participates_in TYPE RELATION IN user OUT conversation SCHEMAFULL PERMISSIONS FULL;
+DEFINE FIELD joined_at ON participates_in TYPE datetime VALUE time::now() PERMISSIONS FULL;
+DEFINE INDEX unique_user_conversation ON participates_in COLUMNS in, out UNIQUE;
+
+-- ------------------------------
+-- 会议邀请关系 (message -> user 关系)
+-- ------------------------------  
+DEFINE TABLE conference_invitation TYPE RELATION IN message OUT user SCHEMAFULL PERMISSIONS FULL;
+DEFINE FIELD target_user_id ON conference_invitation TYPE record<user> PERMISSIONS FULL;
+DEFINE FIELD status ON conference_invitation TYPE string DEFAULT 'pending' ASSERT $value INSIDE ['pending', 'accepted', 'rejected'] PERMISSIONS FULL;
+DEFINE FIELD expires_at ON conference_invitation TYPE option<datetime> PERMISSIONS FULL;
+DEFINE FIELD created_at ON conference_invitation TYPE datetime VALUE time::now() PERMISSIONS FULL;
+DEFINE INDEX invitation_message_user ON conference_invitation COLUMNS in, out UNIQUE;
 
 -- 给admin用户赋予admin角色（全局角色）
 RELATE user:admin->has_role->role:admin SET assigned_at = time::now();

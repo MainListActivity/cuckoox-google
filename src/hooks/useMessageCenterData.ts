@@ -70,9 +70,8 @@ export function useConversationsList(userId: RecordId | null): {
         // Simpler query if participants array stores direct user RecordIds
         // const query = `SELECT *, 0 AS unread_count FROM conversation WHERE $userId IN participants ORDER BY updated_at DESC;`;
 
-        // For now, using a very simplified placeholder that returns basic conversation structure
-        // Actual participant resolution and last message details would be complex
-        const placeholderQuery = `SELECT id, participants, updated_at, 0 AS unread_count FROM conversation WHERE $userId IN participants ORDER BY updated_at DESC;`;
+        // 使用图查询语法替代 IN 子查询
+        const placeholderQuery = `SELECT id, participants, updated_at, 0 AS unread_count FROM $userId->participates_in->conversation ORDER BY updated_at DESC;`;
 
         const result = await client.query<[RawConversationData[]]>(
           placeholderQuery,

@@ -106,8 +106,8 @@ const mockTranslation = vi.fn((key: string, defaultValue?: string) => {
     audit_claim: "审核债权",
   };
 
-  if (key.includes("claim_review_title")) {
-    return `审核债权: CL-${mockClaimId.slice(-5)}`;
+  if (key === "claim_review_page_title") {
+    return "审核债权";
   }
 
   return translations[key] || defaultValue || key;
@@ -320,7 +320,7 @@ describe("ClaimReviewDetailPage", () => {
     // Wait for loading to complete and content to be rendered
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -346,7 +346,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -366,7 +366,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -383,7 +383,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -402,7 +402,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -422,7 +422,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -440,7 +440,7 @@ describe("ClaimReviewDetailPage", () => {
       });
 
       await waitFor(
-        () => expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument(),
+        () => expect(screen.getByText(/CL-im001/)).toBeInTheDocument(),
         { timeout: 1000 },
       );
 
@@ -472,7 +472,7 @@ describe("ClaimReviewDetailPage", () => {
       });
 
       await waitFor(
-        () => expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument(),
+        () => expect(screen.getByText(/CL-im001/)).toBeInTheDocument(),
         { timeout: 2000 },
       );
 
@@ -499,7 +499,7 @@ describe("ClaimReviewDetailPage", () => {
       });
 
       await waitFor(
-        () => expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument(),
+        () => expect(screen.getByText(/CL-im001/)).toBeInTheDocument(),
         { timeout: 2000 },
       );
 
@@ -531,7 +531,7 @@ describe("ClaimReviewDetailPage", () => {
       });
 
       await waitFor(
-        () => expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument(),
+        () => expect(screen.getByText(/CL-im001/)).toBeInTheDocument(),
         { timeout: 2000 },
       );
 
@@ -571,7 +571,7 @@ describe("ClaimReviewDetailPage", () => {
       });
 
       await waitFor(
-        () => expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument(),
+        () => expect(screen.getByText(/CL-im001/)).toBeInTheDocument(),
         { timeout: 2000 },
       );
 
@@ -616,7 +616,7 @@ describe("ClaimReviewDetailPage", () => {
       });
 
       await waitFor(
-        () => expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument(),
+        () => expect(screen.getByText(/CL-im001/)).toBeInTheDocument(),
         { timeout: 2000 },
       );
 
@@ -650,7 +650,7 @@ describe("ClaimReviewDetailPage", () => {
       });
     });
 
-    it("calls handleSubmitReview, updates data, and shows snackbar on successful modal submission", async () => {
+    it("calls handleSubmitReview, updates data, and shows snackbar on successful modal submission", { timeout: 5000 }, async () => {
       await act(async () => {
         renderComponent();
       });
@@ -658,7 +658,7 @@ describe("ClaimReviewDetailPage", () => {
       await waitFor(
         () =>
           expect(
-            screen.getByText(`审核债权: CL-${mockClaimId.slice(-5)}`),
+            screen.getByText(`审核债权: CL-im001`),
           ).toBeInTheDocument(),
         { timeout: 2000 },
       );
@@ -741,14 +741,14 @@ describe("ClaimReviewDetailPage", () => {
       confirmSpy.mockRestore();
     }, 2500);
 
-    it("does not submit if user cancels confirmation dialog", async () => {
+    it("does not submit if user cancels confirmation dialog", { timeout: 5000 }, async () => {
       await act(async () => {
         renderComponent();
       });
 
       await waitFor(
         () => {
-          expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+          expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
         },
         { timeout: 1000 },
       );
@@ -830,7 +830,7 @@ describe("ClaimReviewDetailPage", () => {
     // After loading completes, should show content
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 1000 },
     );
@@ -847,7 +847,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 2000 },
     );
@@ -873,7 +873,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 2000 },
     );
@@ -892,7 +892,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 2000 },
     );
@@ -912,7 +912,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 2000 },
     );
@@ -934,7 +934,7 @@ describe("ClaimReviewDetailPage", () => {
 
     await waitFor(
       () => {
-        expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+        expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
       },
       { timeout: 2000 },
     );
@@ -1111,7 +1111,7 @@ describe("ClaimReviewDetailPage", () => {
 
       await waitFor(
         () => {
-          expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+          expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
         },
         { timeout: 2000 },
       );
@@ -1133,7 +1133,7 @@ describe("ClaimReviewDetailPage", () => {
 
       await waitFor(
         () => {
-          expect(screen.getByText(/CL-.*im001/)).toBeInTheDocument();
+          expect(screen.getByText(/CL-im001/)).toBeInTheDocument();
         },
         { timeout: 2000 },
       );

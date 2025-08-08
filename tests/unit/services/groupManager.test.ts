@@ -680,7 +680,7 @@ describe('GroupManager', () => {
         if (query.includes('return $auth')) {
           return Promise.resolve([{ id: mockUserId, name: 'Test User' }]);
         }
-        if (query.includes('SELECT message_group.* FROM message_group')) {
+        if (query.includes('SELECT * FROM $user_id->group_member->message_group')) {
           return Promise.resolve(mockGroups);
         }
         return Promise.resolve([[]]);
@@ -706,7 +706,7 @@ describe('GroupManager', () => {
         if (query.includes('return $auth')) {
           return Promise.resolve([{ id: mockUserId, name: 'Test User' }]);
         }
-        if (query.includes('SELECT message_group.* FROM message_group')) {
+        if (query.includes('SELECT * FROM $user_id->group_member->message_group')) {
           return Promise.resolve(mockGroups);
         }
         return Promise.resolve([[]]);

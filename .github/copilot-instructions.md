@@ -6,6 +6,8 @@ Always respond in Chinese-simplified.
 
 执行任务过程中如果没有特别要求，则将结果文档按类别存储在 `docs/` 下的子目录中。
 
+注意在任务完成前根据mcp-feedback-enhanced工具的要求进行工具调用，用户确认完成任务后务必确认单元测试用例全部通过，执行命令 `bun run test:run`，并且确保 `bun run lint` 没有任何错误
+
 ## Architecture Overview
 
 ### Service Worker-First Data Architecture

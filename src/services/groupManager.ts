@@ -705,9 +705,8 @@ class GroupManager {
         : "$auth.id";
 
       const query = `
-        SELECT message_group.* FROM message_group
-        WHERE id IN (SELECT group_id FROM group_member WHERE user_id = $user_id)
-        ORDER BY message_group.updated_at DESC
+        SELECT * FROM $user_id->group_member->message_group
+        ORDER BY updated_at DESC
       `;
 
       const groups = await client.query(query, { user_id: userIdParam });
