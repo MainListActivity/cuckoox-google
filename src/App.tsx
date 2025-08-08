@@ -3,6 +3,7 @@ import {Routes, Route, Navigate, useLocation, useNavigate} from 'react-router-do
 import {useAuth} from '@/src/contexts/AuthContext';
 import {useTranslation} from 'react-i18next';
 import DebugPanel from '@/src/components/DebugPanel';
+import ErrorBoundary from '@/src/components/ErrorBoundary';
 // Remove MUI ThemeProvider, use our own from ThemeContext
 // import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles'; 
 // import theme from './theme'; // This is likely MUI theme, not our custom one
@@ -20,6 +21,7 @@ const HomePage = React.lazy(() => import('@/src/pages/index'));
 const DocumentCenterDemo = React.lazy(() => import('@/src/pages/documents/demo'));
 const LoginPage = React.lazy(() => import('@/src/pages/login'));
 const DashboardPage = React.lazy(() => import('@/src/pages/dashboard/unified'));
+// 恢复原始的CaseListPage，React Hook问题已解决
 const CaseListPage = React.lazy(() => import('@/src/pages/cases/index'));
 const CaseDetailPage = React.lazy(() => import('@/src/pages/cases/[caseId]'));
 const CreditorListPage = React.lazy(() => import('@/src/pages/creditors/index')); // MODIFIED PATH
@@ -92,7 +94,8 @@ function App() {
     // Define routes that don't need the main layout (e.g., Login, OidcCallback, Register, Root Admin)
     if (location.pathname === '/login' || location.pathname === '/oidc-callback' || location.pathname === '/register' || location.pathname === '/root-admin' || location.pathname === '/root-admin/login') {
         return (
-            <CustomThemeProvider>
+            <ErrorBoundary>
+                <CustomThemeProvider>
                 <SnackbarProvider>
                     <CaseStatusProvider>
                         <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
@@ -107,14 +110,16 @@ function App() {
                         {import.meta.env.DEV && <DebugPanel />}
                     </CaseStatusProvider>
                 </SnackbarProvider>
-            </CustomThemeProvider>
+                </CustomThemeProvider>
+            </ErrorBoundary>
         );
     }
 
     // 首页路由单独处理，不在Layout中显示
     if (location.pathname === '/') {
         return (
-            <CustomThemeProvider>
+            <ErrorBoundary>
+                <CustomThemeProvider>
                 <SnackbarProvider>
                     <CaseStatusProvider>
                         <Suspense fallback={<GlobalLoader message={t('loader.pageLoading', 'Loading page...')}/>}>
@@ -125,12 +130,14 @@ function App() {
                         {import.meta.env.DEV && <DebugPanel />}
                     </CaseStatusProvider>
                 </SnackbarProvider>
-            </CustomThemeProvider>
+                </CustomThemeProvider>
+            </ErrorBoundary>
         );
     }
 
     return (
-        <CustomThemeProvider>
+        <ErrorBoundary>
+            <CustomThemeProvider>
             <SnackbarProvider>
                 <CaseStatusProvider> {/* <-- ADDED WRAPPER */}
                     <LayoutProvider> {/* <-- ADDED LAYOUT PROVIDER */}
@@ -175,7 +182,8 @@ function App() {
                 </LayoutProvider> {/* <-- ADDED LAYOUT PROVIDER */}
                 </CaseStatusProvider> {/* <-- ADDED WRAPPER */}
             </SnackbarProvider>
-        </CustomThemeProvider>
+            </CustomThemeProvider>
+        </ErrorBoundary>
     );
 }
 

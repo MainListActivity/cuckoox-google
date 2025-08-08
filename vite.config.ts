@@ -5,6 +5,9 @@ import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath, URL } from "node:url";
 import fs from "fs";
 import path from "path";
+import { createRequire } from "module";
+
+const require = createRequire(import.meta.url);
 
 // 将import手动添加到文件开头 - 在所有插件处理完成后执行（仅在需要时）
 function prependImportToSwSurreal(): Plugin<unknown> {
@@ -137,11 +140,6 @@ export default defineConfig(({ mode }) => {
       }),
       prependImportToSwSurreal(),
     ],
-    resolve: {
-      alias: {
-        "@": fileURLToPath(new URL(".", import.meta.url)),
-      },
-    },
     // 将环境变量传递给Vite
     define: {
       ...Object.keys(env).reduce(
@@ -171,10 +169,22 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ["@mui/material", "@mui/icons-material"],
+      include: ["@mui/material", "@mui/icons-material", "@emotion/react", "@emotion/styled"],
       exclude: ["@mui/icons-material/esm", "@surrealdb/wasm"],
+      force: true, // 强制重新优化依赖，解决@emotion重复加载问题
       esbuildOptions: {
         target: "esnext",
+      },
+    },
+    resolve: {
+      alias: {
+        "@": fileURLToPath(new URL(".", import.meta.url)),
+        // 确保只有一个版本的React相关包
+        "react": require.resolve("react"),
+        "react-dom": require.resolve("react-dom"),
+        "react-i18next": require.resolve("react-i18next"),
+        "@emotion/react": require.resolve("@emotion/react"),
+        "@emotion/styled": require.resolve("@emotion/styled"),
       },
     },
     esbuild: {
