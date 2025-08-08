@@ -157,6 +157,7 @@ const resources = {
   }
 };
 
+// 同步初始化i18n以避免异步问题
 i18n
   // .use(LanguageDetector) // Optional: To detect user language from browser settings/localStorage
   .use(initReactI18next) // Passes i18n down to react-i18next
@@ -164,8 +165,12 @@ i18n
     resources,
     lng: 'zh', // Default language to Chinese
     fallbackLng: 'zh', // Fallback language if a translation is missing in a specific regional dialect (e.g., zh-CN)
+    debug: false, // 禁用调试以减少控制台输出
     interpolation: {
       escapeValue: false // React already safes from xss
+    },
+    react: {
+      useSuspense: false, // 禁用Suspense模式，避免异步问题
     },
     // detection: { // Optional LanguageDetector options
     //   order: ['queryString', 'cookie', 'localStorage', 'navigator', 'htmlTag', 'path', 'subdomain'],

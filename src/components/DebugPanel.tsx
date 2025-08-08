@@ -6,41 +6,25 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { useSurreal } from '@/src/contexts/SurrealProvider';
 import authService from '@/src/services/authService';
 
-// 性能监控 Hook - 优化版本，避免无限循环
+// 最简化的性能监控 Hook，完全避免状态更新导致的循环
 const useRenderCounter = (componentName: string) => {
   const renderCount = useRef(0);
-  const lastRenderTime = useRef(Date.now());
-  const renderTimes = useRef<number[]>([]);
   const lastWarnTime = useRef(0);
   
-  // 安全地更新计数器
   renderCount.current += 1;
+  
+  // 只在必要时警告，且限制频率
   const now = Date.now();
-  const timeSinceLastRender = now - lastRenderTime.current;
-  renderTimes.current.push(timeSinceLastRender);
-  lastRenderTime.current = now;
-  
-  // 保留最近10次渲染时间
-  if (renderTimes.current.length > 10) {
-    renderTimes.current.shift();
+  if (renderCount.current > 10 && now - lastWarnTime.current > 5000) {
+    console.warn(`🔄 ${componentName} has rendered ${renderCount.current} times`);
+    lastWarnTime.current = now;
   }
   
-  // 只在必要时检测循环，并限制警告频率
-  const recentRenders = renderTimes.current.filter(time => time < 100);
-  if (recentRenders.length >= 5) {
-    // 限制警告频率：至少间隔5秒才输出一次警告
-    if (now - lastWarnTime.current > 5000) {
-      console.warn(`🔄 Potential infinite loop detected in ${componentName}: ${recentRenders.length} renders in quick succession`);
-      lastWarnTime.current = now;
-    }
-  }
-  
+  // 返回固定的对象，避免每次都创建新对象
   return {
     renderCount: renderCount.current,
-    averageRenderTime: renderTimes.current.length > 0 
-      ? Math.round(renderTimes.current.reduce((a, b) => a + b, 0) / renderTimes.current.length)
-      : 0,
-    recentRenderCount: renderTimes.current.filter(time => time < 1000).length
+    averageRenderTime: 0,
+    recentRenderCount: 0
   };
 };
 
@@ -51,19 +35,26 @@ const DebugPanel: React.FC = React.memo(() => {
   const surreal = useSurreal();
   const renderStats = useRenderCounter('DebugPanel');
 
-  // 缓存经常使用的状态值，避免在渲染时频繁访问上下文
-  const authState = useMemo(() => ({
-    isLoggedIn: auth.isLoggedIn,
-    isLoading: auth.isLoading,
-    userName: auth.user?.name,
-    selectedCaseId: auth.selectedCaseId?.toString()
-  }), [auth.isLoggedIn, auth.isLoading, auth.user?.name, auth.selectedCaseId]);
+  // 缓存经常使用的状态值，使用更稳定的依赖
+  const authState = useMemo(() => {
+    const userName = auth.user?.name || '';
+    const caseId = auth.selectedCaseId?.toString() || '';
+    return {
+      isLoggedIn: Boolean(auth.isLoggedIn),
+      isLoading: Boolean(auth.isLoading),
+      userName,
+      selectedCaseId: caseId
+    };
+  }, [auth.isLoggedIn, auth.isLoading, auth.user?.name, auth.selectedCaseId?.toString()]);
 
-  const surrealState = useMemo(() => ({
-    isConnecting: surreal.isConnecting,
-    isConnected: surreal.isConnected,
-    errorMessage: surreal.error?.message
-  }), [surreal.isConnecting, surreal.isConnected, surreal.error?.message]);
+  const surrealState = useMemo(() => {
+    const errorMsg = surreal.error?.message || '';
+    return {
+      isConnecting: Boolean(surreal.isConnecting),
+      isConnected: Boolean(surreal.isConnected),
+      errorMessage: errorMsg
+    };
+  }, [surreal.isConnecting, surreal.isConnected, surreal.error?.message]);
   
   // 监控 localStorage 变化
   const [localStorageItems, setLocalStorageItems] = useState<{[key: string]: string}>({});
