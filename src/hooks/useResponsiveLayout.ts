@@ -24,23 +24,22 @@ interface ResponsiveLayoutState {
 export const useResponsiveLayout = (): ResponsiveLayoutState => {
   const theme = useTheme();
   
+  // Helper for fallback using window.matchMedia
+  const matchMediaFallback = (query: string, fallback: boolean): boolean => {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const result = window.matchMedia(query);
+      return result ? result.matches : fallback;
+    }
+    return fallback;
+  };
+
   // Safe media query function that handles test environment
   const safeUseMediaQuery = (query: string | (() => string), fallback: boolean = false): boolean => {
+    const mediaQuery = typeof query === 'function' ? query() : query;
     try {
-      const mediaQuery = typeof query === 'function' ? query() : query;
       return useMediaQuery(mediaQuery);
-    } catch (error) {
-      // Fallback for test environment
-      if (typeof window !== 'undefined' && window.matchMedia && typeof window.matchMedia === 'function') {
-        try {
-          const mediaQuery = typeof query === 'function' ? query() : query;
-          const mediaQueryResult = window.matchMedia(mediaQuery);
-          return mediaQueryResult ? mediaQueryResult.matches : fallback;
-        } catch (e) {
-          return fallback; // Ultimate fallback
-        }
-      }
-      return fallback;
+    } catch {
+      return matchMediaFallback(mediaQuery, fallback);
     }
   };
   
