@@ -9,9 +9,12 @@
     "build:sw": "vite build --config vite.sw.config.ts",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest run --reporter=verbose",
+    "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run --run",
+    "test:integration": "vitest run --run --config vitest.integration.config.ts --reporter=verbose",
+    "test:all": "npm run test:fast && npm run test:integration",
+    "test:coverage": "vitest run --coverage",
     "test:simple": "vitest run --run --reporter=./tests/reporters/file-status-reporter.ts",
     "test:e2e": "playwright test"
   },
