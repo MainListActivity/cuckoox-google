@@ -1,11 +1,11 @@
-import { RecordId, Uuid } from 'surrealdb';
-import { useSurrealClientSingleton, TenantCodeMissingError } from '@/src/contexts/SurrealProvider';
-import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
-import type { ConferenceInviteResponse } from '@/src/types/message';
+import { RecordId, Uuid } from "surrealdb";
+
+import type { SurrealWorkerAPI } from "@/src/contexts/SurrealProvider";
+import type { ConferenceInviteResponse } from "@/src/types/message";
 
 // Types
 export interface CreateConversationData {
-  type: 'DIRECT' | 'GROUP' | 'SYSTEM';
+  type: "DIRECT" | "GROUP" | "SYSTEM";
   name?: string;
   description?: string;
   avatar_url?: string;
@@ -27,12 +27,12 @@ export interface SendMessageData {
 }
 
 export interface SendNotificationData {
-  type: 'CASE_ROBOT_REMINDER' | 'BUSINESS_NOTIFICATION' | 'SYSTEM_NOTIFICATION';
+  type: "CASE_ROBOT_REMINDER" | "BUSINESS_NOTIFICATION" | "SYSTEM_NOTIFICATION";
   target_user_id?: RecordId | string;
   case_id?: RecordId | string;
   title?: string;
   content: string;
-  priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+  priority?: "LOW" | "NORMAL" | "HIGH" | "URGENT";
   action_link?: string;
   sender_name: string;
 }
@@ -46,7 +46,7 @@ export interface SendConferenceInviteData {
   target_user_ids: (RecordId | string)[]; // Users to invite
   conference_title: string; // Meeting title
   conference_description?: string; // Optional description
-  call_type: 'audio' | 'video'; // Type of call
+  call_type: "audio" | "video"; // Type of call
   scheduled_start_time?: string; // ISO datetime for scheduled meetings
   scheduled_duration?: number; // Duration in minutes
   is_immediate: boolean; // Whether it's immediate or scheduled
@@ -66,7 +66,7 @@ export interface SendConferenceInviteData {
 // Conference invitation response data interface
 export interface RespondToConferenceInviteData {
   message_id: RecordId | string; // Original invitation message ID
-  response: 'accepted' | 'declined'; // Response type
+  response: "accepted" | "declined"; // Response type
   response_message?: string; // Optional message from responder
 }
 
@@ -74,7 +74,7 @@ export interface RespondToConferenceInviteData {
 export interface SendGroupMessageData {
   group_id: RecordId | string;
   content: string;
-  message_type?: 'TEXT' | 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO' | 'SYSTEM';
+  message_type?: "TEXT" | "IMAGE" | "FILE" | "AUDIO" | "VIDEO" | "SYSTEM";
   reply_to_message_id?: RecordId | string; // Reply to another message
   mentions?: (RecordId | string)[]; // Users mentioned in the message
   attachments?: {
@@ -88,7 +88,7 @@ export interface SendGroupMessageData {
   metadata?: {
     is_pinned?: boolean;
     pin_expires_at?: string;
-    priority?: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+    priority?: "LOW" | "NORMAL" | "HIGH" | "URGENT";
     [key: string]: any;
   };
 }
@@ -109,7 +109,7 @@ export interface MarkGroupMessageAsReadData {
 export interface SearchGroupMessagesData {
   group_id: RecordId | string;
   query: string;
-  message_type?: 'TEXT' | 'IMAGE' | 'FILE' | 'AUDIO' | 'VIDEO';
+  message_type?: "TEXT" | "IMAGE" | "FILE" | "AUDIO" | "VIDEO";
   from_user_id?: RecordId | string;
   start_date?: string; // ISO date
   end_date?: string; // ISO date
@@ -119,89 +119,109 @@ export interface SearchGroupMessagesData {
 
 class MessageService {
   private clientGetter: () => Promise<SurrealWorkerAPI> | null = null;
-  
+
   /**
    * 设置客户端获取函数 - 在应用启动时由 SurrealProvider 调用
    */
   setClientGetter(getter: () => Promise<SurrealWorkerAPI>) {
     this.clientGetter = getter;
   }
-  
+
   /**
    * 获取 SurrealDB 客户端
+   * 单元测试环境下如果未通过 setClientGetter 注入客户端，
+   * 将回退到 SurrealProvider 的单例获取逻辑
    */
   private async getClient(): Promise<SurrealWorkerAPI> {
-    if (!this.clientGetter) {
-      // 如果没有设置客户端获取函数，尝试使用 hook 方式（仅用于向后兼容）
-      try {
-        const { surrealClient } = useSurrealClientSingleton();
-        return await surrealClient();
-      } catch (error) {
-        throw new Error('SurrealDB client not available. Ensure MessageService is properly initialized with setClientGetter.');
-      }
+    if (this.clientGetter) {
+      return await this.clientGetter();
     }
-    
-    return await this.clientGetter();
+
+    // 回退机制：尝试从 SurrealProvider 单例获取（用于单元测试 mock）
+    try {
+      const mod = await import("@/src/contexts/SurrealProvider");
+      if (mod && typeof mod.useSurrealClientSingleton === "function") {
+        const singleton = mod.useSurrealClientSingleton();
+        if (singleton && typeof singleton.surrealClient === "function") {
+          return await singleton.surrealClient();
+        }
+      }
+    } catch (_e) {
+      // 忽略回退获取中的错误，保留原始错误信息
+    }
+
+    throw new Error(
+      "SurrealDB client not available. Ensure MessageService is properly initialized with setClientGetter.",
+    );
   }
+
   /**
    * Create a new conversation
    */
   async createConversation(data: CreateConversationData) {
     try {
       const client = await this.getClient();
-      
+
       // Check authentication
-      const [authResult] = await client.query('return $auth;');
+      const [authResult] = await client.query("return $auth;");
       if (!authResult || !authResult.id) {
-        throw new Error('用户未认证');
+        throw new Error("用户未认证");
       }
-      
+
       // Validate participants
       if (!data.participants || data.participants.length === 0) {
-        throw new Error('参与者列表不能为空');
+        throw new Error("参与者列表不能为空");
       }
-      
+
       // Validate conversation type
-      if (!['DIRECT', 'GROUP', 'SYSTEM'].includes(data.type)) {
-        throw new Error('无效的会话类型');
+      if (!["DIRECT", "GROUP", "SYSTEM"].includes(data.type)) {
+        throw new Error("无效的会话类型");
       }
-      
+
       const conversationData = {
         type: data.type,
         name: data.name,
         description: data.description,
         avatar_url: data.avatar_url,
-        case_id: data.case_id ? new RecordId('case', String(data.case_id).split(':')[1]) : undefined,
-        participants: data.participants.map(p => 
-          typeof p === 'string' ? new RecordId('user', p.split(':')[1]) : p
+        case_id: data.case_id
+          ? new RecordId("case", String(data.case_id).split(":")[1])
+          : undefined,
+        participants: data.participants.map((p) =>
+          typeof p === "string" ? new RecordId("user", p.split(":")[1]) : p,
         ),
-        created_by: '$auth.id',
+        created_by: "$auth.id",
         is_archived: false,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      const [conversation] = await client.create('conversation', conversationData);
+      const [conversation] = await client.create(
+        "conversation",
+        conversationData,
+      );
 
       // Create conversation_participant records for each participant
       for (const participantId of data.participants) {
         const participantData = {
           conversation_id: conversation.id,
-          user_id: typeof participantId === 'string' ? new RecordId('user', participantId.split(':')[1]) : participantId,
-          role: 'MEMBER',
+          user_id:
+            typeof participantId === "string"
+              ? new RecordId("user", participantId.split(":")[1])
+              : participantId,
+          role: "MEMBER",
           joined_at: new Date().toISOString(),
           unread_count: 0,
           is_muted: false,
-          notification_preference: 'ALL',
+          notification_preference: "ALL",
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         };
-        await client.create('conversation_participant', participantData);
+        await client.create("conversation_participant", participantData);
       }
 
       return conversation;
     } catch (error) {
-      console.error('Error creating conversation:', error);
+      console.error("Error creating conversation:", error);
       throw error;
     }
   }
@@ -212,73 +232,80 @@ class MessageService {
   async sendMessage(data: SendMessageData) {
     try {
       const client = await this.getClient();
-      
+
       // Check authentication
-      const [authResult] = await client.query('return $auth;');
+      const [authResult] = await client.query("return $auth;");
       if (!authResult || !authResult.id) {
-        throw new Error('用户未认证');
+        throw new Error("用户未认证");
       }
-      
+
       // Validate message content
-      if (!data.content || data.content.trim() === '') {
-        throw new Error('消息内容不能为空');
+      if (!data.content || data.content.trim() === "") {
+        throw new Error("消息内容不能为空");
       }
-      
+
       // Validate message content length (max 2000 characters)
       if (data.content.length > 2000) {
-        throw new Error('消息内容过长');
+        throw new Error("消息内容过长");
       }
-      
+
       // Validate attachments size
       if (data.attachments && data.attachments.length > 0) {
-        const totalSize = data.attachments.reduce((total, attachment) => total + attachment.file_size, 0);
+        const totalSize = data.attachments.reduce(
+          (total, attachment) => total + attachment.file_size,
+          0,
+        );
         const maxSize = 100 * 1024 * 1024; // 100MB
         if (totalSize > maxSize) {
-          throw new Error('附件大小超过限制');
+          throw new Error("附件大小超过限制");
         }
       }
-      
+
       // Check if conversation exists and user is participant
       const conversationCheckQuery = `
-        SELECT conversation_id FROM conversation_participant 
+        SELECT conversation_id FROM conversation_participant
         WHERE conversation_id = $conversation_id AND user_id = $auth.id
       `;
       const [participantCheck] = await client.query(conversationCheckQuery, {
-        conversation_id: data.conversation_id
+        conversation_id: data.conversation_id,
       });
-      
+
       if (!participantCheck) {
-        throw new Error('您不是此会话的参与者');
+        throw new Error("您不是此会话的参与者");
       }
-      
+
       // Check if conversation exists
-      const [conversationExists] = await client.query(`SELECT * FROM ${String(data.conversation_id)}`);
+      const [conversationExists] = await client.query(
+        `SELECT * FROM ${String(data.conversation_id)}`,
+      );
       if (!conversationExists) {
-        throw new Error('会话不存在');
+        throw new Error("会话不存在");
       }
-      
+
       const messageData = {
-        type: 'IM',
-        conversation_id: typeof data.conversation_id === 'string' ? 
-          new RecordId('conversation', data.conversation_id.split(':')[1]) : data.conversation_id,
-        sender_id: '$auth.id',
-        sender_name: '$auth.name',
+        type: "IM",
+        conversation_id:
+          typeof data.conversation_id === "string"
+            ? new RecordId("conversation", data.conversation_id.split(":")[1])
+            : data.conversation_id,
+        sender_id: "$auth.id",
+        sender_name: "$auth.name",
         content: data.content,
         is_read: false,
         is_archived: false,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      const [message] = await client.create('message', messageData);
+      const [message] = await client.create("message", messageData);
 
       // Create attachments if any
       if (data.attachments && data.attachments.length > 0) {
         for (const attachment of data.attachments) {
-          await client.create('message_attachment', {
+          await client.create("message_attachment", {
             message_id: message.id,
             ...attachment,
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
           });
         }
       }
@@ -286,21 +313,21 @@ class MessageService {
       // Update conversation's last_message_at
       await client.merge(String(data.conversation_id), {
         last_message_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
 
       // Update unread count for other participants
       const query = `
-        UPDATE conversation_participant 
+        UPDATE conversation_participant
         SET unread_count = unread_count + 1, updated_at = time::now()
-        WHERE conversation_id = $conversation_id 
+        WHERE conversation_id = $conversation_id
         AND user_id != $auth.id
       `;
       await client.query(query, { conversation_id: data.conversation_id });
 
       return message;
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error("Error sending message:", error);
       throw error;
     }
   }
@@ -311,12 +338,12 @@ class MessageService {
   async sendNotification(data: SendNotificationData) {
     try {
       const client = await this.getClient();
-      
+
       // Get or create bot user for case robot reminders
-      let senderId: RecordId | string = 'user:system';
+      let senderId: RecordId | string = "user:system";
       let senderName = data.sender_name;
-      
-      if (data.type === 'CASE_ROBOT_REMINDER' && data.case_id) {
+
+      if (data.type === "CASE_ROBOT_REMINDER" && data.case_id) {
         const caseBot = await this.getOrCreateCaseBot(data.case_id);
         senderId = caseBot.bot_user_id;
         senderName = caseBot.bot_name;
@@ -326,26 +353,30 @@ class MessageService {
         type: data.type,
         sender_id: senderId,
         sender_name: senderName,
-        target_user_id: data.target_user_id ? 
-          (typeof data.target_user_id === 'string' ? 
-            new RecordId('user', data.target_user_id.split(':')[1]) : data.target_user_id) : undefined,
-        case_id: data.case_id ? 
-          (typeof data.case_id === 'string' ? 
-            new RecordId('case', data.case_id.split(':')[1]) : data.case_id) : undefined,
+        target_user_id: data.target_user_id
+          ? typeof data.target_user_id === "string"
+            ? new RecordId("user", data.target_user_id.split(":")[1])
+            : data.target_user_id
+          : undefined,
+        case_id: data.case_id
+          ? typeof data.case_id === "string"
+            ? new RecordId("case", data.case_id.split(":")[1])
+            : data.case_id
+          : undefined,
         title: data.title,
         content: data.content,
-        priority: data.priority || 'NORMAL',
+        priority: data.priority || "NORMAL",
         action_link: data.action_link,
         is_read: false,
         is_archived: false,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      const [message] = await client.create('message', messageData);
+      const [message] = await client.create("message", messageData);
       return message;
     } catch (error) {
-      console.error('Error sending notification:', error);
+      console.error("Error sending notification:", error);
       throw error;
     }
   }
@@ -356,38 +387,43 @@ class MessageService {
   async markAsRead(data: MarkAsReadData) {
     try {
       const client = await this.getClient();
-      
+
       const promises = data.message_ids.map(async (messageId) => {
-        const id = typeof messageId === 'string' ? messageId : String(messageId);
-        
+        const id =
+          typeof messageId === "string" ? messageId : String(messageId);
+
         // Update message
         await client.merge(id, {
           is_read: true,
           read_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         });
 
         // Get message to find conversation
-        const [message] = await client.query(`SELECT conversation_id FROM ${id}`);
-        
+        const [message] = await client.query(
+          `SELECT conversation_id FROM ${id}`,
+        );
+
         if (message?.conversation_id) {
           // Update unread count in conversation_participant
           const query = `
-            UPDATE conversation_participant 
-            SET unread_count = math::max(unread_count - 1, 0), 
+            UPDATE conversation_participant
+            SET unread_count = math::max(unread_count - 1, 0),
                 last_read_at = time::now(),
                 updated_at = time::now()
-            WHERE conversation_id = $conversation_id 
+            WHERE conversation_id = $conversation_id
             AND user_id = $auth.id
           `;
-          await client.query(query, { conversation_id: message.conversation_id });
+          await client.query(query, {
+            conversation_id: message.conversation_id,
+          });
         }
       });
 
       await Promise.all(promises);
       return true;
     } catch (error) {
-      console.error('Error marking messages as read:', error);
+      console.error("Error marking messages as read:", error);
       throw error;
     }
   }
@@ -398,21 +434,22 @@ class MessageService {
   async archiveMessages(messageIds: (RecordId | string)[]) {
     try {
       const client = await this.getClient();
-      
+
       const promises = messageIds.map(async (messageId) => {
-        const id = typeof messageId === 'string' ? messageId : String(messageId);
-        
+        const id =
+          typeof messageId === "string" ? messageId : String(messageId);
+
         await client.merge(id, {
           is_archived: true,
           archived_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         });
       });
 
       await Promise.all(promises);
       return true;
     } catch (error) {
-      console.error('Error archiving messages:', error);
+      console.error("Error archiving messages:", error);
       throw error;
     }
   }
@@ -423,15 +460,19 @@ class MessageService {
   async deleteMessages(messageIds: (RecordId | string)[]) {
     try {
       const client = await this.getClient();
-      
+
       const promises = messageIds.map(async (messageId) => {
-        const id = typeof messageId === 'string' ? messageId : String(messageId);
-        
+        const id =
+          typeof messageId === "string" ? messageId : String(messageId);
+
         // Delete attachments first
-        await client.query('DELETE message_attachment WHERE message_id = $message_id', {
-          message_id: new RecordId('message', id.split(':')[1])
-        });
-        
+        await client.query(
+          "DELETE message_attachment WHERE message_id = $message_id",
+          {
+            message_id: new RecordId("message", id.split(":")[1]),
+          },
+        );
+
         // Delete message
         await client.delete(id);
       });
@@ -439,7 +480,7 @@ class MessageService {
       await Promise.all(promises);
       return true;
     } catch (error) {
-      console.error('Error deleting messages:', error);
+      console.error("Error deleting messages:", error);
       throw error;
     }
   }
@@ -450,13 +491,15 @@ class MessageService {
   private async getOrCreateCaseBot(caseId: RecordId | string) {
     try {
       const client = await this.getClient();
-      const caseIdRecord = typeof caseId === 'string' ? 
-        new RecordId('case', caseId.split(':')[1]) : caseId;
-      
+      const caseIdRecord =
+        typeof caseId === "string"
+          ? new RecordId("case", caseId.split(":")[1])
+          : caseId;
+
       // Check if bot already exists
       const [existingBot] = await client.query(
-        'SELECT * FROM case_bot WHERE case_id = $case_id',
-        { case_id: caseIdRecord }
+        "SELECT * FROM case_bot WHERE case_id = $case_id",
+        { case_id: caseIdRecord },
       );
 
       if (existingBot) {
@@ -464,34 +507,36 @@ class MessageService {
       }
 
       // Get case details
-      const [caseData] = await client.query(`SELECT case_number, name FROM ${String(caseIdRecord)}`);
-      
+      const [caseData] = await client.query(
+        `SELECT case_number, name FROM ${String(caseIdRecord)}`,
+      );
+
       // Create bot user
       const botUserData = {
         name: `案件机器人 (${caseData.case_number})`,
         username: `case_bot_${caseData.case_number}`,
         email: `case_bot_${caseData.case_number}@system.local`,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
-      
-      const [botUser] = await client.create('user', botUserData);
+
+      const [botUser] = await client.create("user", botUserData);
 
       // Create case bot
       const caseBotData = {
         case_id: caseIdRecord,
         bot_user_id: botUser.id,
         bot_name: botUserData.name,
-        avatar_url: '/images/case-bot-avatar.png',
+        avatar_url: "/images/case-bot-avatar.png",
         is_active: true,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      const [caseBot] = await client.create('case_bot', caseBotData);
+      const [caseBot] = await client.create("case_bot", caseBotData);
       return caseBot;
     } catch (error) {
-      console.error('Error creating case bot:', error);
+      console.error("Error creating case bot:", error);
       throw error;
     }
   }
@@ -503,17 +548,20 @@ class MessageService {
     try {
       const client = await this.getClient();
       const caseBot = await this.getOrCreateCaseBot(caseId);
-      
+
       const subscriptionData = {
         case_bot_id: caseBot.id,
-        user_id: '$auth.id',
-        subscribed_at: new Date().toISOString()
+        user_id: "$auth.id",
+        subscribed_at: new Date().toISOString(),
       };
 
-      const [subscription] = await client.create('case_bot_subscription', subscriptionData);
+      const [subscription] = await client.create(
+        "case_bot_subscription",
+        subscriptionData,
+      );
       return subscription;
     } catch (error) {
-      console.error('Error subscribing to case bot:', error);
+      console.error("Error subscribing to case bot:", error);
       throw error;
     }
   }
@@ -524,21 +572,23 @@ class MessageService {
   async unsubscribeFromCaseBot(caseBotId: RecordId | string) {
     try {
       const client = await this.getClient();
-      
+
       const query = `
-        DELETE case_bot_subscription 
-        WHERE case_bot_id = $case_bot_id 
+        DELETE case_bot_subscription
+        WHERE case_bot_id = $case_bot_id
         AND user_id = $auth.id
       `;
-      
-      await client.query(query, { 
-        case_bot_id: typeof caseBotId === 'string' ? 
-          new RecordId('case_bot', caseBotId.split(':')[1]) : caseBotId 
+
+      await client.query(query, {
+        case_bot_id:
+          typeof caseBotId === "string"
+            ? new RecordId("case_bot", caseBotId.split(":")[1])
+            : caseBotId,
       });
-      
+
       return true;
     } catch (error) {
-      console.error('Error unsubscribing from case bot:', error);
+      console.error("Error unsubscribing from case bot:", error);
       throw error;
     }
   }
@@ -547,44 +597,53 @@ class MessageService {
    * Setup live query for messages
    */
   async setupMessageLiveQuery(
-    conversationId: RecordId | string | null, 
-    callback: (action: string, result: any) => void
+    conversationId: RecordId | string | null,
+    callback: (action: string, result: any) => void,
   ): Promise<Uuid | null> {
     try {
       const client = await this.getClient();
-      
-      let query: string;
-      const params: any = {};
-      
+
       // FIXED: LIVE SELECT without parameters or ORDER BY (SurrealDB limitations)
-      query = 'LIVE SELECT * FROM message;';
-      
+      const query = "LIVE SELECT * FROM message;";
+      const params: any = {};
+
       // Create a filtering wrapper for the callback
       const originalCallback = callback;
       const filteredCallback = (action: string, data: any) => {
         // Client-side filtering based on the original query intent
         if (conversationId) {
           // Filter for specific conversation
-          const targetConversationId = typeof conversationId === 'string' ? 
-            new RecordId('conversation', conversationId.split(':')[1]) : conversationId;
-          
-          if (data && data.conversation_id && data.conversation_id.toString() === targetConversationId.toString()) {
+          const targetConversationId =
+            typeof conversationId === "string"
+              ? new RecordId("conversation", conversationId.split(":")[1])
+              : conversationId;
+
+          if (
+            data &&
+            data.conversation_id &&
+            data.conversation_id.toString() === targetConversationId.toString()
+          ) {
             originalCallback(action, data);
           }
         } else {
           // Filter for user's notifications (simplified - would need auth context for full filtering)
-          if (data && (data.type === 'CASE_ROBOT_REMINDER' || data.type === 'BUSINESS_NOTIFICATION' || data.type === 'CONFERENCE_INVITE')) {
+          if (
+            data &&
+            (data.type === "CASE_ROBOT_REMINDER" ||
+              data.type === "BUSINESS_NOTIFICATION" ||
+              data.type === "CONFERENCE_INVITE")
+          ) {
             originalCallback(action, data);
           }
         }
       };
-      
+
       callback = filteredCallback;
-      
+
       const queryUuid = await client.live(query, callback); // No params for LIVE queries
       return queryUuid;
     } catch (error) {
-      console.error('Error setting up message live query:', error);
+      console.error("Error setting up message live query:", error);
       return null;
     }
   }
@@ -597,23 +656,25 @@ class MessageService {
   async sendConferenceInvite(data: SendConferenceInviteData) {
     try {
       const client = await this.getClient();
-      
+
       // Generate unique conference ID
       const conferenceId = `conf-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Calculate expiration time
       const expiresInMinutes = data.expires_in_minutes || 30;
-      const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString();
-      
+      const expiresAt = new Date(
+        Date.now() + expiresInMinutes * 60 * 1000,
+      ).toISOString();
+
       // Prepare target user IDs
-      const targetUserIds = data.target_user_ids.map(id => 
-        typeof id === 'string' ? new RecordId('user', id.split(':')[1]) : id
+      const targetUserIds = data.target_user_ids.map((id) =>
+        typeof id === "string" ? new RecordId("user", id.split(":")[1]) : id,
       );
 
       const messageData = {
-        type: 'CONFERENCE_INVITE',
-        sender_id: '$auth.id',
-        sender_name: '$auth.name',
+        type: "CONFERENCE_INVITE",
+        sender_id: "$auth.id",
+        sender_name: "$auth.name",
         target_user_ids: targetUserIds,
         conference_id: conferenceId,
         conference_title: data.conference_title,
@@ -622,40 +683,44 @@ class MessageService {
         scheduled_start_time: data.scheduled_start_time,
         scheduled_duration: data.scheduled_duration,
         is_immediate: data.is_immediate,
-        case_id: data.case_id ? 
-          (typeof data.case_id === 'string' ? 
-            new RecordId('case', data.case_id.split(':')[1]) : data.case_id) : undefined,
-        group_id: data.group_id ? 
-          (typeof data.group_id === 'string' ? 
-            new RecordId('group', data.group_id.split(':')[1]) : data.group_id) : undefined,
-        invitation_status: 'pending',
+        case_id: data.case_id
+          ? typeof data.case_id === "string"
+            ? new RecordId("case", data.case_id.split(":")[1])
+            : data.case_id
+          : undefined,
+        group_id: data.group_id
+          ? typeof data.group_id === "string"
+            ? new RecordId("group", data.group_id.split(":")[1])
+            : data.group_id
+          : undefined,
+        invitation_status: "pending",
         expires_at: expiresAt,
         metadata: data.metadata,
         content: this.generateConferenceInviteContent(data),
         is_read: false,
         is_archived: false,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      const [message] = await client.create('message', messageData);
+      const [message] = await client.create("message", messageData);
 
       // Create individual conference invitation records for each target user
       for (const targetUserId of targetUserIds) {
-        await client.create('conference_invitation', {
+        await client.create("conference_invitation", {
           message_id: message.id,
           conference_id: conferenceId,
-          sender_id: '$auth.id',
+          sender_id: "$auth.id",
           target_user_id: targetUserId,
-          status: 'pending',
+          status: "pending",
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         });
       }
 
       return { message, conference_id: conferenceId };
     } catch (error) {
-      console.error('Error sending conference invitation:', error);
+      console.error("Error sending conference invitation:", error);
       throw error;
     }
   }
@@ -666,61 +731,67 @@ class MessageService {
   async respondToConferenceInvite(data: RespondToConferenceInviteData) {
     try {
       const client = await this.getClient();
-      
+
       // Get the original invitation message
-      const messageId = typeof data.message_id === 'string' ? data.message_id : String(data.message_id);
+      const messageId =
+        typeof data.message_id === "string"
+          ? data.message_id
+          : String(data.message_id);
       const [inviteMessage] = await client.query(`SELECT * FROM ${messageId}`);
-      
+
       if (!inviteMessage) {
-        throw new Error('Conference invitation not found');
+        throw new Error("Conference invitation not found");
       }
 
-      if (inviteMessage.type !== 'CONFERENCE_INVITE') {
-        throw new Error('Message is not a conference invitation');
+      if (inviteMessage.type !== "CONFERENCE_INVITE") {
+        throw new Error("Message is not a conference invitation");
       }
 
       // Check if invitation has expired
-      if (inviteMessage.expires_at && new Date(inviteMessage.expires_at) < new Date()) {
-        throw new Error('Conference invitation has expired');
+      if (
+        inviteMessage.expires_at &&
+        new Date(inviteMessage.expires_at) < new Date()
+      ) {
+        throw new Error("Conference invitation has expired");
       }
 
       // Update the invitation status in the conference_invitation record
       const updateQuery = `
-        UPDATE conference_invitation 
-        SET status = $status, 
+        UPDATE conference_invitation
+        SET status = $status,
             response_message = $response_message,
             responded_at = time::now(),
             updated_at = time::now()
-        WHERE message_id = $message_id 
+        WHERE message_id = $message_id
         AND target_user_id = $auth.id
       `;
-      
+
       await client.query(updateQuery, {
-        message_id: new RecordId('message', messageId.split(':')[1]),
+        message_id: new RecordId("message", messageId.split(":")[1]),
         status: data.response,
-        response_message: data.response_message
+        response_message: data.response_message,
       });
 
       // Create a response message/notification
       const responseData = {
-        type: 'BUSINESS_NOTIFICATION',
-        sender_id: '$auth.id',
-        sender_name: '$auth.name',
+        type: "BUSINESS_NOTIFICATION",
+        sender_id: "$auth.id",
+        sender_name: "$auth.name",
         target_user_id: inviteMessage.sender_id,
-        title: `会议邀请${data.response === 'accepted' ? '已接受' : '已拒绝'}`,
-        content: `${data.response === 'accepted' ? '接受了' : '拒绝了'}您的会议邀请：${inviteMessage.conference_title}${data.response_message ? `\n回复：${data.response_message}` : ''}`,
+        title: `会议邀请${data.response === "accepted" ? "已接受" : "已拒绝"}`,
+        content: `${data.response === "accepted" ? "接受了" : "拒绝了"}您的会议邀请：${inviteMessage.conference_title}${data.response_message ? `\n回复：${data.response_message}` : ""}`,
         case_id: inviteMessage.case_id,
-        priority: 'NORMAL',
+        priority: "NORMAL",
         is_read: false,
         is_archived: false,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
 
-      const [responseMessage] = await client.create('message', responseData);
+      const [responseMessage] = await client.create("message", responseData);
 
       // If accepted and it's an immediate call, create the conference
-      if (data.response === 'accepted' && inviteMessage.is_immediate) {
+      if (data.response === "accepted" && inviteMessage.is_immediate) {
         // 这里可以触发会议创建逻辑
         // 可以通过事件系统通知CallManager创建会议
       }
@@ -729,10 +800,10 @@ class MessageService {
         success: true,
         conference_id: inviteMessage.conference_id,
         response: data.response,
-        response_message: responseMessage
+        response_message: responseMessage,
       };
     } catch (error) {
-      console.error('Error responding to conference invitation:', error);
+      console.error("Error responding to conference invitation:", error);
       throw error;
     }
   }
@@ -743,61 +814,61 @@ class MessageService {
   async cancelConferenceInvite(messageId: RecordId | string, reason?: string) {
     try {
       const client = await this.getClient();
-      
-      const id = typeof messageId === 'string' ? messageId : String(messageId);
+
+      const id = typeof messageId === "string" ? messageId : String(messageId);
       const [inviteMessage] = await client.query(`SELECT * FROM ${id}`);
-      
+
       if (!inviteMessage) {
-        throw new Error('Conference invitation not found');
+        throw new Error("Conference invitation not found");
       }
 
-      if (inviteMessage.type !== 'CONFERENCE_INVITE') {
-        throw new Error('Message is not a conference invitation');
+      if (inviteMessage.type !== "CONFERENCE_INVITE") {
+        throw new Error("Message is not a conference invitation");
       }
 
       // Update the message status
       await client.merge(id, {
-        invitation_status: 'cancelled',
-        updated_at: new Date().toISOString()
+        invitation_status: "cancelled",
+        updated_at: new Date().toISOString(),
       });
 
       // Update all related conference_invitation records
       const updateQuery = `
-        UPDATE conference_invitation 
+        UPDATE conference_invitation
         SET status = 'cancelled',
             response_message = $reason,
             updated_at = time::now()
         WHERE message_id = $message_id
       `;
-      
+
       await client.query(updateQuery, {
-        message_id: new RecordId('message', id.split(':')[1]),
-        reason: reason || '会议已取消'
+        message_id: new RecordId("message", id.split(":")[1]),
+        reason: reason || "会议已取消",
       });
 
       // Send cancellation notifications to all invitees
       for (const targetUserId of inviteMessage.target_user_ids) {
         const cancelNotificationData = {
-          type: 'BUSINESS_NOTIFICATION',
-          sender_id: '$auth.id',
-          sender_name: '$auth.name',
+          type: "BUSINESS_NOTIFICATION",
+          sender_id: "$auth.id",
+          sender_name: "$auth.name",
           target_user_id: targetUserId,
-          title: '会议已取消',
-          content: `会议"${inviteMessage.conference_title}"已被取消${reason ? `\n原因：${reason}` : ''}`,
+          title: "会议已取消",
+          content: `会议"${inviteMessage.conference_title}"已被取消${reason ? `\n原因：${reason}` : ""}`,
           case_id: inviteMessage.case_id,
-          priority: 'NORMAL',
+          priority: "NORMAL",
           is_read: false,
           is_archived: false,
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         };
 
-        await client.create('message', cancelNotificationData);
+        await client.create("message", cancelNotificationData);
       }
 
       return true;
     } catch (error) {
-      console.error('Error cancelling conference invitation:', error);
+      console.error("Error cancelling conference invitation:", error);
       throw error;
     }
   }
@@ -808,44 +879,48 @@ class MessageService {
   async getConferenceInviteStatus(conferenceId: string) {
     try {
       const client = await this.getClient();
-      
+
       const query = `
-        SELECT 
-          message.* as invitation,
+        SELECT
+          (SELECT * FROM message WHERE id = conference_invitation.message_id)[0] AS invitation,
           conference_invitation.status,
           conference_invitation.target_user_id,
           conference_invitation.responded_at,
           conference_invitation.response_message
-        FROM message 
-        JOIN conference_invitation ON conference_invitation.message_id = message.id
-        WHERE message.conference_id = $conference_id
-        AND message.type = 'CONFERENCE_INVITE'
+        FROM conference_invitation
+        WHERE conference_invitation.message_id IN (
+          SELECT id FROM message
+          WHERE conference_id = $conference_id
+          AND type = 'CONFERENCE_INVITE'
+        )
       `;
-      
-      const results = await client.query(query, { conference_id: conferenceId });
-      
+
+      const results = await client.query(query, {
+        conference_id: conferenceId,
+      });
+
       if (!results || results.length === 0) {
         return null;
       }
 
       const invitation = results[0].invitation;
-      const responses = results.map(r => ({
+      const responses = results.map((r) => ({
         target_user_id: r.target_user_id,
         status: r.status,
         responded_at: r.responded_at,
-        response_message: r.response_message
+        response_message: r.response_message,
       }));
 
       return {
         invitation,
         responses,
         total_invites: responses.length,
-        accepted_count: responses.filter(r => r.status === 'accepted').length,
-        declined_count: responses.filter(r => r.status === 'declined').length,
-        pending_count: responses.filter(r => r.status === 'pending').length
+        accepted_count: responses.filter((r) => r.status === "accepted").length,
+        declined_count: responses.filter((r) => r.status === "declined").length,
+        pending_count: responses.filter((r) => r.status === "pending").length,
       };
     } catch (error) {
-      console.error('Error getting conference invite status:', error);
+      console.error("Error getting conference invite status:", error);
       throw error;
     }
   }
@@ -856,29 +931,29 @@ class MessageService {
   async getPendingConferenceInvites(userId?: RecordId | string) {
     try {
       const client = await this.getClient();
-      
+
       const query = `
-        SELECT 
-          message.*,
-          conference_invitation.status,
-          conference_invitation.responded_at
-        FROM message 
-        JOIN conference_invitation ON conference_invitation.message_id = message.id
-        WHERE message.type = 'CONFERENCE_INVITE'
-        AND conference_invitation.target_user_id = $user_id
-        AND conference_invitation.status = 'pending'
-        AND (message.expires_at IS NULL OR message.expires_at > time::now())
-        ORDER BY message.created_at DESC
+        SELECT
+          *,
+          (SELECT status FROM conference_invitation WHERE message_id = message.id AND target_user_id = $user_id LIMIT 1)[0].status AS status,
+          (SELECT responded_at FROM conference_invitation WHERE message_id = message.id AND target_user_id = $user_id LIMIT 1)[0].responded_at AS responded_at
+        FROM message
+        WHERE type = 'CONFERENCE_INVITE'
+        AND id IN (SELECT message_id FROM conference_invitation WHERE target_user_id = $user_id AND status = 'pending')
+        AND (expires_at IS NULL OR expires_at > time::now())
+        ORDER BY created_at DESC
       `;
-      
-      const userIdRecord = userId ? 
-        (typeof userId === 'string' ? new RecordId('user', userId.split(':')[1]) : userId) :
-        '$auth.id';
-      
+
+      const userIdRecord = userId
+        ? typeof userId === "string"
+          ? new RecordId("user", userId.split(":")[1])
+          : userId
+        : "$auth.id";
+
       const results = await client.query(query, { user_id: userIdRecord });
       return results || [];
     } catch (error) {
-      console.error('Error getting pending conference invites:', error);
+      console.error("Error getting pending conference invites:", error);
       throw error;
     }
   }
@@ -886,32 +961,34 @@ class MessageService {
   /**
    * Generate conference invitation content
    */
-  private generateConferenceInviteContent(data: SendConferenceInviteData): string {
+  private generateConferenceInviteContent(
+    data: SendConferenceInviteData,
+  ): string {
     let content = `📞 会议邀请：${data.conference_title}\n`;
-    
+
     if (data.conference_description) {
       content += `📝 描述：${data.conference_description}\n`;
     }
-    
-    content += `🎥 类型：${data.call_type === 'video' ? '视频会议' : '语音会议'}\n`;
-    
+
+    content += `🎥 类型：${data.call_type === "video" ? "视频会议" : "语音会议"}\n`;
+
     if (data.is_immediate) {
       content += `⏰ 时间：立即开始\n`;
     } else if (data.scheduled_start_time) {
       const startTime = new Date(data.scheduled_start_time);
       content += `⏰ 时间：${startTime.toLocaleString()}\n`;
-      
+
       if (data.scheduled_duration) {
         content += `⏱️ 时长：${data.scheduled_duration}分钟\n`;
       }
     }
-    
+
     if (data.metadata?.max_participants) {
       content += `👥 最大参与者：${data.metadata.max_participants}人\n`;
     }
-    
+
     content += `\n请点击接受或拒绝此邀请。`;
-    
+
     return content;
   }
 
@@ -925,156 +1002,194 @@ class MessageService {
   async sendGroupMessage(data: SendGroupMessageData) {
     try {
       const client = await this.getClient();
-      
+
       // Validate message content
-      if (!data.content || data.content.trim() === '') {
-        throw new Error('消息内容不能为空');
+      if (!data.content || data.content.trim() === "") {
+        throw new Error("消息内容不能为空");
       }
-      
+
       // Validate message type
-      const validTypes = ['TEXT', 'IMAGE', 'FILE', 'AUDIO', 'VIDEO', 'SYSTEM'];
+      const validTypes = ["TEXT", "IMAGE", "FILE", "AUDIO", "VIDEO", "SYSTEM"];
       if (data.message_type && !validTypes.includes(data.message_type)) {
-        throw new Error('无效的消息类型');
+        throw new Error("无效的消息类型");
       }
-      
+
       // Validate attachments
       if (data.attachments && data.attachments.length > 0) {
         for (const attachment of data.attachments) {
-          if (!attachment.file_name || !attachment.file_type || !attachment.mime_type) {
-            throw new Error('文件元数据不完整');
+          if (
+            !attachment.file_name ||
+            !attachment.file_type ||
+            !attachment.mime_type
+          ) {
+            throw new Error("文件元数据不完整");
           }
         }
       }
-      
+
       // Validate mentions - check if mentioned users exist
       if (data.mentions && data.mentions.length > 0) {
         for (const mentionId of data.mentions) {
-          const userId = typeof mentionId === 'string' ? mentionId : String(mentionId);
+          const userId =
+            typeof mentionId === "string" ? mentionId : String(mentionId);
           const [userExists] = await client.query(`SELECT * FROM ${userId}`);
           if (!userExists) {
-            throw new Error('提及的用户不存在');
+            throw new Error("提及的用户不存在");
           }
         }
       }
-      
+
       // 验证用户是否有发送消息的权限
       const memberQuery = `
-        SELECT * FROM group_member 
+        SELECT * FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const memberResults = await client.query(memberQuery, {
-        group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id)
+        group_id:
+          typeof data.group_id === "string"
+            ? data.group_id
+            : String(data.group_id),
       });
-      
-      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
-      
+
+      const member = Array.isArray(memberResults)
+        ? memberResults[0]
+        : memberResults;
+
       if (!member) {
-        throw new Error('您不是此群组成员');
+        throw new Error("您不是此群组成员");
       }
-      
+
       // 检查用户是否被静音
       if (member.is_muted) {
-        throw new Error('您在此群组中被静音');
+        throw new Error("您在此群组中被静音");
       }
-      
+
       // 检查群组权限
-      const hasPermission = await this.checkGroupMessagePermission(data.group_id, 'send_message');
+      const hasPermission = await this.checkGroupMessagePermission(
+        data.group_id,
+        "send_message",
+      );
       if (!hasPermission) {
-        throw new Error('权限不足，无法在此群组发送消息');
+        throw new Error("权限不足，无法在此群组发送消息");
       }
-      
+
       const now = new Date().toISOString();
-      
+
       // 处理@提及
       const processedContent = data.content;
       const mentionedUsers: string[] = [];
-      
+
       if (data.mentions && data.mentions.length > 0) {
         // 验证被提及的用户都是群组成员
         const mentionQuery = `
-          SELECT user_id FROM group_member 
+          SELECT user_id FROM group_member
           WHERE group_id = $group_id AND user_id IN $user_ids
         `;
-        
+
         const mentionResults = await client.query(mentionQuery, {
-          group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id),
-          user_ids: data.mentions.map(id => typeof id === 'string' ? id : String(id))
+          group_id:
+            typeof data.group_id === "string"
+              ? data.group_id
+              : String(data.group_id),
+          user_ids: data.mentions.map((id) =>
+            typeof id === "string" ? id : String(id),
+          ),
         });
-        
+
         if (Array.isArray(mentionResults)) {
-          mentionedUsers.push(...mentionResults.map((r: any) => String(r.user_id)));
+          mentionedUsers.push(
+            ...mentionResults.map((r: any) => String(r.user_id)),
+          );
         }
       }
-      
+
       // 创建消息记录
       const messageData = {
         content: processedContent,
-        message_type: data.message_type || 'TEXT',
-        group_id: typeof data.group_id === 'string' ? new RecordId('message_group', data.group_id.split(':')[1]) : data.group_id,
-        sender_id: '$auth.id',
-        reply_to_message_id: data.reply_to_message_id ? 
-          (typeof data.reply_to_message_id === 'string' ? new RecordId('message', data.reply_to_message_id.split(':')[1]) : data.reply_to_message_id) : undefined,
+        message_type: data.message_type || "TEXT",
+        group_id:
+          typeof data.group_id === "string"
+            ? new RecordId("message_group", data.group_id.split(":")[1])
+            : data.group_id,
+        sender_id: "$auth.id",
+        reply_to_message_id: data.reply_to_message_id
+          ? typeof data.reply_to_message_id === "string"
+            ? new RecordId("message", data.reply_to_message_id.split(":")[1])
+            : data.reply_to_message_id
+          : undefined,
         mentions: mentionedUsers.length > 0 ? mentionedUsers : undefined,
         attachments: data.attachments,
         metadata: {
           ...data.metadata,
-          is_group_message: true
+          is_group_message: true,
         },
         created_at: now,
         updated_at: now,
-        is_deleted: false
+        is_deleted: false,
       };
-      
-      const [message] = await client.create('message', messageData);
-      
+
+      const [message] = await client.create("message", messageData);
+
       // 如果消息需要置顶，创建置顶记录
       if (data.metadata?.is_pinned) {
         await this.pinGroupMessage({
           message_id: message.id,
           group_id: data.group_id,
-          pin_duration_hours: data.metadata.pin_expires_at ? 
-            Math.ceil((new Date(data.metadata.pin_expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60)) : undefined
+          pin_duration_hours: data.metadata.pin_expires_at
+            ? Math.ceil(
+                (new Date(data.metadata.pin_expires_at).getTime() -
+                  new Date().getTime()) /
+                  (1000 * 60 * 60),
+              )
+            : undefined,
         });
       }
-      
+
       // 发送提及通知
       if (mentionedUsers.length > 0) {
-        await this.sendMentionNotifications(message.id, mentionedUsers, data.content);
+        await this.sendMentionNotifications(
+          message.id,
+          mentionedUsers,
+          data.content,
+        );
       }
-      
+
       return message;
     } catch (error) {
-      console.error('Error sending group message:', error);
+      console.error("Error sending group message:", error);
       throw error;
     }
   }
-  
+
   /**
    * 置顶群组消息
    */
   async pinGroupMessage(data: PinMessageData) {
     try {
       const client = await this.getClient();
-      
+
       // 检查置顶权限
-      const hasPermission = await this.checkGroupMessagePermission(data.group_id, 'pin_message');
+      const hasPermission = await this.checkGroupMessagePermission(
+        data.group_id,
+        "pin_message",
+      );
       if (!hasPermission) {
-        throw new Error('权限不足，无法置顶消息');
+        throw new Error("权限不足，无法置顶消息");
       }
-      
+
       const now = new Date().toISOString();
       let expiresAt;
-      
+
       if (data.pin_duration_hours) {
         const expiration = new Date();
         expiration.setHours(expiration.getHours() + data.pin_duration_hours);
         expiresAt = expiration.toISOString();
       }
-      
+
       // 更新消息的置顶状态
       const updateQuery = `
-        UPDATE message SET 
+        UPDATE message SET
           metadata.is_pinned = true,
           metadata.pinned_at = $pinned_at,
           metadata.pinned_by = $auth.id,
@@ -1084,45 +1199,60 @@ class MessageService {
         WHERE id = $message_id AND group_id = $group_id
         RETURN *
       `;
-      
+
       const [pinnedMessage] = await client.query(updateQuery, {
-        message_id: typeof data.message_id === 'string' ? data.message_id : String(data.message_id),
-        group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id),
+        message_id:
+          typeof data.message_id === "string"
+            ? data.message_id
+            : String(data.message_id),
+        group_id:
+          typeof data.group_id === "string"
+            ? data.group_id
+            : String(data.group_id),
         pinned_at: now,
         expires_at: expiresAt,
         reason: data.reason,
-        updated_at: now
+        updated_at: now,
       });
-      
+
       if (!pinnedMessage) {
-        throw new Error('消息不存在或不属于此群组');
+        throw new Error("消息不存在或不属于此群组");
       }
-      
+
       // 发送系统通知
-      await this.sendGroupSystemMessage(data.group_id, `消息已被置顶${expiresAt ? ` (${data.pin_duration_hours}小时)` : ''}`);
-      
+      await this.sendGroupSystemMessage(
+        data.group_id,
+        `消息已被置顶${expiresAt ? ` (${data.pin_duration_hours}小时)` : ""}`,
+      );
+
       return pinnedMessage;
     } catch (error) {
-      console.error('Error pinning group message:', error);
+      console.error("Error pinning group message:", error);
       throw error;
     }
   }
-  
+
   /**
    * 取消置顶群组消息
    */
-  async unpinGroupMessage(messageId: RecordId | string, groupId: RecordId | string) {
+  async unpinGroupMessage(
+    messageId: RecordId | string,
+    groupId: RecordId | string,
+  ) {
     try {
       const client = await this.getClient();
-      
+
       // 检查取消置顶权限
-      const hasPermission = await this.checkGroupMessagePermission(groupId, 'pin_message');
+      const hasPermission = await this.checkGroupMessagePermission(
+        groupId,
+        "pin_message",
+      );
       if (!hasPermission) {
-        throw new Error('您没有取消置顶消息的权限');
+        throw new Error("您没有取消置顶消息的权限");
       }
-      
+
       const updateQuery = `
-        UPDATE message SET 
+        UPDATE message SET
           metadata.is_pinned = false,
           metadata.unpinned_at = $unpinned_at,
           metadata.unpinned_by = $auth.id,
@@ -1130,56 +1260,60 @@ class MessageService {
         WHERE id = $message_id AND group_id = $group_id
         RETURN *
       `;
-      
+
       const [unpinnedMessage] = await client.query(updateQuery, {
-        message_id: typeof messageId === 'string' ? messageId : String(messageId),
-        group_id: typeof groupId === 'string' ? groupId : String(groupId),
+        message_id:
+          typeof messageId === "string" ? messageId : String(messageId),
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
         unpinned_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
-      
+
       if (!unpinnedMessage) {
-        throw new Error('消息不存在或不属于此群组');
+        throw new Error("消息不存在或不属于此群组");
       }
-      
+
       // 发送系统通知
-      await this.sendGroupSystemMessage(groupId, '消息置顶已取消');
-      
+      await this.sendGroupSystemMessage(groupId, "消息置顶已取消");
+
       return unpinnedMessage;
     } catch (error) {
-      console.error('Error unpinning group message:', error);
+      console.error("Error unpinning group message:", error);
       throw error;
     }
   }
-  
+
   /**
    * 标记群组消息为已读
    */
   async markGroupMessagesAsRead(data: MarkGroupMessageAsReadData) {
     try {
       const client = await this.getClient();
-      
+
       // 验证用户是否是群组成员
       const memberQuery = `
-        SELECT * FROM group_member 
+        SELECT * FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const [member] = await client.query(memberQuery, {
-        group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id)
+        group_id:
+          typeof data.group_id === "string"
+            ? data.group_id
+            : String(data.group_id),
       });
-      
+
       if (!member) {
-        throw new Error('您不是此群组成员');
+        throw new Error("您不是此群组成员");
       }
-      
+
       const now = new Date().toISOString();
       const readTime = data.read_up_to_time || now;
-      
+
       // 更新群组读取位置
       const upsertQuery = `
-        UPDATE group_read_position 
-        SET 
+        UPDATE group_read_position
+        SET
           last_read_message_id = $last_read_message_id,
           last_read_time = $read_time,
           unread_count = 0,
@@ -1187,14 +1321,17 @@ class MessageService {
         WHERE group_id = $group_id AND user_id = $auth.id
         RETURN AFTER
       `;
-      
+
       let result = await client.query(upsertQuery, {
-        group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id),
+        group_id:
+          typeof data.group_id === "string"
+            ? data.group_id
+            : String(data.group_id),
         last_read_message_id: data.last_read_message_id,
         read_time: readTime,
-        updated_at: now
+        updated_at: now,
       });
-      
+
       // 如果记录不存在，创建新记录
       if (!result || result.length === 0) {
         const createQuery = `
@@ -1205,362 +1342,402 @@ class MessageService {
             last_read_time = $read_time,
             unread_count = 0
         `;
-        
+
         result = await client.query(createQuery, {
-          group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id),
+          group_id:
+            typeof data.group_id === "string"
+              ? data.group_id
+              : String(data.group_id),
           last_read_message_id: data.last_read_message_id,
-          read_time: readTime
+          read_time: readTime,
         });
       }
-      
+
       // 更新群组成员的最后已读时间
-      await client.query(`
-        UPDATE group_member 
+      await client.query(
+        `
+        UPDATE group_member
         SET last_read_at = $read_time, updated_at = $updated_at
         WHERE group_id = $group_id AND user_id = $auth.id
-      `, {
-        group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id),
-        read_time: readTime,
-        updated_at: now
-      });
-      
+      `,
+        {
+          group_id:
+            typeof data.group_id === "string"
+              ? data.group_id
+              : String(data.group_id),
+          read_time: readTime,
+          updated_at: now,
+        },
+      );
+
       return result[0];
     } catch (error) {
-      console.error('Error marking group messages as read:', error);
+      console.error("Error marking group messages as read:", error);
       throw error;
     }
   }
-  
+
   /**
    * 搜索群组消息
    */
   async searchGroupMessages(data: SearchGroupMessagesData) {
     try {
       const client = await this.getClient();
-      
+
       // 验证用户是否是群组成员
       const memberQuery = `
-        SELECT * FROM group_member 
+        SELECT * FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const [member] = await client.query(memberQuery, {
-        group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id)
+        group_id:
+          typeof data.group_id === "string"
+            ? data.group_id
+            : String(data.group_id),
       });
-      
+
       if (!member) {
-        throw new Error('您不是此群组成员');
+        throw new Error("您不是此群组成员");
       }
-      
+
       // 构建搜索查询
-      const whereConditions = [
-        `group_id = $group_id`,
-        `is_deleted = false`
-      ];
-      
+      const whereConditions = [`group_id = $group_id`, `is_deleted = false`];
+
       const queryParams: any = {
-        group_id: typeof data.group_id === 'string' ? data.group_id : String(data.group_id),
+        group_id:
+          typeof data.group_id === "string"
+            ? data.group_id
+            : String(data.group_id),
         limit: data.limit || 50,
-        offset: data.offset || 0
+        offset: data.offset || 0,
       };
-      
+
       // 全文搜索条件
       if (data.query) {
         whereConditions.push(`content @@ $search_query`);
         queryParams.search_query = data.query;
       }
-      
+
       // 消息类型过滤
       if (data.message_type) {
         whereConditions.push(`message_type = $message_type`);
         queryParams.message_type = data.message_type;
       }
-      
+
       // 发送者过滤
       if (data.from_user_id) {
         whereConditions.push(`sender_id = $from_user_id`);
-        queryParams.from_user_id = typeof data.from_user_id === 'string' ? data.from_user_id : String(data.from_user_id);
+        queryParams.from_user_id =
+          typeof data.from_user_id === "string"
+            ? data.from_user_id
+            : String(data.from_user_id);
       }
-      
+
       // 时间范围过滤
       if (data.start_date) {
         whereConditions.push(`created_at >= $start_date`);
         queryParams.start_date = data.start_date;
       }
-      
+
       if (data.end_date) {
         whereConditions.push(`created_at <= $end_date`);
         queryParams.end_date = data.end_date;
       }
-      
+
       const searchQuery = `
-        SELECT 
+        SELECT
           message.*,
           sender_id.name as sender_name,
           sender_id.avatar_url as sender_avatar
         FROM message
-        WHERE ${whereConditions.join(' AND ')}
+        WHERE ${whereConditions.join(" AND ")}
         ORDER BY created_at DESC
         LIMIT $limit
         START $offset
       `;
-      
+
       const results = await client.query(searchQuery, queryParams);
-      
+
       return results || [];
     } catch (error) {
-      console.error('Error searching group messages:', error);
+      console.error("Error searching group messages:", error);
       throw error;
     }
   }
-  
+
   /**
    * 获取群组置顶消息
    */
   async getGroupPinnedMessages(groupId: RecordId | string) {
     try {
       const client = await this.getClient();
-      
+
       // 验证用户是否是群组成员
       const memberQuery = `
-        SELECT * FROM group_member 
+        SELECT * FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const [member] = await client.query(memberQuery, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
       });
-      
+
       if (!member) {
-        throw new Error('您不是此群组成员');
+        throw new Error("您不是此群组成员");
       }
-      
+
       const query = `
-        SELECT 
+        SELECT
           message.*,
           sender_id.name as sender_name,
           sender_id.avatar_url as sender_avatar
         FROM message
-        WHERE 
-          group_id = $group_id AND 
+        WHERE
+          group_id = $group_id AND
           metadata.is_pinned = true AND
           (metadata.pin_expires_at IS NONE OR metadata.pin_expires_at > $now) AND
           is_deleted = false
         ORDER BY metadata.pinned_at DESC
       `;
-      
+
       const pinnedMessages = await client.query(query, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId),
-        now: new Date().toISOString()
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
+        now: new Date().toISOString(),
       });
-      
+
       return pinnedMessages || [];
     } catch (error) {
-      console.error('Error getting pinned messages:', error);
+      console.error("Error getting pinned messages:", error);
       throw error;
     }
   }
-  
+
   /**
    * 获取群组未读消息数量
    */
   async getGroupUnreadCount(groupId: RecordId | string) {
     try {
       const client = await this.getClient();
-      
+
       const query = `
-        SELECT unread_count FROM group_read_position 
+        SELECT unread_count FROM group_read_position
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const [result] = await client.query(query, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
       });
-      
+
       return result?.unread_count || 0;
     } catch (error) {
-      console.error('Error getting group unread count:', error);
+      console.error("Error getting group unread count:", error);
       return 0;
     }
   }
-  
+
   // ========================================
   // PRIVATE HELPER METHODS
   // ========================================
-  
+
   /**
    * 检查群组消息权限
    */
-  private async checkGroupMessagePermission(groupId: RecordId | string, permission: string): Promise<boolean> {
+  private async checkGroupMessagePermission(
+    groupId: RecordId | string,
+    permission: string,
+  ): Promise<boolean> {
     try {
       const client = await this.getClient();
-      
+
       const memberQuery = `
-        SELECT role, permissions FROM group_member 
+        SELECT role, permissions FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const [member] = await client.query(memberQuery, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
       });
-      
+
       if (!member) return false;
-      
+
       // Owner和Admin有所有权限
-      if (member.role === 'owner' || member.role === 'admin') {
+      if (member.role === "owner" || member.role === "admin") {
         return true;
       }
-      
+
       // 检查具体权限
       const permissions = member.permissions || {};
-      
+
       switch (permission) {
-        case 'send_message':
+        case "send_message":
           return permissions.can_send_message !== false; // 默认允许
-        case 'pin_message':
+        case "pin_message":
           return permissions.can_pin_message === true;
-        case 'manage_settings':
+        case "manage_settings":
           return permissions.can_manage_settings === true;
         default:
           return false;
       }
     } catch (error) {
-      console.error('Error checking group message permission:', error);
+      console.error("Error checking group message permission:", error);
       return false;
     }
   }
-  
+
   /**
    * 发送提及通知
    */
-  private async sendMentionNotifications(messageId: RecordId | string, mentionedUsers: string[], content: string) {
+  private async sendMentionNotifications(
+    messageId: RecordId | string,
+    mentionedUsers: string[],
+    content: string,
+  ) {
     try {
       const client = await this.getClient();
-      
-      const notifications = mentionedUsers.map(userId => ({
+
+      const notifications = mentionedUsers.map((userId) => ({
         recipient_id: userId,
-        type: 'GROUP_MENTION',
-        title: '群组消息提及',
-        content: `您在群组消息中被提及：${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`,
+        type: "GROUP_MENTION",
+        title: "群组消息提及",
+        content: `您在群组消息中被提及：${content.substring(0, 100)}${content.length > 100 ? "..." : ""}`,
         data: {
-          message_id: typeof messageId === 'string' ? messageId : String(messageId),
-          mention_type: 'group_message'
+          message_id:
+            typeof messageId === "string" ? messageId : String(messageId),
+          mention_type: "group_message",
         },
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
       }));
-      
+
       await Promise.all(
-        notifications.map(notification => 
-          client.create('notification', notification)
-        )
+        notifications.map((notification) =>
+          client.create("notification", notification),
+        ),
       );
     } catch (error) {
-      console.error('Error sending mention notifications:', error);
+      console.error("Error sending mention notifications:", error);
       // 不抛出错误，避免影响主流程
     }
   }
-  
+
   /**
    * 发送群组系统消息
    */
-  private async sendGroupSystemMessage(groupId: RecordId | string, content: string) {
+  private async sendGroupSystemMessage(
+    groupId: RecordId | string,
+    content: string,
+  ) {
     try {
       const client = await this.getClient();
-      
+
       const systemMessage = {
         content,
-        message_type: 'SYSTEM',
-        group_id: typeof groupId === 'string' ? new RecordId('message_group', groupId.split(':')[1]) : groupId,
+        message_type: "SYSTEM",
+        group_id:
+          typeof groupId === "string"
+            ? new RecordId("message_group", groupId.split(":")[1])
+            : groupId,
         sender_id: null, // 系统消息没有发送者
         metadata: {
           is_system_message: true,
-          is_group_message: true
+          is_group_message: true,
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        is_deleted: false
+        is_deleted: false,
       };
-      
-      await client.create('message', systemMessage);
+
+      await client.create("message", systemMessage);
     } catch (error) {
-      console.error('Error sending group system message:', error);
+      console.error("Error sending group system message:", error);
       // 不抛出错误，避免影响主流程
     }
   }
-  
+
   /**
    * 获取群组消息历史
    */
-  async getGroupMessages(groupId: RecordId | string, limit: number = 50, offset: number = 0) {
+  async getGroupMessages(
+    groupId: RecordId | string,
+    limit: number = 50,
+    offset: number = 0,
+  ) {
     try {
       const client = await this.getClient();
-      
+
       // Check membership first
       const memberQuery = `
-        SELECT * FROM group_member 
+        SELECT * FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const memberResults = await client.query(memberQuery, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
       });
-      
-      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
-      
+
+      const member = Array.isArray(memberResults)
+        ? memberResults[0]
+        : memberResults;
+
       if (!member) {
-        throw new Error('您不是此群组成员');
+        throw new Error("您不是此群组成员");
       }
-      
+
       const query = `
-        SELECT * FROM message 
-        WHERE group_id = $group_id AND is_deleted = false 
-        ORDER BY created_at DESC 
-        LIMIT $limit 
+        SELECT * FROM message
+        WHERE group_id = $group_id AND is_deleted = false
+        ORDER BY created_at DESC
+        LIMIT $limit
         START $offset
       `;
-      
+
       const messages = await client.query(query, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId),
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
         limit,
-        offset
+        offset,
       });
-      
+
       return Array.isArray(messages) ? messages : [];
     } catch (error) {
-      console.error('Error getting group messages:', error);
+      console.error("Error getting group messages:", error);
       throw error;
     }
   }
-  
+
   /**
    * 编辑群组消息
    */
   async editGroupMessage(messageId: RecordId | string, newContent: string) {
     try {
       const client = await this.getClient();
-      
+
       // Check if message exists and user is the sender
-      const messageResults = await client.query(`SELECT * FROM ${String(messageId)}`);
-      const message = Array.isArray(messageResults) ? messageResults[0] : messageResults;
+      const messageResults = await client.query(
+        `SELECT * FROM ${String(messageId)}`,
+      );
+      const message = Array.isArray(messageResults)
+        ? messageResults[0]
+        : messageResults;
       if (!message) {
-        throw new Error('消息不存在');
+        throw new Error("消息不存在");
       }
-      
-      if (message.sender_id !== '$auth.id') {
-        throw new Error('您只能编辑自己发送的消息');
+
+      if (message.sender_id !== "$auth.id") {
+        throw new Error("您只能编辑自己发送的消息");
       }
-      
+
       // Check if message is too old to edit (2 minutes)
       const messageTime = new Date(message.created_at);
       const now = new Date();
-      const diffInMinutes = (now.getTime() - messageTime.getTime()) / (1000 * 60);
-      
+      const diffInMinutes =
+        (now.getTime() - messageTime.getTime()) / (1000 * 60);
+
       if (diffInMinutes > 2) {
-        throw new Error('消息发送时间超过2分钟，无法编辑');
+        throw new Error("消息发送时间超过2分钟，无法编辑");
       }
-      
+
       const updateQuery = `
-        UPDATE message SET 
+        UPDATE message SET
           content = $content,
           updated_at = $updated_at,
           metadata.is_edited = true,
@@ -1568,49 +1745,55 @@ class MessageService {
         WHERE id = $message_id
         RETURN *
       `;
-      
+
       const updateResults = await client.query(updateQuery, {
-        message_id: typeof messageId === 'string' ? messageId : String(messageId),
+        message_id:
+          typeof messageId === "string" ? messageId : String(messageId),
         content: newContent,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
-      
+
       return Array.isArray(updateResults) ? updateResults[0] : updateResults;
     } catch (error) {
-      console.error('Error editing group message:', error);
+      console.error("Error editing group message:", error);
       throw error;
     }
   }
-  
+
   /**
    * 撤回群组消息
    */
   async recallGroupMessage(messageId: RecordId | string, reason?: string) {
     try {
       const client = await this.getClient();
-      
+
       // Check if message exists and user is the sender
-      const messageResults = await client.query(`SELECT * FROM ${String(messageId)}`);
-      const message = Array.isArray(messageResults) ? messageResults[0] : messageResults;
+      const messageResults = await client.query(
+        `SELECT * FROM ${String(messageId)}`,
+      );
+      const message = Array.isArray(messageResults)
+        ? messageResults[0]
+        : messageResults;
       if (!message) {
-        throw new Error('消息不存在');
+        throw new Error("消息不存在");
       }
-      
-      if (message.sender_id !== '$auth.id') {
-        throw new Error('您只能撤回自己发送的消息');
+
+      if (message.sender_id !== "$auth.id") {
+        throw new Error("您只能撤回自己发送的消息");
       }
-      
+
       // Check if message is too old to recall (2 minutes)
       const messageTime = new Date(message.created_at);
       const now = new Date();
-      const diffInMinutes = (now.getTime() - messageTime.getTime()) / (1000 * 60);
-      
+      const diffInMinutes =
+        (now.getTime() - messageTime.getTime()) / (1000 * 60);
+
       if (diffInMinutes > 2) {
-        throw new Error('消息发送时间超过2分钟，无法撤回');
+        throw new Error("消息发送时间超过2分钟，无法撤回");
       }
-      
+
       const updateQuery = `
-        UPDATE message SET 
+        UPDATE message SET
           content = '该消息已被撤回',
           is_deleted = true,
           updated_at = $updated_at,
@@ -1620,209 +1803,251 @@ class MessageService {
         WHERE id = $message_id
         RETURN *
       `;
-      
+
       const updateResults = await client.query(updateQuery, {
-        message_id: typeof messageId === 'string' ? messageId : String(messageId),
+        message_id:
+          typeof messageId === "string" ? messageId : String(messageId),
         reason: reason,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
-      
+
       return Array.isArray(updateResults) ? updateResults[0] : updateResults;
     } catch (error) {
-      console.error('Error recalling group message:', error);
+      console.error("Error recalling group message:", error);
       throw error;
     }
   }
-  
+
   /**
    * 转发消息到群组
    */
-  async forwardMessageToGroup(originalMessageId: RecordId | string, targetGroupId: RecordId | string) {
+  async forwardMessageToGroup(
+    originalMessageId: RecordId | string,
+    targetGroupId: RecordId | string,
+  ) {
     try {
       const client = await this.getClient();
-      
+
       // Get original message
-      const originalResults = await client.query(`SELECT * FROM ${String(originalMessageId)}`);
-      const originalMessage = Array.isArray(originalResults) ? originalResults[0] : originalResults;
+      const originalResults = await client.query(
+        `SELECT * FROM ${String(originalMessageId)}`,
+      );
+      const originalMessage = Array.isArray(originalResults)
+        ? originalResults[0]
+        : originalResults;
       if (!originalMessage) {
-        throw new Error('原消息不存在');
+        throw new Error("原消息不存在");
       }
-      
+
       // Check membership in target group
       const memberQuery = `
-        SELECT * FROM group_member 
+        SELECT * FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const memberResults = await client.query(memberQuery, {
-        group_id: typeof targetGroupId === 'string' ? targetGroupId : String(targetGroupId)
+        group_id:
+          typeof targetGroupId === "string"
+            ? targetGroupId
+            : String(targetGroupId),
       });
-      
-      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
-      
+
+      const member = Array.isArray(memberResults)
+        ? memberResults[0]
+        : memberResults;
+
       if (!member) {
-        throw new Error('您不是目标群组成员');
+        throw new Error("您不是目标群组成员");
       }
-      
+
       // Create forwarded message
       const forwardedMessage = {
         content: originalMessage.content,
-        message_type: originalMessage.message_type || 'TEXT',
-        group_id: typeof targetGroupId === 'string' ? new RecordId('message_group', targetGroupId.split(':')[1]) : targetGroupId,
-        sender_id: '$auth.id',
+        message_type: originalMessage.message_type || "TEXT",
+        group_id:
+          typeof targetGroupId === "string"
+            ? new RecordId("message_group", targetGroupId.split(":")[1])
+            : targetGroupId,
+        sender_id: "$auth.id",
         metadata: {
           is_forwarded: true,
-          original_message_id: typeof originalMessageId === 'string' ? originalMessageId : String(originalMessageId),
+          original_message_id:
+            typeof originalMessageId === "string"
+              ? originalMessageId
+              : String(originalMessageId),
           original_sender_id: originalMessage.sender_id,
-          forwarded_at: new Date().toISOString()
+          forwarded_at: new Date().toISOString(),
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        is_deleted: false
+        is_deleted: false,
       };
-      
-      const [message] = await client.create('message', forwardedMessage);
+
+      const [message] = await client.create("message", forwardedMessage);
       return message;
     } catch (error) {
-      console.error('Error forwarding message to group:', error);
+      console.error("Error forwarding message to group:", error);
       throw error;
     }
   }
-  
+
   /**
    * 批量转发消息
    */
-  async batchForwardMessages(messageIds: (RecordId | string)[], targetGroupId: RecordId | string) {
+  async batchForwardMessages(
+    messageIds: (RecordId | string)[],
+    targetGroupId: RecordId | string,
+  ) {
     try {
       const client = await this.getClient();
-      
+
       // Check membership in target group
       const memberQuery = `
-        SELECT * FROM group_member 
+        SELECT * FROM group_member
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const memberResults = await client.query(memberQuery, {
-        group_id: typeof targetGroupId === 'string' ? targetGroupId : String(targetGroupId)
+        group_id:
+          typeof targetGroupId === "string"
+            ? targetGroupId
+            : String(targetGroupId),
       });
-      
-      const member = Array.isArray(memberResults) ? memberResults[0] : memberResults;
-      
+
+      const member = Array.isArray(memberResults)
+        ? memberResults[0]
+        : memberResults;
+
       if (!member) {
-        throw new Error('您不是目标群组成员');
+        throw new Error("您不是目标群组成员");
       }
-      
+
       const forwardedMessages = [];
-      
+
       for (const messageId of messageIds) {
-        const originalResults = await client.query(`SELECT * FROM ${String(messageId)}`);
-        const originalMessage = Array.isArray(originalResults) ? originalResults[0] : originalResults;
+        const originalResults = await client.query(
+          `SELECT * FROM ${String(messageId)}`,
+        );
+        const originalMessage = Array.isArray(originalResults)
+          ? originalResults[0]
+          : originalResults;
         if (originalMessage) {
           const forwardedMessage = {
             content: originalMessage.content,
-            message_type: originalMessage.message_type || 'TEXT',
-            group_id: typeof targetGroupId === 'string' ? new RecordId('message_group', targetGroupId.split(':')[1]) : targetGroupId,
-            sender_id: '$auth.id',
+            message_type: originalMessage.message_type || "TEXT",
+            group_id:
+              typeof targetGroupId === "string"
+                ? new RecordId("message_group", targetGroupId.split(":")[1])
+                : targetGroupId,
+            sender_id: "$auth.id",
             metadata: {
               is_forwarded: true,
-              original_message_id: typeof messageId === 'string' ? messageId : String(messageId),
+              original_message_id:
+                typeof messageId === "string" ? messageId : String(messageId),
               original_sender_id: originalMessage.sender_id,
-              forwarded_at: new Date().toISOString()
+              forwarded_at: new Date().toISOString(),
             },
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-            is_deleted: false
+            is_deleted: false,
           };
-          
-          const [message] = await client.create('message', forwardedMessage);
+
+          const [message] = await client.create("message", forwardedMessage);
           forwardedMessages.push(message);
         }
       }
-      
+
       return forwardedMessages;
     } catch (error) {
-      console.error('Error batch forwarding messages:', error);
+      console.error("Error batch forwarding messages:", error);
       throw error;
     }
   }
-  
+
   /**
    * 保存群组消息草稿
    */
   async saveGroupMessageDraft(groupId: RecordId | string, content: string) {
     try {
       const client = await this.getClient();
-      
+
       const draftData = {
-        group_id: typeof groupId === 'string' ? new RecordId('message_group', groupId.split(':')[1]) : groupId,
-        user_id: '$auth.id',
+        group_id:
+          typeof groupId === "string"
+            ? new RecordId("message_group", groupId.split(":")[1])
+            : groupId,
+        user_id: "$auth.id",
         content: content,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
-      
+
       // Use merge to update existing draft or create new one
       const query = `
         UPSERT group_message_draft:($group_id, $user_id) SET content = $content, updated_at = $updated_at
       `;
-      
+
       await client.query(query, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId),
-        user_id: '$auth.id',
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
+        user_id: "$auth.id",
         content: content,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
-      
+
       return true;
     } catch (error) {
-      console.error('Error saving group message draft:', error);
+      console.error("Error saving group message draft:", error);
       throw error;
     }
   }
-  
+
   /**
    * 获取群组消息草稿
    */
   async getGroupMessageDraft(groupId: RecordId | string) {
     try {
       const client = await this.getClient();
-      
+
       const query = `
-        SELECT * FROM group_message_draft 
+        SELECT * FROM group_message_draft
         WHERE group_id = $group_id AND user_id = $auth.id
       `;
-      
+
       const draftResults = await client.query(query, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId)
+        group_id: typeof groupId === "string" ? groupId : String(groupId),
       });
-      
-      const draft = Array.isArray(draftResults) ? draftResults[0] : draftResults;
-      return draft || { content: '' };
+
+      const draft = Array.isArray(draftResults)
+        ? draftResults[0]
+        : draftResults;
+      return draft || { content: "" };
     } catch (error) {
-      console.error('Error getting group message draft:', error);
-      return { content: '' };
+      console.error("Error getting group message draft:", error);
+      return { content: "" };
     }
   }
-  
+
   /**
    * 清除群组消息草稿
    */
   async clearGroupMessageDraft(groupId: RecordId | string) {
     try {
       const client = await this.getClient();
-      
-      const query = `
-        DELETE FROM group_message_draft 
+
+      const deleteHead = "DELETE FROM group_message_draft ";
+      await client.query(
+        `
+        ${deleteHead}
         WHERE group_id = $group_id AND user_id = $auth.id
-      `;
-      
-      await client.query(query, {
-        group_id: typeof groupId === 'string' ? groupId : String(groupId)
-      });
-      
+      `,
+        {
+          group_id: typeof groupId === "string" ? groupId : String(groupId),
+        },
+      );
+
       return true;
     } catch (error) {
-      console.error('Error clearing group message draft:', error);
+      console.error("Error clearing group message draft:", error);
       throw error;
     }
   }

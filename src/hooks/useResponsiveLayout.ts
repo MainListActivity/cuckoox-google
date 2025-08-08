@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { useTheme, useMediaQuery } from '@mui/material';
+import { useState, useEffect } from "react";
+import { useTheme, useMediaQuery } from "@mui/material";
 
-export type DeviceType = 'mobile' | 'tablet' | 'desktop';
-export type ScreenSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+export type DeviceType = "mobile" | "tablet" | "desktop";
+export type ScreenSize = "xs" | "sm" | "md" | "lg" | "xl";
 
 interface ResponsiveLayoutState {
   deviceType: DeviceType;
@@ -12,7 +12,7 @@ interface ResponsiveLayoutState {
   isDesktop: boolean;
   isSmallScreen: boolean;
   isLargeScreen: boolean;
-  orientation: 'portrait' | 'landscape';
+  orientation: "portrait" | "landscape";
   viewportWidth: number;
   viewportHeight: number;
 }
@@ -23,10 +23,13 @@ interface ResponsiveLayoutState {
  */
 export const useResponsiveLayout = (): ResponsiveLayoutState => {
   const theme = useTheme();
-  
+
   // Helper for fallback using window.matchMedia
   const matchMediaFallback = (query: string, fallback: boolean): boolean => {
-    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    if (
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function"
+    ) {
       const result = window.matchMedia(query);
       return result ? result.matches : fallback;
     }
@@ -34,35 +37,73 @@ export const useResponsiveLayout = (): ResponsiveLayoutState => {
   };
 
   // Safe media query function that handles test environment
-  const safeUseMediaQuery = (query: string | (() => string), fallback: boolean = false): boolean => {
-    const mediaQuery = typeof query === 'function' ? query() : query;
+  const useSafeMediaQuery = (
+    query: string | (() => string),
+    fallback: boolean = false,
+  ): boolean => {
+    const mediaQuery = typeof query === "function" ? query() : query;
     try {
       return useMediaQuery(mediaQuery);
     } catch {
       return matchMediaFallback(mediaQuery, fallback);
     }
   };
-  
+
   // MUI断点检测 - with safe fallbacks
-  const isXs = safeUseMediaQuery(() => theme?.breakpoints?.only?.('xs') || '(max-width:600px)', false);
-  const isSm = safeUseMediaQuery(() => theme?.breakpoints?.only?.('sm') || '(min-width:600px) and (max-width:900px)', false);
-  const isMd = safeUseMediaQuery(() => theme?.breakpoints?.only?.('md') || '(min-width:900px) and (max-width:1200px)', false);
-  const isLg = safeUseMediaQuery(() => theme?.breakpoints?.only?.('lg') || '(min-width:1200px) and (max-width:1536px)', false);
-  const isXl = safeUseMediaQuery(() => theme?.breakpoints?.only?.('xl') || '(min-width:1536px)', false);
-  
+  const isXs = useSafeMediaQuery(
+    () => theme?.breakpoints?.only?.("xs") || "(max-width:600px)",
+    false,
+  );
+  const isSm = useSafeMediaQuery(
+    () =>
+      theme?.breakpoints?.only?.("sm") ||
+      "(min-width:600px) and (max-width:900px)",
+    false,
+  );
+  const isMd = useSafeMediaQuery(
+    () =>
+      theme?.breakpoints?.only?.("md") ||
+      "(min-width:900px) and (max-width:1200px)",
+    false,
+  );
+  const isLg = useSafeMediaQuery(
+    () =>
+      theme?.breakpoints?.only?.("lg") ||
+      "(min-width:1200px) and (max-width:1536px)",
+    false,
+  );
+  const isXl = useSafeMediaQuery(
+    () => theme?.breakpoints?.only?.("xl") || "(min-width:1536px)",
+    false,
+  );
+
   // 设备类型检测
-  const isMobile = safeUseMediaQuery(() => theme?.breakpoints?.down?.('md') || '(max-width:900px)', false);
-  const isTablet = safeUseMediaQuery(() => theme?.breakpoints?.between?.('md', 'lg') || '(min-width:900px) and (max-width:1200px)', false);
-  const isDesktop = safeUseMediaQuery(() => theme?.breakpoints?.up?.('lg') || '(min-width:1200px)', true);
-  
+  const isMobile = useSafeMediaQuery(
+    () => theme?.breakpoints?.down?.("md") || "(max-width:900px)",
+    false,
+  );
+  const isTablet = useSafeMediaQuery(
+    () =>
+      theme?.breakpoints?.between?.("md", "lg") ||
+      "(min-width:900px) and (max-width:1200px)",
+    false,
+  );
+  const isDesktop = useSafeMediaQuery(
+    () => theme?.breakpoints?.up?.("lg") || "(min-width:1200px)",
+    true,
+  );
+
   // 屏幕尺寸检测
-  const isSmallScreen = safeUseMediaQuery(() => theme?.breakpoints?.down?.('sm') || '(max-width:600px)', false);
-  const isLargeScreen = useMediaQuery(theme.breakpoints.up('xl'));
+  const isSmallScreen = useSafeMediaQuery(
+    () => theme?.breakpoints?.down?.("sm") || "(max-width:600px)",
+    false,
+  );
+  const isLargeScreen = useMediaQuery(theme.breakpoints.up("xl"));
 
   // 视口尺寸状态
   const [viewportSize, setViewportSize] = useState({
-    width: typeof window !== 'undefined' ? window.innerWidth : 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    width: typeof window !== "undefined" ? window.innerWidth : 0,
+    height: typeof window !== "undefined" ? window.innerHeight : 0,
   });
 
   // 监听视口尺寸变化
@@ -74,30 +115,30 @@ export const useResponsiveLayout = (): ResponsiveLayoutState => {
       });
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // 确定当前屏幕尺寸
   const getScreenSize = (): ScreenSize => {
-    if (isXs) return 'xs';
-    if (isSm) return 'sm';
-    if (isMd) return 'md';
-    if (isLg) return 'lg';
-    if (isXl) return 'xl';
-    return 'md'; // 默认值
+    if (isXs) return "xs";
+    if (isSm) return "sm";
+    if (isMd) return "md";
+    if (isLg) return "lg";
+    if (isXl) return "xl";
+    return "md"; // 默认值
   };
 
   // 确定设备类型
   const getDeviceType = (): DeviceType => {
-    if (isMobile) return 'mobile';
-    if (isTablet) return 'tablet';
-    return 'desktop';
+    if (isMobile) return "mobile";
+    if (isTablet) return "tablet";
+    return "desktop";
   };
 
   // 确定屏幕方向
-  const getOrientation = (): 'portrait' | 'landscape' => {
-    return viewportSize.height > viewportSize.width ? 'portrait' : 'landscape';
+  const getOrientation = (): "portrait" | "landscape" => {
+    return viewportSize.height > viewportSize.width ? "portrait" : "landscape";
   };
 
   return {
@@ -141,9 +182,9 @@ export const useResponsiveValue = <T>(values: {
   }
 
   // 回退到最接近的值
-  const fallbackOrder: ScreenSize[] = ['xl', 'lg', 'md', 'sm', 'xs'];
+  const fallbackOrder: ScreenSize[] = ["xl", "lg", "md", "sm", "xs"];
   const currentIndex = fallbackOrder.indexOf(screenSize);
-  
+
   for (let i = currentIndex; i < fallbackOrder.length; i++) {
     if (values[fallbackOrder[i]] !== undefined) {
       return values[fallbackOrder[i]];
@@ -160,13 +201,17 @@ export const useResponsiveValue = <T>(values: {
 export const useResponsiveSpacing = () => {
   const { deviceType } = useResponsiveLayout();
 
-  const getSpacing = (mobile: number, tablet: number, desktop: number): number => {
+  const getSpacing = (
+    mobile: number,
+    tablet: number,
+    desktop: number,
+  ): number => {
     switch (deviceType) {
-      case 'mobile':
+      case "mobile":
         return mobile;
-      case 'tablet':
+      case "tablet":
         return tablet;
-      case 'desktop':
+      case "desktop":
         return desktop;
       default:
         return mobile;

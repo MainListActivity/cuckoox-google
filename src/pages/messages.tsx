@@ -1,5 +1,10 @@
-/// <reference types="react" />
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 import {
   Box,
   Typography,
@@ -36,7 +41,7 @@ import {
   SpeedDial,
   SpeedDialIcon,
   SpeedDialAction,
-} from '@mui/material';
+} from "@mui/material";
 import {
   Message,
   Notifications,
@@ -58,53 +63,69 @@ import {
   Add,
   Chat,
   ArrowBack,
-} from '@mui/icons-material';
-import MessageListItem from '@/src/components/messages/MessageListItem';
-import ChatBubble, { ChatBubbleProps } from '@/src/components/messages/ChatBubble';
-import ChatInput from '@/src/components/messages/ChatInput';
-import NotificationCard from '@/src/components/messages/NotificationCard';
-import ConferenceInviteCard from '@/src/components/messages/ConferenceInviteCard';
-import CreateConversationDialog from '@/src/components/messages/CreateConversationDialog';
-import GroupChatInterface from '@/src/components/messages/GroupChatInterface';
-import GroupCreateDialog from '@/src/components/messages/GroupCreateDialog';
-import GroupInfoPanel from '@/src/components/messages/GroupInfoPanel';
+} from "@mui/icons-material";
+import MessageListItem from "@/src/components/messages/MessageListItem";
+import ChatBubble, {
+  ChatBubbleProps,
+} from "@/src/components/messages/ChatBubble";
+import ChatInput from "@/src/components/messages/ChatInput";
+import NotificationCard from "@/src/components/messages/NotificationCard";
+import ConferenceInviteCard from "@/src/components/messages/ConferenceInviteCard";
+import CreateConversationDialog from "@/src/components/messages/CreateConversationDialog";
+import GroupChatInterface from "@/src/components/messages/GroupChatInterface";
+import GroupCreateDialog from "@/src/components/messages/GroupCreateDialog";
+import GroupInfoPanel from "@/src/components/messages/GroupInfoPanel";
 import {
   Message as MessageType,
   IMMessage,
   CaseRobotReminderMessage,
   BusinessNotificationMessage,
   ConferenceInviteMessage,
-  ConversationSummary
-} from '@/src/types/message';
-import type { Group, GroupMember } from '@/src/types/group';
+  ConversationSummary,
+} from "@/src/types/message";
+import type { Group, GroupMember } from "@/src/types/group";
 import {
   useConversationsList,
-  useSystemNotifications
-} from '@/src/hooks/useMessageCenterData';
-import { useUserGroups } from '@/src/hooks/useGroupData';
-import { useAuth } from '@/src/contexts/AuthContext';
-import { useSnackbar } from '@/src/contexts/SnackbarContext';
-import { useSurrealClient } from '@/src/contexts/SurrealProvider';
-import { messageService } from '@/src/services/messageService';
-import { groupManager } from '@/src/services/groupManager';
-import callManager, { CallType } from '@/src/services/callManager';
-import { useResponsiveLayout } from '@/src/hooks/useResponsiveLayout';
-import MobileOptimizedLayout from '@/src/components/mobile/MobileOptimizedLayout';
-import { RecordId } from 'surrealdb';
-import { idToStr } from '@/src/utils/id';
+  useSystemNotifications,
+} from "@/src/hooks/useMessageCenterData";
+import { useUserGroups } from "@/src/hooks/useGroupData";
+import { useAuth } from "@/src/contexts/AuthContext";
+import { useSnackbar } from "@/src/contexts/SnackbarContext";
+import { useSurrealClient } from "@/src/contexts/SurrealProvider";
+import { messageService } from "@/src/services/messageService";
+import { groupManager } from "@/src/services/groupManager";
+import callManager, { CallType } from "@/src/services/callManager";
+import { useResponsiveLayout } from "@/src/hooks/useResponsiveLayout";
+import MobileOptimizedLayout from "@/src/components/mobile/MobileOptimizedLayout";
+import { RecordId } from "surrealdb";
+import { idToStr } from "@/src/utils/id";
 
 // 消息类型 (与后端 `type` 字段保持一致，便于类型收窄)
 const messageTypes = {
-  BUSINESS_NOTIFICATION: { label: '系统通知', icon: <Notifications />, color: 'info' },
-  CASE_ROBOT_REMINDER: { label: '案件提醒', icon: <SmartToy />, color: 'warning' },
-  CONFERENCE_INVITE: { label: '会议邀请', icon: <Notifications />, color: 'primary' },
-  IM: { label: '用户消息', icon: <Person />, color: 'primary' },
-  GROUP_IM: { label: '群组消息', icon: <GroupIcon />, color: 'secondary' },
+  BUSINESS_NOTIFICATION: {
+    label: "系统通知",
+    icon: <Notifications />,
+    color: "info",
+  },
+  CASE_ROBOT_REMINDER: {
+    label: "案件提醒",
+    icon: <SmartToy />,
+    color: "warning",
+  },
+  CONFERENCE_INVITE: {
+    label: "会议邀请",
+    icon: <Notifications />,
+    color: "primary",
+  },
+  IM: { label: "用户消息", icon: <Person />, color: "primary" },
+  GROUP_IM: { label: "群组消息", icon: <GroupIcon />, color: "secondary" },
 } as const;
 type MessageTypeKey = keyof typeof messageTypes;
 
 // Define a union type for items in the left panel list
-type DisplayListItem = (ConversationSummary & { itemType: 'conversation' }) | (MessageType & { itemType: 'notification' });
+type DisplayListItem =
+  | (ConversationSummary & { itemType: "conversation" })
+  | (MessageType & { itemType: "notification" });
 
 interface ChatMessageDisplay extends ChatBubbleProps {
   id: string;
@@ -124,7 +145,7 @@ const MessageCenterPage: React.FC = () => {
     groups,
     isLoading: isLoadingGroups,
     error: groupsError,
-    setGroups
+    setGroups,
   } = useUserGroups(user?.id || null);
 
   const {
@@ -143,18 +164,28 @@ const MessageCenterPage: React.FC = () => {
 
   // State for UI
   const [activeTab, setActiveTab] = useState(0);
-  const [selectedItem, setSelectedItem] = useState<DisplayListItem | null>(null);
-  const [currentFilter, setCurrentFilter] = useState<'all' | 'im' | 'reminders' | 'groups'>('all');
-  const [currentConversation, setCurrentConversation] = useState<ChatMessageDisplay[]>([]);
+  const [selectedItem, setSelectedItem] = useState<DisplayListItem | null>(
+    null,
+  );
+  const [currentFilter, setCurrentFilter] = useState<
+    "all" | "im" | "reminders" | "groups"
+  >("all");
+  const [currentConversation, setCurrentConversation] = useState<
+    ChatMessageDisplay[]
+  >([]);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedMessageId, setSelectedMessageId] = useState<string>('');
-  const [chatInput, setChatInput] = useState('');
-  const [searchKeyword, setSearchKeyword] = useState('');
+  const [selectedMessageId, setSelectedMessageId] = useState<string>("");
+  const [chatInput, setChatInput] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [createConversationOpen, setCreateConversationOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [currentChatMode, setCurrentChatMode] = useState<'conversation' | 'group'>('conversation');
-  const [currentViewMode, setCurrentViewMode] = useState<'list' | 'chat'>('list');
+  const [currentChatMode, setCurrentChatMode] = useState<
+    "conversation" | "group"
+  >("conversation");
+  const [currentViewMode, setCurrentViewMode] = useState<"list" | "chat">(
+    "list",
+  );
   const [showGroupInfo, setShowGroupInfo] = useState(false);
 
   const chatHistoryEndRef = useRef<HTMLDivElement>(null);
@@ -162,24 +193,32 @@ const MessageCenterPage: React.FC = () => {
   // Handle errors from hooks
   useEffect(() => {
     if (conversationsError) {
-      const errMsg = (conversationsError as Error)?.message ?? '未知错误';
+      const errMsg = (conversationsError as Error)?.message ?? "未知错误";
       showError(`加载会话列表失败: ${errMsg}`);
     }
     if (notificationsError) {
-      const errMsg = (notificationsError as Error)?.message ?? '未知错误';
+      const errMsg = (notificationsError as Error)?.message ?? "未知错误";
       showError(`加载通知列表失败: ${errMsg}`);
     }
     if (groupsError) {
-      const errMsg = (groupsError as Error)?.message ?? '未知错误';
+      const errMsg = (groupsError as Error)?.message ?? "未知错误";
       showError(`加载群组列表失败: ${errMsg}`);
     }
   }, [conversationsError, notificationsError, groupsError, showError]);
 
   // 统计未读消息
   const unreadCount = useMemo(() => {
-    const notificationUnread = notifications.filter((n: any) => !n.is_read).length;
-    const conversationUnread = conversations.reduce((count: number, conv: any) => count + (conv.unread_count || 0), 0);
-    const groupUnread = groups.reduce((count: number, group: Group) => count + (group.unread_count || 0), 0);
+    const notificationUnread = notifications.filter(
+      (n: any) => !n.is_read,
+    ).length;
+    const conversationUnread = conversations.reduce(
+      (count: number, conv: any) => count + (conv.unread_count || 0),
+      0,
+    );
+    const groupUnread = groups.reduce(
+      (count: number, group: Group) => count + (group.unread_count || 0),
+      0,
+    );
     return notificationUnread + conversationUnread + groupUnread;
   }, [notifications, conversations, groups]);
 
@@ -187,44 +226,68 @@ const MessageCenterPage: React.FC = () => {
   const systemMessages = useMemo(
     () =>
       notifications.filter(
-        (n): n is CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage =>
-          n.type === 'BUSINESS_NOTIFICATION' || n.type === 'CASE_ROBOT_REMINDER' || n.type === 'CONFERENCE_INVITE'
+        (
+          n,
+        ): n is
+          | CaseRobotReminderMessage
+          | BusinessNotificationMessage
+          | ConferenceInviteMessage =>
+          n.type === "BUSINESS_NOTIFICATION" ||
+          n.type === "CASE_ROBOT_REMINDER" ||
+          n.type === "CONFERENCE_INVITE",
       ),
-    [notifications]
+    [notifications],
   );
 
-  const chatMessages = useMemo(() =>
-    conversations.filter((c: any) => c.type === 'IM'),
-    [conversations]
+  const chatMessages = useMemo(
+    () => conversations.filter((c: any) => c.type === "IM"),
+    [conversations],
   );
 
   // Combine conversations, notifications, and groups into a single list for display, sorted by timestamp
   const combinedList = useMemo((): DisplayListItem[] => {
-    const convItems: DisplayListItem[] = conversations.map((c: ConversationSummary) => ({
-      ...c,
-      itemType: 'conversation' as const,
-      created_at: c.last_message_timestamp,
-      updated_at: c.last_message_timestamp,
-      is_read: c.unread_count === 0
-    }));
+    const convItems: DisplayListItem[] = conversations.map(
+      (c: ConversationSummary) => ({
+        ...c,
+        itemType: "conversation" as const,
+        created_at: c.last_message_timestamp,
+        updated_at: c.last_message_timestamp,
+        is_read: c.unread_count === 0,
+      }),
+    );
 
-    const notifItems: DisplayListItem[] = notifications.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) => ({
-      ...n,
-      itemType: 'notification' as const
-    }));
+    const notifItems: DisplayListItem[] = notifications.map(
+      (
+        n:
+          | CaseRobotReminderMessage
+          | BusinessNotificationMessage
+          | ConferenceInviteMessage,
+      ) => ({
+        ...n,
+        itemType: "notification" as const,
+      }),
+    );
 
     const groupItems: DisplayListItem[] = groups.map((g: Group) => ({
       ...g,
-      itemType: 'group' as const,
-      is_read: (g.unread_count || 0) === 0
+      itemType: "group" as const,
+      is_read: (g.unread_count || 0) === 0,
     }));
 
     const allItems = [...convItems, ...notifItems, ...groupItems];
 
     // Sort by updated_at or created_at (last_message_timestamp for conversations)
     allItems.sort((a, b) => {
-      const dateA = new Date((a as any).updated_at || (a as any).created_at || (a as any).last_message_timestamp).getTime();
-      const dateB = new Date((b as any).updated_at || (b as any).created_at || (b as any).last_message_timestamp).getTime();
+      const dateA = new Date(
+        (a as any).updated_at ||
+          (a as any).created_at ||
+          (a as any).last_message_timestamp,
+      ).getTime();
+      const dateB = new Date(
+        (b as any).updated_at ||
+          (b as any).created_at ||
+          (b as any).last_message_timestamp,
+      ).getTime();
       return dateB - dateA; // Descending order
     });
 
@@ -233,15 +296,35 @@ const MessageCenterPage: React.FC = () => {
 
   // Update simulated conversation when a conversation summary is selected
   useEffect(() => {
-    if (selectedItem && selectedItem.itemType === 'conversation') {
+    if (selectedItem && selectedItem.itemType === "conversation") {
       // For now, use existing simulation logic, but use conversation details
       const convSummary = selectedItem as ConversationSummary;
       // Determine the "other" participant for display name in chat header
-      const otherParticipantName = convSummary.participants.find((p: any) => p.id !== user?.id)?.name || convSummary.last_message_sender_name || '对方';
+      const otherParticipantName =
+        convSummary.participants.find((p: any) => p.id !== user?.id)?.name ||
+        convSummary.last_message_sender_name ||
+        "对方";
 
       const simulatedConvo: ChatMessageDisplay[] = [
-        { id: 'sim1', messageText: convSummary.last_message_snippet, timestamp: new Date(convSummary.last_message_timestamp).toLocaleTimeString(), isSender: false, senderName: convSummary.last_message_sender_name || otherParticipantName },
-        { id: 'sim2', messageText: '好的，我明白了。我会尽快处理。', timestamp: new Date(Date.parse(convSummary.last_message_timestamp) + 60000).toLocaleTimeString(), isSender: true, senderName: 'You' },
+        {
+          id: "sim1",
+          messageText: convSummary.last_message_snippet,
+          timestamp: new Date(
+            convSummary.last_message_timestamp,
+          ).toLocaleTimeString(),
+          isSender: false,
+          senderName:
+            convSummary.last_message_sender_name || otherParticipantName,
+        },
+        {
+          id: "sim2",
+          messageText: "好的，我明白了。我会尽快处理。",
+          timestamp: new Date(
+            Date.parse(convSummary.last_message_timestamp) + 60000,
+          ).toLocaleTimeString(),
+          isSender: true,
+          senderName: "You",
+        },
       ];
       setCurrentConversation(simulatedConvo);
     } else {
@@ -250,127 +333,259 @@ const MessageCenterPage: React.FC = () => {
   }, [selectedItem, user?.id]);
 
   useEffect(() => {
-    chatHistoryEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    chatHistoryEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [currentConversation]);
 
   // 处理菜单
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, messageId: RecordId | string) => {
+  const handleMenuOpen = (
+    event: React.MouseEvent<HTMLElement>,
+    messageId: RecordId | string,
+  ) => {
     setAnchorEl(event.currentTarget);
     setSelectedMessageId(idToStr(messageId));
   };
 
   const handleMenuClose = () => {
     setAnchorEl(null);
-    setSelectedMessageId('');
+    setSelectedMessageId("");
   };
 
-  const handleSelectItem = useCallback(async (item: DisplayListItem): Promise<void> => {
-    setSelectedItem(item);
+  const handleSelectItem = useCallback(
+    async (item: DisplayListItem): Promise<void> => {
+      setSelectedItem(item);
 
-    if (item.itemType === 'notification' && !item.is_read && client) {
-      try {
-        // Optimistic UI update
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
-            n.id === item.id ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n
-          )
-        );
-        await client.merge(String(item.id), {
-          is_read: true,
-          updated_at: new Date().toISOString()
-        });
-        showSuccess('通知已标记为已读');
-      } catch (error) {
-        console.error("Error marking notification as read:", error);
-        showError('标记通知为已读失败');
-        // Revert optimistic update on error
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
-            n.id === item.id ? { ...n, is_read: false, updated_at: (item as BusinessNotificationMessage | CaseRobotReminderMessage | ConferenceInviteMessage).updated_at } : n
-          )
-        );
+      if (item.itemType === "notification" && !item.is_read && client) {
+        try {
+          // Optimistic UI update
+          setNotifications(
+            (
+              prev: (
+                | CaseRobotReminderMessage
+                | BusinessNotificationMessage
+                | ConferenceInviteMessage
+              )[],
+            ) =>
+              prev.map(
+                (
+                  n:
+                    | CaseRobotReminderMessage
+                    | BusinessNotificationMessage
+                    | ConferenceInviteMessage,
+                ) =>
+                  n.id === item.id
+                    ? {
+                        ...n,
+                        is_read: true,
+                        updated_at: new Date().toISOString(),
+                      }
+                    : n,
+              ),
+          );
+          await client.merge(String(item.id), {
+            is_read: true,
+            updated_at: new Date().toISOString(),
+          });
+          showSuccess("通知已标记为已读");
+        } catch (error) {
+          console.error("Error marking notification as read:", error);
+          showError("标记通知为已读失败");
+          // Revert optimistic update on error
+          setNotifications(
+            (
+              prev: (
+                | CaseRobotReminderMessage
+                | BusinessNotificationMessage
+                | ConferenceInviteMessage
+              )[],
+            ) =>
+              prev.map(
+                (
+                  n:
+                    | CaseRobotReminderMessage
+                    | BusinessNotificationMessage
+                    | ConferenceInviteMessage,
+                ) =>
+                  n.id === item.id
+                    ? {
+                        ...n,
+                        is_read: false,
+                        updated_at: (
+                          item as
+                            | BusinessNotificationMessage
+                            | CaseRobotReminderMessage
+                            | ConferenceInviteMessage
+                        ).updated_at,
+                      }
+                    : n,
+              ),
+          );
+        }
       }
-    }
-  }, [client, showSuccess, showError, setNotifications]);
+    },
+    [client, showSuccess, showError, setNotifications],
+  );
 
   const handleMarkAsRead = useCallback(async () => {
     if (!selectedMessageId || !client) return;
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item) => idToStr(item.id) === selectedMessageId);
+      const item = [...notifications, ...conversations].find(
+        (item) => idToStr(item.id) === selectedMessageId,
+      );
       if (!item) return;
 
       // Optimistic UI update
-      if ('is_read' in item) {
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
-            n.id === selectedMessageId ? { ...n, is_read: true, updated_at: new Date().toISOString() } : n
-          )
+      if ("is_read" in item) {
+        setNotifications(
+          (
+            prev: (
+              | CaseRobotReminderMessage
+              | BusinessNotificationMessage
+              | ConferenceInviteMessage
+            )[],
+          ) =>
+            prev.map(
+              (
+                n:
+                  | CaseRobotReminderMessage
+                  | BusinessNotificationMessage
+                  | ConferenceInviteMessage,
+              ) =>
+                n.id === selectedMessageId
+                  ? {
+                      ...n,
+                      is_read: true,
+                      updated_at: new Date().toISOString(),
+                    }
+                  : n,
+            ),
         );
       }
 
       await client.merge(String(selectedMessageId), {
         is_read: true,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
 
-      showSuccess('消息已标记为已读');
+      showSuccess("消息已标记为已读");
       handleMenuClose();
     } catch (error) {
       console.error("Error marking as read:", error);
-      showError('操作失败');
+      showError("操作失败");
     }
-  }, [selectedMessageId, client, notifications, conversations, setNotifications, showSuccess, showError]);
+  }, [
+    selectedMessageId,
+    client,
+    notifications,
+    conversations,
+    setNotifications,
+    showSuccess,
+    showError,
+  ]);
 
   const handleMarkAsUnread = useCallback(async () => {
     if (!selectedMessageId || !client) return;
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item) => idToStr(item.id) === selectedMessageId);
+      const item = [...notifications, ...conversations].find(
+        (item) => idToStr(item.id) === selectedMessageId,
+      );
       if (!item) return;
 
       // Optimistic UI update
-      if ('is_read' in item) {
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) =>
-          prev.map((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) =>
-            n.id === selectedMessageId ? { ...n, is_read: false, updated_at: new Date().toISOString() } : n
-          )
+      if ("is_read" in item) {
+        setNotifications(
+          (
+            prev: (
+              | CaseRobotReminderMessage
+              | BusinessNotificationMessage
+              | ConferenceInviteMessage
+            )[],
+          ) =>
+            prev.map(
+              (
+                n:
+                  | CaseRobotReminderMessage
+                  | BusinessNotificationMessage
+                  | ConferenceInviteMessage,
+              ) =>
+                n.id === selectedMessageId
+                  ? {
+                      ...n,
+                      is_read: false,
+                      updated_at: new Date().toISOString(),
+                    }
+                  : n,
+            ),
         );
       }
 
       await client.merge(String(selectedMessageId), {
         is_read: false,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
 
-      showSuccess('消息已标记为未读');
+      showSuccess("消息已标记为未读");
       handleMenuClose();
     } catch (error) {
       console.error("Error marking as unread:", error);
-      showError('操作失败');
+      showError("操作失败");
     }
-  }, [selectedMessageId, client, notifications, conversations, setNotifications, showSuccess, showError]);
+  }, [
+    selectedMessageId,
+    client,
+    notifications,
+    conversations,
+    setNotifications,
+    showSuccess,
+    showError,
+  ]);
 
   const handleDelete = useCallback(async () => {
     if (!selectedMessageId || !client) return;
 
     try {
       // Find the item in our lists
-      const item = [...notifications, ...conversations].find((item) => idToStr(item.id) === selectedMessageId);
+      const item = [...notifications, ...conversations].find(
+        (item) => idToStr(item.id) === selectedMessageId,
+      );
       if (!item) return;
 
       // Optimistic UI update
-      if ('type' in item && (item.type === 'BUSINESS_NOTIFICATION' || item.type === 'CASE_ROBOT_REMINDER' || item.type === 'CONFERENCE_INVITE')) {
-        setNotifications((prev: (CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage)[]) => prev.filter((n: CaseRobotReminderMessage | BusinessNotificationMessage | ConferenceInviteMessage) => n.id !== selectedMessageId));
+      if (
+        "type" in item &&
+        (item.type === "BUSINESS_NOTIFICATION" ||
+          item.type === "CASE_ROBOT_REMINDER" ||
+          item.type === "CONFERENCE_INVITE")
+      ) {
+        setNotifications(
+          (
+            prev: (
+              | CaseRobotReminderMessage
+              | BusinessNotificationMessage
+              | ConferenceInviteMessage
+            )[],
+          ) =>
+            prev.filter(
+              (
+                n:
+                  | CaseRobotReminderMessage
+                  | BusinessNotificationMessage
+                  | ConferenceInviteMessage,
+              ) => n.id !== selectedMessageId,
+            ),
+        );
       } else {
-        setConversations((prev: ConversationSummary[]) => prev.filter((c: ConversationSummary) => c.id !== selectedMessageId));
+        setConversations((prev: ConversationSummary[]) =>
+          prev.filter((c: ConversationSummary) => c.id !== selectedMessageId),
+        );
       }
 
       await client.delete(String(selectedMessageId));
 
-      showSuccess('消息已删除');
+      showSuccess("消息已删除");
       handleMenuClose();
 
       // If the deleted item was selected, clear selection
@@ -379,9 +594,19 @@ const MessageCenterPage: React.FC = () => {
       }
     } catch (error) {
       console.error("Error deleting item:", error);
-      showError('删除失败');
+      showError("删除失败");
     }
-  }, [selectedMessageId, client, notifications, conversations, selectedItem, setNotifications, setConversations, showSuccess, showError]);
+  }, [
+    selectedMessageId,
+    client,
+    notifications,
+    conversations,
+    selectedItem,
+    setNotifications,
+    setConversations,
+    showSuccess,
+    showError,
+  ]);
 
   const handleArchive = useCallback(async (): Promise<void> => {
     if (!selectedMessageId || !client) return;
@@ -389,27 +614,41 @@ const MessageCenterPage: React.FC = () => {
     try {
       await client.merge(String(selectedMessageId), {
         archived: true,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       });
 
       // Optimistic UI update
-      const updatedList: DisplayListItem[] = combinedList.filter((item: DisplayListItem) => idToStr(item.id) !== selectedMessageId);
+      const updatedList: DisplayListItem[] = combinedList.filter(
+        (item: DisplayListItem) => idToStr(item.id) !== selectedMessageId,
+      );
       if (selectedItem && selectedItem.id === selectedMessageId) {
         setSelectedItem(null);
       }
 
-      showSuccess('消息已归档');
+      showSuccess("消息已归档");
       handleMenuClose();
     } catch (error) {
       console.error("Error archiving item:", error);
-      showError('归档失败');
+      showError("归档失败");
     }
-  }, [selectedMessageId, client, combinedList, selectedItem, showSuccess, showError]);
+  }, [
+    selectedMessageId,
+    client,
+    combinedList,
+    selectedItem,
+    showSuccess,
+    showError,
+  ]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!chatInput.trim() || !selectedItem || selectedItem.itemType !== 'conversation' || !user?.id) {
-      if (!selectedItem || selectedItem.itemType !== 'conversation') {
-        showWarning('请先选择一个会话以发送消息。');
+    if (
+      !chatInput.trim() ||
+      !selectedItem ||
+      selectedItem.itemType !== "conversation" ||
+      !user?.id
+    ) {
+      if (!selectedItem || selectedItem.itemType !== "conversation") {
+        showWarning("请先选择一个会话以发送消息。");
       }
       return;
     }
@@ -422,154 +661,243 @@ const MessageCenterPage: React.FC = () => {
       messageText: chatInput,
       timestamp: new Date().toLocaleTimeString(),
       isSender: true,
-      senderName: user.name || '我',
+      senderName: user.name || "我",
     };
-    setCurrentConversation((prev: ChatMessageDisplay[]) => [...prev, newMessage]);
-    setChatInput('');
+    setCurrentConversation((prev: ChatMessageDisplay[]) => [
+      ...prev,
+      newMessage,
+    ]);
+    setChatInput("");
 
     try {
       // Send message using messageService
       const message = await messageService.sendMessage({
         conversation_id: convSummary.id,
-        content: chatInput
+        content: chatInput,
       });
-      console.log('Message sent:', message);
+      console.log("Message sent:", message);
 
       // Update conversation list with new message info
       setConversations((prev: ConversationSummary[]) =>
-        prev.map(c =>
+        prev.map((c) =>
           c.id === convSummary.id
             ? {
-              ...c,
-              last_message_snippet: chatInput,
-              last_message_timestamp: new Date().toISOString(),
-              last_message_sender_name: user.name || '我',
-              updated_at: new Date().toISOString()
-            }
-            : c
-        )
+                ...c,
+                last_message_snippet: chatInput,
+                last_message_timestamp: new Date().toISOString(),
+                last_message_sender_name: user.name || "我",
+                updated_at: new Date().toISOString(),
+              }
+            : c,
+        ),
       );
     } catch (error) {
-      console.error('Error sending message:', error);
-      showError('发送消息失败');
+      console.error("Error sending message:", error);
+      showError("发送消息失败");
       // Revert optimistic update on error
-      setCurrentConversation((prev: ChatMessageDisplay[]) => prev.filter((msg: ChatMessageDisplay) => msg.id !== newMessage.id));
+      setCurrentConversation((prev: ChatMessageDisplay[]) =>
+        prev.filter((msg: ChatMessageDisplay) => msg.id !== newMessage.id),
+      );
       setChatInput(chatInput);
     }
-      }, [chatInput, selectedItem, user, setConversations, showWarning, showError]);
+  }, [chatInput, selectedItem, user, setConversations, showWarning, showError]);
 
-  const handleConversationCreated = useCallback((_conversationId: RecordId | string) => {
-    // 临时刷新页面，后续可改为局部数据刷新
-    window.location.reload();
-    setCreateConversationOpen(false);
-    showSuccess('会话创建成功');
-  }, [showSuccess]);
+  const handleConversationCreated = useCallback(
+    (_conversationId: RecordId | string) => {
+      // 临时刷新页面，后续可改为局部数据刷新
+      window.location.reload();
+      setCreateConversationOpen(false);
+      showSuccess("会话创建成功");
+    },
+    [showSuccess],
+  );
 
   // 群组相关事件处理
-  const handleGroupCreated = useCallback((newGroup: Group) => {
-    setGroups(prev => [newGroup, ...prev]);
-    setCreateGroupOpen(false);
-    setSelectedGroup(newGroup);
-    setCurrentChatMode('group');
-    setCurrentViewMode('chat');
-    showSuccess('群组创建成功');
-  }, [setGroups, showSuccess]);
+  const handleGroupCreated = useCallback(
+    (newGroup: Group) => {
+      setGroups((prev) => [newGroup, ...prev]);
+      setCreateGroupOpen(false);
+      setSelectedGroup(newGroup);
+      setCurrentChatMode("group");
+      setCurrentViewMode("chat");
+      showSuccess("群组创建成功");
+    },
+    [setGroups, showSuccess],
+  );
 
   const handleGroupSelect = useCallback((group: Group) => {
     setSelectedGroup(group);
     setSelectedItem(null);
-    setCurrentChatMode('group');
-    setCurrentViewMode('chat');
+    setCurrentChatMode("group");
+    setCurrentViewMode("chat");
     setShowGroupInfo(false);
   }, []);
 
-  const handleStartGroupCall = useCallback(async (type: CallType) => {
-    if (!selectedGroup || !user?.id) return;
-    
-    try {
-      await callManager.initiateGroupCall(selectedGroup.id, type, { initiatorId: user.id });
-      showSuccess(`群组${type === 'video' ? '视频' : '语音'}通话已发起`);
-    } catch (error) {
-      showError(`发起群组通话失败: ${(error as Error).message}`);
-    }
-  }, [selectedGroup, user?.id, showSuccess, showError]);
+  const handleStartGroupCall = useCallback(
+    async (type: CallType) => {
+      if (!selectedGroup || !user?.id) return;
+
+      try {
+        await callManager.initiateGroupCall(selectedGroup.id, type, {
+          initiatorId: user.id,
+        });
+        showSuccess(`群组${type === "video" ? "视频" : "语音"}通话已发起`);
+      } catch (error) {
+        showError(`发起群组通话失败: ${(error as Error).message}`);
+      }
+    },
+    [selectedGroup, user?.id, showSuccess, showError],
+  );
 
   const handleBackToList = useCallback(() => {
-    setCurrentViewMode('list');
+    setCurrentViewMode("list");
     setSelectedGroup(null);
     setSelectedItem(null);
-    setCurrentChatMode('conversation');
+    setCurrentChatMode("conversation");
     setShowGroupInfo(false);
   }, []);
 
   const filteredDisplayList = useMemo((): DisplayListItem[] => {
-    if (currentFilter === 'im') {
-      return combinedList.filter((item: DisplayListItem) => item.itemType === 'conversation');
+    if (currentFilter === "im") {
+      return combinedList.filter(
+        (item: DisplayListItem) => item.itemType === "conversation",
+      );
     }
-    if (currentFilter === 'reminders') {
-      return combinedList.filter((item: DisplayListItem) => item.itemType === 'notification');
+    if (currentFilter === "reminders") {
+      return combinedList.filter(
+        (item: DisplayListItem) => item.itemType === "notification",
+      );
     }
-    if (currentFilter === 'groups') {
-      return combinedList.filter((item: DisplayListItem) => (item as any).itemType === 'group');
+    if (currentFilter === "groups") {
+      return combinedList.filter(
+        (item: DisplayListItem) => (item as any).itemType === "group",
+      );
     }
     return combinedList; // 'all'
   }, [combinedList, currentFilter]);
 
   // 渲染消息列表项
   const renderMessageItem = (message: DisplayListItem) => {
-    const isNotif = message.itemType === 'notification';
-    const isGroup = message.itemType === 'group';
-    const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage | ConferenceInviteMessage) : undefined;
+    const isNotif = message.itemType === "notification";
+    const isGroup = message.itemType === "group";
+    const notifMsg = isNotif
+      ? (message as
+          | BusinessNotificationMessage
+          | CaseRobotReminderMessage
+          | ConferenceInviteMessage)
+      : undefined;
     const groupData = isGroup ? (message as Group) : undefined;
-    
+
     let primaryText: string;
     if (isNotif) {
-      primaryText = notifMsg?.title ?? '通知';
+      primaryText = notifMsg?.title ?? "通知";
     } else if (isGroup) {
-      primaryText = groupData?.name ?? '群组';
+      primaryText = groupData?.name ?? "群组";
     } else {
-      primaryText = (message as ConversationSummary).last_message_sender_name ?? '会话';
+      primaryText =
+        (message as ConversationSummary).last_message_sender_name ?? "会话";
     }
-    
-    const hasHighPriority = isNotif && notifMsg?.priority === 'high';
-    const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : isGroup ? 'GROUP_IM' : 'IM';
+
+    const hasHighPriority = isNotif && notifMsg?.priority === "high";
+    const avatarColorKey: MessageTypeKey = isNotif
+      ? (notifMsg!.type as MessageTypeKey)
+      : isGroup
+        ? "GROUP_IM"
+        : "IM";
 
     return (
       <React.Fragment key={message.id}>
         <ListItem
           onClick={() => {
-            if (message.itemType === 'group') {
+            if (message.itemType === "group") {
               handleGroupSelect(message as Group);
             } else {
               handleSelectItem(message);
             }
           }}
           sx={{
-            cursor: 'pointer',
-            backgroundColor: (message as any).unread ? 'action.hover' : 'transparent',
-            '&:hover': { backgroundColor: 'action.hover' },
-            '&.Mui-selected': { backgroundColor: 'action.selected' },
+            cursor: "pointer",
+            backgroundColor: (message as any).unread
+              ? "action.hover"
+              : "transparent",
+            "&:hover": { backgroundColor: "action.hover" },
+            "&.Mui-selected": { backgroundColor: "action.selected" },
           }}
         >
           <ListItemAvatar>
-            <Badge color="error" variant="dot" invisible={!((message as any).unread)}>
-              <Avatar sx={{ bgcolor: theme.palette[messageTypes[avatarColorKey].color as 'info' | 'warning' | 'primary' | 'secondary'].main }}>
-                {typeof (message as any).avatar === 'string' ? (message as any).avatar : messageTypes[avatarColorKey].icon}
+            <Badge
+              color="error"
+              variant="dot"
+              invisible={!(message as any).unread}
+            >
+              <Avatar
+                sx={{
+                  bgcolor:
+                    theme.palette[
+                      messageTypes[avatarColorKey].color as
+                        | "info"
+                        | "warning"
+                        | "primary"
+                        | "secondary"
+                    ].main,
+                }}
+              >
+                {typeof (message as any).avatar === "string"
+                  ? (message as any).avatar
+                  : messageTypes[avatarColorKey].icon}
               </Avatar>
             </Badge>
           </ListItemAvatar>
           <ListItemText
-            primary={<Box display="flex" alignItems="center" gap={1}><Typography variant="subtitle2" fontWeight={(message as any).unread ? 'bold' : 'normal'}>{primaryText}</Typography>{hasHighPriority && (<Chip label="重要" size="small" color="error" sx={{ height: 20 }} />)}{(message as any).hasAttachment && (<AttachFile fontSize="small" color="action" />)}</Box>}
-            secondary={<Typography variant="body2" color="text.secondary" noWrap>{
-              isNotif ? notifMsg?.content : 
-              isGroup ? (groupData?.last_message_snippet || '暂无消息') :
-              (message as ConversationSummary).last_message_snippet
-            }</Typography>}
+            primary={
+              <Box display="flex" alignItems="center" gap={1}>
+                <Typography
+                  variant="subtitle2"
+                  fontWeight={(message as any).unread ? "bold" : "normal"}
+                >
+                  {primaryText}
+                </Typography>
+                {hasHighPriority && (
+                  <Chip
+                    label="重要"
+                    size="small"
+                    color="error"
+                    sx={{ height: 20 }}
+                  />
+                )}
+                {(message as any).hasAttachment && (
+                  <AttachFile fontSize="small" color="action" />
+                )}
+              </Box>
+            }
+            secondary={
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {isNotif
+                  ? notifMsg?.content
+                  : isGroup
+                    ? groupData?.last_message_snippet || "暂无消息"
+                    : (message as ConversationSummary).last_message_snippet}
+              </Typography>
+            }
           />
           <ListItemSecondaryAction>
             <Box display="flex" flexDirection="column" alignItems="flex-end">
-              <Typography variant="caption" color="text.secondary">{(message as any).time || new Date(((message as any).updated_at || (message as any).created_at || (message as any).last_message_timestamp)).toLocaleTimeString()}</Typography>
-              <IconButton edge="end" size="small" onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); handleMenuOpen(e, message.id); }}>
+              <Typography variant="caption" color="text.secondary">
+                {(message as any).time ||
+                  new Date(
+                    (message as any).updated_at ||
+                      (message as any).created_at ||
+                      (message as any).last_message_timestamp,
+                  ).toLocaleTimeString()}
+              </Typography>
+              <IconButton
+                edge="end"
+                size="small"
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation();
+                  handleMenuOpen(e, message.id);
+                }}
+              >
                 <MoreVert fontSize="small" />
               </IconButton>
             </Box>
@@ -583,7 +911,7 @@ const MessageCenterPage: React.FC = () => {
   // Mobile rendering
   if (isMobile) {
     // Mobile group chat view
-    if (currentViewMode === 'chat' && selectedGroup) {
+    if (currentViewMode === "chat" && selectedGroup) {
       return (
         <MobileOptimizedLayout
           title={selectedGroup.name}
@@ -593,11 +921,13 @@ const MessageCenterPage: React.FC = () => {
             {
               icon: <Info />,
               onClick: () => setShowGroupInfo(!showGroupInfo),
-              ariaLabel: '群组信息'
-            }
+              ariaLabel: "群组信息",
+            },
           ]}
         >
-          <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
+          <Box
+            sx={{ height: "100vh", display: "flex", flexDirection: "column" }}
+          >
             {showGroupInfo ? (
               <GroupInfoPanel
                 group={selectedGroup}
@@ -610,13 +940,19 @@ const MessageCenterPage: React.FC = () => {
                 }}
                 onGroupUpdated={(updatedGroup) => {
                   setSelectedGroup(updatedGroup);
-                  setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g));
-                  showSuccess('群组信息已更新');
+                  setGroups((prev) =>
+                    prev.map((g) =>
+                      g.id === updatedGroup.id ? updatedGroup : g,
+                    ),
+                  );
+                  showSuccess("群组信息已更新");
                 }}
                 onGroupDeleted={() => {
-                  setGroups(prev => prev.filter(g => g.id !== selectedGroup.id));
+                  setGroups((prev) =>
+                    prev.filter((g) => g.id !== selectedGroup.id),
+                  );
                   handleBackToList();
-                  showSuccess('群组已解散');
+                  showSuccess("群组已解散");
                 }}
                 currentUserId={user?.id}
                 compact={true}
@@ -639,47 +975,60 @@ const MessageCenterPage: React.FC = () => {
     if (selectedItem) {
       return (
         <MobileOptimizedLayout
-          title={selectedItem.itemType === 'conversation'
-            ? (selectedItem.participants?.find((p: any) => p.id !== user?.id)?.name || '对话')
-            : (selectedItem.title || '系统通知')}
+          title={
+            selectedItem.itemType === "conversation"
+              ? selectedItem.participants?.find((p: any) => p.id !== user?.id)
+                  ?.name || "对话"
+              : selectedItem.title || "系统通知"
+          }
           showBackButton={true}
           onBackClick={() => setSelectedItem(null)}
         >
-          <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-            {selectedItem.itemType === 'conversation' ? (
+          <Box
+            sx={{ height: "100vh", display: "flex", flexDirection: "column" }}
+          >
+            {selectedItem.itemType === "conversation" ? (
               // Mobile chat interface
               <>
                 {/* Mobile chat messages */}
-                <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
+                <Box sx={{ flexGrow: 1, overflow: "auto", p: 2 }}>
                   {currentConversation.map((msg: ChatMessageDisplay) => (
                     <Box
                       key={msg.id}
                       sx={{
-                        display: 'flex',
-                        flexDirection: msg.isSender ? 'row-reverse' : 'row',
+                        display: "flex",
+                        flexDirection: msg.isSender ? "row-reverse" : "row",
                         mb: 2,
-                        alignItems: 'flex-end',
+                        alignItems: "flex-end",
                       }}
                     >
                       <Avatar
                         sx={{
-                          bgcolor: msg.isSender ? 'primary.main' : 'secondary.main',
+                          bgcolor: msg.isSender
+                            ? "primary.main"
+                            : "secondary.main",
                           width: 32,
                           height: 32,
                           mr: msg.isSender ? 0 : 1,
                           ml: msg.isSender ? 1 : 0,
-                          fontSize: '0.875rem'
+                          fontSize: "0.875rem",
                         }}
                       >
-                        {msg.isSender ? '我' : (msg.senderName?.[0] || '对')}
+                        {msg.isSender ? "我" : msg.senderName?.[0] || "对"}
                       </Avatar>
                       <Box
                         sx={{
-                          maxWidth: '80%',
+                          maxWidth: "80%",
                           p: 2,
-                          borderRadius: msg.isSender ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                          bgcolor: msg.isSender ? 'primary.main' : 'background.paper',
-                          color: msg.isSender ? 'primary.contrastText' : 'text.primary',
+                          borderRadius: msg.isSender
+                            ? "18px 18px 4px 18px"
+                            : "18px 18px 18px 4px",
+                          bgcolor: msg.isSender
+                            ? "primary.main"
+                            : "background.paper",
+                          color: msg.isSender
+                            ? "primary.contrastText"
+                            : "text.primary",
                           boxShadow: 1,
                           mb: 0.5,
                         }}
@@ -687,15 +1036,15 @@ const MessageCenterPage: React.FC = () => {
                         <Typography variant="body2" sx={{ lineHeight: 1.4 }}>
                           {msg.messageText}
                         </Typography>
-                        <Typography 
-                          variant="caption" 
-                          color={msg.isSender ? 'inherit' : 'text.secondary'} 
-                          sx={{ 
-                            display: 'block', 
-                            mt: 0.5, 
-                            textAlign: 'right',
+                        <Typography
+                          variant="caption"
+                          color={msg.isSender ? "inherit" : "text.secondary"}
+                          sx={{
+                            display: "block",
+                            mt: 0.5,
+                            textAlign: "right",
                             opacity: 0.8,
-                            fontSize: '0.7rem'
+                            fontSize: "0.7rem",
                           }}
                         >
                           {msg.timestamp}
@@ -707,35 +1056,37 @@ const MessageCenterPage: React.FC = () => {
                 </Box>
 
                 {/* Mobile chat input */}
-                <Box 
-                  sx={{ 
-                    p: 2, 
-                    borderTop: 1, 
-                    borderColor: 'divider',
-                    backgroundColor: 'background.paper'
+                <Box
+                  sx={{
+                    p: 2,
+                    borderTop: 1,
+                    borderColor: "divider",
+                    backgroundColor: "background.paper",
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1 }}>
                     <TextField
                       fullWidth
                       placeholder="输入消息..."
                       value={chatInput}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setChatInput(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setChatInput(e.target.value)
+                      }
                       multiline
                       maxRows={4}
                       variant="outlined"
                       size="small"
-                      inputProps={{ 
-                        style: { fontSize: 16 } // Prevent zoom on iOS
+                      inputProps={{
+                        style: { fontSize: 16 }, // Prevent zoom on iOS
                       }}
                       sx={{
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: '20px',
-                          minHeight: '44px', // Touch-friendly minimum height
-                        }
+                        "& .MuiOutlinedInput-root": {
+                          borderRadius: "20px",
+                          minHeight: "44px", // Touch-friendly minimum height
+                        },
                       }}
                       onKeyPress={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
+                        if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
                           handleSendMessage();
                         }
@@ -743,10 +1094,10 @@ const MessageCenterPage: React.FC = () => {
                     />
                     <IconButton
                       sx={{
-                        minWidth: '44px',
-                        minHeight: '44px',
-                        bgcolor: 'grey.100',
-                        '&:hover': { bgcolor: 'grey.200' }
+                        minWidth: "44px",
+                        minHeight: "44px",
+                        bgcolor: "grey.100",
+                        "&:hover": { bgcolor: "grey.200" },
                       }}
                     >
                       <AttachFile />
@@ -755,15 +1106,15 @@ const MessageCenterPage: React.FC = () => {
                       onClick={handleSendMessage}
                       disabled={!chatInput.trim()}
                       sx={{
-                        minWidth: '44px',
-                        minHeight: '44px',
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        '&:hover': { bgcolor: 'primary.dark' },
-                        '&.Mui-disabled': { 
-                          bgcolor: 'grey.300', 
-                          color: 'grey.500' 
-                        }
+                        minWidth: "44px",
+                        minHeight: "44px",
+                        bgcolor: "primary.main",
+                        color: "primary.contrastText",
+                        "&:hover": { bgcolor: "primary.dark" },
+                        "&.Mui-disabled": {
+                          bgcolor: "grey.300",
+                          color: "grey.500",
+                        },
                       }}
                     >
                       <Send />
@@ -773,13 +1124,15 @@ const MessageCenterPage: React.FC = () => {
               </>
             ) : (
               // Mobile notification view
-              <Box sx={{ p: 2, flexGrow: 1, overflow: 'auto' }}>
-                {selectedItem.type === 'CONFERENCE_INVITE' ? (
+              <Box sx={{ p: 2, flexGrow: 1, overflow: "auto" }}>
+                {selectedItem.type === "CONFERENCE_INVITE" ? (
                   // Mobile 会议邀请卡片
                   <ConferenceInviteCard
                     message={selectedItem as ConferenceInviteMessage}
                     onResponse={(response, responseMessage) => {
-                      showSuccess(`会议邀请已${response === 'accepted' ? '接受' : '拒绝'}`);
+                      showSuccess(
+                        `会议邀请已${response === "accepted" ? "接受" : "拒绝"}`,
+                      );
                       // 这里可以添加刷新逻辑或更新状态
                     }}
                     onJoinMeeting={(conferenceId) => {
@@ -798,28 +1151,51 @@ const MessageCenterPage: React.FC = () => {
                   <>
                     <Card sx={{ mb: 3 }}>
                       <CardContent>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", mb: 2 }}
+                        >
                           <Avatar
                             sx={{
-                              bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                              bgcolor:
+                                theme.palette[
+                                  messageTypes[
+                                    selectedItem.type as MessageTypeKey
+                                  ]?.color as
+                                    | "info"
+                                    | "warning"
+                                    | "primary"
+                                    | "secondary"
+                                ].main,
                               mr: 2,
                             }}
                           >
-                            {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
+                            {
+                              messageTypes[selectedItem.type as MessageTypeKey]
+                                ?.icon
+                            }
                           </Avatar>
                           <Box sx={{ flex: 1 }}>
                             <Typography variant="h6" fontWeight="600">
                               {selectedItem.title}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {new Date(selectedItem.created_at).toLocaleString()}
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {new Date(
+                                selectedItem.created_at,
+                              ).toLocaleString()}
                             </Typography>
                           </Box>
                         </Box>
-                        <Typography variant="body1" paragraph sx={{ lineHeight: 1.6 }}>
+                        <Typography
+                          variant="body1"
+                          paragraph
+                          sx={{ lineHeight: 1.6 }}
+                        >
                           {selectedItem.content}
                         </Typography>
-                        {selectedItem.priority === 'high' && (
+                        {selectedItem.priority === "high" && (
                           <Alert severity="warning" sx={{ mt: 2 }}>
                             此消息为重要通知，请及时处理。
                           </Alert>
@@ -828,7 +1204,9 @@ const MessageCenterPage: React.FC = () => {
                     </Card>
 
                     {/* Mobile notification actions */}
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <Box
+                      sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+                    >
                       <Button
                         variant="contained"
                         fullWidth
@@ -836,18 +1214,18 @@ const MessageCenterPage: React.FC = () => {
                         startIcon={<MarkEmailRead />}
                         onClick={handleMarkAsRead}
                         disabled={selectedItem.is_read}
-                        sx={{ minHeight: '48px' }}
+                        sx={{ minHeight: "48px" }}
                       >
                         标记为已读
                       </Button>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Box sx={{ display: "flex", gap: 1 }}>
                         <Button
                           variant="outlined"
                           fullWidth
                           size="large"
                           startIcon={<Archive />}
                           onClick={handleArchive}
-                          sx={{ minHeight: '48px' }}
+                          sx={{ minHeight: "48px" }}
                         >
                           归档
                         </Button>
@@ -858,7 +1236,7 @@ const MessageCenterPage: React.FC = () => {
                           color="error"
                           startIcon={<Delete />}
                           onClick={handleDelete}
-                          sx={{ minHeight: '48px' }}
+                          sx={{ minHeight: "48px" }}
                         >
                           删除
                         </Button>
@@ -883,37 +1261,58 @@ const MessageCenterPage: React.FC = () => {
           actions: [
             {
               icon: <Chat />,
-              label: '新建对话',
-              onClick: () => setCreateConversationOpen(true)
+              label: "新建对话",
+              onClick: () => setCreateConversationOpen(true),
             },
             {
               icon: <GroupIcon />,
-              label: '创建群组',
-              onClick: () => setCreateGroupOpen(true)
-            }
+              label: "创建群组",
+              onClick: () => setCreateGroupOpen(true),
+            },
           ],
           ariaLabel: "新建",
         }}
       >
         <Box sx={{ p: 0 }}>
           {/* Mobile search and filters */}
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Box
+            sx={{
+              p: 2,
+              borderBottom: 1,
+              borderColor: "divider",
+              backgroundColor: "background.paper",
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 2,
+              }}
+            >
               <Typography variant="h6" fontWeight="600">
                 消息中心
               </Typography>
               <Badge badgeContent={unreadCount} color="error">
-                <Chip label="未读消息" color="primary" variant="outlined" size="small" />
+                <Chip
+                  label="未读消息"
+                  color="primary"
+                  variant="outlined"
+                  size="small"
+                />
               </Badge>
             </Box>
             <TextField
               fullWidth
               placeholder="搜索消息..."
               value={searchKeyword}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchKeyword(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setSearchKeyword(e.target.value)
+              }
               size="small"
-              inputProps={{ 
-                style: { fontSize: 16 } // Prevent zoom on iOS
+              inputProps={{
+                style: { fontSize: 16 }, // Prevent zoom on iOS
               }}
               InputProps={{
                 startAdornment: (
@@ -923,56 +1322,61 @@ const MessageCenterPage: React.FC = () => {
                 ),
               }}
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '20px',
-                  minHeight: '44px',
-                }
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "20px",
+                  minHeight: "44px",
+                },
               }}
             />
             <Tabs
               value={activeTab}
               onChange={(e: React.SyntheticEvent, newValue: number) => {
                 setActiveTab(newValue);
-                const filters = ['all', 'im', 'groups', 'reminders'] as const;
-                setCurrentFilter(filters[newValue] || 'all');
+                const filters = ["all", "im", "groups", "reminders"] as const;
+                setCurrentFilter(filters[newValue] || "all");
               }}
               sx={{ mt: 2 }}
               variant="fullWidth"
               textColor="primary"
               indicatorColor="primary"
             >
-              <Tab 
-                icon={<Message />} 
-                label={`全部${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+              <Tab
+                icon={<Message />}
+                label={`全部${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
                 iconPosition="start"
               />
-              <Tab 
-                icon={<Chat />} 
-                label={`会话${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0) > 0 ? ` (${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0)})` : ''}`}
+              <Tab
+                icon={<Chat />}
+                label={`会话${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0) > 0 ? ` (${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0)})` : ""}`}
                 iconPosition="start"
               />
-              <Tab 
+              <Tab
                 icon={<GroupIcon />}
-                label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ''}`}
+                label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ""}`}
                 iconPosition="start"
               />
-              <Tab 
+              <Tab
                 icon={<Notifications />}
-                label={`通知${notifications.filter(n => !n.is_read).length > 0 ? ` (${notifications.filter(n => !n.is_read).length})` : ''}`}
+                label={`通知${notifications.filter((n) => !n.is_read).length > 0 ? ` (${notifications.filter((n) => !n.is_read).length})` : ""}`}
                 iconPosition="start"
               />
             </Tabs>
           </Box>
 
           {/* Mobile message list */}
-          <Box sx={{ overflow: 'auto', height: 'calc(100vh - 200px)' }}>
+          <Box sx={{ overflow: "auto", height: "calc(100vh - 200px)" }}>
             {isLoadingConversations || isLoadingNotifications ? (
               // Mobile loading state
               <Box sx={{ p: 2 }}>
                 {Array.from(new Array(5)).map((_, index) => (
                   <Card key={index} sx={{ mb: 2 }}>
-                    <CardContent sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Skeleton variant="circular" width={48} height={48} sx={{ mr: 2 }} />
+                    <CardContent sx={{ display: "flex", alignItems: "center" }}>
+                      <Skeleton
+                        variant="circular"
+                        width={48}
+                        height={48}
+                        sx={{ mr: 2 }}
+                      />
                       <Box sx={{ flex: 1 }}>
                         <Skeleton width="80%" height={20} sx={{ mb: 1 }} />
                         <Skeleton width="60%" height={16} />
@@ -985,87 +1389,141 @@ const MessageCenterPage: React.FC = () => {
               // Mobile message cards
               <Box sx={{ p: 2 }}>
                 {filteredDisplayList.map((message) => {
-                  const isNotif = message.itemType === 'notification';
-                  const notifMsg = isNotif ? (message as BusinessNotificationMessage | CaseRobotReminderMessage | ConferenceInviteMessage) : undefined;
-                  const primaryText = isNotif ? (notifMsg?.title ?? '通知') : (message as ConversationSummary).last_message_sender_name ?? '会话';
-                  const hasHighPriority = isNotif && notifMsg?.priority === 'high';
-                  const avatarColorKey: MessageTypeKey = isNotif ? (notifMsg!.type as MessageTypeKey) : 'IM';
-                  
+                  const isNotif = message.itemType === "notification";
+                  const notifMsg = isNotif
+                    ? (message as
+                        | BusinessNotificationMessage
+                        | CaseRobotReminderMessage
+                        | ConferenceInviteMessage)
+                    : undefined;
+                  const primaryText = isNotif
+                    ? (notifMsg?.title ?? "通知")
+                    : ((message as ConversationSummary)
+                        .last_message_sender_name ?? "会话");
+                  const hasHighPriority =
+                    isNotif && notifMsg?.priority === "high";
+                  const avatarColorKey: MessageTypeKey = isNotif
+                    ? (notifMsg!.type as MessageTypeKey)
+                    : "IM";
+
                   return (
-                    <Card 
-                      key={message.id} 
-                      sx={{ 
-                        mb: 2, 
-                        cursor: 'pointer',
-                        backgroundColor: (message as any).unread ? 'action.hover' : 'transparent',
-                        '&:hover': { backgroundColor: 'action.hover' },
-                        '&:active': { backgroundColor: 'action.selected' },
-                        minHeight: '80px'
+                    <Card
+                      key={message.id}
+                      sx={{
+                        mb: 2,
+                        cursor: "pointer",
+                        backgroundColor: (message as any).unread
+                          ? "action.hover"
+                          : "transparent",
+                        "&:hover": { backgroundColor: "action.hover" },
+                        "&:active": { backgroundColor: "action.selected" },
+                        minHeight: "80px",
                       }}
                       onClick={() => {
-                        if (message.itemType === 'group') {
+                        if (message.itemType === "group") {
                           handleGroupSelect(message as Group);
                         } else {
                           handleSelectItem(message);
                         }
                       }}
                     >
-                      <CardContent sx={{ display: 'flex', alignItems: 'center', p: 2 }}>
-                        <Badge color="error" variant="dot" invisible={!((message as any).unread)}>
-                          <Avatar 
-                            sx={{ 
-                              bgcolor: theme.palette[messageTypes[avatarColorKey].color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                      <CardContent
+                        sx={{ display: "flex", alignItems: "center", p: 2 }}
+                      >
+                        <Badge
+                          color="error"
+                          variant="dot"
+                          invisible={!(message as any).unread}
+                        >
+                          <Avatar
+                            sx={{
+                              bgcolor:
+                                theme.palette[
+                                  messageTypes[avatarColorKey].color as
+                                    | "info"
+                                    | "warning"
+                                    | "primary"
+                                    | "secondary"
+                                ].main,
                               width: 48,
                               height: 48,
-                              mr: 2
+                              mr: 2,
                             }}
                           >
-                            {typeof (message as any).avatar === 'string' ? (message as any).avatar : messageTypes[avatarColorKey].icon}
+                            {typeof (message as any).avatar === "string"
+                              ? (message as any).avatar
+                              : messageTypes[avatarColorKey].icon}
                           </Avatar>
                         </Badge>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                            <Typography 
-                              variant="subtitle2" 
-                              fontWeight={(message as any).unread ? 'bold' : 'normal'}
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              mb: 0.5,
+                            }}
+                          >
+                            <Typography
+                              variant="subtitle2"
+                              fontWeight={
+                                (message as any).unread ? "bold" : "normal"
+                              }
                               sx={{ flex: 1 }}
                               noWrap
                             >
                               {primaryText}
                             </Typography>
                             {hasHighPriority && (
-                              <Chip label="重要" size="small" color="error" sx={{ height: 20 }} />
+                              <Chip
+                                label="重要"
+                                size="small"
+                                color="error"
+                                sx={{ height: 20 }}
+                              />
                             )}
                             {(message as any).hasAttachment && (
                               <AttachFile fontSize="small" color="action" />
                             )}
                           </Box>
-                          <Typography 
-                            variant="body2" 
-                            color="text.secondary" 
-                            sx={{ 
-                              display: '-webkit-box',
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{
+                              display: "-webkit-box",
                               WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              overflow: 'hidden',
-                              lineHeight: 1.4
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              lineHeight: 1.4,
                             }}
                           >
-                            {isNotif ? notifMsg?.content : (message as ConversationSummary).last_message_snippet}
+                            {isNotif
+                              ? notifMsg?.content
+                              : (message as ConversationSummary)
+                                  .last_message_snippet}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                            {(message as any).time || new Date(((message as any).updated_at || (message as any).created_at || (message as any).last_message_timestamp)).toLocaleString()}
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mt: 0.5, display: "block" }}
+                          >
+                            {(message as any).time ||
+                              new Date(
+                                (message as any).updated_at ||
+                                  (message as any).created_at ||
+                                  (message as any).last_message_timestamp,
+                              ).toLocaleString()}
                           </Typography>
                         </Box>
-                        <IconButton 
-                          edge="end" 
-                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => { 
-                            e.stopPropagation(); 
-                            handleMenuOpen(e, message.id); 
+                        <IconButton
+                          edge="end"
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.stopPropagation();
+                            handleMenuOpen(e, message.id);
                           }}
                           sx={{
-                            minWidth: '44px',
-                            minHeight: '44px'
+                            minWidth: "44px",
+                            minHeight: "44px",
                           }}
                         >
                           <MoreVert />
@@ -1077,27 +1535,33 @@ const MessageCenterPage: React.FC = () => {
               </Box>
             ) : (
               // Mobile empty state
-              <Box sx={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                height: '50vh',
-                p: 3,
-                textAlign: 'center'
-              }}>
-                <Message sx={{ fontSize: 80, color: 'text.disabled', mb: 2 }} />
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "50vh",
+                  p: 3,
+                  textAlign: "center",
+                }}
+              >
+                <Message sx={{ fontSize: 80, color: "text.disabled", mb: 2 }} />
                 <Typography variant="h6" color="text.secondary" gutterBottom>
                   暂无消息
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mb: 3 }}
+                >
                   开始新的对话或等待其他人联系您
                 </Typography>
                 <Button
                   variant="contained"
                   startIcon={<Add />}
                   onClick={() => setCreateConversationOpen(true)}
-                  sx={{ minHeight: '48px', px: 3 }}
+                  sx={{ minHeight: "48px", px: 3 }}
                 >
                   新建对话
                 </Button>
@@ -1112,7 +1576,7 @@ const MessageCenterPage: React.FC = () => {
           onClose={() => setCreateConversationOpen(false)}
           onCreated={handleConversationCreated}
         />
-        
+
         {/* 创建群组对话框 */}
         <GroupCreateDialog
           open={createGroupOpen}
@@ -1151,7 +1615,12 @@ const MessageCenterPage: React.FC = () => {
   return (
     <Box>
       {/* 页面标题 */}
-      <Box mb={3} display="flex" justifyContent="space-between" alignItems="center">
+      <Box
+        mb={3}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+      >
         <Typography variant="h4" fontWeight="bold">
           消息中心
         </Typography>
@@ -1164,14 +1633,23 @@ const MessageCenterPage: React.FC = () => {
       <Grid container spacing={2}>
         {/* 左侧消息列表 */}
         <Grid size={{ xs: 12, md: 4 }}>
-          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+          <Paper
+            sx={{
+              height: "70vh",
+              display: "flex",
+              flexDirection: "column",
+              position: "relative",
+            }}
+          >
             {/* 搜索框和过滤器 */}
-            <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+            <Box p={2} sx={{ borderBottom: 1, borderColor: "divider" }}>
               <TextField
                 fullWidth
                 placeholder="搜索消息..."
                 value={searchKeyword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchKeyword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setSearchKeyword(e.target.value)
+                }
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1185,37 +1663,37 @@ const MessageCenterPage: React.FC = () => {
                 value={activeTab}
                 onChange={(e: React.SyntheticEvent, newValue: number) => {
                   setActiveTab(newValue);
-                  const filters = ['all', 'im', 'groups', 'reminders'] as const;
-                  setCurrentFilter(filters[newValue] || 'all');
+                  const filters = ["all", "im", "groups", "reminders"] as const;
+                  setCurrentFilter(filters[newValue] || "all");
                 }}
                 sx={{ mt: 1 }}
                 variant="fullWidth"
               >
-                <Tab 
-                  icon={<Message />} 
-                  label={`全部${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+                <Tab
+                  icon={<Message />}
+                  label={`全部${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
                   iconPosition="start"
                 />
-                <Tab 
-                  icon={<Chat />} 
-                  label={`会话${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0) > 0 ? ` (${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0)})` : ''}`}
+                <Tab
+                  icon={<Chat />}
+                  label={`会话${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0) > 0 ? ` (${conversations.reduce((count, conv) => count + (conv.unread_count || 0), 0)})` : ""}`}
                   iconPosition="start"
                 />
-                <Tab 
+                <Tab
                   icon={<GroupIcon />}
-                  label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ''}`}
+                  label={`群组${groups.reduce((count, group) => count + (group.unread_count || 0), 0) > 0 ? ` (${groups.reduce((count, group) => count + (group.unread_count || 0), 0)})` : ""}`}
                   iconPosition="start"
                 />
-                <Tab 
+                <Tab
                   icon={<Notifications />}
-                  label={`通知${notifications.filter(n => !n.is_read).length > 0 ? ` (${notifications.filter(n => !n.is_read).length})` : ''}`}
+                  label={`通知${notifications.filter((n) => !n.is_read).length > 0 ? ` (${notifications.filter((n) => !n.is_read).length})` : ""}`}
                   iconPosition="start"
                 />
               </Tabs>
             </Box>
 
             {/* 消息列表 */}
-            <List sx={{ overflow: 'auto', flexGrow: 1 }}>
+            <List sx={{ overflow: "auto", flexGrow: 1 }}>
               {isLoadingConversations || isLoadingNotifications ? (
                 // 加载状态
                 Array.from(new Array(5)).map((_, index) => (
@@ -1242,11 +1720,11 @@ const MessageCenterPage: React.FC = () => {
                 </Box>
               )}
             </List>
-            
+
             {/* 创建按钮 */}
             <Box
               sx={{
-                position: 'absolute',
+                position: "absolute",
                 bottom: 16,
                 right: 16,
               }}
@@ -1254,10 +1732,10 @@ const MessageCenterPage: React.FC = () => {
               <SpeedDial
                 ariaLabel="新建"
                 sx={{
-                  '& .MuiFab-primary': {
-                    bgcolor: 'primary.main',
-                    '&:hover': {
-                      bgcolor: 'primary.dark',
+                  "& .MuiFab-primary": {
+                    bgcolor: "primary.main",
+                    "&:hover": {
+                      bgcolor: "primary.dark",
                     },
                   },
                 }}
@@ -1282,21 +1760,40 @@ const MessageCenterPage: React.FC = () => {
 
         {/* 右侧消息详情 */}
         <Grid size={{ xs: 12, md: 8 }}>
-          <Paper sx={{ height: '70vh', display: 'flex', flexDirection: 'column' }}>
+          <Paper
+            sx={{ height: "70vh", display: "flex", flexDirection: "column" }}
+          >
             {/* 群组聊天界面 */}
-            {currentViewMode === 'chat' && selectedGroup ? (
-              <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {currentViewMode === "chat" && selectedGroup ? (
+              <Box
+                sx={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                }}
+              >
                 {/* 群组头部 */}
-                <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Box
+                  p={2}
+                  sx={{
+                    borderBottom: 1,
+                    borderColor: "divider",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <IconButton onClick={handleBackToList}>
                       <ArrowBack />
                     </IconButton>
-                    <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                    <Avatar sx={{ bgcolor: "secondary.main" }}>
                       <GroupIcon />
                     </Avatar>
                     <Box>
-                      <Typography variant="h6" noWrap>{selectedGroup.name}</Typography>
+                      <Typography variant="h6" noWrap>
+                        {selectedGroup.name}
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {selectedGroup.member_count} 人
                       </Typography>
@@ -1320,13 +1817,19 @@ const MessageCenterPage: React.FC = () => {
                     }}
                     onGroupUpdated={(updatedGroup) => {
                       setSelectedGroup(updatedGroup);
-                      setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g));
-                      showSuccess('群组信息已更新');
+                      setGroups((prev) =>
+                        prev.map((g) =>
+                          g.id === updatedGroup.id ? updatedGroup : g,
+                        ),
+                      );
+                      showSuccess("群组信息已更新");
                     }}
                     onGroupDeleted={() => {
-                      setGroups(prev => prev.filter(g => g.id !== selectedGroup.id));
+                      setGroups((prev) =>
+                        prev.filter((g) => g.id !== selectedGroup.id),
+                      );
                       handleBackToList();
-                      showSuccess('群组已解散');
+                      showSuccess("群组已解散");
                     }}
                     currentUserId={user?.id}
                     compact={false}
@@ -1344,50 +1847,78 @@ const MessageCenterPage: React.FC = () => {
             ) : selectedItem ? (
               <>
                 {/* 消息详情头部 */}
-                <Box p={2} sx={{ borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
+                <Box
+                  p={2}
+                  sx={{
+                    borderBottom: 1,
+                    borderColor: "divider",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
                   <Typography variant="h6" noWrap>
-                    {selectedItem.itemType === 'conversation'
-                      ? (selectedItem.participants?.find((p: any) => p.id !== user?.id)?.name || '对话')
-                      : (selectedItem.title || '系统通知')}
+                    {selectedItem.itemType === "conversation"
+                      ? selectedItem.participants?.find(
+                          (p: any) => p.id !== user?.id,
+                        )?.name || "对话"
+                      : selectedItem.title || "系统通知"}
                   </Typography>
                 </Box>
 
                 {/* 消息内容 */}
-                {selectedItem.itemType === 'conversation' ? (
+                {selectedItem.itemType === "conversation" ? (
                   // 聊天消息
                   <>
-                    <Box p={2} sx={{ flexGrow: 1, overflow: 'auto' }}>
+                    <Box p={2} sx={{ flexGrow: 1, overflow: "auto" }}>
                       {currentConversation.map((msg: ChatMessageDisplay) => (
                         <Box
                           key={msg.id}
                           sx={{
-                            display: 'flex',
-                            flexDirection: msg.isSender ? 'row-reverse' : 'row',
+                            display: "flex",
+                            flexDirection: msg.isSender ? "row-reverse" : "row",
                             mb: 2,
                           }}
                         >
                           <Avatar
                             sx={{
-                              bgcolor: msg.isSender ? 'primary.main' : 'secondary.main',
+                              bgcolor: msg.isSender
+                                ? "primary.main"
+                                : "secondary.main",
                               width: 36,
                               height: 36,
                               mr: msg.isSender ? 0 : 1,
                               ml: msg.isSender ? 1 : 0,
                             }}
                           >
-                            {msg.isSender ? 'Me' : msg.senderName?.[0]}
+                            {msg.isSender ? "Me" : msg.senderName?.[0]}
                           </Avatar>
                           <Box
                             sx={{
-                              maxWidth: '70%',
+                              maxWidth: "70%",
                               p: 1.5,
                               borderRadius: 2,
-                              bgcolor: msg.isSender ? 'primary.light' : 'background.default',
-                              color: msg.isSender ? 'primary.contrastText' : 'text.primary',
+                              bgcolor: msg.isSender
+                                ? "primary.light"
+                                : "background.default",
+                              color: msg.isSender
+                                ? "primary.contrastText"
+                                : "text.primary",
                             }}
                           >
-                            <Typography variant="body2">{msg.messageText}</Typography>
-                            <Typography variant="caption" color={msg.isSender ? 'inherit' : 'text.secondary'} sx={{ display: 'block', mt: 0.5, textAlign: 'right' }}>
+                            <Typography variant="body2">
+                              {msg.messageText}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color={
+                                msg.isSender ? "inherit" : "text.secondary"
+                              }
+                              sx={{
+                                display: "block",
+                                mt: 0.5,
+                                textAlign: "right",
+                              }}
+                            >
                               {msg.timestamp}
                             </Typography>
                           </Box>
@@ -1395,12 +1926,14 @@ const MessageCenterPage: React.FC = () => {
                       ))}
                       <div ref={chatHistoryEndRef} />
                     </Box>
-                    <Box p={2} sx={{ borderTop: 1, borderColor: 'divider' }}>
+                    <Box p={2} sx={{ borderTop: 1, borderColor: "divider" }}>
                       <TextField
                         fullWidth
                         placeholder="输入消息..."
                         value={chatInput}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setChatInput(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                          setChatInput(e.target.value)
+                        }
                         multiline
                         rows={2}
                         InputProps={{
@@ -1425,13 +1958,15 @@ const MessageCenterPage: React.FC = () => {
                   </>
                 ) : (
                   // 系统通知
-                  <Box p={3} sx={{ flexGrow: 1, overflow: 'auto' }}>
-                    {selectedItem.type === 'CONFERENCE_INVITE' ? (
+                  <Box p={3} sx={{ flexGrow: 1, overflow: "auto" }}>
+                    {selectedItem.type === "CONFERENCE_INVITE" ? (
                       // 会议邀请卡片
                       <ConferenceInviteCard
                         message={selectedItem as ConferenceInviteMessage}
                         onResponse={(response, responseMessage) => {
-                          showSuccess(`会议邀请已${response === 'accepted' ? '接受' : '拒绝'}`);
+                          showSuccess(
+                            `会议邀请已${response === "accepted" ? "接受" : "拒绝"}`,
+                          );
                           // 这里可以添加刷新逻辑或更新状态
                         }}
                         onJoinMeeting={(conferenceId) => {
@@ -1452,23 +1987,43 @@ const MessageCenterPage: React.FC = () => {
                           <Box display="flex" alignItems="center" mb={2}>
                             <Avatar
                               sx={{
-                                bgcolor: theme.palette[messageTypes[selectedItem.type as MessageTypeKey]?.color as 'info' | 'warning' | 'primary' | 'secondary'].main,
+                                bgcolor:
+                                  theme.palette[
+                                    messageTypes[
+                                      selectedItem.type as MessageTypeKey
+                                    ]?.color as
+                                      | "info"
+                                      | "warning"
+                                      | "primary"
+                                      | "secondary"
+                                  ].main,
                                 mr: 2,
                               }}
                             >
-                              {messageTypes[selectedItem.type as MessageTypeKey]?.icon}
+                              {
+                                messageTypes[
+                                  selectedItem.type as MessageTypeKey
+                                ]?.icon
+                              }
                             </Avatar>
                             <Box>
-                              <Typography variant="h6">{selectedItem.title}</Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {new Date(selectedItem.created_at).toLocaleString()}
+                              <Typography variant="h6">
+                                {selectedItem.title}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {new Date(
+                                  selectedItem.created_at,
+                                ).toLocaleString()}
                               </Typography>
                             </Box>
                           </Box>
                           <Typography variant="body1" paragraph>
                             {selectedItem.content}
                           </Typography>
-                          {selectedItem.priority === 'high' && (
+                          {selectedItem.priority === "high" && (
                             <Alert severity="warning" sx={{ mt: 2 }}>
                               此消息为重要通知，请及时处理。
                             </Alert>
@@ -1510,7 +2065,7 @@ const MessageCenterPage: React.FC = () => {
                 alignItems="center"
                 height="100%"
               >
-                <Message sx={{ fontSize: 60, color: 'text.disabled', mb: 2 }} />
+                <Message sx={{ fontSize: 60, color: "text.disabled", mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
                   请选择一条消息查看详情
                 </Typography>
@@ -1543,14 +2098,14 @@ const MessageCenterPage: React.FC = () => {
           删除
         </MenuItem>
       </Menu>
-      
+
       {/* 创建会话对话框 */}
       <CreateConversationDialog
         open={createConversationOpen}
         onClose={() => setCreateConversationOpen(false)}
         onCreated={handleConversationCreated}
       />
-      
+
       {/* 创建群组对话框 */}
       <GroupCreateDialog
         open={createGroupOpen}
