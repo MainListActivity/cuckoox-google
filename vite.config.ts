@@ -198,6 +198,7 @@ export default defineConfig(({ mode }) => {
       fs: {
         strict: false,
       },
+      host: true,
       allowedHosts: ["dev.cuckoox.cn", "dc.cuckoox.cn", "code.cuckoox.cn"],
     },
     preview: {
