@@ -358,8 +358,17 @@ export function useGroupLiveUpdates(groupId: RecordId | string | null) {
     if (!groupId || !client) return;
 
     try {
+      // 验证 groupId 格式: 应该是 'group:UUID' 形式
+      const groupIdStr = typeof groupId === 'string' ? groupId : String(groupId);
+      const match = groupIdStr.match(/^group:([0-9a-fA-F-]{36})$/);
+      if (!match) {
+        console.error('Invalid groupId format for live query:', groupId);
+        return;
+      }
+      const groupUuid = match[1];
+
       // 监听群组成员变化
-      const query = `LIVE SELECT * FROM group_member WHERE group_id = type::thing('group', '${typeof groupId === 'string' ? groupId.split(':')[1] : String(groupId).split(':')[1]}')`;
+      const query = `LIVE SELECT * FROM group_member WHERE group_id = type::thing('group', '${groupUuid}')`;
       
       const queryId = await client.live(query, (action: string, data: unknown) => {
         // 处理实时更新

@@ -100,6 +100,68 @@ export interface WebRTCPermissionResult extends PermissionCheckResult {
 }
 
 /**
+ * WebRTC权限系统 Hook
+ * 
+ * ## 权限系统工作原理
+ * 
+ * 本权限系统基于项目的通用权限架构，专门为WebRTC功能提供细粒度的权限控制。
+ * 系统通过AuthContext集成，支持权限缓存，减少重复查询。
+ * 
+ * ## 权限层次结构
+ * 
+ * 1. **基础通话权限** (BASIC_CALLING)
+ *    - 语音通话发起 (VOICE_CALL_INITIATE)
+ *    - 视频通话发起 (VIDEO_CALL_INITIATE) 
+ *    - 通话接听/拒绝/结束 (CALL_ANSWER/CALL_REJECT/CALL_END)
+ * 
+ * 2. **媒体控制权限** (MEDIA_CONTROLS)
+ *    - 摄像头/麦克风/扬声器控制
+ *    - 屏幕共享功能
+ * 
+ * 3. **群组通话权限** (GROUP_CALLING)
+ *    - 群组通话创建、加入、邀请、管理
+ * 
+ * 4. **文件传输权限** (FILE_TRANSFER)
+ *    - 文件发送/接收、媒体上传
+ * 
+ * 5. **高级功能权限** (ADMIN_FEATURES)
+ *    - 通话录制、质量控制、网络监控
+ * 
+ * ## 权限组合逻辑
+ * 
+ * - **AND组合**: 需要所有权限都通过才能执行操作
+ * - **OR组合**: 任一权限通过即可执行操作  
+ * - **权限继承**: 管理员权限自动包含所有子权限
+ * 
+ * ## 使用示例
+ * 
+ * ```typescript
+ * const { 
+ *   checkPermission, 
+ *   checkPermissions, 
+ *   hasBasicCalling, 
+ *   hasMediaControls 
+ * } = useWebRTCPermissions();
+ * 
+ * // 检查单个权限
+ * const canInitiateCall = checkPermission('webrtc_voice_call_initiate');
+ * 
+ * // 检查权限组合 (AND逻辑)
+ * const canCreateGroup = checkPermissions([
+ *   'webrtc_group_call_create',
+ *   'webrtc_group_call_invite'
+ * ], 'AND');
+ * 
+ * // 使用预定义权限组
+ * if (hasBasicCalling) {
+ *   // 显示通话按钮
+ * }
+ * ```
+ * 
+ * @returns WebRTC权限检查和管理功能
+ */
+
+/**
  * WebRTC权限组合检查结果接口
  */
 export interface WebRTCPermissionGroupResult {

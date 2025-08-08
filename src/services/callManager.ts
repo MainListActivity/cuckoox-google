@@ -59,7 +59,17 @@ export interface CallSession {
   duration: number;
   isGroup: boolean;
   groupId?: string;
-  metadata?: any;
+  metadata?: CallMetadata;
+}
+
+// 通话元数据接口
+export interface CallMetadata {
+  caseId?: string;
+  subject?: string;
+  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  category?: string;
+  tags?: string[];
+  customData?: Record<string, any>;
 }
 
 // 通话统计信息
@@ -97,7 +107,7 @@ class CallManager {
   private currentUserId: string | null = null;
   private isInitialized: boolean = false;
   private callTimeout: number = 30000; // 30秒响铃超时
-  private stats: CallStats;
+  private stats!: CallStats;
 
   constructor() {
     this.stats = {
@@ -488,23 +498,52 @@ class CallManager {
   /**
    * 切换扬声器状态
    */
-  toggleSpeaker(callId: string): boolean {
+  async toggleSpeaker(callId: string): Promise<boolean> {
     const callSession = this.activeCalls.get(callId);
     if (!callSession) {
       return false;
     }
 
     const newSpeakerState = !callSession.localParticipant.mediaState.speakerEnabled;
-    callSession.localParticipant.mediaState.speakerEnabled = newSpeakerState;
+    
+    try {
+      // 实际切换音频输出设备
+      if ('setSinkId' in HTMLAudioElement.prototype) {
+        // 获取所有音频元素
+        const audioElements = document.querySelectorAll('audio');
+        
+        // 根据扬声器状态选择音频输出设备
+        const sinkId = newSpeakerState ? 'default' : 'communications'; // 或者从配置获取设备ID
+        
+        // 切换所有音频元素的输出设备
+        for (const audioElement of audioElements) {
+          if ('setSinkId' in audioElement && typeof audioElement.setSinkId === 'function') {
+            try {
+              await (audioElement as any).setSinkId(sinkId);
+            } catch (error) {
+              console.warn('Failed to set audio sink for element:', error);
+            }
+          }
+        }
+      } else {
+        console.warn('Audio output device selection is not supported');
+      }
 
-    // 通知媒体状态变更
-    this.listeners.onParticipantMediaChanged?.(
-      callId,
-      this.currentUserId!,
-      callSession.localParticipant.mediaState
-    );
+      // 更新状态
+      callSession.localParticipant.mediaState.speakerEnabled = newSpeakerState;
 
-    return newSpeakerState;
+      // 通知媒体状态变更
+      this.listeners.onParticipantMediaChanged?.(
+        callId,
+        this.currentUserId!,
+        callSession.localParticipant.mediaState
+      );
+
+      return newSpeakerState;
+    } catch (error) {
+      console.error('Failed to toggle speaker:', error);
+      return callSession.localParticipant.mediaState.speakerEnabled;
+    }
   }
 
   /**

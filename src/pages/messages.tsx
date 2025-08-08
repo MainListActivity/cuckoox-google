@@ -487,7 +487,7 @@ const MessageCenterPage: React.FC = () => {
     if (!selectedGroup || !user?.id) return;
     
     try {
-      await callManager.startGroupCall(selectedGroup.id, type, user.id);
+      await callManager.initiateGroupCall(selectedGroup.id, type, { initiatorId: user.id });
       showSuccess(`群组${type === 'video' ? '视频' : '语音'}通话已发起`);
     } catch (error) {
       showError(`发起群组通话失败: ${(error as Error).message}`);
