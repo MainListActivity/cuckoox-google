@@ -256,7 +256,7 @@ export class PageAwareSubscriptionManager {
         },
         {
           table: 'conversation',
-          query: 'SELECT * FROM conversation WHERE participants CONTAINS $user_id ORDER BY last_message_at DESC',
+          query: 'SELECT * FROM $user_id->participates_in->conversation ORDER BY last_message_at DESC',
           priority: 'high',
           cacheType: 'temporary'
         }
@@ -269,7 +269,7 @@ export class PageAwareSubscriptionManager {
         },
         {
           table: 'conversation',
-          condition: 'participants CONTAINS $user_id',
+          condition: '$user_id->participates_in->conversation',
           params: { user_id: '$user_id' }
         }
       ]
@@ -285,7 +285,7 @@ export class PageAwareSubscriptionManager {
       preloadQueries: [
         {
           table: 'claim',
-          query: 'SELECT * FROM claim WHERE creditor_id IN (SELECT id FROM creditor WHERE user_id = $user_id) ORDER BY created_at DESC',
+          query: 'SELECT * FROM claim WHERE creditor_id.created_by = $user_id ORDER BY created_at DESC',
           priority: 'high',
           cacheType: 'temporary'
         }
@@ -293,7 +293,7 @@ export class PageAwareSubscriptionManager {
       conditions: [
         {
           table: 'claim',
-          condition: 'creditor_id IN (SELECT id FROM creditor WHERE user_id = $user_id)',
+          condition: 'creditor_id.created_by = $user_id',
           params: { user_id: '$user_id' }
         }
       ]

@@ -77,7 +77,7 @@ describe("useMessageCenterData Hooks", () => {
       await waitFor(() => expect(result.current.isLoading).toBe(false));
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining(
-          "SELECT id, participants, updated_at, 0 AS unread_count FROM conversation WHERE $userId IN participants ORDER BY updated_at DESC;",
+          "SELECT id, participants, updated_at, 0 AS unread_count FROM $userId->participates_in->conversation ORDER BY updated_at DESC;",
         ),
         { userId: mockUserId },
       );

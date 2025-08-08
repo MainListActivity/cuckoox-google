@@ -939,7 +939,7 @@ class MessageService {
           (SELECT responded_at FROM conference_invitation WHERE message_id = message.id AND target_user_id = $user_id LIMIT 1)[0].responded_at AS responded_at
         FROM message
         WHERE type = 'CONFERENCE_INVITE'
-        AND id IN (SELECT message_id FROM conference_invitation WHERE target_user_id = $user_id AND status = 'pending')
+        AND id->conference_invitation[WHERE status = 'pending']->user = $user_id
         AND (expires_at IS NULL OR expires_at > time::now())
         ORDER BY created_at DESC
       `;
