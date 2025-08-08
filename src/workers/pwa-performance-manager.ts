@@ -192,7 +192,13 @@ export class PWAPerformanceManager {
         preloadPromises.push(this.preloadResource(url).then(() => {
           // 估算资源大小（简化实现）
           totalSize += 1024; // 假设每个资源1KB，实际项目中应该获取实际大小
-        }));
+        preloadPromises.push(
+          this.preloadResource(url).then(async () => {
+            // 获取实际资源大小
+            const size = await this.getResourceSize(url);
+            totalSize += size;
+          })
+        );
       }
 
       await Promise.allSettled(preloadPromises);
