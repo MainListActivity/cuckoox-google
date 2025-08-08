@@ -376,6 +376,48 @@ export class PWASecurityManager {
   }
 
   /**
+   * 存储会话数据
+   */
+  async storeSessionData(sessionData: { expiry: number; userId?: string }): Promise<void> {
+    try {
+      const cache = await caches.open('security-cache');
+      const sessionRequest = new Request('internal://session-data');
+      const sessionResponse = new Response(JSON.stringify(sessionData), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      await cache.put(sessionRequest, sessionResponse);
+      this.securityMetrics.sessionExpiry = new Date(sessionData.expiry);
+      
+      console.log('PWASecurityManager: Session data stored successfully');
+    } catch (error) {
+      console.error('PWASecurityManager: Failed to store session data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 存储认证令牌
+   */
+  async storeAuthToken(token: string, expiry: number): Promise<void> {
+    try {
+      const cache = await caches.open('security-cache');
+      const tokenRequest = new Request('internal://auth-token');
+      const tokenData = { token, expiry };
+      const tokenResponse = new Response(JSON.stringify(tokenData), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      await cache.put(tokenRequest, tokenResponse);
+      
+      console.log('PWASecurityManager: Auth token stored successfully');
+    } catch (error) {
+      console.error('PWASecurityManager: Failed to store auth token:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 清理安全资源
    */
   async cleanup(): Promise<void> {
@@ -465,8 +507,16 @@ export class PWASecurityManager {
 
   private async getStoredSessionData(): Promise<{ expiry: number } | null> {
     try {
-      // 这里应该从安全存储中获取会话数据
-      // 暂时返回null，需要根据实际认证系统实现
+      // 从缓存中获取会话数据
+      const cache = await caches.open('security-cache');
+      const sessionRequest = new Request('internal://session-data');
+      const response = await cache.match(sessionRequest);
+      
+      if (response) {
+        const sessionData = await response.json();
+        return sessionData;
+      }
+      
       return null;
     } catch (error) {
       console.error('PWASecurityManager: Error getting stored session data:', error);
@@ -476,9 +526,30 @@ export class PWASecurityManager {
 
   private async checkAuthToken(): Promise<boolean> {
     try {
-      // 这里应该与现有的TokenManager集成
-      // 检查当前的认证令牌是否有效
-      return true; // 暂时返回true，需要根据实际实现
+      // 检查缓存中的认证令牌
+      const cache = await caches.open('security-cache');
+      const tokenRequest = new Request('internal://auth-token');
+      const response = await cache.match(tokenRequest);
+      
+      if (!response) {
+        return false;
+      }
+      
+      const tokenData = await response.json();
+      const now = Date.now();
+      
+      // 检查令牌是否过期
+      if (tokenData.expiry && tokenData.expiry < now) {
+        await cache.delete(tokenRequest);
+        return false;
+      }
+      
+      // 检查令牌格式
+      if (!tokenData.token || typeof tokenData.token !== 'string') {
+        return false;
+      }
+      
+      return true;
     } catch (error) {
       console.error('PWASecurityManager: Auth token check failed:', error);
       return false;
