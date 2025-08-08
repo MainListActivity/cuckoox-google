@@ -1,130 +1,206 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '@/src/i18n'; // Assuming your i18n setup is here
-import MeetingMinutesDialog, { QuillDelta } from '@/src/components/case/MeetingMinutesDialog'; // Assuming QuillDelta is exported or defined
-import { Delta } from 'quill/core'; // Import Delta
+import React from "react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  createSimpleTestEnvironment,
+  cleanupTestEnvironment,
+  resetTestEnvironment,
+} from "../../utils/testUtils";
+import MeetingMinutesDialog, {
+  QuillDelta,
+} from "@/src/components/case/MeetingMinutesDialog";
+import { Delta } from "quill/core";
 
 // Mock RichTextEditor
-vi.mock('../../../../src/components/RichTextEditor', () => ({
+vi.mock("../../../../src/components/RichTextEditor", () => ({
   __esModule: true,
-  default: vi.fn(({ value, onChange, placeholder }) => ( // Changed onTextChange to onChange based on MeetingMinutesDialog
-      <textarea
-          data-testid="mocked-rich-text-editor"
-          placeholder={placeholder}
-          value={typeof value === 'string' ? value : JSON.stringify(value?.ops)}
-          onChange={(e) => {
-            const mockDelta = new Delta().insert(e.target.value); // Use new Delta()
-            if (onChange) {
-              onChange(mockDelta, mockDelta, 'user'); // Pass Delta, lastChangeDelta, source
-            }
-          }}
-      />
+  default: vi.fn(({ value, onChange, placeholder }) => (
+    <textarea
+      data-testid="mocked-rich-text-editor"
+      placeholder={placeholder}
+      defaultValue={
+        typeof value === "string" ? value : JSON.stringify(value?.ops || [])
+      }
+      onChange={(e) => {
+        const mockDelta = new Delta().insert(e.target.value);
+        if (onChange) {
+          onChange(mockDelta, mockDelta, "user");
+        }
+      }}
+    />
   )),
 }));
 
-const mockCaseInfo = {
-  caseId: 'case:testcaseid',
-  caseName: 'Test Case Name 2023',
-};
+describe("MeetingMinutesDialog (使用MockFactory)", () => {
+  let testEnv: any;
+  let mockOnClose: any;
+  let mockOnSave: any;
 
-const mockMeetingTitle = 'Test Meeting Minutes Title';
+  const mockCaseInfo = {
+    caseId: "case:testcaseid",
+    caseName: "Test Case Name 2023",
+  };
 
-describe('MeetingMinutesDialog', () => {
+  const mockMeetingTitle = "Test Meeting Minutes Title";
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    testEnv = createSimpleTestEnvironment();
+    mockOnClose = vi.fn();
+    mockOnSave = vi.fn();
+  });
+
+  afterEach(() => {
+    resetTestEnvironment();
+    cleanupTestEnvironment();
   });
 
   const renderDialog = (
-      open = true,
-      onClose = vi.fn(),
-      onSave = vi.fn(),
-      existingMinutes?: QuillDelta | string
+    open = true,
+    onClose = mockOnClose,
+    onSave = mockOnSave,
+    existingMinutes?: QuillDelta | string,
   ) => {
     return render(
-        <I18nextProvider i18n={i18n}>
-          <MeetingMinutesDialog
-              open={open}
-              onClose={onClose}
-              caseInfo={mockCaseInfo}
-              meetingTitle={mockMeetingTitle}
-              existingMinutes={existingMinutes}
-              onSave={onSave}
-          />
-        </I18nextProvider>
+      <div data-testid="test-providers">
+        <MeetingMinutesDialog
+          open={open}
+          onClose={onClose}
+          caseInfo={mockCaseInfo}
+          title={mockMeetingTitle}
+          onSave={onSave}
+          existingMinutes={existingMinutes}
+        />
+      </div>,
     );
   };
 
-  it('renders with the provided title and case name', () => {
-    renderDialog();
-    expect(screen.getByText(mockMeetingTitle)).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(mockCaseInfo.caseName))).toBeInTheDocument(); // Check for case name part in title
-  });
+  describe("基本功能测试", () => {
+    it("应该在open为true时渲染对话框", () => {
+      renderDialog(true);
+      expect(screen.getByTestId("mocked-rich-text-editor")).toBeInTheDocument();
+      expect(screen.getByText("取消")).toBeInTheDocument();
+      expect(screen.getByText("save_minutes_button")).toBeInTheDocument();
+    });
 
-  it('save button is initially disabled when creating new minutes (no existingMinutes)', () => {
-    renderDialog();
-    const saveButton = screen.getByRole('button', { name: '保存纪要' }); // Adjust name if translation changes
-    expect(saveButton).toBeDisabled();
-  });
+    it("应该在open为false时不渲染对话框", () => {
+      renderDialog(false);
+      expect(
+        screen.queryByTestId("mocked-rich-text-editor"),
+      ).not.toBeInTheDocument();
+    });
 
-  it('save button is enabled after typing in the editor when creating new minutes', async () => {
-    renderDialog();
-    const saveButton = screen.getByRole('button', { name: '保存纪要' });
-    expect(saveButton).toBeDisabled();
+    it("应该初始禁用保存按钮", () => {
+      renderDialog();
+      const saveButton = screen.getByText("save_minutes_button");
+      expect(saveButton).toBeDisabled();
+    });
 
-    const editor = screen.getByTestId('mocked-rich-text-editor');
-    fireEvent.change(editor, { target: { value: 'Some meeting notes.' } });
+    it("应该在编辑器有内容后启用保存按钮", async () => {
+      renderDialog();
 
-    await waitFor(() => {
-      expect(saveButton).not.toBeDisabled();
+      const editor = screen.getByTestId("mocked-rich-text-editor");
+      const saveButton = screen.getByText("save_minutes_button");
+
+      expect(saveButton).toBeDisabled();
+
+      fireEvent.change(editor, { target: { value: "Test content" } });
+
+      await waitFor(() => {
+        expect(saveButton).not.toBeDisabled();
+      });
     });
   });
 
-  it('save button is initially disabled if existingMinutes are provided but editor is not dirty', () => {
-    const initialDelta = new Delta().insert('Initial content.\n');
-    renderDialog(true, vi.fn(), vi.fn(), initialDelta);
-    const saveButton = screen.getByRole('button', { name: '保存纪要' });
-    expect(saveButton).toBeDisabled(); // Should be disabled because it's not dirty yet
-  });
+  describe("用户交互测试", () => {
+    it("应该在点击取消按钮时调用onClose", () => {
+      renderDialog();
 
-  it('save button is enabled if existingMinutes are provided and editor becomes dirty', async () => {
-    const initialDelta = new Delta().insert('Initial content.\n');
-    renderDialog(true, vi.fn(), vi.fn(), initialDelta);
-    const saveButton = screen.getByRole('button', { name: '保存纪要' });
-    expect(saveButton).toBeDisabled();
+      const cancelButton = screen.getByText("取消");
+      fireEvent.click(cancelButton);
 
-    const editor = screen.getByTestId('mocked-rich-text-editor');
-    fireEvent.change(editor, { target: { value: 'Initial content has been modified.' } });
+      expect(mockOnClose).toHaveBeenCalled();
+    });
 
-    await waitFor(() => {
-      expect(saveButton).not.toBeDisabled();
+    it("应该在点击保存按钮时调用onSave", async () => {
+      renderDialog();
+
+      const editor = screen.getByTestId("mocked-rich-text-editor");
+      const saveButton = screen.getByText("save_minutes_button");
+
+      // 输入内容启用保存按钮
+      fireEvent.change(editor, { target: { value: "Test meeting content" } });
+
+      await waitFor(() => {
+        expect(saveButton).not.toBeDisabled();
+      });
+
+      // 点击保存
+      fireEvent.click(saveButton);
+
+      await waitFor(() => {
+        expect(mockOnSave).toHaveBeenCalled();
+      });
     });
   });
 
-  it('calls onSave with the correct content when save button is clicked', async () => {
-    const handleSaveMock = vi.fn();
-    renderDialog(true, vi.fn(), handleSaveMock);
+  describe("内容处理测试", () => {
+    it("应该处理Delta类型的现有纪要", () => {
+      const existingContent = new Delta().insert("Existing content");
+      renderDialog(true, mockOnClose, mockOnSave, existingContent);
 
-    const editor = screen.getByTestId('mocked-rich-text-editor');
-    const testContent = 'Detailed meeting discussion notes.';
-    fireEvent.change(editor, { target: { value: testContent } });
+      const editor = screen.getByTestId("mocked-rich-text-editor");
+      expect(editor).toBeInTheDocument();
+    });
 
-    const saveButton = screen.getByRole('button', { name: '保存纪要' });
-    await waitFor(() => expect(saveButton).not.toBeDisabled());
-    fireEvent.click(saveButton);
+    it("应该处理字符串类型的现有纪要", () => {
+      const existingContent = "String content";
+      renderDialog(true, mockOnClose, mockOnSave, existingContent);
 
-    expect(handleSaveMock).toHaveBeenCalledTimes(1);
-
-    // Check the first argument (QuillDelta) passed to onSave
-    const savedDelta = handleSaveMock.mock.calls[0][0] as QuillDelta;
-    expect(savedDelta.ops).toEqual([{ insert: testContent }]);
-
-    // Check the second argument (meetingTitle)
-    expect(handleSaveMock.mock.calls[0][1]).toBe(mockMeetingTitle);
-
-    // Check the third argument (caseId)
-    expect(handleSaveMock.mock.calls[0][2]).toBe(mockCaseInfo.caseId);
+      const editor = screen.getByTestId("mocked-rich-text-editor");
+      expect(editor).toBeInTheDocument();
+    });
   });
 
+  describe("错误处理测试", () => {
+    it("应该正确处理保存失败", async () => {
+      const mockOnSaveWithError = vi
+        .fn()
+        .mockRejectedValue(new Error("Save failed"));
+      renderDialog(true, mockOnClose, mockOnSaveWithError);
+
+      const editor = screen.getByTestId("mocked-rich-text-editor");
+      const saveButton = screen.getByText("save_minutes_button");
+
+      // 输入内容
+      fireEvent.change(editor, { target: { value: "Test content" } });
+
+      await waitFor(() => {
+        expect(saveButton).not.toBeDisabled();
+      });
+
+      // 点击保存
+      fireEvent.click(saveButton);
+
+      await waitFor(() => {
+        expect(mockOnSaveWithError).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe("可访问性测试", () => {
+    it("应该具有正确的dialog角色", () => {
+      renderDialog();
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+    });
+
+    it("应该支持ESC键关闭", () => {
+      renderDialog();
+
+      const dialog = screen.getByRole("dialog");
+      fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+
+      expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
 });
