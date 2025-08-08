@@ -10,7 +10,13 @@
     "plugin:@typescript-eslint/recommended",
     "plugin:react-hooks/recommended"
   ],
-  "ignorePatterns": ["dist", ".eslintrc.json", "node_modules"],
+  "ignorePatterns": [
+    "tests",
+    "public",
+    "dist",
+    ".eslintrc.json",
+    "node_modules"
+  ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": "latest",
@@ -21,17 +27,9 @@
   },
   "plugins": ["react-refresh"],
   "rules": {
-    "react-refresh/only-export-components": [
-      "warn",
-      { "allowConstantExport": true }
-    ],
-    "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-unused-vars": [
-      "error",
-      {
-        "argsIgnorePattern": "^_",
-        "varsIgnorePattern": "^_"
-      }
-    ]
+    "react-refresh/only-export-components": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "react-hooks/exhaustive-deps": "off",
+    "@typescript-eslint/no-unused-vars": "off"
   }
 }

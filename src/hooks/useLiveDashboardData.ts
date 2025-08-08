@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useSurrealContext } from '@/src/contexts/SurrealProvider';
-import { Uuid } from 'surrealdb';
+import { useState, useEffect, useCallback } from "react";
+import { useSurrealContext } from "@/src/contexts/SurrealProvider";
+import { Uuid } from "surrealdb";
 
 // Generic type for count results
 interface CountResult {
@@ -14,9 +14,18 @@ interface SumResult {
 
 // --- Chart Data Point Types ---
 // Import colors for chart data
-import { green, yellow, red as muiRed, blue, orange, purple, cyan, teal } from '@mui/material/colors'; // For chart colors
+import {
+  green,
+  yellow,
+  red as muiRed,
+  blue,
+  orange,
+  purple,
+  cyan,
+  teal,
+} from "@mui/material/colors"; // For chart colors
 // Import grey for default colors
-import { grey } from '@mui/material/colors';
+import { grey } from "@mui/material/colors";
 
 export interface PieChartDataPoint {
   id: string | number; // Unique ID for the slice
@@ -25,13 +34,15 @@ export interface PieChartDataPoint {
   color: string;
 }
 
-export interface BarChartDataPoint { // For User Online Distribution
+export interface BarChartDataPoint {
+  // For User Online Distribution
   role: string;
   count: number;
   color: string;
 }
 
-export interface LineChartDataPoint { // For Daily Claims Trend
+export interface LineChartDataPoint {
+  // For Daily Claims Trend
   date: string; // e.g., "MM-DD"
   count: number;
   // amount?: number; // Amount can be optional or derived if needed elsewhere
@@ -41,10 +52,9 @@ export interface LineChartDataPoint { // For Daily Claims Trend
 interface GroupedCountResult {
   status?: string; // For claimsByStatus
   nature?: string; // For claimsByNature
-  day?: string;    // For dailyClaimsTrend
+  day?: string; // For dailyClaimsTrend
   count: number;
 }
-
 
 // --- Types for Dynamic List Data ---
 export interface RecentSubmissionItem {
@@ -53,7 +63,7 @@ export interface RecentSubmissionItem {
   claimantName: string;
   amount: number;
   time: string; // Formatted time string
-  type: 'New' | 'Updated'; // Assuming we can determine this, or default to 'New'
+  type: "New" | "Updated"; // Assuming we can determine this, or default to 'New'
 }
 
 export interface RecentReviewActionItem {
@@ -84,64 +94,78 @@ interface RawRecentReviewAction {
   review_time: string; // ISO string, to be mapped to 'time'
 }
 
-
 // Factory function to create live metric hooks
 function createLiveMetricHook<TResultType, TDataType>(
   metricQueryFn: (caseId: string, limit?: number) => string,
-  parseResult: (queryResult: any, caseId: string | null, limit?: number) => TDataType, // eslint-disable-line @typescript-eslint/no-explicit-any
+  parseResult: (
+    queryResult: any,
+    caseId: string | null,
+    limit?: number,
+  ) => TDataType,
   defaultValue: TDataType,
-  debugName: string = "metric"
+  debugName: string = "metric",
 ) {
   // Define the return type for the hook
   type LiveMetricReturn = {
     data: TDataType;
     isLoading: boolean;
-    error: any | null; // eslint-disable-line @typescript-eslint/no-explicit-any
+    error: any | null;
   };
 
   // The hook itself can now accept additional parameters like 'limit'
-  return function useLiveMetric(caseId: string | null, limit?: number): LiveMetricReturn {
+  return function useLiveMetric(
+    caseId: string | null,
+    limit?: number,
+  ): LiveMetricReturn {
     const { client, isConnected } = useSurrealContext();
     const [metricValue, setMetricValue] = useState<TDataType>(defaultValue);
     const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [error, setError] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const [error, setError] = useState<any>(null);
 
-    const fetchMetric = useCallback(async (currentCaseId: string) => {
-      if (!client || !isConnected) {
-        return;
-      }
-      
-      // Check if client is ready by verifying it's not the dummy proxy
-      if (typeof client.query !== 'function') {
-        console.log('Client not ready yet, waiting...');
-        return;
-      }
-      
-      try {
-        const finalQuery = metricQueryFn(currentCaseId, limit);
-        const queryParams: { [key: string]: string | number } = { caseId: currentCaseId };
-        
-        if (finalQuery.includes('$limit')) {
-          queryParams.limit = limit || 5;
+    const fetchMetric = useCallback(
+      async (currentCaseId: string) => {
+        if (!client || !isConnected) {
+          return;
         }
 
-        const result = await client.query<[TResultType[]]>(finalQuery, queryParams);
+        // Check if client is ready by verifying it's not the dummy proxy
+        if (typeof client.query !== "function") {
+          console.log("Client not ready yet, waiting...");
+          return;
+        }
 
-        if (result && result[0]) {
-          const parsed = parseResult(result[0], currentCaseId, limit);
-          setMetricValue(parsed);
-        } else {
+        try {
+          const finalQuery = metricQueryFn(currentCaseId, limit);
+          const queryParams: { [key: string]: string | number } = {
+            caseId: currentCaseId,
+          };
+
+          if (finalQuery.includes("$limit")) {
+            queryParams.limit = limit || 5;
+          }
+
+          const result = await client.query<[TResultType[]]>(
+            finalQuery,
+            queryParams,
+          );
+
+          if (result && result[0]) {
+            const parsed = parseResult(result[0], currentCaseId, limit);
+            setMetricValue(parsed);
+          } else {
+            setMetricValue(defaultValue);
+          }
+          setError(null);
+        } catch (e) {
+          console.error(`Error fetching ${debugName} for ${currentCaseId}:`, e);
+          setError(e);
           setMetricValue(defaultValue);
+        } finally {
+          setIsLoading(false);
         }
-        setError(null);
-      } catch (e) {
-        console.error(`Error fetching ${debugName} for ${currentCaseId}:`, e);
-        setError(e);
-        setMetricValue(defaultValue);
-      } finally {
-        setIsLoading(false);
-      }
-    }, [client, isConnected, limit]);
+      },
+      [client, isConnected, limit],
+    );
 
     useEffect(() => {
       if (!client || !isConnected || !caseId) {
@@ -149,10 +173,10 @@ function createLiveMetricHook<TResultType, TDataType>(
         setIsLoading(false);
         return;
       }
-      
+
       // Check if client is ready by verifying it's not the dummy proxy
-      if (typeof client.query !== 'function') {
-        console.log('Client not ready yet, waiting...');
+      if (typeof client.query !== "function") {
+        console.log("Client not ready yet, waiting...");
         setIsLoading(false);
         return;
       }
@@ -169,19 +193,22 @@ function createLiveMetricHook<TResultType, TDataType>(
           // Step 2: Set up the live query for the entire claim table (no parameters allowed)
           const liveSelectQuery = `LIVE SELECT * FROM claim;`;
           const queryResponse = await client.query<[Uuid]>(liveSelectQuery);
-          
+
           if (queryResponse && queryResponse[0]) {
             liveQueryId = queryResponse[0];
-            
+
             // Step 3: Subscribe to live events with case filtering
             client.subscribeLive(String(liveQueryId), (_action, data) => {
               if (!isMounted) return;
-              
+
               // Filter for relevant case_id changes
               // data contains the changed record, check if it matches our caseId
-              if (data && typeof data === 'object' && 'case_id' in data) {
+              if (data && typeof data === "object" && "case_id" in data) {
                 const recordCaseId = data.case_id;
-                if (recordCaseId === caseId || String(recordCaseId) === String(caseId)) {
+                if (
+                  recordCaseId === caseId ||
+                  String(recordCaseId) === String(caseId)
+                ) {
                   // Re-fetch the metric when relevant claim changes
                   fetchMetric(caseId);
                 }
@@ -193,7 +220,10 @@ function createLiveMetricHook<TResultType, TDataType>(
           }
         } catch (err) {
           if (!isMounted) return;
-          console.error(`Error setting up live subscription for ${debugName}:`, err);
+          console.error(
+            `Error setting up live subscription for ${debugName}:`,
+            err,
+          );
           setError(err);
         }
       };
@@ -204,8 +234,11 @@ function createLiveMetricHook<TResultType, TDataType>(
       return () => {
         isMounted = false;
         if (liveQueryId && client) {
-          client.kill(String(liveQueryId)).catch(killError => {
-            console.error(`Error killing live query ${liveQueryId} for ${debugName}:`, killError);
+          client.kill(String(liveQueryId)).catch((killError) => {
+            console.error(
+              `Error killing live query ${liveQueryId} for ${debugName}:`,
+              killError,
+            );
           });
         }
       };
@@ -218,119 +251,170 @@ function createLiveMetricHook<TResultType, TDataType>(
 // Specific hooks using the factory
 
 // 1. useLiveClaimCountForCase
-export const useLiveClaimCountForCase = createLiveMetricHook<CountResult, number>(
-  (_caseId, _limit) => 'SELECT count() FROM claim WHERE case_id = $caseId GROUP ALL;',
-  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+export const useLiveClaimCountForCase = createLiveMetricHook<
+  CountResult,
+  number
+>(
+  (_caseId, _limit) =>
+    "SELECT count() FROM claim WHERE case_id = $caseId GROUP ALL;",
+  (result: CountResult[], _caseId, _limit) =>
+    result && result.length > 0 ? result[0].count : 0,
   0,
-  "TotalClaimCount"
+  "TotalClaimCount",
 );
 
 // 2. useLiveTotalClaimAmount
 export const useLiveTotalClaimAmount = createLiveMetricHook<SumResult, number>(
-  (_caseId, _limit) => 'SELECT math::sum(asserted_claim_details.total_asserted_amount) AS total_amount FROM claim WHERE case_id = $caseId GROUP ALL;',
-  (result: SumResult[], _caseId, _limit) => (result && result.length > 0 && result[0].total_amount !== null ? result[0].total_amount : 0),
+  (_caseId, _limit) =>
+    "SELECT math::sum(asserted_claim_details.total_asserted_amount) AS total_amount FROM claim WHERE case_id = $caseId GROUP ALL;",
+  (result: SumResult[], _caseId, _limit) =>
+    result && result.length > 0 && result[0].total_amount !== null
+      ? result[0].total_amount
+      : 0,
   0,
-  "TotalClaimAmount"
+  "TotalClaimAmount",
 );
 
 // 3. useLiveApprovedClaimAmount
-export const useLiveApprovedClaimAmount = createLiveMetricHook<SumResult, number>(
-  (_caseId, _limit) => "SELECT math::sum(approved_claim_details.total_approved_amount) AS approved_total FROM claim WHERE case_id = $caseId AND status = '审核通过' GROUP ALL;",
-  (result: SumResult[], _caseId, _limit) => (result && result.length > 0 && result[0].approved_total !== null ? result[0].approved_total : 0),
+export const useLiveApprovedClaimAmount = createLiveMetricHook<
+  SumResult,
+  number
+>(
+  (_caseId, _limit) =>
+    "SELECT math::sum(approved_claim_details.total_approved_amount) AS approved_total FROM claim WHERE case_id = $caseId AND status = '审核通过' GROUP ALL;",
+  (result: SumResult[], _caseId, _limit) =>
+    result && result.length > 0 && result[0].approved_total !== null
+      ? result[0].approved_total
+      : 0,
   0,
-  "ApprovedClaimAmount"
+  "ApprovedClaimAmount",
 );
 
 // 4. useLivePendingClaimAmount
-export const useLivePendingClaimAmount = createLiveMetricHook<SumResult, number>(
-  (_caseId, _limit) => "SELECT math::sum(asserted_claim_details.total_asserted_amount) AS pending_total FROM claim WHERE case_id = $caseId AND status = '待审' GROUP ALL;",
-  (result: SumResult[], _caseId, _limit) => (result && result.length > 0 && result[0].pending_total !== null ? result[0].pending_total : 0),
+export const useLivePendingClaimAmount = createLiveMetricHook<
+  SumResult,
+  number
+>(
+  (_caseId, _limit) =>
+    "SELECT math::sum(asserted_claim_details.total_asserted_amount) AS pending_total FROM claim WHERE case_id = $caseId AND status = '待审' GROUP ALL;",
+  (result: SumResult[], _caseId, _limit) =>
+    result && result.length > 0 && result[0].pending_total !== null
+      ? result[0].pending_total
+      : 0,
   0,
-  "PendingClaimAmount"
+  "PendingClaimAmount",
 );
 
 // 5. useLiveApprovedClaimsCount
-export const useLiveApprovedClaimsCount = createLiveMetricHook<CountResult, number>(
-  (_caseId, _limit) => "SELECT count() AS count FROM claim WHERE case_id = $caseId AND status = '审核通过' GROUP ALL;",
-  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+export const useLiveApprovedClaimsCount = createLiveMetricHook<
+  CountResult,
+  number
+>(
+  (_caseId, _limit) =>
+    "SELECT count() AS count FROM claim WHERE case_id = $caseId AND status = '审核通过' GROUP ALL;",
+  (result: CountResult[], _caseId, _limit) =>
+    result && result.length > 0 ? result[0].count : 0,
   0,
-  "ApprovedClaimsCount"
+  "ApprovedClaimsCount",
 );
 
 // 6. useLivePendingClaimsCount
-export const useLivePendingClaimsCount = createLiveMetricHook<CountResult, number>(
-  (_caseId, _limit) => "SELECT count() AS count FROM claim WHERE case_id = $caseId AND status = '待审' GROUP ALL;",
-  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+export const useLivePendingClaimsCount = createLiveMetricHook<
+  CountResult,
+  number
+>(
+  (_caseId, _limit) =>
+    "SELECT count() AS count FROM claim WHERE case_id = $caseId AND status = '待审' GROUP ALL;",
+  (result: CountResult[], _caseId, _limit) =>
+    result && result.length > 0 ? result[0].count : 0,
   0,
-  "PendingClaimsCount"
+  "PendingClaimsCount",
 );
 
 // 7. useLiveUniqueClaimantsCount
-export const useLiveUniqueClaimantsCount = createLiveMetricHook<CountResult, number>(
-  (_caseId, _limit) => 'SELECT array::len(array::distinct(array::flatten([SELECT creditor_id FROM claim WHERE case_id = $caseId]))) AS count FROM [] GROUP ALL;',
-  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+export const useLiveUniqueClaimantsCount = createLiveMetricHook<
+  CountResult,
+  number
+>(
+  (_caseId, _limit) =>
+    "SELECT array::len(array::distinct(array::flatten([SELECT creditor_id FROM claim WHERE case_id = $caseId]))) AS count FROM [] GROUP ALL;",
+  (result: CountResult[], _caseId, _limit) =>
+    result && result.length > 0 ? result[0].count : 0,
   0,
-  "UniqueClaimantsCount"
+  "UniqueClaimantsCount",
 );
 
 // 8. useLiveTodaysSubmissionsCount
-export const useLiveTodaysSubmissionsCount = createLiveMetricHook<CountResult, number>(
+export const useLiveTodaysSubmissionsCount = createLiveMetricHook<
+  CountResult,
+  number
+>(
   (_caseId, _limit) => `
-    SELECT count() 
-    FROM claim 
-    WHERE case_id = $caseId AND string::slice(created_at, 0, 10) = string::slice(time::now(), 0, 10) 
+    SELECT count()
+    FROM claim
+    WHERE case_id = $caseId AND string::slice(created_at, 0, 10) = string::slice(time::now(), 0, 10)
     GROUP ALL;
   `,
-  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+  (result: CountResult[], _caseId, _limit) =>
+    result && result.length > 0 ? result[0].count : 0,
   0,
-  "TodaysSubmissionsCount"
+  "TodaysSubmissionsCount",
 );
 
 // 9. useLiveTodaysReviewedClaimsCount
-export const useLiveTodaysReviewedClaimsCount = createLiveMetricHook<CountResult, number>(
+export const useLiveTodaysReviewedClaimsCount = createLiveMetricHook<
+  CountResult,
+  number
+>(
   (_caseId, _limit) => `
-    SELECT count() 
-    FROM claim 
-    WHERE case_id = $caseId AND review_time IS NOT NULL AND string::slice(review_time, 0, 10) = string::slice(time::now(), 0, 10) 
+    SELECT count()
+    FROM claim
+    WHERE case_id = $caseId AND review_time IS NOT NULL AND string::slice(review_time, 0, 10) = string::slice(time::now(), 0, 10)
     GROUP ALL;
   `,
-  (result: CountResult[], _caseId, _limit) => (result && result.length > 0 ? result[0].count : 0),
+  (result: CountResult[], _caseId, _limit) =>
+    result && result.length > 0 ? result[0].count : 0,
   0,
-  "TodaysReviewedClaimsCount"
+  "TodaysReviewedClaimsCount",
 );
-
 
 // --- Hooks for Chart Data ---
 
-// 10. useLiveClaimsByStatusChartData 
+// 10. useLiveClaimsByStatusChartData
 const statusColorMap: { [key: string]: string } = {
-  '审核通过': green[400],
-  '待审': yellow[400],
-  '已驳回': muiRed[400],
-  '补充材料': orange[400],
+  审核通过: green[400],
+  待审: yellow[400],
+  已驳回: muiRed[400],
+  补充材料: orange[400],
 };
 const defaultStatusColor = grey[500];
 
-export const useLiveClaimsByStatusChartData = createLiveMetricHook<GroupedCountResult[], PieChartDataPoint[]>(
-  (_caseId, _limit) => "SELECT status, count() AS count FROM claim WHERE case_id = $caseId GROUP BY status;",
+export const useLiveClaimsByStatusChartData = createLiveMetricHook<
+  GroupedCountResult[],
+  PieChartDataPoint[]
+>(
+  (_caseId, _limit) =>
+    "SELECT status, count() AS count FROM claim WHERE case_id = $caseId GROUP BY status;",
   (results: GroupedCountResult[], _caseId, _limit) => {
     if (!results) return [];
     return results.map((item, index) => ({
       id: item.status || `unknown-${index}`,
       value: item.count,
-      label: item.status || '未知状态',
-      color: item.status ? (statusColorMap[item.status] || defaultStatusColor) : defaultStatusColor,
+      label: item.status || "未知状态",
+      color: item.status
+        ? statusColorMap[item.status] || defaultStatusColor
+        : defaultStatusColor,
     }));
   },
   [],
-  "ClaimsByStatusChartData"
+  "ClaimsByStatusChartData",
 );
 
 // 11. useLiveUsersOnlineByRoleChartData
 const roleColorMap: { [key: string]: string } = {
-  '管理人': teal[400],
-  '债权人': cyan[500],
-  '管理员': purple[400],
+  管理人: teal[400],
+  债权人: cyan[500],
+  管理员: purple[400],
 };
 const defaultRoleColor = grey[500];
 
@@ -339,118 +423,140 @@ interface UserActivityByRoleResult {
   count: number;
 }
 
-export const useLiveUsersOnlineByRoleChartData = createLiveMetricHook<UserActivityByRoleResult[], BarChartDataPoint[]>(
+export const useLiveUsersOnlineByRoleChartData = createLiveMetricHook<
+  UserActivityByRoleResult[],
+  BarChartDataPoint[]
+>(
   (_caseId, _limit) => `
-    SELECT 
-      user.role AS role, 
-      count() AS count 
-    FROM presence 
-    WHERE 
-      case_id = $caseId AND 
+    SELECT
+      user.role AS role,
+      count() AS count
+    FROM presence
+    WHERE
+      case_id = $caseId AND
       meta::id(user) IS NOT NULL AND
-      last_seen > (time::now() - 5m) 
+      last_seen > (time::now() - 5m)
     GROUP BY user.role;
   `,
   (results: UserActivityByRoleResult[], _caseId, _limit) => {
     if (!results || results.length === 0) {
       return [];
     }
-    return results.map(item => ({
-      role: item.role || '未知角色',
+    return results.map((item) => ({
+      role: item.role || "未知角色",
       count: item.count,
       color: roleColorMap[item.role] || defaultRoleColor,
     }));
   },
   [],
-  "UsersOnlineByRoleChartData"
+  "UsersOnlineByRoleChartData",
 );
 
 // 12. useLiveDailyClaimsTrendChartData
-export const useLiveDailyClaimsTrendChartData = createLiveMetricHook<GroupedCountResult[], LineChartDataPoint[]>(
-  (_caseId, _limit) => "SELECT string::slice(created_at, 0, 10) AS day, count() AS count FROM claim WHERE case_id = $caseId GROUP BY day ORDER BY day ASC;",
+export const useLiveDailyClaimsTrendChartData = createLiveMetricHook<
+  GroupedCountResult[],
+  LineChartDataPoint[]
+>(
+  (_caseId, _limit) =>
+    "SELECT string::slice(created_at, 0, 10) AS day, count() AS count FROM claim WHERE case_id = $caseId GROUP BY day ORDER BY day ASC;",
   (results: GroupedCountResult[], _caseId, _limit) => {
     if (!results) return [];
-    return results.map(item => ({
-      date: item.day ? item.day.substring(5) : 'Unknown',
+    return results.map((item) => ({
+      date: item.day ? item.day.substring(5) : "Unknown",
       count: item.count,
     }));
   },
   [],
-  "DailyClaimsTrendChartData"
+  "DailyClaimsTrendChartData",
 );
 
 // 13. useLiveClaimsByNatureChartData
 const natureColorMap: { [key: string]: string } = {
-  '普通债权': blue[400],
-  '有财产担保债权': green[500],
-  '劳动报酬': yellow[500],
-  '税款类债权': orange[400],
-  '其他': purple[300],
+  普通债权: blue[400],
+  有财产担保债权: green[500],
+  劳动报酬: yellow[500],
+  税款类债权: orange[400],
+  其他: purple[300],
 };
 const defaultNatureColor = grey[600];
 
-export const useLiveClaimsByNatureChartData = createLiveMetricHook<GroupedCountResult[], PieChartDataPoint[]>(
-  (_caseId, _limit) => "SELECT asserted_claim_details.nature AS nature, count() AS count FROM claim WHERE case_id = $caseId GROUP BY nature;",
+export const useLiveClaimsByNatureChartData = createLiveMetricHook<
+  GroupedCountResult[],
+  PieChartDataPoint[]
+>(
+  (_caseId, _limit) =>
+    "SELECT asserted_claim_details.nature AS nature, count() AS count FROM claim WHERE case_id = $caseId GROUP BY nature;",
   (results: GroupedCountResult[], _caseId, _limit) => {
     if (!results) return [];
     return results.map((item, index) => ({
       id: item.nature || `unknown-nature-${index}`,
       value: item.count,
-      label: item.nature || '未知性质',
-      color: item.nature ? (natureColorMap[item.nature] || defaultNatureColor) : defaultNatureColor,
+      label: item.nature || "未知性质",
+      color: item.nature
+        ? natureColorMap[item.nature] || defaultNatureColor
+        : defaultNatureColor,
     }));
   },
   [],
-  "ClaimsByNatureChartData"
+  "ClaimsByNatureChartData",
 );
-
 
 // --- Hooks for Dynamic List Data ---
 
 // 14. useLiveRecentSubmissions
-export const useLiveRecentSubmissions = createLiveMetricHook<RawRecentSubmission[], RecentSubmissionItem[]>(
+export const useLiveRecentSubmissions = createLiveMetricHook<
+  RawRecentSubmission[],
+  RecentSubmissionItem[]
+>(
   (_caseId, _limit) => `
-    SELECT id, claim_number, creditor_id.name AS creditor_name, asserted_claim_details.total_asserted_amount AS amount, created_at 
-    FROM claim 
-    WHERE case_id = $caseId 
-    ORDER BY created_at DESC 
+    SELECT id, claim_number, creditor_id.name AS creditor_name, asserted_claim_details.total_asserted_amount AS amount, created_at
+    FROM claim
+    WHERE case_id = $caseId
+    ORDER BY created_at DESC
     LIMIT $limit;
   `,
   (results: RawRecentSubmission[], _caseId, _limit) => {
     if (!results) return [];
-    return results.map(item => ({
+    return results.map((item) => ({
       id: String(item.id),
-      claimId: item.claim_number || 'N/A',
-      claimantName: item.creditor_name || '未知申请人',
+      claimId: item.claim_number || "N/A",
+      claimantName: item.creditor_name || "未知申请人",
       amount: item.amount || 0,
-      time: item.created_at ? new Date(item.created_at).toLocaleTimeString() : 'N/A',
-      type: 'New',
+      time: item.created_at
+        ? new Date(item.created_at).toLocaleTimeString()
+        : "N/A",
+      type: "New",
     }));
   },
   [],
-  "RecentSubmissions"
+  "RecentSubmissions",
 );
 
 // 15. useLiveRecentReviewActions
-export const useLiveRecentReviewActions = createLiveMetricHook<RawRecentReviewAction[], RecentReviewActionItem[]>(
+export const useLiveRecentReviewActions = createLiveMetricHook<
+  RawRecentReviewAction[],
+  RecentReviewActionItem[]
+>(
   (_caseId, _limit) => `
-    SELECT id, claim_number, status, reviewer_id.name AS reviewer_name, approved_claim_details.total_approved_amount AS approved_amount, review_time 
-    FROM claim 
-    WHERE case_id = $caseId AND review_time IS NOT NULL 
-    ORDER BY review_time DESC 
+    SELECT id, claim_number, status, reviewer_id.name AS reviewer_name, approved_claim_details.total_approved_amount AS approved_amount, review_time
+    FROM claim
+    WHERE case_id = $caseId AND review_time IS NOT NULL
+    ORDER BY review_time DESC
     LIMIT $limit;
   `,
   (results: RawRecentReviewAction[], _caseId, _limit) => {
     if (!results) return [];
-    return results.map(item => ({
+    return results.map((item) => ({
       id: String(item.id),
-      claimId: item.claim_number || 'N/A',
-      action: item.status || '未知操作',
-      reviewerName: item.reviewer_name || '未知审核人',
+      claimId: item.claim_number || "N/A",
+      action: item.status || "未知操作",
+      reviewerName: item.reviewer_name || "未知审核人",
       reviewedAmount: item.approved_amount || 0,
-      time: item.review_time ? new Date(item.review_time).toLocaleTimeString() : 'N/A',
+      time: item.review_time
+        ? new Date(item.review_time).toLocaleTimeString()
+        : "N/A",
     }));
   },
   [],
-  "RecentReviewActions"
+  "RecentReviewActions",
 );

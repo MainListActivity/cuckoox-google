@@ -103,14 +103,14 @@ export interface ClaimAttachmentData {
 
 
 class ClaimService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   private client: any;
   private operationService: ClaimOperationService;
   private versionService: ClaimVersionService;
   private statusFlowService: ClaimStatusFlowService;
   private auditService: ClaimAuditService;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   constructor(surrealClient: any) {
     this.client = surrealClient;
     this.operationService = new ClaimOperationService(surrealClient);

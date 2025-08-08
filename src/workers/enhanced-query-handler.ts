@@ -3,23 +3,23 @@
  * 集成智能缓存系统，替换sw-surreal.ts中的简单缓存逻辑
  */
 
-import { QueryRouter } from './query-router';
-import { CacheExecutor } from './cache-executor';
-import { SubscriptionManager } from './subscription-manager';
-import { DataCacheManager } from './data-cache-manager';
-import { PerformanceMonitor } from './performance-monitor';
-import { CacheDebugger } from './cache-debugger';
-import { CacheLogger, LogCategory } from './cache-logger';
-import { ClaimTrackingSync } from './claim-tracking-sync';
-import type { Surreal } from 'surrealdb';
-import type { QueryParams, UnknownData } from '../types/surreal';
+import { QueryRouter } from "./query-router";
+import { CacheExecutor } from "./cache-executor";
+import { SubscriptionManager } from "./subscription-manager";
+import { DataCacheManager } from "./data-cache-manager";
+import { PerformanceMonitor } from "./performance-monitor";
+import { CacheDebugger } from "./cache-debugger";
+import { CacheLogger, LogCategory } from "./cache-logger";
+import { ClaimTrackingSync } from "./claim-tracking-sync";
+import type { Surreal } from "surrealdb";
+import type { QueryParams, UnknownData } from "../types/surreal";
 
 // 查询处理结果
 export interface QueryHandlerResult {
   success: boolean;
   data?: UnknownData[];
   error?: string;
-  source: 'local' | 'remote' | 'hybrid';
+  source: "local" | "remote" | "hybrid";
   executionTime: number;
   cacheHit: boolean;
   strategy: string;
@@ -45,7 +45,7 @@ export class EnhancedQueryHandler {
     localDb: Surreal,
     dataCacheManager: DataCacheManager,
     broadcastToAllClients: (message: Record<string, unknown>) => Promise<void>,
-    remoteDb?: Surreal
+    remoteDb?: Surreal,
   ) {
     this.localDb = localDb;
     this.remoteDb = remoteDb;
@@ -58,32 +58,44 @@ export class EnhancedQueryHandler {
     this.cacheDebugger = new CacheDebugger(
       this.localDb,
       this.dataCacheManager,
-      this.queryRouter
+      this.queryRouter,
     );
     this.cacheExecutor = new CacheExecutor(
       this.queryRouter,
       this.dataCacheManager,
       this.localDb,
-      this.remoteDb
+      this.remoteDb,
     );
     this.subscriptionManager = new SubscriptionManager(
       this.localDb,
       this.dataCacheManager,
       broadcastToAllClients,
-      this.remoteDb
+      this.remoteDb,
     );
     this.claimTrackingSync = new ClaimTrackingSync(
       this.localDb,
       this.dataCacheManager,
       broadcastToAllClients,
-      this.remoteDb
+      this.remoteDb,
     );
 
     // 记录系统启动日志
-    this.cacheLogger.info(LogCategory.SYSTEM, 'Enhanced query handler initialized', {
-      hasRemoteDb: !!this.remoteDb,
-      components: ['QueryRouter', 'CacheExecutor', 'SubscriptionManager', 'PerformanceMonitor', 'CacheDebugger', 'ClaimTrackingSync']
-    }, 'EnhancedQueryHandler');
+    this.cacheLogger.info(
+      LogCategory.SYSTEM,
+      "Enhanced query handler initialized",
+      {
+        hasRemoteDb: !!this.remoteDb,
+        components: [
+          "QueryRouter",
+          "CacheExecutor",
+          "SubscriptionManager",
+          "PerformanceMonitor",
+          "CacheDebugger",
+          "ClaimTrackingSync",
+        ],
+      },
+      "EnhancedQueryHandler",
+    );
   }
 
   /**
@@ -93,36 +105,60 @@ export class EnhancedQueryHandler {
     sql: string,
     params?: QueryParams,
     userId?: string,
-    caseId?: string
+    caseId?: string,
   ): Promise<QueryHandlerResult> {
     const startTime = Date.now();
 
     try {
-      this.cacheLogger.debug(LogCategory.QUERY, 'Processing query', {
-        sql: sql.substring(0, 200),
-        hasParams: !!params,
-        userId,
-        caseId
-      }, 'EnhancedQueryHandler');
+      this.cacheLogger.debug(
+        LogCategory.QUERY,
+        "Processing query",
+        {
+          sql: sql.substring(0, 200),
+          hasParams: !!params,
+          userId,
+          caseId,
+        },
+        "EnhancedQueryHandler",
+      );
 
       // 开始性能计时
       const timerId = `query_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       this.cacheLogger.startTimer(timerId);
 
       // 使用智能缓存执行器执行查询
-      const result = await this.cacheExecutor.executeQuery(sql, params, userId, caseId);
+      const result = await this.cacheExecutor.executeQuery(
+        sql,
+        params,
+        userId,
+        caseId,
+      );
 
       // 结束性能计时
-      this.cacheLogger.endTimer(timerId, LogCategory.QUERY, 'Query execution completed', {
-        source: result.source,
-        cacheHit: result.cacheHit,
-        strategy: result.strategy,
-        userId,
-        caseId
-      }, 'EnhancedQueryHandler');
+      this.cacheLogger.endTimer(
+        timerId,
+        LogCategory.QUERY,
+        "Query execution completed",
+        {
+          source: result.source,
+          cacheHit: result.cacheHit,
+          strategy: result.strategy,
+          userId,
+          caseId,
+        },
+        "EnhancedQueryHandler",
+      );
 
       // 记录查询执行日志
-      this.cacheLogger.logQuery(sql, params, result.executionTime, result.source, result.cacheHit, userId, caseId);
+      this.cacheLogger.logQuery(
+        sql,
+        params,
+        result.executionTime,
+        result.source,
+        result.cacheHit,
+        userId,
+        caseId,
+      );
 
       // 记录性能指标
       const analysis = this.queryRouter.analyzeQuery(sql, params);
@@ -132,7 +168,7 @@ export class EnhancedQueryHandler {
         result.source,
         result.executionTime,
         result.cacheHit,
-        analysis.tables
+        analysis.tables,
       );
 
       // 处理订阅逻辑
@@ -147,40 +183,45 @@ export class EnhancedQueryHandler {
         source: result.source,
         executionTime: result.executionTime,
         cacheHit: result.cacheHit,
-        strategy: result.strategy
+        strategy: result.strategy,
       };
-
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      
+
       // 记录错误日志
-      this.cacheLogger.error(LogCategory.QUERY, 'Query execution failed', error as Error, {
-        sql: sql.substring(0, 200),
-        hasParams: !!params,
-        userId,
-        caseId,
-        executionTime
-      }, 'EnhancedQueryHandler');
-      
+      this.cacheLogger.error(
+        LogCategory.QUERY,
+        "Query execution failed",
+        error as Error,
+        {
+          sql: sql.substring(0, 200),
+          hasParams: !!params,
+          userId,
+          caseId,
+          executionTime,
+        },
+        "EnhancedQueryHandler",
+      );
+
       // 记录错误性能指标
       const analysis = this.queryRouter.analyzeQuery(sql, params);
       this.performanceMonitor.recordQueryPerformance(
         sql,
         params,
-        'remote',
+        "remote",
         executionTime,
         false,
         analysis.tables,
-        (error as Error).message
+        (error as Error).message,
       );
-      
+
       return {
         success: false,
         error: (error as Error).message,
-        source: 'remote',
+        source: "remote",
         executionTime,
         cacheHit: false,
-        strategy: 'ERROR'
+        strategy: "ERROR",
       };
     }
   }
@@ -192,98 +233,123 @@ export class EnhancedQueryHandler {
     sql: string,
     params?: QueryParams,
     userId?: string,
-    caseId?: string
+    caseId?: string,
   ): Promise<QueryHandlerResult> {
     const startTime = Date.now();
 
     try {
-      this.cacheLogger.info(LogCategory.QUERY, 'Processing mutation', {
-        sql: sql.substring(0, 200),
-        hasParams: !!params,
-        userId,
-        caseId
-      }, 'EnhancedQueryHandler');
+      this.cacheLogger.info(
+        LogCategory.QUERY,
+        "Processing mutation",
+        {
+          sql: sql.substring(0, 200),
+          hasParams: !!params,
+          userId,
+          caseId,
+        },
+        "EnhancedQueryHandler",
+      );
 
       // 写操作必须走远程数据库
       if (!this.remoteDb) {
-        throw new Error('Remote database not available for mutations');
+        throw new Error("Remote database not available for mutations");
       }
 
       const result = await this.remoteDb.query(sql, params);
 
       // 分析写操作影响的表
       const analysis = this.queryRouter.analyzeQuery(sql, params);
-      
+
       // 如果是写操作，需要清理相关缓存或触发更新
-      await this.handleMutationCacheInvalidation(analysis.tables, userId, caseId);
+      await this.handleMutationCacheInvalidation(
+        analysis.tables,
+        userId,
+        caseId,
+      );
 
       // 广播数据变更事件
       await this.broadcastMutationEvent(analysis, result, userId, caseId);
 
       // 处理债权追踪相关的数据变更
-      await this.handleClaimTrackingMutation(analysis, result, sql, params, userId);
+      await this.handleClaimTrackingMutation(
+        analysis,
+        result,
+        sql,
+        params,
+        userId,
+      );
 
       const executionTime = Date.now() - startTime;
-      
+
       // 记录写操作日志
-      this.cacheLogger.info(LogCategory.QUERY, 'Mutation completed', {
-        executionTime,
-        affectedTables: analysis.tables,
-        queryType: analysis.queryType,
-        userId,
-        caseId
-      }, 'EnhancedQueryHandler');
+      this.cacheLogger.info(
+        LogCategory.QUERY,
+        "Mutation completed",
+        {
+          executionTime,
+          affectedTables: analysis.tables,
+          queryType: analysis.queryType,
+          userId,
+          caseId,
+        },
+        "EnhancedQueryHandler",
+      );
 
       // 记录写操作性能指标
       this.performanceMonitor.recordQueryPerformance(
         sql,
         params,
-        'remote',
+        "remote",
         executionTime,
         false,
-        analysis.tables
+        analysis.tables,
       );
 
       return {
         success: true,
         data: result,
-        source: 'remote',
+        source: "remote",
         executionTime,
         cacheHit: false,
-        strategy: 'REMOTE_ONLY'
+        strategy: "REMOTE_ONLY",
       };
-
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      
+
       // 记录写操作错误日志
-      this.cacheLogger.error(LogCategory.QUERY, 'Mutation execution failed', error as Error, {
-        sql: sql.substring(0, 200),
-        hasParams: !!params,
-        userId,
-        caseId,
-        executionTime
-      }, 'EnhancedQueryHandler');
-      
+      this.cacheLogger.error(
+        LogCategory.QUERY,
+        "Mutation execution failed",
+        error as Error,
+        {
+          sql: sql.substring(0, 200),
+          hasParams: !!params,
+          userId,
+          caseId,
+          executionTime,
+        },
+        "EnhancedQueryHandler",
+      );
+
       // 记录写操作错误性能指标
       const analysis = this.queryRouter.analyzeQuery(sql, params);
       this.performanceMonitor.recordQueryPerformance(
         sql,
         params,
-        'remote',
+        "remote",
         executionTime,
         false,
         analysis.tables,
-        (error as Error).message
+        (error as Error).message,
       );
-      
+
       return {
         success: false,
         error: (error as Error).message,
-        source: 'remote',
+        source: "remote",
         executionTime,
         cacheHit: false,
-        strategy: 'ERROR'
+        strategy: "ERROR",
       };
     }
   }
@@ -295,37 +361,50 @@ export class EnhancedQueryHandler {
     sql: string,
     result: any,
     userId?: string,
-    caseId?: string
+    caseId?: string,
   ): Promise<void> {
     try {
       const analysis = this.queryRouter.analyzeQuery(sql);
-      
+
       // 只对SELECT查询处理订阅
-      if (analysis.queryType !== 'SELECT') {
+      if (analysis.queryType !== "SELECT") {
         return;
       }
 
       // 检查是否需要设置新的订阅
       for (const table of analysis.tables) {
-        const shouldSubscribe = await this.shouldCreateSubscription(table, analysis, userId, caseId);
-        
+        const shouldSubscribe = await this.shouldCreateSubscription(
+          table,
+          analysis,
+          userId,
+          caseId,
+        );
+
         if (shouldSubscribe) {
-          console.log(`EnhancedQueryHandler: Creating subscription for table: ${table}`);
-          
+          console.log(
+            `EnhancedQueryHandler: Creating subscription for table: ${table}`,
+          );
+
           try {
-            const subscriptionId = await this.subscriptionManager.subscribeToTable(
-              table,
-              userId,
-              caseId
+            const subscriptionId =
+              await this.subscriptionManager.subscribeToTable(
+                table,
+                userId,
+                caseId,
+              );
+            console.log(
+              `EnhancedQueryHandler: Subscription created: ${subscriptionId}`,
             );
-            console.log(`EnhancedQueryHandler: Subscription created: ${subscriptionId}`);
           } catch (subscriptionError) {
-            console.warn(`EnhancedQueryHandler: Failed to create subscription for ${table}:`, subscriptionError);
+            console.warn(
+              `EnhancedQueryHandler: Failed to create subscription for ${table}:`,
+              subscriptionError,
+            );
           }
         }
       }
     } catch (error) {
-      console.warn('EnhancedQueryHandler: Error in subscription logic:', error);
+      console.warn("EnhancedQueryHandler: Error in subscription logic:", error);
     }
   }
 
@@ -336,17 +415,18 @@ export class EnhancedQueryHandler {
     table: string,
     analysis: any,
     userId?: string,
-    caseId?: string
+    caseId?: string,
   ): Promise<boolean> {
     // 检查表的缓存配置
     const tableProfile = this.queryRouter.getTableProfile(table);
-    
+
     // 如果是高优先级表且用户已认证，创建订阅
     if (tableProfile && tableProfile.priority >= 7 && userId) {
       // 检查是否已存在订阅
-      const activeSubscriptions = this.subscriptionManager.getActiveSubscriptions();
-      const subscriptionId = `${table}::USER_SPECIFIC::user:${userId}${caseId ? `::case:${caseId}` : ''}`;
-      
+      const activeSubscriptions =
+        this.subscriptionManager.getActiveSubscriptions();
+      const subscriptionId = `${table}::USER_SPECIFIC::user:${userId}${caseId ? `::case:${caseId}` : ""}`;
+
       return !activeSubscriptions.has(subscriptionId);
     }
 
@@ -365,41 +445,55 @@ export class EnhancedQueryHandler {
     sql: string,
     data: UnknownData[],
     userId?: string,
-    _caseId?: string
+    _caseId?: string,
   ): Promise<void> {
     if (!userId || !data) return;
 
     try {
       // 检查是否为个人数据查询
       if (this.isPersonalDataQuery(sql)) {
-        console.log('EnhancedQueryHandler: Processing personal data caching');
+        console.log("EnhancedQueryHandler: Processing personal data caching");
 
-        const personalDataComponent = this.extractPersonalDataComponent(sql, data);
-        
+        const personalDataComponent = this.extractPersonalDataComponent(
+          sql,
+          data,
+        );
+
         if (personalDataComponent) {
           // 获取现有个人数据
-          let existingPersonalData = this.dataCacheManager.getCacheStatus().hasAuth ? {} : null;
+          let existingPersonalData = this.dataCacheManager.getCacheStatus()
+            .hasAuth
+            ? {}
+            : null;
 
           if (!existingPersonalData) {
             existingPersonalData = {
               permissions: { operations: [] },
               roles: { global: [], case: {} },
               menus: [],
-              syncTimestamp: Date.now()
+              syncTimestamp: Date.now(),
             };
           }
 
           // 合并新数据
-          this.mergePersonalDataComponent(existingPersonalData, personalDataComponent);
+          this.mergePersonalDataComponent(
+            existingPersonalData,
+            personalDataComponent,
+          );
 
           // 更新认证状态
           await this.dataCacheManager.updateAuthState(existingPersonalData);
 
-          console.log(`EnhancedQueryHandler: Personal data cached for user ${userId}`);
+          console.log(
+            `EnhancedQueryHandler: Personal data cached for user ${userId}`,
+          );
         }
       }
     } catch (error) {
-      console.warn('EnhancedQueryHandler: Error in personal data caching:', error);
+      console.warn(
+        "EnhancedQueryHandler: Error in personal data caching:",
+        error,
+      );
     }
   }
 
@@ -408,27 +502,30 @@ export class EnhancedQueryHandler {
    */
   private isPersonalDataQuery(sql: string): boolean {
     const sqlLower = sql.toLowerCase();
-    
+
     // 检查是否包含认证检查
-    const hasAuthCheck = sqlLower.includes('return $auth');
+    const hasAuthCheck = sqlLower.includes("return $auth");
     if (!hasAuthCheck) return false;
 
     // 检查是否涉及个人数据相关的表或关系
     const personalDataPatterns = [
-      'operation_metadata',
-      'menu_metadata',
-      'has_role',
-      'has_case_role',
-      'user_personal_data'
+      "operation_metadata",
+      "menu_metadata",
+      "has_role",
+      "has_case_role",
+      "user_personal_data",
     ];
 
-    return personalDataPatterns.some(pattern => sqlLower.includes(pattern));
+    return personalDataPatterns.some((pattern) => sqlLower.includes(pattern));
   }
 
   /**
    * 从查询结果中提取个人数据组件
    */
-  private extractPersonalDataComponent(sql: string, result: UnknownData[]): any {
+  private extractPersonalDataComponent(
+    sql: string,
+    result: UnknownData[],
+  ): any {
     const sqlLower = sql.toLowerCase();
 
     // 检查认证状态（第一个结果应该是认证检查）
@@ -438,7 +535,9 @@ export class EnhancedQueryHandler {
 
     const authResult = result[0];
     if (!authResult || (Array.isArray(authResult) && authResult.length === 0)) {
-      console.warn('EnhancedQueryHandler: Authentication failed for personal data query');
+      console.warn(
+        "EnhancedQueryHandler: Authentication failed for personal data query",
+      );
       return null;
     }
 
@@ -449,25 +548,28 @@ export class EnhancedQueryHandler {
     }
 
     // 根据查询类型识别数据组件
-    if (sqlLower.includes('operation_metadata')) {
+    if (sqlLower.includes("operation_metadata")) {
       return {
-        type: 'operations',
-        data: actualResult[0] || []
+        type: "operations",
+        data: actualResult[0] || [],
       };
-    } else if (sqlLower.includes('menu_metadata')) {
+    } else if (sqlLower.includes("menu_metadata")) {
       return {
-        type: 'menus',
-        data: actualResult[0] || []
+        type: "menus",
+        data: actualResult[0] || [],
       };
-    } else if (sqlLower.includes('has_role') && !sqlLower.includes('has_case_role')) {
+    } else if (
+      sqlLower.includes("has_role") &&
+      !sqlLower.includes("has_case_role")
+    ) {
       return {
-        type: 'globalRoles',
-        data: actualResult[0] || []
+        type: "globalRoles",
+        data: actualResult[0] || [],
       };
-    } else if (sqlLower.includes('has_case_role')) {
+    } else if (sqlLower.includes("has_case_role")) {
       return {
-        type: 'caseRoles',
-        data: actualResult[0] || []
+        type: "caseRoles",
+        data: actualResult[0] || [],
       };
     }
 
@@ -479,16 +581,18 @@ export class EnhancedQueryHandler {
    */
   private mergePersonalDataComponent(existingData: any, component: any): void {
     switch (component.type) {
-      case 'operations':
-        existingData.permissions.operations = component.data.map((item: any) => ({
-          operation_id: item.operation_id,
-          case_id: item.case_id,
-          can_execute: item.can_execute,
-          conditions: item.conditions
-        }));
+      case "operations":
+        existingData.permissions.operations = component.data.map(
+          (item: any) => ({
+            operation_id: item.operation_id,
+            case_id: item.case_id,
+            can_execute: item.can_execute,
+            conditions: item.conditions,
+          }),
+        );
         break;
 
-      case 'menus':
+      case "menus":
         existingData.menus = component.data.map((item: any) => ({
           id: item.id,
           path: item.path,
@@ -497,24 +601,31 @@ export class EnhancedQueryHandler {
           parent_id: item.parent_id,
           order_index: item.order_index,
           is_active: item.is_active,
-          required_permissions: item.required_permissions
+          required_permissions: item.required_permissions,
         }));
         break;
 
-      case 'globalRoles':
-        existingData.roles.global = component.data.map((item: any) => item.role_name);
+      case "globalRoles":
+        existingData.roles.global = component.data.map(
+          (item: any) => item.role_name,
+        );
         break;
 
-      case 'caseRoles':
-        const caseRoleMap: Record<string, string[]> = {};
-        component.data.forEach((item: any) => {
-          const caseId = String(item.case_id);
-          if (!caseRoleMap[caseId]) {
-            caseRoleMap[caseId] = [];
-          }
-          caseRoleMap[caseId].push(item.role_name);
-        });
-        existingData.roles.case = { ...existingData.roles.case, ...caseRoleMap };
+      case "caseRoles":
+        {
+          const caseRoleMap: Record<string, string[]> = {};
+          component.data.forEach((item: any) => {
+            const caseId = String(item.case_id);
+            if (!caseRoleMap[caseId]) {
+              caseRoleMap[caseId] = [];
+            }
+            caseRoleMap[caseId].push(item.role_name);
+          });
+          existingData.roles.case = {
+            ...existingData.roles.case,
+            ...caseRoleMap,
+          };
+        }
         break;
     }
 
@@ -528,15 +639,17 @@ export class EnhancedQueryHandler {
   private async handleMutationCacheInvalidation(
     tables: string[],
     userId?: string,
-    caseId?: string
+    caseId?: string,
   ): Promise<void> {
     try {
       for (const table of tables) {
-        console.log(`EnhancedQueryHandler: Invalidating cache for table: ${table}`);
-        
+        console.log(
+          `EnhancedQueryHandler: Invalidating cache for table: ${table}`,
+        );
+
         // 根据表的重要性决定失效策略
         const tableProfile = this.queryRouter.getTableProfile(table);
-        
+
         if (tableProfile && tableProfile.priority >= 8) {
           // 高优先级表：触发后台同步而不是清除缓存
           this.scheduleBackgroundSync(table, userId, caseId);
@@ -546,27 +659,45 @@ export class EnhancedQueryHandler {
         }
       }
     } catch (error) {
-      console.warn('EnhancedQueryHandler: Error in cache invalidation:', error);
+      console.warn("EnhancedQueryHandler: Error in cache invalidation:", error);
     }
   }
 
   /**
    * 安排后台同步
    */
-  private scheduleBackgroundSync(table: string, userId?: string, caseId?: string): void {
+  private scheduleBackgroundSync(
+    table: string,
+    userId?: string,
+    caseId?: string,
+  ): void {
     setTimeout(async () => {
       try {
         console.log(`EnhancedQueryHandler: Background syncing table: ${table}`);
-        
+
         if (this.remoteDb) {
           const data = await this.remoteDb.select(table);
-          const cacheType = this.queryRouter.getTableProfile(table)?.priority >= 8 ? 'persistent' : 'temporary';
-          
-          await this.dataCacheManager.cacheData(table, data, cacheType, userId, caseId);
-          console.log(`EnhancedQueryHandler: Background sync completed for table: ${table}`);
+          const cacheType =
+            this.queryRouter.getTableProfile(table)?.priority >= 8
+              ? "persistent"
+              : "temporary";
+
+          await this.dataCacheManager.cacheData(
+            table,
+            data,
+            cacheType,
+            userId,
+            caseId,
+          );
+          console.log(
+            `EnhancedQueryHandler: Background sync completed for table: ${table}`,
+          );
         }
       } catch (error) {
-        console.warn(`EnhancedQueryHandler: Background sync failed for table ${table}:`, error);
+        console.warn(
+          `EnhancedQueryHandler: Background sync failed for table ${table}:`,
+          error,
+        );
       }
     }, 100); // 100ms延迟
   }
@@ -578,26 +709,32 @@ export class EnhancedQueryHandler {
     analysis: any,
     result: UnknownData[],
     userId?: string,
-    caseId?: string
+    caseId?: string,
   ): Promise<void> {
     try {
       // 这里可以实现更详细的变更事件广播逻辑
       const message = {
-        type: 'data_mutation',
+        type: "data_mutation",
         payload: {
           queryType: analysis.queryType,
           tables: analysis.tables,
           userId,
           caseId,
           timestamp: Date.now(),
-          resultCount: Array.isArray(result) ? result.length : 1
-        }
+          resultCount: Array.isArray(result) ? result.length : 1,
+        },
       };
 
       // 注意：这里需要访问broadcastToAllClients，可能需要通过构造函数传入
-      console.log('EnhancedQueryHandler: Broadcasting mutation event:', message);
+      console.log(
+        "EnhancedQueryHandler: Broadcasting mutation event:",
+        message,
+      );
     } catch (error) {
-      console.warn('EnhancedQueryHandler: Error broadcasting mutation event:', error);
+      console.warn(
+        "EnhancedQueryHandler: Error broadcasting mutation event:",
+        error,
+      );
     }
   }
 
@@ -611,7 +748,7 @@ export class EnhancedQueryHandler {
       syncStatus: this.subscriptionManager.getSyncStatus(),
       performanceReport: this.performanceMonitor.generatePerformanceReport(),
       realTimeStats: this.performanceMonitor.getRealTimeStats(),
-      anomalies: this.performanceMonitor.getAnomalies()
+      anomalies: this.performanceMonitor.getAnomalies(),
     };
   }
 
@@ -639,17 +776,26 @@ export class EnhancedQueryHandler {
   /**
    * 预热缓存
    */
-  async preloadCache(tables: string[], userId?: string, caseId?: string): Promise<void> {
-    console.log(`EnhancedQueryHandler: Preloading cache for tables: ${tables.join(', ')}`);
-    
+  async preloadCache(
+    tables: string[],
+    userId?: string,
+    caseId?: string,
+  ): Promise<void> {
+    console.log(
+      `EnhancedQueryHandler: Preloading cache for tables: ${tables.join(", ")}`,
+    );
+
     await this.cacheExecutor.preloadCache(tables, userId, caseId);
-    
+
     // 同时为这些表设置订阅
     for (const table of tables) {
       try {
         await this.subscriptionManager.subscribeToTable(table, userId, caseId);
       } catch (error) {
-        console.warn(`EnhancedQueryHandler: Failed to subscribe to ${table} during preload:`, error);
+        console.warn(
+          `EnhancedQueryHandler: Failed to subscribe to ${table} during preload:`,
+          error,
+        );
       }
     }
   }
@@ -658,19 +804,29 @@ export class EnhancedQueryHandler {
    * 清理资源
    */
   async cleanup(): Promise<void> {
-    this.cacheLogger.info(LogCategory.SYSTEM, 'Cleaning up resources', {}, 'EnhancedQueryHandler');
-    
+    this.cacheLogger.info(
+      LogCategory.SYSTEM,
+      "Cleaning up resources",
+      {},
+      "EnhancedQueryHandler",
+    );
+
     // 清理统计数据
     this.cacheExecutor.cleanupStats();
     this.queryRouter.cleanupFrequencyStats();
     this.performanceMonitor.cleanup();
     this.cacheDebugger.cleanup();
     this.cacheLogger.cleanup();
-    
+
     // 关闭订阅管理器
     await this.subscriptionManager.close();
-    
-    this.cacheLogger.info(LogCategory.SYSTEM, 'Cleanup completed', {}, 'EnhancedQueryHandler');
+
+    this.cacheLogger.info(
+      LogCategory.SYSTEM,
+      "Cleanup completed",
+      {},
+      "EnhancedQueryHandler",
+    );
   }
 
   /**
@@ -695,31 +851,54 @@ export class EnhancedQueryHandler {
     result: UnknownData[],
     sql: string,
     params?: QueryParams,
-    userId?: string
+    userId?: string,
   ): Promise<void> {
     try {
       // 检查是否涉及债权追踪相关的表
-      const trackingTables = ['claim_operation_log', 'claim_version_history', 'claim_status_flow', 'claim_access_log'];
-      const affectedTrackingTables = analysis.tables.filter((table: string) => trackingTables.includes(table));
+      const trackingTables = [
+        "claim_operation_log",
+        "claim_version_history",
+        "claim_status_flow",
+        "claim_access_log",
+      ];
+      const affectedTrackingTables = analysis.tables.filter((table: string) =>
+        trackingTables.includes(table),
+      );
 
       if (affectedTrackingTables.length === 0) return;
 
-      this.cacheLogger.info(LogCategory.SYSTEM, 'Processing claim tracking mutation', {
-        affectedTables: affectedTrackingTables,
-        queryType: analysis.queryType,
-        userId
-      }, 'EnhancedQueryHandler');
+      this.cacheLogger.info(
+        LogCategory.SYSTEM,
+        "Processing claim tracking mutation",
+        {
+          affectedTables: affectedTrackingTables,
+          queryType: analysis.queryType,
+          userId,
+        },
+        "EnhancedQueryHandler",
+      );
 
       // 处理每个受影响的追踪表
       for (const table of affectedTrackingTables) {
-        await this.processTrackingTableMutation(table, result, sql, params, userId);
+        await this.processTrackingTableMutation(
+          table,
+          result,
+          sql,
+          params,
+          userId,
+        );
       }
-
     } catch (error) {
-      this.cacheLogger.error(LogCategory.SYSTEM, 'Failed to handle claim tracking mutation', error as Error, {
-        affectedTables: analysis.tables,
-        userId
-      }, 'EnhancedQueryHandler');
+      this.cacheLogger.error(
+        LogCategory.SYSTEM,
+        "Failed to handle claim tracking mutation",
+        error as Error,
+        {
+          affectedTables: analysis.tables,
+          userId,
+        },
+        "EnhancedQueryHandler",
+      );
     }
   }
 
@@ -731,7 +910,7 @@ export class EnhancedQueryHandler {
     result: UnknownData[],
     sql: string,
     params?: QueryParams,
-    userId?: string
+    userId?: string,
   ): Promise<void> {
     try {
       // 从结果中提取数据
@@ -740,25 +919,30 @@ export class EnhancedQueryHandler {
 
       // 根据表类型调用相应的处理方法
       switch (table) {
-        case 'claim_operation_log':
+        case "claim_operation_log":
           await this.claimTrackingSync.handleClaimOperationUpdate(data);
           break;
-        case 'claim_status_flow':
+        case "claim_status_flow":
           await this.claimTrackingSync.handleStatusTransition(data);
           break;
-        case 'claim_version_history':
+        case "claim_version_history":
           await this.claimTrackingSync.handleVersionUpdate(data);
           break;
-        case 'claim_access_log':
+        case "claim_access_log":
           await this.claimTrackingSync.handleAccessLog(data);
           break;
       }
-
     } catch (error) {
-      this.cacheLogger.error(LogCategory.SYSTEM, 'Failed to process tracking table mutation', error as Error, {
-        table,
-        userId
-      }, 'EnhancedQueryHandler');
+      this.cacheLogger.error(
+        LogCategory.SYSTEM,
+        "Failed to process tracking table mutation",
+        error as Error,
+        {
+          table,
+          userId,
+        },
+        "EnhancedQueryHandler",
+      );
     }
   }
 

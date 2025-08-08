@@ -9,7 +9,7 @@ import { vi } from "vitest";
 
 // Mock date-fns format function to ensure consistent timezone behavior
 vi.mock("date-fns", async () => {
-  const actual = await vi.importActual("date-fns");
+  const actual = await vi.importActual<typeof import("date-fns")>("date-fns");
   return {
     ...actual,
     format: vi.fn((date: Date, formatStr: string) => {
@@ -27,7 +27,7 @@ vi.mock("date-fns", async () => {
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
       }
       // For other formats, use the actual implementation
-      return (actual as any).format(date, formatStr);
+      return actual.format(date, formatStr);
     }),
   };
 });

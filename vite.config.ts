@@ -5,9 +5,6 @@ import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath, URL } from "node:url";
 import fs from "fs";
 import path from "path";
-import { createRequire } from "module";
-
-const require = createRequire(import.meta.url);
 
 // 将import手动添加到文件开头 - 在所有插件处理完成后执行（仅在需要时）
 function prependImportToSwSurreal(): Plugin<unknown> {
@@ -169,7 +166,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ["@mui/material", "@mui/icons-material", "@emotion/react", "@emotion/styled"],
+      include: [
+        "@mui/material",
+        "@mui/icons-material",
+        "@emotion/react",
+        "@emotion/styled",
+      ],
       exclude: ["@mui/icons-material/esm", "@surrealdb/wasm"],
       force: true, // 强制重新优化依赖，解决@emotion重复加载问题
       esbuildOptions: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   Card,
@@ -28,9 +28,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider,
-  SvgIcon
-} from '@mui/material';
+  SvgIcon,
+} from "@mui/material";
 import {
   mdiChevronDown,
   mdiChevronUp,
@@ -42,23 +41,23 @@ import {
   mdiFileDocumentOutline,
   mdiAlertCircleOutline,
   mdiCheckCircleOutline,
-  mdiCloseCircleOutline
-} from '@mdi/js';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { zhCN } from 'date-fns/locale';
-import { format } from 'date-fns';
+  mdiCloseCircleOutline,
+} from "@mdi/js";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
+import { zhCN } from "date-fns/locale";
+import { format } from "date-fns";
 
-import { ClaimOperationService } from '@/src/services/claimOperationService';
-import { useSurreal } from '@/src/contexts/SurrealProvider';
+import { ClaimOperationService } from "@/src/services/claimOperationService";
+import { useSurreal } from "@/src/contexts/SurrealProvider";
 import {
   ClaimOperationLog,
   OperationType,
   OperationResult,
-  OperationLogQueryOptions
-} from '@/src/types/claimTracking';
-import { touchFriendlyIconButtonSx } from '@/src/utils/touchTargetUtils';
+  OperationLogQueryOptions,
+} from "@/src/types/claimTracking";
+import { touchFriendlyIconButtonSx } from "@/src/utils/touchTargetUtils";
 
 interface ClaimOperationHistoryProps {
   claimId: string;
@@ -79,12 +78,12 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
   claimId,
   showFilters = true,
   maxHeight = 600,
-  onOperationClick
+  onOperationClick,
 }) => {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { client } = useSurreal();
-  
+
   const [operations, setOperations] = useState<ClaimOperationLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,53 +91,66 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState<FilterState>({});
   const [showFiltersPanel, setShowFiltersPanel] = useState(false);
-  const [selectedOperation, setSelectedOperation] = useState<ClaimOperationLog | null>(null);
+  const [selectedOperation, setSelectedOperation] =
+    useState<ClaimOperationLog | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const pageSize = 20;
-  const operationService = new ClaimOperationService(client);
+  const operationService = useMemo(
+    () => new ClaimOperationService(client),
+    [client],
+  );
 
   // 操作类型映射
   const operationTypeLabels: Record<OperationType, string> = {
-    [OperationType.CREATE]: '创建',
-    [OperationType.UPDATE]: '更新',
-    [OperationType.SUBMIT]: '提交',
-    [OperationType.WITHDRAW]: '撤回',
-    [OperationType.REVIEW]: '审核',
-    [OperationType.APPROVE]: '通过',
-    [OperationType.REJECT]: '驳回',
-    [OperationType.SUPPLEMENT_REQUEST]: '补充要求',
-    [OperationType.DELETE]: '删除',
-    [OperationType.VIEW]: '查看'
+    [OperationType.CREATE]: "创建",
+    [OperationType.UPDATE]: "更新",
+    [OperationType.SUBMIT]: "提交",
+    [OperationType.WITHDRAW]: "撤回",
+    [OperationType.REVIEW]: "审核",
+    [OperationType.APPROVE]: "通过",
+    [OperationType.REJECT]: "驳回",
+    [OperationType.SUPPLEMENT_REQUEST]: "补充要求",
+    [OperationType.DELETE]: "删除",
+    [OperationType.VIEW]: "查看",
   };
 
   // 操作结果映射
   const operationResultLabels: Record<OperationResult, string> = {
-    [OperationResult.SUCCESS]: '成功',
-    [OperationResult.FAILED]: '失败',
-    [OperationResult.PARTIAL]: '部分成功'
+    [OperationResult.SUCCESS]: "成功",
+    [OperationResult.FAILED]: "失败",
+    [OperationResult.PARTIAL]: "部分成功",
   };
 
   // 获取操作类型颜色
-  const getOperationTypeColor = (type: OperationType): 'default' | 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success' => {
+  const getOperationTypeColor = (
+    type: OperationType,
+  ):
+    | "default"
+    | "primary"
+    | "secondary"
+    | "error"
+    | "warning"
+    | "info"
+    | "success" => {
     switch (type) {
       case OperationType.CREATE:
-        return 'success';
+        return "success";
       case OperationType.UPDATE:
-        return 'info';
+        return "info";
       case OperationType.SUBMIT:
-        return 'primary';
+        return "primary";
       case OperationType.APPROVE:
-        return 'success';
+        return "success";
       case OperationType.REJECT:
-        return 'error';
+        return "error";
       case OperationType.DELETE:
-        return 'error';
+        return "error";
       case OperationType.WITHDRAW:
-        return 'warning';
+        return "warning";
       default:
-        return 'default';
+        return "default";
     }
   };
 
@@ -147,27 +159,27 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
     switch (result) {
       case OperationResult.SUCCESS:
         return {
-          color: 'success' as const,
+          color: "success" as const,
           icon: mdiCheckCircleOutline,
-          label: operationResultLabels[result]
+          label: operationResultLabels[result],
         };
       case OperationResult.FAILED:
         return {
-          color: 'error' as const,
+          color: "error" as const,
           icon: mdiCloseCircleOutline,
-          label: operationResultLabels[result]
+          label: operationResultLabels[result],
         };
       case OperationResult.PARTIAL:
         return {
-          color: 'warning' as const,
+          color: "warning" as const,
           icon: mdiAlertCircleOutline,
-          label: operationResultLabels[result]
+          label: operationResultLabels[result],
         };
       default:
         return {
-          color: 'default' as const,
+          color: "default" as const,
           icon: mdiAlertCircleOutline,
-          label: '未知'
+          label: "未知",
         };
     }
   };
@@ -185,21 +197,30 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
         offset: (page - 1) * pageSize,
         operation_type: filters.operationType,
         operation_result: filters.operationResult,
-        date_range: filters.startDate && filters.endDate ? {
-          start: filters.startDate,
-          end: filters.endDate
-        } : undefined
+        date_range:
+          filters.startDate && filters.endDate
+            ? {
+                start: filters.startDate,
+                end: filters.endDate,
+              }
+            : undefined,
       };
 
-      const result = await operationService.getOperationHistory(claimId, options);
+      const result = await operationService.getOperationHistory(
+        claimId,
+        options,
+      );
       setOperations(result);
 
       // 计算总页数（这里简化处理，实际应该从服务返回总数）
-      const estimatedTotal = result.length === pageSize ? page * pageSize + 1 : (page - 1) * pageSize + result.length;
+      const estimatedTotal =
+        result.length === pageSize
+          ? page * pageSize + 1
+          : (page - 1) * pageSize + result.length;
       setTotalPages(Math.ceil(estimatedTotal / pageSize));
     } catch (err) {
-      console.error('加载操作历史失败:', err);
-      setError('加载操作历史失败，请重试');
+      console.error("加载操作历史失败:", err);
+      setError("加载操作历史失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -212,7 +233,7 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
 
   // 处理筛选器变更
   const handleFilterChange = (newFilters: Partial<FilterState>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
+    setFilters((prev) => ({ ...prev, ...newFilters }));
     setPage(1); // 重置到第一页
   };
 
@@ -243,7 +264,7 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
   // 格式化时间
   const formatTime = (timeStr: string) => {
     try {
-      return format(new Date(timeStr), 'yyyy-MM-dd HH:mm:ss');
+      return format(new Date(timeStr), "yyyy-MM-dd HH:mm:ss");
     } catch {
       return timeStr;
     }
@@ -261,14 +282,17 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
               筛选条件
             </Typography>
             <Stack spacing={2}>
-              <Stack direction={isMobile ? 'column' : 'row'} spacing={2}>
+              <Stack direction={isMobile ? "column" : "row"} spacing={2}>
                 <TextField
                   select
                   label="操作类型"
-                  value={filters.operationType || ''}
-                  onChange={(e) => handleFilterChange({ 
-                    operationType: e.target.value as OperationType || undefined 
-                  })}
+                  value={filters.operationType || ""}
+                  onChange={(e) =>
+                    handleFilterChange({
+                      operationType:
+                        (e.target.value as OperationType) || undefined,
+                    })
+                  }
                   size="small"
                   sx={{ minWidth: 120 }}
                 >
@@ -283,60 +307,74 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
                 <TextField
                   select
                   label="操作结果"
-                  value={filters.operationResult || ''}
-                  onChange={(e) => handleFilterChange({ 
-                    operationResult: e.target.value as OperationResult || undefined 
-                  })}
+                  value={filters.operationResult || ""}
+                  onChange={(e) =>
+                    handleFilterChange({
+                      operationResult:
+                        (e.target.value as OperationResult) || undefined,
+                    })
+                  }
                   size="small"
                   sx={{ minWidth: 120 }}
                 >
                   <MenuItem value="">全部</MenuItem>
-                  {Object.entries(operationResultLabels).map(([value, label]) => (
-                    <MenuItem key={value} value={value}>
-                      {label}
-                    </MenuItem>
-                  ))}
+                  {Object.entries(operationResultLabels).map(
+                    ([value, label]) => (
+                      <MenuItem key={value} value={value}>
+                        {label}
+                      </MenuItem>
+                    ),
+                  )}
                 </TextField>
 
                 <TextField
                   label="操作人"
-                  value={filters.operatorName || ''}
-                  onChange={(e) => handleFilterChange({ operatorName: e.target.value })}
+                  value={filters.operatorName || ""}
+                  onChange={(e) =>
+                    handleFilterChange({ operatorName: e.target.value })
+                  }
                   size="small"
                   placeholder="输入操作人姓名"
                 />
               </Stack>
 
-              <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={zhCN}>
-                <Stack direction={isMobile ? 'column' : 'row'} spacing={2}>
+              <LocalizationProvider
+                dateAdapter={AdapterDateFns}
+                adapterLocale={zhCN}
+              >
+                <Stack direction={isMobile ? "column" : "row"} spacing={2}>
                   <DatePicker
                     label="开始日期"
                     value={filters.startDate || null}
-                    onChange={(date) => handleFilterChange({ startDate: date || undefined })}
-                    slotProps={{ textField: { size: 'small' } }}
+                    onChange={(date) =>
+                      handleFilterChange({ startDate: date || undefined })
+                    }
+                    slotProps={{ textField: { size: "small" } }}
                   />
                   <DatePicker
                     label="结束日期"
                     value={filters.endDate || null}
-                    onChange={(date) => handleFilterChange({ endDate: date || undefined })}
-                    slotProps={{ textField: { size: 'small' } }}
+                    onChange={(date) =>
+                      handleFilterChange({ endDate: date || undefined })
+                    }
+                    slotProps={{ textField: { size: "small" } }}
                   />
                 </Stack>
               </LocalizationProvider>
 
               <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={clearFilters}
-                >
+                <Button variant="outlined" size="small" onClick={clearFilters}>
                   清除筛选
                 </Button>
                 <Button
                   variant="contained"
                   size="small"
                   onClick={loadOperations}
-                  startIcon={<SvgIcon><path d={mdiRefresh} /></SvgIcon>}
+                  startIcon={
+                    <SvgIcon>
+                      <path d={mdiRefresh} />
+                    </SvgIcon>
+                  }
                 >
                   刷新
                 </Button>
@@ -356,7 +394,11 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
           <Card key={operation.id} variant="outlined">
             <CardContent>
               <Stack spacing={2}>
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="flex-start"
+                >
                   <Stack spacing={1}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Chip
@@ -365,11 +407,25 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
                         size="small"
                       />
                       <Chip
-                        icon={<SvgIcon fontSize="small">
-                          <path d={getOperationResultDisplay(operation.operation_result).icon} />
-                        </SvgIcon>}
-                        label={getOperationResultDisplay(operation.operation_result).label}
-                        color={getOperationResultDisplay(operation.operation_result).color}
+                        icon={
+                          <SvgIcon fontSize="small">
+                            <path
+                              d={
+                                getOperationResultDisplay(
+                                  operation.operation_result,
+                                ).icon
+                              }
+                            />
+                          </SvgIcon>
+                        }
+                        label={
+                          getOperationResultDisplay(operation.operation_result)
+                            .label
+                        }
+                        color={
+                          getOperationResultDisplay(operation.operation_result)
+                            .color
+                        }
                         size="small"
                       />
                     </Stack>
@@ -382,7 +438,9 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
                     onClick={() => handleViewDetails(operation)}
                     sx={touchFriendlyIconButtonSx}
                   >
-                    <SvgIcon><path d={mdiEyeOutline} /></SvgIcon>
+                    <SvgIcon>
+                      <path d={mdiEyeOutline} />
+                    </SvgIcon>
                   </IconButton>
                 </Stack>
 
@@ -444,7 +502,13 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
                       onClick={() => toggleRowExpansion(operation.id as string)}
                     >
                       <SvgIcon>
-                        <path d={expandedRows.has(operation.id as string) ? mdiChevronUp : mdiChevronDown} />
+                        <path
+                          d={
+                            expandedRows.has(operation.id as string)
+                              ? mdiChevronUp
+                              : mdiChevronDown
+                          }
+                        />
                       </SvgIcon>
                     </IconButton>
                   </TableCell>
@@ -460,11 +524,25 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
                   <TableCell>{formatTime(operation.operation_time)}</TableCell>
                   <TableCell>
                     <Chip
-                      icon={<SvgIcon fontSize="small">
-                        <path d={getOperationResultDisplay(operation.operation_result).icon} />
-                      </SvgIcon>}
-                      label={getOperationResultDisplay(operation.operation_result).label}
-                      color={getOperationResultDisplay(operation.operation_result).color}
+                      icon={
+                        <SvgIcon fontSize="small">
+                          <path
+                            d={
+                              getOperationResultDisplay(
+                                operation.operation_result,
+                              ).icon
+                            }
+                          />
+                        </SvgIcon>
+                      }
+                      label={
+                        getOperationResultDisplay(operation.operation_result)
+                          .label
+                      }
+                      color={
+                        getOperationResultDisplay(operation.operation_result)
+                          .color
+                      }
                       size="small"
                     />
                   </TableCell>
@@ -474,7 +552,9 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
                         size="small"
                         onClick={() => handleViewDetails(operation)}
                       >
-                        <SvgIcon><path d={mdiEyeOutline} /></SvgIcon>
+                        <SvgIcon>
+                          <path d={mdiEyeOutline} />
+                        </SvgIcon>
                       </IconButton>
                     </Tooltip>
                   </TableCell>
@@ -484,11 +564,13 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
                     <Collapse in={expandedRows.has(operation.id as string)}>
                       <Box sx={{ py: 2 }}>
                         <Stack spacing={1}>
-                          {operation.changed_fields && operation.changed_fields.length > 0 && (
-                            <Typography variant="body2">
-                              <strong>变更字段:</strong> {operation.changed_fields.join(', ')}
-                            </Typography>
-                          )}
+                          {operation.changed_fields &&
+                            operation.changed_fields.length > 0 && (
+                              <Typography variant="body2">
+                                <strong>变更字段:</strong>{" "}
+                                {operation.changed_fields.join(", ")}
+                              </Typography>
+                            )}
                           {operation.ip_address && (
                             <Typography variant="body2" color="text.secondary">
                               <strong>IP地址:</strong> {operation.ip_address}
@@ -533,22 +615,41 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
               <Typography variant="h6">基本信息</Typography>
               <Stack spacing={1}>
                 <Typography variant="body2">
-                  <strong>操作描述:</strong> {selectedOperation.operation_description}
+                  <strong>操作描述:</strong>{" "}
+                  {selectedOperation.operation_description}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>操作人:</strong> {selectedOperation.operator_name} ({selectedOperation.operator_role})
+                  <strong>操作人:</strong> {selectedOperation.operator_name} (
+                  {selectedOperation.operator_role})
                 </Typography>
                 <Typography variant="body2">
-                  <strong>操作时间:</strong> {formatTime(selectedOperation.operation_time)}
+                  <strong>操作时间:</strong>{" "}
+                  {formatTime(selectedOperation.operation_time)}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>操作结果:</strong> 
+                  <strong>操作结果:</strong>
                   <Chip
-                    icon={<SvgIcon fontSize="small">
-                      <path d={getOperationResultDisplay(selectedOperation.operation_result).icon} />
-                    </SvgIcon>}
-                    label={getOperationResultDisplay(selectedOperation.operation_result).label}
-                    color={getOperationResultDisplay(selectedOperation.operation_result).color}
+                    icon={
+                      <SvgIcon fontSize="small">
+                        <path
+                          d={
+                            getOperationResultDisplay(
+                              selectedOperation.operation_result,
+                            ).icon
+                          }
+                        />
+                      </SvgIcon>
+                    }
+                    label={
+                      getOperationResultDisplay(
+                        selectedOperation.operation_result,
+                      ).label
+                    }
+                    color={
+                      getOperationResultDisplay(
+                        selectedOperation.operation_result,
+                      ).color
+                    }
                     size="small"
                     sx={{ ml: 1 }}
                   />
@@ -561,22 +662,34 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
               </Stack>
             </Stack>
 
-            {selectedOperation.changed_fields && selectedOperation.changed_fields.length > 0 && (
-              <Stack spacing={2}>
-                <Typography variant="h6">变更字段</Typography>
-                <Box>
-                  {selectedOperation.changed_fields.map((field, index) => (
-                    <Chip key={index} label={field} size="small" sx={{ mr: 1, mb: 1 }} />
-                  ))}
-                </Box>
-              </Stack>
-            )}
+            {selectedOperation.changed_fields &&
+              selectedOperation.changed_fields.length > 0 && (
+                <Stack spacing={2}>
+                  <Typography variant="h6">变更字段</Typography>
+                  <Box>
+                    {selectedOperation.changed_fields.map((field, index) => (
+                      <Chip
+                        key={index}
+                        label={field}
+                        size="small"
+                        sx={{ mr: 1, mb: 1 }}
+                      />
+                    ))}
+                  </Box>
+                </Stack>
+              )}
 
             {selectedOperation.before_data && (
               <Stack spacing={2}>
                 <Typography variant="h6">变更前数据</Typography>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <pre style={{ margin: 0, fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: "grey.50" }}>
+                  <pre
+                    style={{
+                      margin: 0,
+                      fontSize: "0.875rem",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
                     {JSON.stringify(selectedOperation.before_data, null, 2)}
                   </pre>
                 </Paper>
@@ -586,8 +699,14 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
             {selectedOperation.after_data && (
               <Stack spacing={2}>
                 <Typography variant="h6">变更后数据</Typography>
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <pre style={{ margin: 0, fontSize: '0.875rem', whiteSpace: 'pre-wrap' }}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: "grey.50" }}>
+                  <pre
+                    style={{
+                      margin: 0,
+                      fontSize: "0.875rem",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
                     {JSON.stringify(selectedOperation.after_data, null, 2)}
                   </pre>
                 </Paper>
@@ -605,9 +724,7 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDetailDialogOpen(false)}>
-            关闭
-          </Button>
+          <Button onClick={() => setDetailDialogOpen(false)}>关闭</Button>
         </DialogActions>
       </Dialog>
     );
@@ -616,16 +733,23 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
   return (
     <Box>
       {/* 标题和操作栏 */}
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Typography variant="h6">
-          操作历史
-        </Typography>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mb: 2 }}
+      >
+        <Typography variant="h6">操作历史</Typography>
         <Stack direction="row" spacing={1}>
           {showFilters && (
             <Button
               variant="outlined"
               size="small"
-              startIcon={<SvgIcon><path d={mdiFilterOutline} /></SvgIcon>}
+              startIcon={
+                <SvgIcon>
+                  <path d={mdiFilterOutline} />
+                </SvgIcon>
+              }
               onClick={() => setShowFiltersPanel(!showFiltersPanel)}
             >
               筛选
@@ -634,7 +758,11 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
           <Button
             variant="outlined"
             size="small"
-            startIcon={<SvgIcon><path d={mdiRefresh} /></SvgIcon>}
+            startIcon={
+              <SvgIcon>
+                <path d={mdiRefresh} />
+              </SvgIcon>
+            }
             onClick={loadOperations}
             disabled={loading}
           >
@@ -647,49 +775,54 @@ const ClaimOperationHistory: React.FC<ClaimOperationHistoryProps> = ({
       {renderFilters()}
 
       {/* 内容区域 */}
-      <Box sx={{ maxHeight, overflow: 'auto' }}>
-        {loading && (
-          <Box display="flex" justifyContent="center" py={4}>
-            <CircularProgress />
-          </Box>
-        )}
+      {!showFiltersPanel && (
+        <Box sx={{ maxHeight, overflow: "auto" }}>
+          {loading && (
+            <Box display="flex" justifyContent="center" py={4}>
+              <CircularProgress />
+            </Box>
+          )}
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-        {!loading && !error && operations.length === 0 && (
-          <Box display="flex" flexDirection="column" alignItems="center" py={4}>
-            <SvgIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}>
-              <path d={mdiFileDocumentOutline} />
-            </SvgIcon>
-            <Typography color="text.secondary">
-              暂无操作记录
-            </Typography>
-          </Box>
-        )}
+          {!loading && !error && operations.length === 0 && (
+            <Box
+              display="flex"
+              flexDirection="column"
+              alignItems="center"
+              py={4}
+            >
+              <SvgIcon sx={{ fontSize: 48, color: "text.secondary", mb: 2 }}>
+                <path d={mdiFileDocumentOutline} />
+              </SvgIcon>
+              <Typography color="text.secondary">暂无操作记录</Typography>
+            </Box>
+          )}
 
-        {!loading && !error && operations.length > 0 && (
-          <>
-            {isMobile ? renderMobileView() : renderDesktopView()}
-            
-            {/* 分页 */}
-            {totalPages > 1 && (
-              <Box display="flex" justifyContent="center" mt={2}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={(_, newPage) => setPage(newPage)}
-                  color="primary"
-                  size={isMobile ? 'small' : 'medium'}
-                />
-              </Box>
-            )}
-          </>
-        )}
-      </Box>
+          {!loading && !error && operations.length > 0 && (
+            <>
+              {isMobile ? renderMobileView() : renderDesktopView()}
+
+              {/* 分页 */}
+              {totalPages > 1 && (
+                <Box display="flex" justifyContent="center" mt={2}>
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(_, newPage) => setPage(newPage)}
+                    color="primary"
+                    size={isMobile ? "small" : "medium"}
+                  />
+                </Box>
+              )}
+            </>
+          )}
+        </Box>
+      )}
 
       {/* 详情对话框 */}
       {renderDetailDialog()}

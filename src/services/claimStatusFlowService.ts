@@ -3,20 +3,18 @@
  * 负责记录和查询债权状态流转历史，计算状态停留时长和流转统计
  */
 
-import { queryWithAuth } from '@/src/utils/surrealAuth';
+import { queryWithAuth } from "@/src/utils/surrealAuth";
 import {
   ClaimStatusFlow,
   TransitionType,
   StatusStatistics,
-  RecordStatusTransitionParams
-} from '@/src/types/claimTracking';
-import type { RecordId } from 'surrealdb';
+  RecordStatusTransitionParams,
+} from "@/src/types/claimTracking";
+import type { RecordId } from "surrealdb";
 
 export class ClaimStatusFlowService {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(surrealClient: any) {
     this.client = surrealClient;
   }
@@ -24,13 +22,16 @@ export class ClaimStatusFlowService {
   /**
    * 记录状态流转
    */
-  async recordStatusTransition(params: RecordStatusTransitionParams): Promise<ClaimStatusFlow> {
+  async recordStatusTransition(
+    params: RecordStatusTransitionParams,
+  ): Promise<ClaimStatusFlow> {
     try {
       // 获取前一个状态的停留时长
-      const durationInPreviousStatus = await this.calculatePreviousStatusDuration(
-        params.claim_id,
-        params.from_status
-      );
+      const durationInPreviousStatus =
+        await this.calculatePreviousStatusDuration(
+          params.claim_id,
+          params.from_status,
+        );
 
       const query = `
         CREATE claim_status_flow SET
@@ -56,30 +57,32 @@ export class ClaimStatusFlowService {
         transition_notes: params.transition_notes,
         review_comments: params.review_comments,
         duration_in_previous_status: durationInPreviousStatus,
-        related_operation_log_id: params.related_operation_log_id
+        related_operation_log_id: params.related_operation_log_id,
       };
 
       const results = await queryWithAuth(this.client, query, queryParams);
       const statusFlow = results[0]?.[0] as ClaimStatusFlow;
 
       if (!statusFlow) {
-        throw new Error('状态流转记录失败');
+        throw new Error("状态流转记录失败");
       }
 
       return statusFlow;
     } catch (error) {
-      console.error('记录状态流转失败:', error);
-      throw new Error('记录状态流转失败');
+      console.error("记录状态流转失败:", error);
+      throw new Error("记录状态流转失败");
     }
   }
 
   /**
    * 获取债权状态流转历史
    */
-  async getStatusFlowHistory(claimId: string | RecordId): Promise<ClaimStatusFlow[]> {
+  async getStatusFlowHistory(
+    claimId: string | RecordId,
+  ): Promise<ClaimStatusFlow[]> {
     try {
       const query = `
-        SELECT 
+        SELECT
           *,
           from_status.name AS from_status_name,
           to_status.name AS to_status_name
@@ -88,11 +91,13 @@ export class ClaimStatusFlowService {
         ORDER BY transition_time ASC
       `;
 
-      const results = await queryWithAuth(this.client, query, { claim_id: claimId });
-      return results[0] as ClaimStatusFlow[] || [];
+      const results = await queryWithAuth(this.client, query, {
+        claim_id: claimId,
+      });
+      return (results[0] as ClaimStatusFlow[]) || [];
     } catch (error) {
-      console.error('获取状态流转历史失败:', error);
-      throw new Error('获取状态流转历史失败');
+      console.error("获取状态流转历史失败:", error);
+      throw new Error("获取状态流转历史失败");
     }
   }
 
@@ -105,26 +110,27 @@ export class ClaimStatusFlowService {
   }): Promise<StatusStatistics> {
     try {
       const { case_id, date_range } = params;
-      
-      let whereClause = '1 = 1';
+
+      let whereClause = "1 = 1";
       const queryParams: Record<string, unknown> = {};
 
       // 添加案件过滤
       if (case_id) {
-        whereClause += ' AND claim_id->case_id = $case_id';
+        whereClause += " AND claim_id->case_id = $case_id";
         queryParams.case_id = case_id;
       }
 
       // 添加日期范围过滤
       if (date_range) {
-        whereClause += ' AND transition_time >= $start_date AND transition_time <= $end_date';
+        whereClause +=
+          " AND transition_time >= $start_date AND transition_time <= $end_date";
         queryParams.start_date = date_range.start.toISOString();
         queryParams.end_date = date_range.end.toISOString();
       }
 
       // 基础统计查询
       const baseQuery = `
-        SELECT 
+        SELECT
           count() AS total_transitions
         FROM claim_status_flow
         WHERE ${whereClause}
@@ -133,7 +139,7 @@ export class ClaimStatusFlowService {
 
       // 按状态分组统计流转次数
       const statusTransitionsQuery = `
-        SELECT 
+        SELECT
           to_status.name AS status_name,
           count() AS count
         FROM claim_status_flow
@@ -143,7 +149,7 @@ export class ClaimStatusFlowService {
 
       // 按状态计算平均停留时长
       const statusDurationQuery = `
-        SELECT 
+        SELECT
           from_status.name AS status_name,
           math::mean(duration::secs(duration_in_previous_status)) AS avg_duration_seconds
         FROM claim_status_flow
@@ -153,19 +159,28 @@ export class ClaimStatusFlowService {
 
       // 当前状态分布统计
       const currentStatusQuery = `
-        SELECT 
+        SELECT
           status AS current_status,
           count() AS count
         FROM claim
-        WHERE ${case_id ? 'case_id = $case_id' : '1 = 1'}
+        WHERE ${case_id ? "case_id = $case_id" : "1 = 1"}
         GROUP BY status
       `;
 
-      const [baseResults, transitionResults, durationResults, currentStatusResults] = await Promise.all([
+      const [
+        baseResults,
+        transitionResults,
+        durationResults,
+        currentStatusResults,
+      ] = await Promise.all([
         queryWithAuth(this.client, baseQuery, queryParams),
         queryWithAuth(this.client, statusTransitionsQuery, queryParams),
         queryWithAuth(this.client, statusDurationQuery, queryParams),
-        queryWithAuth(this.client, currentStatusQuery, case_id ? { case_id } : {})
+        queryWithAuth(
+          this.client,
+          currentStatusQuery,
+          case_id ? { case_id } : {},
+        ),
       ]);
 
       const baseStats = baseResults[0]?.[0] || {};
@@ -193,11 +208,11 @@ export class ClaimStatusFlowService {
         total_transitions: baseStats.total_transitions || 0,
         transitions_by_status: transitionsByStatus,
         average_duration_by_status: averageDurationByStatus,
-        status_distribution: statusDistribution
+        status_distribution: statusDistribution,
       };
     } catch (error) {
-      console.error('获取状态统计失败:', error);
-      throw new Error('获取状态统计失败');
+      console.error("获取状态统计失败:", error);
+      throw new Error("获取状态统计失败");
     }
   }
 
@@ -230,28 +245,31 @@ export class ClaimStatusFlowService {
 
       const [transitionResults, statusResults] = await Promise.all([
         queryWithAuth(this.client, lastTransitionQuery, { claim_id: claimId }),
-        queryWithAuth(this.client, currentStatusQuery, { claim_id: claimId })
+        queryWithAuth(this.client, currentStatusQuery, { claim_id: claimId }),
       ]);
 
-      const lastTransition = transitionResults[0]?.[0] as ClaimStatusFlow || null;
+      const lastTransition =
+        (transitionResults[0]?.[0] as ClaimStatusFlow) || null;
       const currentClaim = statusResults[0]?.[0];
 
       if (!currentClaim) {
         return null;
       }
 
-      const statusSince = lastTransition?.transition_time || currentClaim.updated_at;
-      const durationInCurrentStatus = this.calculateDurationFromTimestamp(statusSince);
+      const statusSince =
+        lastTransition?.transition_time || currentClaim.updated_at;
+      const durationInCurrentStatus =
+        this.calculateDurationFromTimestamp(statusSince);
 
       return {
         current_status: currentClaim.status,
         status_since: statusSince,
         duration_in_current_status: durationInCurrentStatus,
-        last_transition: lastTransition
+        last_transition: lastTransition,
       };
     } catch (error) {
-      console.error('获取当前状态信息失败:', error);
-      throw new Error('获取当前状态信息失败');
+      console.error("获取当前状态信息失败:", error);
+      throw new Error("获取当前状态信息失败");
     }
   }
 
@@ -275,24 +293,25 @@ export class ClaimStatusFlowService {
   }> {
     try {
       const { case_id, date_range } = params;
-      
-      let whereClause = '1 = 1';
+
+      let whereClause = "1 = 1";
       const queryParams: Record<string, unknown> = {};
 
       if (case_id) {
-        whereClause += ' AND claim_id->case_id = $case_id';
+        whereClause += " AND claim_id->case_id = $case_id";
         queryParams.case_id = case_id;
       }
 
       if (date_range) {
-        whereClause += ' AND transition_time >= $start_date AND transition_time <= $end_date';
+        whereClause +=
+          " AND transition_time >= $start_date AND transition_time <= $end_date";
         queryParams.start_date = date_range.start.toISOString();
         queryParams.end_date = date_range.end.toISOString();
       }
 
       // 分析常见流转路径
       const pathAnalysisQuery = `
-        SELECT 
+        SELECT
           string::concat(from_status.name, ' → ', to_status.name) AS path,
           count() AS count,
           math::mean(duration::secs(duration_in_previous_status)) AS avg_duration
@@ -305,7 +324,7 @@ export class ClaimStatusFlowService {
 
       // 分析瓶颈状态（停留时间较长的状态）
       const bottleneckQuery = `
-        SELECT 
+        SELECT
           from_status.name AS status,
           math::mean(duration::secs(duration_in_previous_status)) AS avg_duration,
           count() AS claim_count
@@ -319,28 +338,30 @@ export class ClaimStatusFlowService {
 
       const [pathResults, bottleneckResults] = await Promise.all([
         queryWithAuth(this.client, pathAnalysisQuery, queryParams),
-        queryWithAuth(this.client, bottleneckQuery, queryParams)
+        queryWithAuth(this.client, bottleneckQuery, queryParams),
       ]);
 
       const commonPaths = (pathResults[0] || []).map((result: any) => ({
         path: result.path,
         count: result.count,
-        avg_duration: result.avg_duration || 0
+        avg_duration: result.avg_duration || 0,
       }));
 
-      const bottleneckStatuses = (bottleneckResults[0] || []).map((result: any) => ({
-        status: result.status,
-        avg_duration: result.avg_duration,
-        claim_count: result.claim_count
-      }));
+      const bottleneckStatuses = (bottleneckResults[0] || []).map(
+        (result: any) => ({
+          status: result.status,
+          avg_duration: result.avg_duration,
+          claim_count: result.claim_count,
+        }),
+      );
 
       return {
         common_paths: commonPaths,
-        bottleneck_statuses: bottleneckStatuses
+        bottleneck_statuses: bottleneckStatuses,
       };
     } catch (error) {
-      console.error('获取状态流转路径分析失败:', error);
-      throw new Error('获取状态流转路径分析失败');
+      console.error("获取状态流转路径分析失败:", error);
+      throw new Error("获取状态流转路径分析失败");
     }
   }
 
@@ -353,26 +374,27 @@ export class ClaimStatusFlowService {
       limit?: number;
       offset?: number;
       date_range?: { start: Date; end: Date };
-    } = {}
+    } = {},
   ): Promise<ClaimStatusFlow[]> {
     try {
       const { limit = 50, offset = 0, date_range } = options;
-      
-      let whereClause = 'operator_id = $user_id';
+
+      let whereClause = "operator_id = $user_id";
       const queryParams: Record<string, unknown> = {
         user_id: userId,
         limit,
-        offset
+        offset,
       };
 
       if (date_range) {
-        whereClause += ' AND transition_time >= $start_date AND transition_time <= $end_date';
+        whereClause +=
+          " AND transition_time >= $start_date AND transition_time <= $end_date";
         queryParams.start_date = date_range.start.toISOString();
         queryParams.end_date = date_range.end.toISOString();
       }
 
       const query = `
-        SELECT 
+        SELECT
           *,
           from_status.name AS from_status_name,
           to_status.name AS to_status_name,
@@ -384,10 +406,10 @@ export class ClaimStatusFlowService {
       `;
 
       const results = await queryWithAuth(this.client, query, queryParams);
-      return results[0] as ClaimStatusFlow[] || [];
+      return (results[0] as ClaimStatusFlow[]) || [];
     } catch (error) {
-      console.error('获取用户状态流转记录失败:', error);
-      throw new Error('获取用户状态流转记录失败');
+      console.error("获取用户状态流转记录失败:", error);
+      throw new Error("获取用户状态流转记录失败");
     }
   }
 
@@ -405,13 +427,13 @@ export class ClaimStatusFlowService {
       `;
 
       const results = await queryWithAuth(this.client, query, {
-        cutoff_date: cutoffDate.toISOString()
+        cutoff_date: cutoffDate.toISOString(),
       });
 
       return results.length;
     } catch (error) {
-      console.error('清理旧状态流转记录失败:', error);
-      throw new Error('清理旧状态流转记录失败');
+      console.error("清理旧状态流转记录失败:", error);
+      throw new Error("清理旧状态流转记录失败");
     }
   }
 
@@ -420,7 +442,7 @@ export class ClaimStatusFlowService {
    */
   private async calculatePreviousStatusDuration(
     claimId: string | RecordId,
-    fromStatus?: string | RecordId
+    fromStatus?: string | RecordId,
   ): Promise<string | undefined> {
     try {
       if (!fromStatus) {
@@ -438,7 +460,7 @@ export class ClaimStatusFlowService {
 
       const results = await queryWithAuth(this.client, query, {
         claim_id: claimId,
-        from_status: fromStatus
+        from_status: fromStatus,
       });
 
       const lastTransition = results[0]?.[0];
@@ -454,7 +476,7 @@ export class ClaimStatusFlowService {
       // 转换为ISO 8601 duration格式
       return this.formatDuration(durationMs);
     } catch (error) {
-      console.error('计算前一个状态停留时长失败:', error);
+      console.error("计算前一个状态停留时长失败:", error);
       return undefined;
     }
   }
@@ -495,7 +517,7 @@ export class ClaimStatusFlowService {
   async validateStatusTransition(
     claimId: string | RecordId,
     fromStatus: string | RecordId,
-    toStatus: string | RecordId
+    toStatus: string | RecordId,
   ): Promise<{
     valid: boolean;
     reason?: string;
@@ -503,22 +525,22 @@ export class ClaimStatusFlowService {
     try {
       // 获取状态流转规则（这里可以实现具体的业务规则）
       // 目前简单实现，实际应该根据业务需求定义状态流转规则
-      
+
       // 检查目标状态是否存在
       const statusQuery = `
-        SELECT id FROM claim_review_status_definition 
+        SELECT id FROM claim_review_status_definition
         WHERE id = $to_status AND is_active = true
         LIMIT 1
       `;
 
       const statusResults = await queryWithAuth(this.client, statusQuery, {
-        to_status: toStatus
+        to_status: toStatus,
       });
 
       if (!statusResults[0]?.[0]) {
         return {
           valid: false,
-          reason: '目标状态不存在或已禁用'
+          reason: "目标状态不存在或已禁用",
         };
       }
 
@@ -526,32 +548,36 @@ export class ClaimStatusFlowService {
       const recentTransitionQuery = `
         SELECT id
         FROM claim_status_flow
-        WHERE claim_id = $claim_id 
-          AND from_status = $to_status 
+        WHERE claim_id = $claim_id
+          AND from_status = $to_status
           AND to_status = $from_status
           AND transition_time > time::now() - 1h
         LIMIT 1
       `;
 
-      const recentResults = await queryWithAuth(this.client, recentTransitionQuery, {
-        claim_id: claimId,
-        from_status: fromStatus,
-        to_status: toStatus
-      });
+      const recentResults = await queryWithAuth(
+        this.client,
+        recentTransitionQuery,
+        {
+          claim_id: claimId,
+          from_status: fromStatus,
+          to_status: toStatus,
+        },
+      );
 
       if (recentResults[0]?.[0]) {
         return {
           valid: false,
-          reason: '检测到循环状态流转，请稍后再试'
+          reason: "检测到循环状态流转，请稍后再试",
         };
       }
 
       return { valid: true };
     } catch (error) {
-      console.error('验证状态流转失败:', error);
+      console.error("验证状态流转失败:", error);
       return {
         valid: false,
-        reason: '状态流转验证失败'
+        reason: "状态流转验证失败",
       };
     }
   }
@@ -565,33 +591,52 @@ export class ClaimStatusFlowService {
     required_role?: string;
   }> {
     // 定义状态流转建议规则
-    const transitionRules: Record<string, Array<{
-      status: string;
-      description: string;
-      required_role?: string;
-    }>> = {
-      '草稿': [
-        { status: '已提交', description: '提交债权申报' },
-        { status: '已删除', description: '删除草稿' }
+    const transitionRules: Record<
+      string,
+      Array<{
+        status: string;
+        description: string;
+        required_role?: string;
+      }>
+    > = {
+      草稿: [
+        { status: "已提交", description: "提交债权申报" },
+        { status: "已删除", description: "删除草稿" },
       ],
-      '已提交': [
-        { status: '审核中', description: '开始审核', required_role: 'claim_reviewer' },
-        { status: '草稿', description: '撤回申报' }
+      已提交: [
+        {
+          status: "审核中",
+          description: "开始审核",
+          required_role: "claim_reviewer",
+        },
+        { status: "草稿", description: "撤回申报" },
       ],
-      '审核中': [
-        { status: '审核通过', description: '审核通过', required_role: 'claim_reviewer' },
-        { status: '已驳回', description: '驳回申报', required_role: 'claim_reviewer' },
-        { status: '需要补充', description: '要求补充材料', required_role: 'claim_reviewer' }
+      审核中: [
+        {
+          status: "审核通过",
+          description: "审核通过",
+          required_role: "claim_reviewer",
+        },
+        {
+          status: "已驳回",
+          description: "驳回申报",
+          required_role: "claim_reviewer",
+        },
+        {
+          status: "需要补充",
+          description: "要求补充材料",
+          required_role: "claim_reviewer",
+        },
       ],
-      '已驳回': [
-        { status: '草稿', description: '重新编辑' }
+      已驳回: [{ status: "草稿", description: "重新编辑" }],
+      需要补充: [{ status: "已提交", description: "补充材料后重新提交" }],
+      审核通过: [
+        {
+          status: "需要补充",
+          description: "要求补充材料",
+          required_role: "claim_reviewer",
+        },
       ],
-      '需要补充': [
-        { status: '已提交', description: '补充材料后重新提交' }
-      ],
-      '审核通过': [
-        { status: '需要补充', description: '要求补充材料', required_role: 'claim_reviewer' }
-      ]
     };
 
     return transitionRules[currentStatus] || [];

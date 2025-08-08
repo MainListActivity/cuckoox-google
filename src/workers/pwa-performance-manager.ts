@@ -2,7 +2,7 @@
 
 /**
  * PWA性能优化管理器
- * 
+ *
  * 负责PWA应用的性能优化，包括：
  * - App Shell架构实现
  * - 资源预加载和懒加载
@@ -19,7 +19,7 @@ export interface PWAPerformanceConfig {
   };
   preloading: {
     criticalResources: string[];
-    preloadStrategy: 'aggressive' | 'conservative' | 'adaptive';
+    preloadStrategy: "aggressive" | "conservative" | "adaptive";
     maxPreloadSize: number; // bytes
   };
   lazyLoading: {
@@ -64,14 +64,14 @@ export class PWAPerformanceManager {
     cls: 0,
     ttfb: 0,
     memoryUsage: 0,
-    cacheHitRate: 0
+    cacheHitRate: 0,
   };
   private appShellState: AppShellState = {
     isLoaded: false,
     coreResourcesCount: 0,
     loadedResourcesCount: 0,
     loadingProgress: 0,
-    lastUpdated: new Date()
+    lastUpdated: new Date(),
   };
   private isInitialized = false;
 
@@ -85,7 +85,7 @@ export class PWAPerformanceManager {
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
 
-    console.log('PWAPerformanceManager: Initializing...');
+    console.log("PWAPerformanceManager: Initializing...");
 
     try {
       // 初始化App Shell
@@ -101,9 +101,9 @@ export class PWAPerformanceManager {
       this.startMemoryManagement();
 
       this.isInitialized = true;
-      console.log('PWAPerformanceManager: Initialized successfully');
+      console.log("PWAPerformanceManager: Initialized successfully");
     } catch (error) {
-      console.error('PWAPerformanceManager: Initialization failed:', error);
+      console.error("PWAPerformanceManager: Initialization failed:", error);
       throw error;
     }
   }
@@ -112,7 +112,7 @@ export class PWAPerformanceManager {
    * 初始化App Shell
    */
   async initializeAppShell(): Promise<void> {
-    console.log('PWAPerformanceManager: Initializing App Shell...');
+    console.log("PWAPerformanceManager: Initializing App Shell...");
 
     try {
       const { coreResources, shellCacheName } = this.config.appShell;
@@ -122,23 +122,34 @@ export class PWAPerformanceManager {
       const cache = await caches.open(shellCacheName);
 
       // 检查现有缓存
-      const cachedResources = await this.checkCachedResources(cache, coreResources);
+      const cachedResources = await this.checkCachedResources(
+        cache,
+        coreResources,
+      );
       this.appShellState.loadedResourcesCount = cachedResources.length;
 
       // 缓存缺失的核心资源
-      const missingResources = coreResources.filter(url => !cachedResources.includes(url));
-      
+      const missingResources = coreResources.filter(
+        (url) => !cachedResources.includes(url),
+      );
+
       if (missingResources.length > 0) {
-        console.log('PWAPerformanceManager: Caching missing App Shell resources:', missingResources);
+        console.log(
+          "PWAPerformanceManager: Caching missing App Shell resources:",
+          missingResources,
+        );
         await this.cacheAppShellResources(cache, missingResources);
       }
 
       this.appShellState.isLoaded = true;
       this.updateAppShellProgress();
 
-      console.log('PWAPerformanceManager: App Shell initialized successfully');
+      console.log("PWAPerformanceManager: App Shell initialized successfully");
     } catch (error) {
-      console.error('PWAPerformanceManager: App Shell initialization failed:', error);
+      console.error(
+        "PWAPerformanceManager: App Shell initialization failed:",
+        error,
+      );
       throw error;
     }
   }
@@ -167,15 +178,15 @@ export class PWAPerformanceManager {
    * 预加载资源
    */
   async preloadResources(urls: string[]): Promise<void> {
-    console.log('PWAPerformanceManager: Preloading resources:', urls);
+    console.log("PWAPerformanceManager: Preloading resources:", urls);
 
     const { preloadStrategy, maxPreloadSize } = this.config.preloading;
-    
+
     // 根据策略和网络状况决定预加载行为
     const shouldPreload = await this.shouldPreloadResources(preloadStrategy);
-    
+
     if (!shouldPreload) {
-      console.log('PWAPerformanceManager: Skipping preload due to strategy');
+      console.log("PWAPerformanceManager: Skipping preload due to strategy");
       return;
     }
 
@@ -185,26 +196,26 @@ export class PWAPerformanceManager {
 
       for (const url of urls) {
         if (totalSize >= maxPreloadSize) {
-          console.log('PWAPerformanceManager: Preload size limit reached');
+          console.log("PWAPerformanceManager: Preload size limit reached");
           break;
         }
 
-        preloadPromises.push(this.preloadResource(url).then(() => {
-          // 估算资源大小（简化实现）
-          totalSize += 1024; // 假设每个资源1KB，实际项目中应该获取实际大小
         preloadPromises.push(
           this.preloadResource(url).then(async () => {
-            // 获取实际资源大小
+            // 获取实际资源大小（优先使用真实大小，回退为估算值）
             const size = await this.getResourceSize(url);
             totalSize += size;
-          })
+          }),
         );
       }
 
       await Promise.allSettled(preloadPromises);
-      console.log('PWAPerformanceManager: Resource preloading completed');
+      console.log("PWAPerformanceManager: Resource preloading completed");
     } catch (error) {
-      console.error('PWAPerformanceManager: Resource preloading failed:', error);
+      console.error(
+        "PWAPerformanceManager: Resource preloading failed:",
+        error,
+      );
     }
   }
 
@@ -226,7 +237,7 @@ export class PWAPerformanceManager {
    * 强制清理内存
    */
   async forceMemoryCleanup(): Promise<void> {
-    console.log('PWAPerformanceManager: Forcing memory cleanup...');
+    console.log("PWAPerformanceManager: Forcing memory cleanup...");
 
     try {
       // 清理过期缓存
@@ -238,9 +249,9 @@ export class PWAPerformanceManager {
       // 更新内存使用指标
       this.updateMemoryMetrics();
 
-      console.log('PWAPerformanceManager: Memory cleanup completed');
+      console.log("PWAPerformanceManager: Memory cleanup completed");
     } catch (error) {
-      console.error('PWAPerformanceManager: Memory cleanup failed:', error);
+      console.error("PWAPerformanceManager: Memory cleanup failed:", error);
     }
   }
 
@@ -248,7 +259,7 @@ export class PWAPerformanceManager {
    * 销毁性能管理器
    */
   destroy(): void {
-    console.log('PWAPerformanceManager: Destroying...');
+    console.log("PWAPerformanceManager: Destroying...");
 
     // 清理性能观察器
     if (this.performanceObserver) {
@@ -263,12 +274,15 @@ export class PWAPerformanceManager {
     }
 
     this.isInitialized = false;
-    console.log('PWAPerformanceManager: Destroyed');
+    console.log("PWAPerformanceManager: Destroyed");
   }
 
   // 私有方法
 
-  private async checkCachedResources(cache: Cache, resources: string[]): Promise<string[]> {
+  private async checkCachedResources(
+    cache: Cache,
+    resources: string[],
+  ): Promise<string[]> {
     const cachedResources: string[] = [];
 
     for (const url of resources) {
@@ -278,14 +292,21 @@ export class PWAPerformanceManager {
           cachedResources.push(url);
         }
       } catch (error) {
-        console.warn('PWAPerformanceManager: Error checking cached resource:', url, error);
+        console.warn(
+          "PWAPerformanceManager: Error checking cached resource:",
+          url,
+          error,
+        );
       }
     }
 
     return cachedResources;
   }
 
-  private async cacheAppShellResources(cache: Cache, resources: string[]): Promise<void> {
+  private async cacheAppShellResources(
+    cache: Cache,
+    resources: string[],
+  ): Promise<void> {
     const cachePromises = resources.map(async (url) => {
       try {
         const response = await fetch(url);
@@ -295,7 +316,11 @@ export class PWAPerformanceManager {
           this.updateAppShellProgress();
         }
       } catch (error) {
-        console.warn('PWAPerformanceManager: Failed to cache App Shell resource:', url, error);
+        console.warn(
+          "PWAPerformanceManager: Failed to cache App Shell resource:",
+          url,
+          error,
+        );
       }
     });
 
@@ -304,18 +329,19 @@ export class PWAPerformanceManager {
 
   private updateAppShellProgress(): void {
     const { coreResourcesCount, loadedResourcesCount } = this.appShellState;
-    this.appShellState.loadingProgress = coreResourcesCount > 0 
-      ? Math.round((loadedResourcesCount / coreResourcesCount) * 100)
-      : 100;
+    this.appShellState.loadingProgress =
+      coreResourcesCount > 0
+        ? Math.round((loadedResourcesCount / coreResourcesCount) * 100)
+        : 100;
     this.appShellState.lastUpdated = new Date();
   }
 
   private isAppShellResource(pathname: string): boolean {
     const { coreResources } = this.config.appShell;
-    return coreResources.some(resource => {
+    return coreResources.some((resource) => {
       // 支持精确匹配和模式匹配
-      if (resource.includes('*')) {
-        const pattern = resource.replace(/\*/g, '.*');
+      if (resource.includes("*")) {
+        const pattern = resource.replace(/\*/g, ".*");
         return new RegExp(pattern).test(pathname);
       }
       return pathname === resource || pathname.startsWith(resource);
@@ -324,32 +350,46 @@ export class PWAPerformanceManager {
 
   private isDynamicResource(pathname: string): boolean {
     // 判断是否为动态资源（API请求、数据等）
-    return pathname.startsWith('/api/') || 
-           pathname.includes('.json') ||
-           pathname.includes('query=');
+    return (
+      pathname.startsWith("/api/") ||
+      pathname.includes(".json") ||
+      pathname.includes("query=")
+    );
   }
 
-  private async handleAppShellRequest(request: Request): Promise<Response | null> {
+  private async handleAppShellRequest(
+    request: Request,
+  ): Promise<Response | null> {
     try {
       // POST请求不能被缓存，直接转发到网络
-      if (request.method !== 'GET') {
-        console.log('PWAPerformanceManager: Non-GET request, bypassing cache:', request.method, request.url);
+      if (request.method !== "GET") {
+        console.log(
+          "PWAPerformanceManager: Non-GET request, bypassing cache:",
+          request.method,
+          request.url,
+        );
         return fetch(request.clone());
       }
 
       const cache = await caches.open(this.config.appShell.shellCacheName);
-      
+
       // 首先尝试从缓存获取
       const cachedResponse = await cache.match(request);
       if (cachedResponse) {
-        console.log('PWAPerformanceManager: Serving App Shell from cache:', request.url);
+        console.log(
+          "PWAPerformanceManager: Serving App Shell from cache:",
+          request.url,
+        );
         return cachedResponse;
       }
 
       // 缓存未命中，从网络获取
-      console.log('PWAPerformanceManager: App Shell cache miss, fetching from network:', request.url);
+      console.log(
+        "PWAPerformanceManager: App Shell cache miss, fetching from network:",
+        request.url,
+      );
       const networkResponse = await fetch(request.clone());
-      
+
       if (networkResponse.ok) {
         // 只缓存GET请求的响应
         await cache.put(request.clone(), networkResponse.clone());
@@ -357,20 +397,25 @@ export class PWAPerformanceManager {
 
       return networkResponse;
     } catch (error) {
-      console.error('PWAPerformanceManager: Error handling App Shell request:', error);
+      console.error(
+        "PWAPerformanceManager: Error handling App Shell request:",
+        error,
+      );
       return null;
     }
   }
 
-  private async handleDynamicRequest(request: Request): Promise<Response | null> {
+  private async handleDynamicRequest(
+    request: Request,
+  ): Promise<Response | null> {
     try {
       // 动态资源使用网络优先策略
       const networkResponse = await fetch(request);
-      
+
       if (networkResponse.ok) {
         // 选择性缓存动态资源
         if (this.shouldCacheDynamicResource(request)) {
-          const cache = await caches.open('dynamic-cache');
+          const cache = await caches.open("dynamic-cache");
           await cache.put(request, networkResponse.clone());
         }
       }
@@ -378,70 +423,86 @@ export class PWAPerformanceManager {
       return networkResponse;
     } catch (error) {
       // 网络失败时尝试从缓存获取
-      console.log('PWAPerformanceManager: Network failed, trying cache for:', request.url);
-      const cache = await caches.open('dynamic-cache');
+      console.log(
+        "PWAPerformanceManager: Network failed, trying cache for:",
+        request.url,
+      );
+      const cache = await caches.open("dynamic-cache");
       return await cache.match(request);
     }
   }
 
   private shouldCacheDynamicResource(request: Request): boolean {
     // 只缓存GET请求的某些类型的动态资源
-    if (request.method !== 'GET') return false;
-    
+    if (request.method !== "GET") return false;
+
     const url = new URL(request.url);
-    
+
     // 缓存API响应（有选择性）
-    if (url.pathname.startsWith('/api/')) {
+    if (url.pathname.startsWith("/api/")) {
       // 只缓存读取操作，不缓存写入操作
-      return !url.pathname.includes('/create') && 
-             !url.pathname.includes('/update') && 
-             !url.pathname.includes('/delete');
+      return (
+        !url.pathname.includes("/create") &&
+        !url.pathname.includes("/update") &&
+        !url.pathname.includes("/delete")
+      );
     }
 
     return false;
   }
 
   private async shouldPreloadResources(strategy: string): Promise<boolean> {
+    // 预先获取网络连接信息，避免在 switch 分支中进行声明以满足 no-case-declarations
+    const connection = (
+      navigator as Navigator & { connection?: { type: string } }
+    )?.connection;
+
     switch (strategy) {
-      case 'aggressive':
+      case "aggressive":
         return true;
-      
-      case 'conservative':
+
+      case "conservative":
         // 只在WiFi连接时预加载
-        const connection = (navigator as Navigator & { connection?: { type: string } })?.connection;
-        return connection?.type === 'wifi' || !connection;
-      
-      case 'adaptive':
+        return connection?.type === "wifi" || !connection;
+
+      case "adaptive":
         // 根据网络质量和设备性能决定
         return this.isGoodNetworkCondition() && this.isGoodDevicePerformance();
-      
+
       default:
         return false;
     }
   }
 
   private isGoodNetworkCondition(): boolean {
-    const connection = (navigator as Navigator & { 
-      connection?: { 
-        effectiveType: string;
-        downlink: number;
-        rtt: number;
+    const connection = (
+      navigator as Navigator & {
+        connection?: {
+          effectiveType: string;
+          downlink: number;
+          rtt: number;
+        };
       }
-    })?.connection;
+    )?.connection;
     if (!connection) return true; // 假设网络良好
 
-    return connection.effectiveType === '4g' && 
-           connection.downlink > 2 && 
-           connection.rtt < 300;
+    return (
+      connection.effectiveType === "4g" &&
+      connection.downlink > 2 &&
+      connection.rtt < 300
+    );
   }
 
   private isGoodDevicePerformance(): boolean {
     // 简单的设备性能检测
-    const memory = (navigator as Navigator & { deviceMemory?: number })?.deviceMemory;
+    const memory = (navigator as Navigator & { deviceMemory?: number })
+      ?.deviceMemory;
     const hardwareConcurrency = navigator.hardwareConcurrency;
 
-    return (memory === undefined || memory >= 4) && 
-           (hardwareConcurrency === undefined || hardwareConcurrency >= 4);
+    return (
+      (memory === undefined || memory >= 4) &&
+      (hardwareConcurrency === undefined || hardwareConcurrency >= 4)
+    );
   }
 
   private async preloadResource(url: string): Promise<void> {
@@ -449,18 +510,54 @@ export class PWAPerformanceManager {
       const response = await fetch(url);
       if (response.ok) {
         // 将预加载的资源放入适当的缓存
-        const cache = await caches.open('preload-cache');
+        const cache = await caches.open("preload-cache");
         await cache.put(url, response);
-        console.log('PWAPerformanceManager: Preloaded resource:', url);
+        console.log("PWAPerformanceManager: Preloaded resource:", url);
       }
     } catch (error) {
-      console.warn('PWAPerformanceManager: Failed to preload resource:', url, error);
+      console.warn(
+        "PWAPerformanceManager: Failed to preload resource:",
+        url,
+        error,
+      );
     }
   }
 
+  // 估算资源大小（优先尝试 HEAD 获取 content-length，失败则回退为1KB）
+  private async getResourceSize(url: string): Promise<number> {
+    try {
+      const headResp = await fetch(url, { method: "HEAD" });
+      const len = headResp.headers.get("content-length");
+      if (len) {
+        const parsed = parseInt(len, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // 忽略 HEAD 失败，尝试 Range GET
+    }
+    try {
+      const getResp = await fetch(url, { headers: { Range: "bytes=0-0" } });
+      const len =
+        getResp.headers.get("content-length") ||
+        getResp.headers.get("Content-Length");
+      if (len) {
+        const parsed = parseInt(len, 10);
+        if (!Number.isNaN(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // 忽略获取失败
+    }
+    // 回退估算值
+    return 1024;
+  }
+
   private setupPerformanceMonitoring(): void {
-    if (typeof window === 'undefined' || !('PerformanceObserver' in window)) {
-      console.warn('PWAPerformanceManager: PerformanceObserver not supported');
+    if (typeof window === "undefined" || !("PerformanceObserver" in window)) {
+      console.warn("PWAPerformanceManager: PerformanceObserver not supported");
       return;
     }
 
@@ -470,46 +567,60 @@ export class PWAPerformanceManager {
       });
 
       // 监控各种性能指标
-      this.performanceObserver.observe({ 
-        entryTypes: ['paint', 'largest-contentful-paint', 'first-input', 'layout-shift'] 
+      this.performanceObserver.observe({
+        entryTypes: [
+          "paint",
+          "largest-contentful-paint",
+          "first-input",
+          "layout-shift",
+        ],
       });
 
-      console.log('PWAPerformanceManager: Performance monitoring started');
+      console.log("PWAPerformanceManager: Performance monitoring started");
     } catch (error) {
-      console.error('PWAPerformanceManager: Failed to setup performance monitoring:', error);
+      console.error(
+        "PWAPerformanceManager: Failed to setup performance monitoring:",
+        error,
+      );
     }
   }
 
   private processPerformanceEntries(entries: PerformanceEntry[]): void {
     entries.forEach((entry) => {
       switch (entry.entryType) {
-        case 'paint':
-          if (entry.name === 'first-contentful-paint') {
+        case "paint":
+          if (entry.name === "first-contentful-paint") {
             this.metrics.fcp = entry.startTime;
           }
           break;
 
-        case 'largest-contentful-paint':
+        case "largest-contentful-paint":
           this.metrics.lcp = (entry as PerformancePaintTiming).startTime;
           break;
 
-        case 'first-input':
-          this.metrics.fid = (entry as PerformanceEventTiming).processingStart - entry.startTime;
+        case "first-input":
+          this.metrics.fid =
+            (entry as PerformanceEventTiming).processingStart - entry.startTime;
           break;
 
-        case 'layout-shift':
-          this.metrics.cls += (entry as PerformanceEntry & { value: number }).value;
+        case "layout-shift":
+          this.metrics.cls += (
+            entry as PerformanceEntry & { value: number }
+          ).value;
           break;
       }
     });
 
     // 记录性能指标
-    console.log('PWAPerformanceManager: Updated performance metrics:', this.metrics);
+    console.log(
+      "PWAPerformanceManager: Updated performance metrics:",
+      this.metrics,
+    );
   }
 
   private startResourcePreloading(): void {
-    console.log('PWAPerformanceManager: Starting resource preloading...');
-    
+    console.log("PWAPerformanceManager: Starting resource preloading...");
+
     const { criticalResources } = this.config.preloading;
     if (criticalResources.length > 0) {
       this.preloadResources(criticalResources);
@@ -523,7 +634,7 @@ export class PWAPerformanceManager {
       this.performMemoryCleanup();
     }, cleanupInterval);
 
-    console.log('PWAPerformanceManager: Memory management started');
+    console.log("PWAPerformanceManager: Memory management started");
   }
 
   private async performMemoryCleanup(): Promise<void> {
@@ -533,21 +644,28 @@ export class PWAPerformanceManager {
 
       // 如果超过阈值，执行清理
       if (this.metrics.memoryUsage > this.config.performance.memoryThreshold) {
-        console.log('PWAPerformanceManager: Memory threshold exceeded, performing cleanup');
+        console.log(
+          "PWAPerformanceManager: Memory threshold exceeded, performing cleanup",
+        );
         await this.forceMemoryCleanup();
       }
     } catch (error) {
-      console.error('PWAPerformanceManager: Error during memory cleanup:', error);
+      console.error(
+        "PWAPerformanceManager: Error during memory cleanup:",
+        error,
+      );
     }
   }
 
   private updateMemoryMetrics(): void {
-    if ('memory' in performance) {
-      const memory = (performance as Performance & {
-        memory: {
-          usedJSHeapSize: number;
+    if ("memory" in performance) {
+      const memory = (
+        performance as Performance & {
+          memory: {
+            usedJSHeapSize: number;
+          };
         }
-      }).memory;
+      ).memory;
       this.metrics.memoryUsage = memory.usedJSHeapSize / (1024 * 1024); // MB
     }
   }
@@ -558,19 +676,19 @@ export class PWAPerformanceManager {
     const maxAge = 7 * 24 * 60 * 60 * 1000; // 7天
 
     for (const cacheName of cacheNames) {
-      if (cacheName.includes('temp-') || cacheName.includes('old-')) {
+      if (cacheName.includes("temp-") || cacheName.includes("old-")) {
         // 清理临时和旧版本缓存
         await caches.delete(cacheName);
-        console.log('PWAPerformanceManager: Deleted expired cache:', cacheName);
+        console.log("PWAPerformanceManager: Deleted expired cache:", cacheName);
       }
     }
   }
 
   private async cleanupUnusedResources(): Promise<void> {
     // 清理未使用的预加载缓存
-    const preloadCache = await caches.open('preload-cache');
+    const preloadCache = await caches.open("preload-cache");
     const requests = await preloadCache.keys();
-    
+
     // 清理超过一定时间未访问的预加载资源
     for (const request of requests) {
       // 这里可以添加更复杂的清理逻辑
@@ -588,10 +706,14 @@ export const PerformanceUtils = {
     return new Promise((resolve) => {
       // 等待所有关键指标收集完成
       setTimeout(() => {
-        const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
-        const paint = performance.getEntriesByType('paint');
-        
-        const fcp = paint.find(entry => entry.name === 'first-contentful-paint')?.startTime || 0;
+        const navigation = performance.getEntriesByType(
+          "navigation",
+        )[0] as PerformanceNavigationTiming;
+        const paint = performance.getEntriesByType("paint");
+
+        const fcp =
+          paint.find((entry) => entry.name === "first-contentful-paint")
+            ?.startTime || 0;
         const ttfb = navigation?.responseStart - navigation?.requestStart || 0;
 
         resolve({
@@ -601,7 +723,7 @@ export const PerformanceUtils = {
           cls: 0, // 需要通过PerformanceObserver获取
           ttfb,
           memoryUsage: 0,
-          cacheHitRate: 0
+          cacheHitRate: 0,
         });
       }, 3000);
     });
@@ -610,18 +732,21 @@ export const PerformanceUtils = {
   /**
    * 检查是否达到性能目标
    */
-  checkPerformanceTargets(metrics: PerformanceMetrics, targets: PWAPerformanceConfig['performance']): {
+  checkPerformanceTargets(
+    metrics: PerformanceMetrics,
+    targets: PWAPerformanceConfig["performance"],
+  ): {
     fcpPassed: boolean;
     lcpPassed: boolean;
     overall: boolean;
   } {
     const fcpPassed = metrics.fcp <= targets.targetFCP;
     const lcpPassed = metrics.lcp <= targets.targetLCP;
-    
+
     return {
       fcpPassed,
       lcpPassed,
-      overall: fcpPassed && lcpPassed
+      overall: fcpPassed && lcpPassed,
     };
-  }
+  },
 };
