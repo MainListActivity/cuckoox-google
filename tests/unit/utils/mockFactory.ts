@@ -1,5 +1,5 @@
-import { vi } from 'vitest';
-import { RecordId } from 'surrealdb';
+import { vi } from "vitest";
+import { RecordId } from "surrealdb";
 
 /**
  * 统一的Mock工厂，用于创建和管理测试中的Mock对象
@@ -17,7 +17,7 @@ export class MockFactory {
     const id = `surreal_${Math.random().toString(36).substr(2, 9)}`;
 
     const client = {
-      status: 'disconnected' as const,
+      status: "disconnected" as const,
       connect: vi.fn().mockResolvedValue(undefined),
       disconnect: vi.fn().mockResolvedValue(undefined),
       use: vi.fn().mockResolvedValue(undefined),
@@ -27,10 +27,10 @@ export class MockFactory {
       merge: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue(undefined),
       query: vi.fn().mockResolvedValue([]),
-      live: vi.fn().mockResolvedValue('mock-live-id'),
+      live: vi.fn().mockResolvedValue("mock-live-id"),
       subscribeLive: vi.fn(),
       kill: vi.fn().mockResolvedValue(undefined),
-      signin: vi.fn().mockResolvedValue('mock-token'),
+      signin: vi.fn().mockResolvedValue("mock-token"),
       signout: vi.fn().mockResolvedValue(undefined),
       authenticate: vi.fn().mockResolvedValue(true),
       invalidate: vi.fn().mockResolvedValue(undefined),
@@ -131,11 +131,11 @@ export class MockFactory {
   static createReactRouterMocks() {
     const navigate = vi.fn();
     const location = {
-      pathname: '/',
-      search: '',
-      hash: '',
+      pathname: "/",
+      search: "",
+      hash: "",
       state: null,
-      key: 'default',
+      key: "default",
     };
     const params = {};
 
@@ -156,38 +156,48 @@ export class MockFactory {
     const t = vi.fn((key: string, options?: any) => {
       // 提供一些常用的翻译
       const translations: Record<string, string> = {
-        'create_user_and_add_to_case': '创建用户并添加到案件',
-        'username_label': '用户名',
-        'cancel_button': '取消',
-        'create_user_and_add': '创建用户并添加',
-        'password_label': '密码',
-        'email_label': '邮箱',
-        'display_name_label': '显示姓名',
-        'role_in_case_label': '在案件中的角色',
-        'username_required': '用户名不能为空',
-        'password_required': '密码不能为空',
-        'email_required': '邮箱不能为空',
-        'name_required': '姓名不能为空',
-        'email_invalid': '邮箱格式不正确',
-        'save': '保存',
-        'saving': '保存中...',
-        'edit': '编辑',
-        'preview': '预览',
-        'loading': '加载中...',
-        'error': '错误',
-        'success': '成功',
+        create_user_and_add_to_case: "创建用户并添加到案件",
+        username_label: "用户名",
+        cancel_button: "取消",
+        create_user_and_add: "创建用户并添加",
+        password_label: "密码",
+        email_label: "邮箱",
+        display_name_label: "显示姓名",
+        role_in_case_label: "在案件中的角色",
+        username_required: "用户名不能为空",
+        password_required: "密码不能为空",
+        email_required: "邮箱不能为空",
+        name_required: "姓名不能为空",
+        email_invalid: "邮箱格式不正确",
+        save: "保存",
+        saving: "保存中...",
+        edit: "编辑",
+        preview: "预览",
+        loading: "加载中...",
+        error: "错误",
+        success: "成功",
       };
 
       return translations[key] || key;
     });
 
     const i18n = {
-      language: 'zh-CN',
+      language: "zh-CN",
       changeLanguage: vi.fn().mockResolvedValue(undefined),
+      exists: vi.fn().mockReturnValue(true),
+      getFixedT: vi.fn().mockReturnValue(t),
+      hasResourceBundle: vi.fn().mockReturnValue(true),
+      loadNamespaces: vi.fn().mockResolvedValue(undefined),
+      loadLanguages: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn(),
+      off: vi.fn(),
+      emit: vi.fn(),
     };
 
+    const useTranslation = vi.fn(() => ({ t, i18n }));
+
     return {
-      useTranslation: () => ({ t, i18n }),
+      useTranslation,
       t,
       i18n,
     };
@@ -198,12 +208,12 @@ export class MockFactory {
    */
   static createMockCase(overrides: Partial<any> = {}) {
     return {
-      id: new RecordId('case', 'test_case_1'),
-      name: '测试案件',
-      number: 'TEST001',
-      status: 'active',
-      created_at: new Date('2024-01-01'),
-      updated_at: new Date('2024-01-01'),
+      id: new RecordId("case", "test_case_1"),
+      name: "测试案件",
+      number: "TEST001",
+      status: "active",
+      created_at: new Date("2024-01-01"),
+      updated_at: new Date("2024-01-01"),
       ...overrides,
     };
   }
@@ -213,13 +223,13 @@ export class MockFactory {
    */
   static createMockUser(overrides: Partial<any> = {}) {
     return {
-      id: new RecordId('user', 'test_user_1'),
-      username: 'testuser',
-      email: 'test@example.com',
-      display_name: '测试用户',
+      id: new RecordId("user", "test_user_1"),
+      username: "testuser",
+      email: "test@example.com",
+      display_name: "测试用户",
       is_admin: false,
-      created_at: new Date('2024-01-01'),
-      updated_at: new Date('2024-01-01'),
+      created_at: new Date("2024-01-01"),
+      updated_at: new Date("2024-01-01"),
       ...overrides,
     };
   }
@@ -229,15 +239,15 @@ export class MockFactory {
    */
   static createMockCreditor(overrides: Partial<any> = {}) {
     return {
-      id: new RecordId('creditor', 'test_creditor_1'),
-      name: '测试债权人',
-      id_number: '123456789012345678',
-      phone: '13800138000',
-      email: 'creditor@example.com',
+      id: new RecordId("creditor", "test_creditor_1"),
+      name: "测试债权人",
+      id_number: "123456789012345678",
+      phone: "13800138000",
+      email: "creditor@example.com",
       amount: 100000,
-      case_id: new RecordId('case', 'test_case_1'),
-      created_at: new Date('2024-01-01'),
-      updated_at: new Date('2024-01-01'),
+      case_id: new RecordId("case", "test_case_1"),
+      created_at: new Date("2024-01-01"),
+      updated_at: new Date("2024-01-01"),
       ...overrides,
     };
   }
@@ -261,11 +271,11 @@ export class MockFactory {
    */
   static cleanup() {
     // 执行清理回调
-    this.cleanup_callbacks.forEach(callback => {
+    this.cleanup_callbacks.forEach((callback) => {
       try {
         callback();
       } catch (error) {
-        console.warn('Mock cleanup callback failed:', error);
+        console.warn("Mock cleanup callback failed:", error);
       }
     });
 
@@ -280,7 +290,7 @@ export class MockFactory {
   static resetInstance(id: string) {
     const instance = this.instances.get(id);
     if (instance) {
-      Object.values(instance).forEach(value => {
+      Object.values(instance).forEach((value) => {
         if (vi.isMockFunction(value)) {
           value.mockClear();
         }
@@ -303,10 +313,14 @@ export class MockFactory {
  * 返回常用的Mock对象和清理函数
  */
 export function createTestEnvironment() {
-  const { client: surrealClient, id: surrealId } = MockFactory.createSurrealClient();
-  const { service: dataService, id: dataServiceId } = MockFactory.createDataService();
-  const { service: authService, id: authServiceId } = MockFactory.createAuthService();
-  const { service: menuService, id: menuServiceId } = MockFactory.createMenuService();
+  const { client: surrealClient, id: surrealId } =
+    MockFactory.createSurrealClient();
+  const { service: dataService, id: dataServiceId } =
+    MockFactory.createDataService();
+  const { service: authService, id: authServiceId } =
+    MockFactory.createAuthService();
+  const { service: menuService, id: menuServiceId } =
+    MockFactory.createMenuService();
   const { comm: swComm, id: swCommId } = MockFactory.createServiceWorkerComm();
 
   const routerMocks = MockFactory.createReactRouterMocks();
