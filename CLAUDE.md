@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Always respond in Chinese-simplified.
 
-注意在任务完成前根据mcp-feedback-enhanced工具的要求进行工具调用
+注意在任务完成前根据mcp-feedback-enhanced工具的要求进行工具调用，用户确认完成任务后务必确认单元测试用例全部通过，执行命令 `bun run test:run`
 
 ## Development Commands
 
@@ -82,7 +82,7 @@ This is a legal case management system with the following key architectural comp
 
 ## Important Notes
 - Uses Bun as package manager instead of npm/yarn
-- Custom path alias `@/*` maps to project root, example: `@/src/types/pdfParser`
+- Custom path alias `@/*` maps to project root, example: `@/src/types/pdfParser`，在代码中尽量使用@别名，而不是../../../
 - Strict TypeScript configuration with experimental decorators
 - E2E tests require Playwright browser installation
 - Uses CSS custom properties for theming integration MUI

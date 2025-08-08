@@ -322,23 +322,36 @@ export class PWAPushManager {
     
     // 处理通知点击事件
     if (payload.data?.url) {
-      // 导航到指定URL
-      window.open(payload.data.url, '_blank');
+      // 发送消息给Service Worker处理导航
+      self.postMessage({
+        type: 'navigate_to_url',
+        payload: { url: payload.data.url }
+      });
     }
     
-    // 可以触发自定义事件
-    window.dispatchEvent(new CustomEvent('pwa-notification-click', {
-      detail: payload
-    }));
+    // 发送消息给客户端
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'pwa-notification-click',
+          payload
+        });
+      });
+    });
   }
 
   private handleNotificationClose(payload: { data?: Record<string, unknown> }): void {
     console.log('PWAPushManager: Notification closed:', payload);
     
-    // 可以触发自定义事件
-    window.dispatchEvent(new CustomEvent('pwa-notification-close', {
-      detail: payload
-    }));
+    // 发送消息给客户端
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'pwa-notification-close',
+          payload
+        });
+      });
+    });
   }
 
   private async sendSubscriptionToServer(subscriptionData: PushSubscriptionData): Promise<void> {
@@ -399,7 +412,7 @@ export class PWAPushManager {
       .replace(/-/g, '+')
       .replace(/_/g, '/');
 
-    const rawData = window.atob(base64);
+    const rawData = atob(base64);
     const outputArray = new Uint8Array(rawData.length);
 
     for (let i = 0; i < rawData.length; ++i) {
@@ -412,7 +425,7 @@ export class PWAPushManager {
     const bytes = new Uint8Array(buffer);
     let binary = '';
     bytes.forEach(byte => binary += String.fromCharCode(byte));
-    return window.btoa(binary);
+    return btoa(binary);
   }
 
   private generateDeviceId(): string {

@@ -454,29 +454,121 @@ export class PWACollaborationEnhancer {
   }
 
   private async checkForCollaborationUpdates(): Promise<void> {
-    // 实现轻量级的协作更新检查
-    // 避免在后台进行大量的数据传输
     console.log('PWACollaborationEnhancer: Checking for collaboration updates');
+    
+    try {
+      // 检查是否有新的协作事件
+      // 这里可以发送轻量级请求到服务器检查更新
+      
+      // 发送检查请求到主线程
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'check_collaboration_updates',
+            payload: { timestamp: Date.now() }
+          });
+        });
+      });
+      
+    } catch (error) {
+      console.error('PWACollaborationEnhancer: Error checking for updates:', error);
+    }
   }
 
   private pauseCollaborationUpdates(): void {
     console.log('PWACollaborationEnhancer: Pausing collaboration updates');
-    // 暂停实时更新处理
+    
+    // 通知客户端暂停实时更新
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'pause_collaboration_updates',
+          payload: { reason: 'connection_lost' }
+        });
+      });
+    });
   }
 
   private resumeCollaborationUpdates(): void {
     console.log('PWACollaborationEnhancer: Resuming collaboration updates');
-    // 恢复实时更新处理
+    
+    // 通知客户端恢复实时更新
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'resume_collaboration_updates',
+          payload: { reason: 'connection_restored' }
+        });
+      });
+    });
   }
 
   private async syncOfflineChanges(): Promise<void> {
     console.log('PWACollaborationEnhancer: Syncing offline changes');
-    // 同步离线期间的变更
+    
+    try {
+      // 获取离线期间缓存的协作事件
+      const cache = await caches.open('collaboration-cache');
+      const offlineEventsRequest = new Request('internal://offline-collaboration-events');
+      const response = await cache.match(offlineEventsRequest);
+      
+      if (response) {
+        const offlineEvents = await response.json();
+        
+        // 发送离线事件到主线程进行同步
+        self.clients.matchAll().then(clients => {
+          clients.forEach(client => {
+            client.postMessage({
+              type: 'sync_offline_collaboration_events',
+              payload: { events: offlineEvents }
+            });
+          });
+        });
+        
+        // 清理离线事件缓存
+        await cache.delete(offlineEventsRequest);
+      }
+      
+    } catch (error) {
+      console.error('PWACollaborationEnhancer: Error syncing offline changes:', error);
+    }
   }
 
   private async syncMissedUpdates(): Promise<void> {
     console.log('PWACollaborationEnhancer: Syncing missed updates');
-    // 同步可能错过的更新
+    
+    try {
+      // 获取最后同步的时间戳
+      const cache = await caches.open('collaboration-cache');
+      const lastSyncRequest = new Request('internal://last-sync-timestamp');
+      const response = await cache.match(lastSyncRequest);
+      
+      let lastSyncTimestamp = 0;
+      if (response) {
+        const data = await response.json();
+        lastSyncTimestamp = data.timestamp;
+      }
+      
+      // 请求主线程获取错过的更新
+      self.clients.matchAll().then(clients => {
+        clients.forEach(client => {
+          client.postMessage({
+            type: 'fetch_missed_collaboration_updates',
+            payload: { since: lastSyncTimestamp }
+          });
+        });
+      });
+      
+      // 更新最后同步时间戳
+      const currentTimestamp = Date.now();
+      const timestampResponse = new Response(JSON.stringify({ timestamp: currentTimestamp }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      await cache.put(lastSyncRequest, timestampResponse);
+      
+    } catch (error) {
+      console.error('PWACollaborationEnhancer: Error syncing missed updates:', error);
+    }
   }
 
   private notifyEventListeners(event: CollaborationEvent): void {

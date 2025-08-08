@@ -180,7 +180,7 @@ export class PWAPerformanceManager {
     }
 
     try {
-      const totalSize = 0;
+      let totalSize = 0;
       const preloadPromises: Promise<void>[] = [];
 
       for (const url of urls) {
@@ -189,7 +189,10 @@ export class PWAPerformanceManager {
           break;
         }
 
-        preloadPromises.push(this.preloadResource(url));
+        preloadPromises.push(this.preloadResource(url).then(() => {
+          // 估算资源大小（简化实现）
+          totalSize += 1024; // 假设每个资源1KB，实际项目中应该获取实际大小
+        }));
       }
 
       await Promise.allSettled(preloadPromises);
@@ -496,6 +499,15 @@ export class PWAPerformanceManager {
 
     // 记录性能指标
     console.log('PWAPerformanceManager: Updated performance metrics:', this.metrics);
+  }
+
+  private startResourcePreloading(): void {
+    console.log('PWAPerformanceManager: Starting resource preloading...');
+    
+    const { criticalResources } = this.config.preloading;
+    if (criticalResources.length > 0) {
+      this.preloadResources(criticalResources);
+    }
   }
 
   private startMemoryManagement(): void {
