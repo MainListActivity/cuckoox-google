@@ -45,7 +45,7 @@ const DebugPanel: React.FC = React.memo(() => {
       userName,
       selectedCaseId: caseId
     };
-  }, [auth.isLoggedIn, auth.isLoading, auth.user?.name, auth.selectedCaseId?.toString()]);
+  }, [auth.isLoggedIn, auth.isLoading, auth.user?.name, auth.selectedCaseId]);
 
   const surrealState = useMemo(() => {
     const errorMsg = surreal.error?.message || '';
