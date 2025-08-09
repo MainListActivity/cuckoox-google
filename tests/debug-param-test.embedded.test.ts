@@ -1,97 +1,117 @@
 /**
- * 调试参数设置的专用测试
+ * 调试参数设置的专用测试（重写版）
+ * 去除对 $auth/DEFINE PARAM 的依赖，基于登录与参数化构造记录ID的测试
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { TestHelpers } from './utils/realSurrealTestUtils';
+import { describe, it, expect, beforeEach } from "vitest";
+import { TestHelpers, TEST_IDS } from "./utils/realSurrealTestUtils";
 
-describe('SurrealDB参数设置调试', () => {
+describe("SurrealDB参数设置调试（基于登录与参数化记录ID）", () => {
   beforeEach(async () => {
     await TestHelpers.resetDatabase();
+    // 统一使用管理员登录，确保具备查询/更新权限（完全仿真生产权限）
+    await TestHelpers.setAuthUser(TEST_IDS.USERS.ADMIN);
   });
 
-  it('应该测试不同的参数设置方法', async () => {
-    // 方法1: 使用DEFINE PARAM (当前方法)
-    try {
-      await TestHelpers.query(`DEFINE PARAM $auth VALUE user:admin;`);
-      const result1 = await TestHelpers.query('RETURN $auth;');
-      console.log('方法1 - DEFINE PARAM结果:', JSON.stringify(result1, null, 2));
-    } catch (error) {
-      console.log('方法1失败:', error);
-    }
+  it("应该支持使用查询参数构造记录ID并查询用户", async () => {
+    // 使用查询参数传入表名与主键，并在查询中用 type::thing 构造记录ID
+    const result = await TestHelpers.query(
+      `
+      SELECT * FROM type::thing($tb, $id);
+    `,
+      { tb: "user", id: "admin" },
+    );
 
-    // 方法2: 使用LET语句（注意：$auth 是受保护变量，不能被赋值，这里保留失败验证）
-    try {
-      const result2 = await TestHelpers.query('LET $auth = user:admin; RETURN $auth;');
-      console.log('方法2 - LET语句结果:', JSON.stringify(result2, null, 2));
-    } catch (error) {
-      console.log('方法2失败:', error);
-    }
-
-    // 方法3: 直接在查询中使用变量
-    try {
-      const result3 = await TestHelpers.query('SELECT * FROM user:admin;');
-      console.log('方法3 - 直接查询结果:', JSON.stringify(result3, null, 2));
-    } catch (error) {
-      console.log('方法3失败:', error);
-    }
-
-    // 方法4: 使用query参数传递（注意：$auth 是受保护变量，不能作为查询参数名，这里保留失败验证）
-    try {
-      const result4 = await TestHelpers.query('RETURN $auth;', { auth: 'user:admin' });
-      console.log('方法4 - 查询参数结果:', JSON.stringify(result4, null, 2));
-    } catch (error) {
-      console.log('方法4失败:', error);
-    }
+    // 期望返回集合，并且第一条记录是 user:admin
+    expect(Array.isArray(result)).toBe(true);
+    const rows = (result[0] as unknown[]) || [];
+    expect(rows.length).toBeGreaterThan(0);
+    const first = rows[0] as { id: { toString: () => string } };
+    expect(first.id.toString()).toBe("user:admin");
   });
 
-  it('应该测试查询参数方式设置认证', async () => {
-    // 不能设置 $auth（受保护变量），通过查询参数传入表名与主键，并在查询中用 type::thing 构造记录ID
-    const roleResult = await TestHelpers.query(
+  it("应该支持 LET + type::thing 组合使用参数，查询用户的角色关系", async () => {
+    const result = await TestHelpers.query(
       `
       LET $user = type::thing($tb, $id);
       SELECT ->has_role->role.* AS roles FROM $user;
     `,
-      { tb: 'user', id: 'admin' }
+      { tb: "user", id: "admin" },
     );
 
-    console.log('使用查询参数的角色查询结果:', JSON.stringify(roleResult, null, 2));
-
-    // 类型与结构断言
-    if (!Array.isArray(roleResult)) throw new Error('roleResult 应为数组');
-    expect(roleResult.length).toBeGreaterThanOrEqual(2); // LET + SELECT 两个语句
-
-    const selectResult = roleResult[1];
-    if (!Array.isArray(selectResult)) throw new Error('第二个结果集应为数组');
-    expect(selectResult.length).toBeGreaterThan(0);
-
-    const firstRow = selectResult[0];
-    expect(firstRow && typeof firstRow === 'object').toBe(true);
-    const rec = firstRow as Record<string, unknown>;
-    expect('roles' in rec).toBe(true);
-    expect(Array.isArray(rec.roles as unknown[])).toBe(true);
-  });
-
-  it('应该测试组合查询语句', async () => {
-    // 不能赋值 $auth（受保护变量），改为在同一查询中定义 $user 并使用 type::thing 构造记录ID
-    const result = await TestHelpers.query(`
-      LET $user = type::thing('user', 'admin');
-      SELECT ->has_role->role.* AS roles FROM $user;
-    `);
-
-    console.log('组合查询结果:', JSON.stringify(result, null, 2));
-
-    if (!Array.isArray(result)) throw new Error('结果应为数组');
+    // 结果应包含两条：LET 的结果（一般为 null）与 SELECT 的结果
+    expect(Array.isArray(result)).toBe(true);
     expect(result.length).toBeGreaterThanOrEqual(2);
 
-    const selectResult = result[1];
-    if (!Array.isArray(selectResult)) throw new Error('第二个结果集应为数组');
-    expect(selectResult.length).toBeGreaterThan(0);
+    const selectRows = (result[1] as unknown[]) || [];
+    expect(selectRows.length).toBeGreaterThan(0);
 
-    const firstRow = selectResult[0];
-    expect(firstRow && typeof firstRow === 'object').toBe(true);
-    const rec = firstRow as Record<string, unknown>;
-    expect('roles' in rec).toBe(true);
-    expect(Array.isArray(rec.roles as unknown[])).toBe(true);
+    const row = selectRows[0] as { roles: Array<{ name: string }> };
+    expect(Array.isArray(row.roles)).toBe(true);
+    const hasAdminRole = row.roles.some((r) => r.name === "admin");
+    expect(hasAdminRole).toBe(true);
+  });
+
+  it("应该支持在多语句中复用参数并进行条件查询", async () => {
+    const result = await TestHelpers.query(
+      `
+      LET $u = type::thing($tb, $id);
+      LET $case = type::thing('case', 'test_case_1');
+      SELECT * FROM has_role WHERE in = $u;
+      SELECT * FROM case WHERE id = $case;
+    `,
+      { tb: "user", id: "admin" },
+    );
+
+    expect(Array.isArray(result)).toBe(true);
+    // 预期至少包含3个结果：LET、LET、SELECT、SELECT
+    expect(result.length).toBeGreaterThanOrEqual(4);
+
+    const roleRows = (result[2] as unknown[]) || [];
+    const caseRows = (result[3] as unknown[]) || [];
+
+    // has_role 应至少有一条（admin -> admin）
+    expect(roleRows.length).toBeGreaterThan(0);
+    // case:test_case_1 应该存在（由测试数据注入）
+    expect(caseRows.length).toBe(1);
+  });
+
+  it("应该支持使用 type::thing 对记录进行更新并验证（权限基于登录态）", async () => {
+    // 更新 user:test_user 的 name 字段
+    const updateRes = await TestHelpers.query(
+      `
+      UPDATE type::thing('user', 'test_user') SET name = '测试用户X' RETURN AFTER;
+    `,
+    );
+    expect(Array.isArray(updateRes)).toBe(true);
+    const updatedRows = (updateRes[0] as unknown[]) || [];
+    expect(updatedRows.length).toBeGreaterThan(0);
+    const updated = updatedRows[0] as { name: string };
+    expect(updated.name).toBe("测试用户X");
+
+    // 再次查询验证
+    const verify = await TestHelpers.query(
+      `
+      SELECT * FROM type::thing('user', 'test_user');
+    `,
+    );
+    const verifyRows = (verify[0] as unknown[]) || [];
+    expect(verifyRows.length).toBe(1);
+    const row = verifyRows[0] as { name: string };
+    expect(row.name).toBe("测试用户X");
+  });
+
+  it("应该支持参数用于关系查询（不依赖 $auth）", async () => {
+    const result = await TestHelpers.query(
+      `
+      LET $id = type::thing('user', 'admin');
+      SELECT ->has_role->role.* AS roles FROM $id;
+    `,
+    );
+    expect(Array.isArray(result)).toBe(true);
+    const rolesRows = (result[1] as unknown[]) || [];
+    expect(rolesRows.length).toBeGreaterThan(0);
+    const row = rolesRows[0] as { roles: Array<{ name: string }> };
+    expect(Array.isArray(row.roles)).toBe(true);
   });
 });

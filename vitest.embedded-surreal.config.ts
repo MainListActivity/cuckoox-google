@@ -21,6 +21,12 @@ export default defineConfig({
       "react-i18next",
     ],
   },
+  optimizeDeps: {
+    exclude: ["@surrealdb/node"],
+  },
+  ssr: {
+    external: ["@surrealdb/node"],
+  },
   // 设置测试模式以加载 .env.test
   mode: "test",
   test: {
