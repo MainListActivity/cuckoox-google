@@ -683,6 +683,8 @@ DEFINE INDEX jwt_key_pair_created_idx ON jwt_key_pair FIELDS created_at;
 -- Set the name of the token
 DEFINE ACCESS cuckoox_token ON DATABASE TYPE RECORD WITH JWT URL 'http://127.0.0.1:8080/.well-known/jwks.json' DURATION FOR TOKEN 1h, FOR SESSION 1h;
 
+
+
 -- ======================================
 -- 图数据库边表定义 (Graph Relations)
 -- ======================================
@@ -1133,38 +1135,12 @@ INSERT INTO system_config {
 
 -- 测试初始数据（通过 OPTION IMPORT 加载）
 
--- 创建基础测试用户
+-- 创建基础管理员用户
 CREATE user:admin SET name = '系统管理员', email = 'admin@cuckoox.cn', username = 'admin', password_hash = crypto::argon2::generate('admin123');
-CREATE user:case_manager SET name = '案件管理员', email = 'manager@cuckoox.cn', username = 'case_manager', password_hash = crypto::argon2::generate('test123');
-CREATE user:creditor_user SET name = '债权人用户', email = 'creditor@cuckoox.cn', username = 'creditor_user', password_hash = crypto::argon2::generate('test123');
-CREATE user:test_user SET name = '测试用户', email = 'test@cuckoox.cn', username = 'test_user', password_hash = crypto::argon2::generate('test123');
 
 -- 赋予基础角色
 RELATE user:admin->has_role->role:admin SET assigned_at = time::now();
-RELATE user:case_manager->has_role->role:case_manager SET assigned_at = time::now();
-RELATE user:creditor_user->has_role->role:creditor_representative SET assigned_at = time::now();
 
--- 创建测试案件
-CREATE case:test_case_1 SET
-  acceptance_date = time::now(),
-  announcement_date = time::now(),
-  case_lead_user_id = user:case_manager,
-  case_manager_name = '张三',
-  case_number = '(2024)京0108破1号',
-  case_procedure = '破产清算',
-  claim_submission_start_date = time::now(),
-  claim_submission_end_date = time::now(),
-  created_by_user = user:admin,
-  name = '北京某某科技有限公司破产清算案',
-  procedure_phase = '债权申报',
-  selected_theme_name = 'default';
+-- 其他用户应该通过页面方法调用创建，不在schema中硬编码
 
-CREATE case:test_case_2 SET
-  acceptance_date = time::now(),
-  case_lead_user_id = user:case_manager,
-  case_manager_name = '李四',
-  case_number = '(2024)京0108破2号',
-  case_procedure = '破产重整',
-  created_by_user = user:admin,
-  name = '上海某某贸易有限公司破产重整案',
-  procedure_phase = '立案';
+-- 测试案件数据应该通过页面方法调用创建，不在schema中硬编码

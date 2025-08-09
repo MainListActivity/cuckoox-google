@@ -230,121 +230,23 @@ export class TestDataGenerator {
   generateInsertStatements(): string[] {
     const statements: string[] = [];
 
-    // 插入用户数据
-    for (const user of this.generateUsers()) {
-      statements.push(
-        `
-        CREATE user:${user.id.id} SET
-          github_id = '${user.github_id}',
-          name = '${user.name}',
-          email = '${user.email}';
-      `.trim(),
-      );
-    }
+    // 插入基础用户数据 - 这些用户已在Schema中定义
+    // 只需要创建admin用户，因为Schema会自动处理用户角色关系
+    statements.push(
+      `
+      CREATE user:admin SET
+        github_id = '--admin--',
+        name = '系统管理员',
+        email = 'admin@cuckoox.cn',
+        avatar_url = 'https://via.placeholder.com/40',
+        created_at = time::now(),
+        updated_at = time::now();
+    `.trim(),
+    );
 
-    // 插入角色数据
-    for (const role of this.generateRoles()) {
-      statements.push(
-        `
-        CREATE role:${role.id.id} SET
-          name = '${role.name}',
-          display_name = '${role.display_name}',
-          description = ${role.description ? `'${role.description}'` : "NONE"};
-      `.trim(),
-      );
-    }
-
-    // 插入操作元数据
-    for (const op of this.generateOperationMetadata()) {
-      statements.push(
-        `
-        CREATE operation_metadata:${op.id.id} SET
-          name = '${op.name}',
-          display_name = '${op.display_name}',
-          operation_type = '${op.operation_type}',
-          tables = [${op.tables.map((t) => `'${t}'`).join(", ")}],
-          description = ${op.description ? `'${op.description}'` : "NONE"};
-      `.trim(),
-      );
-    }
-
-    // 插入菜单元数据
-    for (const menu of this.generateMenuMetadata()) {
-      statements.push(
-        `
-        CREATE menu_metadata:${menu.id.id} SET
-          name = '${menu.name}',
-          display_name = '${menu.display_name}',
-          path = ${menu.path ? `'${menu.path}'` : "NONE"},
-          icon = ${menu.icon ? `'${menu.icon}'` : "NONE"},
-          parent_id = ${menu.parent_id ? `menu_metadata:${menu.parent_id.id}` : "NONE"},
-          sort_order = ${menu.sort_order},
-          is_active = ${menu.is_active};
-      `.trim(),
-      );
-    }
-
-    // 插入案件数据
-    for (const caseData of this.generateCases()) {
-      statements.push(
-        `
-        CREATE case:${caseData.id.id} SET
-          acceptance_date = d'${caseData.acceptance_date.toISOString()}',
-          announcement_date = ${caseData.announcement_date ? `d'${caseData.announcement_date.toISOString()}'` : "NONE"},
-          case_lead_user_id = ${caseData.case_lead_user_id ? `user:${caseData.case_lead_user_id.id}` : "NONE"},
-          case_manager_name = '${caseData.case_manager_name}',
-          case_number = '${caseData.case_number}',
-          case_procedure = '${caseData.case_procedure}',
-          claim_submission_start_date = ${caseData.claim_submission_start_date ? `d'${caseData.claim_submission_start_date.toISOString()}'` : "NONE"},
-          claim_submission_end_date = ${caseData.claim_submission_end_date ? `d'${caseData.claim_submission_end_date.toISOString()}'` : "NONE"},
-          closing_date = ${caseData.closing_date ? `d'${caseData.closing_date.toISOString()}'` : "NONE"},
-          created_by_user = user:${caseData.created_by_user.id},
-          name = '${caseData.name}',
-          procedure_phase = '${caseData.procedure_phase}',
-          selected_theme_name = ${caseData.selected_theme_name ? `'${caseData.selected_theme_name}'` : "NONE"};
-      `.trim(),
-      );
-    }
-
-    // 插入债权人数据
-    for (const creditor of this.generateCreditors()) {
-      statements.push(
-        `
-        CREATE creditor:${creditor.id.id} SET
-          case_id = case:${creditor.case_id.id},
-          name = '${creditor.name}',
-          phone = ${creditor.phone ? `'${creditor.phone}'` : "NONE"},
-          email = ${creditor.email ? `'${creditor.email}'` : "NONE"},
-          address = ${creditor.address ? `'${creditor.address}'` : "NONE"},
-          organization_code = ${creditor.organization_code ? `'${creditor.organization_code}'` : "NONE"},
-          id_number = ${creditor.id_number ? `'${creditor.id_number}'` : "NONE"},
-          creditor_type = '${creditor.creditor_type}',
-          created_at = d'${creditor.created_at.toISOString()}',
-          updated_at = d'${creditor.updated_at.toISOString()}';
-      `.trim(),
-      );
-    }
-
-    // 插入债权申报数据
-    for (const claim of this.generateClaims()) {
-      statements.push(
-        `
-        CREATE claim:${claim.id.id} SET
-          case_id = case:${claim.case_id.id},
-          creditor_id = creditor:${claim.creditor_id.id},
-          created_by = user:${claim.created_by.id},
-          claim_amount = ${claim.claim_amount},
-          claim_nature = '${claim.claim_nature}',
-          claim_description = ${claim.claim_description ? `'${claim.claim_description}'` : "NONE"},
-          review_status = '${claim.review_status}',
-          created_at = d'${claim.created_at.toISOString()}',
-          updated_at = d'${claim.updated_at.toISOString()}';
-      `.trim(),
-      );
-    }
-
-    // 权限和角色关系将由Schema默认数据或应用逻辑创建
-    // 这里不再手动创建权限关系
+    // 由于Schema中已经定义了完整的权限系统和初始数据，
+    // 包括角色、操作元数据、菜单元数据、用户角色关系等，
+    // 这里只需要确保基础用户存在即可
 
     return statements;
   }

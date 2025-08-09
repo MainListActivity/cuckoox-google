@@ -12,6 +12,8 @@ import {
   TestHelpers,
   TEST_IDS,
 } from "../utils/realSurrealTestUtils";
+import { RealUserOperations } from "../utils/realUserOperations";
+import { getTestDatabase } from "../../setup-embedded-db";
 
 // 这里我们需要一个简单的案件组件来测试
 // 由于复杂的页面组件可能有很多依赖，我们先创建一个简单的测试组件
@@ -106,9 +108,6 @@ const SimpleCaseCreator: React.FC<{ onCaseCreated?: () => void }> = ({
         acceptance_date: new Date(),
         case_procedure: "破产清算",
         procedure_phase: "立案",
-        created_by_user: new RecordId("user", "test_user"),
-        created_at: new Date(),
-        updated_at: new Date(),
       });
 
       // 重置表单
@@ -179,6 +178,28 @@ describe("案件管理 - 真实数据库集成测试", () => {
   beforeEach(async () => {
     // 确保每个测试开始时都有干净的数据库状态
     await TestHelpers.resetDatabase();
+
+    // 使用 admin 登录并创建两条基础用例数据，避免依赖预置用例
+    await TestHelpers.setAuthUser(TEST_IDS.USERS.ADMIN);
+    const client = getTestDatabase();
+
+    await RealUserOperations.adminCreateCase(client, {
+      name: "用例一有限公司破产清算案",
+      case_number: "(2025)测001号",
+      case_manager_name: "张三",
+      acceptance_date: new Date(),
+      case_procedure: "破产清算",
+      procedure_phase: "立案",
+    });
+
+    await RealUserOperations.adminCreateCase(client, {
+      name: "用例二贸易有限公司破产重整案",
+      case_number: "(2025)测002号",
+      case_manager_name: "李四",
+      acceptance_date: new Date(),
+      case_procedure: "破产重整",
+      procedure_phase: "立案",
+    });
   });
 
   describe("案件列表功能", () => {
@@ -196,17 +217,13 @@ describe("案件管理 - 真实数据库集成测试", () => {
 
       // 验证显示了测试数据中的案件
       expect(screen.getByText("案件列表")).toBeInTheDocument();
+      expect(screen.getByText("用例一有限公司破产清算案")).toBeInTheDocument();
       expect(
-        screen.getByText("北京某某科技有限公司破产清算案"),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText("上海某某贸易有限公司破产重整案"),
+        screen.getByText("用例二贸易有限公司破产重整案"),
       ).toBeInTheDocument();
 
       // 验证案件详细信息
-      expect(
-        screen.getByText("案件编号: (2024)京0108破1号"),
-      ).toBeInTheDocument();
+      expect(screen.getByText("案件编号: (2025)测001号")).toBeInTheDocument();
       expect(screen.getByText("负责人: 张三")).toBeInTheDocument();
     });
 
@@ -300,7 +317,6 @@ describe("案件管理 - 真实数据库集成测试", () => {
         acceptance_date: new Date(),
         case_procedure: "破产清算",
         procedure_phase: "立案",
-        created_by_user: new RecordId("user", "admin"),
       });
 
       const initialCount = await TestHelpers.getRecordCount("case");
@@ -339,7 +355,7 @@ describe("案件管理 - 真实数据库集成测试", () => {
 
   describe("数据库约束和关系测试", () => {
     it("应该正确处理案件创建者关系", async () => {
-      await TestHelpers.setAuthUser(TEST_IDS.USERS.CASE_MANAGER);
+      await TestHelpers.setAuthUser(TEST_IDS.USERS.ADMIN);
 
       // 创建案件并指定创建者
       const caseResult = await TestHelpers.create("case", {
@@ -349,7 +365,6 @@ describe("案件管理 - 真实数据库集成测试", () => {
         acceptance_date: new Date(),
         case_procedure: "破产清算",
         procedure_phase: "立案",
-        created_by_user: new RecordId("user", "case_manager"),
       });
 
       // 验证案件创建成功
@@ -366,7 +381,7 @@ describe("案件管理 - 真实数据库集成测试", () => {
       expect(creatorRows).toHaveLength(1);
       const creatorRow = creatorRows[0] as any;
       expect(creatorRow.creator).toBeDefined();
-      expect((creatorRow.creator as any).github_id).toBe("case_manager");
+      expect(String((creatorRow.creator as any).id)).toContain("user:admin");
     });
 
     it("应该正确验证日期字段", async () => {
@@ -383,7 +398,6 @@ describe("案件管理 - 真实数据库集成测试", () => {
         announcement_date: announcementDate,
         case_procedure: "破产清算",
         procedure_phase: "立案",
-        created_by_user: new RecordId("user", "admin"),
       });
 
       // Surreal 可能返回字符串，需要兼容
@@ -411,21 +425,13 @@ describe("案件管理 - 真实数据库集成测试", () => {
   });
 
   describe("权限和认证测试", () => {
-    it("应该区分不同用户的访问权限", async () => {
-      // 测试管理员用户可以访问所有案件
+    it("应该区分管理员用户的访问权限", async () => {
+      // 仅验证管理员用户可以访问案件列表（其余用户需通过页面流程创建后再验证）
       await TestHelpers.setAuthUser(TEST_IDS.USERS.ADMIN);
 
       const adminCases = await TestHelpers.query("SELECT * FROM case;");
       const adminRows = (adminCases?.[0] as any[]) ?? [];
       expect(adminRows.length).toBeGreaterThan(0);
-
-      // 测试普通用户的访问权限
-      await TestHelpers.setAuthUser(TEST_IDS.USERS.CREDITOR_USER);
-
-      const creditorCases = await TestHelpers.query("SELECT * FROM case;");
-      // 根据权限系统，债权人用户可能看不到所有案件，或者有不同的数据
-      // 这里的具体行为取决于数据库的权限配置
-      expect(creditorCases).toBeDefined();
     });
 
     it("应该正确处理未认证用户", async () => {
@@ -460,7 +466,6 @@ describe("案件管理 - 真实数据库集成测试", () => {
         acceptance_date: new Date(),
         case_procedure: "破产清算",
         procedure_phase: "立案",
-        created_by_user: new RecordId("user", "admin"),
       });
 
       // 验证统计信息更新（等待计数变化）

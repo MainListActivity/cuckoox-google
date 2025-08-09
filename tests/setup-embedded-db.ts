@@ -7,80 +7,78 @@ import "@testing-library/jest-dom";
 import React from "react";
 import { vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
-import { TestDatabaseManager, closeTestDatabase } from "./database/TestDatabaseManager";
+import {
+  TestDatabaseManager,
+  closeTestDatabase,
+} from "./database/TestDatabaseManager";
+// Service Worker测试在Node.js环境中不可用，移除相关导入
+// import {
+//   registerTestServiceWorker,
+//   cleanupTestServiceWorker,
+//   isTestServiceWorkerReady,
+// } from "./test-service-worker/test-sw-registration";
 
 // 全局数据库管理器实例
 let testDbManager: TestDatabaseManager;
 
 // 初始化内嵌数据库测试环境
 beforeAll(async () => {
-  console.log('🚀 正在初始化内嵌数据库测试环境...');
-  
+  console.log("🚀 正在初始化内嵌数据库测试环境...");
+
   // 获取测试数据库管理器
   testDbManager = TestDatabaseManager.getInstance();
-  
+
   // 初始化数据库 - 这会创建内嵌数据库实例并加载测试数据
   await testDbManager.initialize();
-  
+
   // 验证数据库状态
   const isValid = await testDbManager.validateDatabaseState();
   if (!isValid) {
-    throw new Error('测试数据库初始化失败 - 数据验证不通过');
+    throw new Error("测试数据库初始化失败 - 数据验证不通过");
   }
-  
+
   const stats = await testDbManager.getDatabaseStats();
-  console.log('📊 数据库初始化完成，统计信息:', stats);
-  
+  console.log("📊 数据库初始化完成，统计信息:", stats);
+
   // 设置全局数据库实例供测试使用
   (globalThis as any).__TEST_DATABASE__ = testDbManager.getDatabase();
   (globalThis as any).__TEST_DB_MANAGER__ = testDbManager;
+
+  // Node.js环境中不支持Service Worker，跳过注册
+  console.log("ℹ️ 跳过Service Worker注册，直接使用数据库连接");
 }, 30000); // 30秒超时，给数据库初始化足够时间
 
 // 清理数据库测试环境
 afterAll(async () => {
-  console.log('🧹 正在清理内嵌数据库测试环境...');
-  
+  console.log("🧹 正在清理内嵌数据库测试环境...");
+
   try {
     // 清理全局引用
     delete (globalThis as any).__TEST_DATABASE__;
     delete (globalThis as any).__TEST_DB_MANAGER__;
-    
+
     // 关闭数据库连接
     await closeTestDatabase();
-    console.log('✅ 数据库测试环境清理完成');
+    console.log("✅ 数据库测试环境清理完成");
   } catch (error) {
-    console.warn('⚠️ 清理数据库环境时出现警告:', error);
+    console.warn("⚠️ 清理数据库环境时出现警告:", error);
   }
 }, 10000); // 10秒超时
 
-// 每个测试前重置数据库状态
-beforeEach(async () => {
-  if (testDbManager) {
-    // 重置数据库到初始状态
-    await testDbManager.resetDatabase();
-    
-    // 清除认证状态，每个测试开始时都是未认证状态
-    await testDbManager.clearAuth();
-  }
-  
-  // React Testing Library 清理
-  cleanup();
-}, 5000); // 5秒超时
+// 集成测试支持数据共享 - 不清理数据库数据
+// 让测试用例创建的数据保留在数据库中，供后续测试使用
 
-// 每个测试后清理
+// 每个测试后只清理React组件状态和Mock，保留所有数据库数据
 afterEach(async () => {
-  // 清理认证状态
-  if (testDbManager) {
-    await testDbManager.clearAuth();
-  }
-  
   // 清理 React Testing Library
   cleanup();
-  
-  // 清理所有 mocks
+
+  // 清理所有 mocks 但保留数据库连接和数据
   vi.clearAllMocks();
   vi.clearAllTimers();
   vi.useRealTimers();
+
+  // 注意：不清理数据库数据，不调用signOut，保持数据和认证状态
 }, 3000); // 3秒超时
 
 // DOM Mock 设置
@@ -114,8 +112,17 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
 
 // 基本DOM方法mock
 Element.prototype.scrollIntoView = vi.fn();
-HTMLElement.prototype.focus = vi.fn();
-HTMLElement.prototype.blur = vi.fn();
+// 使用 Object.defineProperty 来 mock 只读属性
+Object.defineProperty(HTMLElement.prototype, "focus", {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
+Object.defineProperty(HTMLElement.prototype, "blur", {
+  value: vi.fn(),
+  writable: true,
+  configurable: true,
+});
 
 // Mock createPortal
 vi.mock("react-dom", async (importOriginal) => {
@@ -172,17 +179,17 @@ vi.mock("react-router-dom", async (importOriginal) => {
   };
 });
 
-// 设置测试超时
+// 设置测试超时 - 减少超时时间避免hang
 vi.setConfig({
-  testTimeout: 15000, // 15秒超时，因为数据库操作可能较慢
-  hookTimeout: 10000, // 10秒hook超时
+  testTimeout: 10000, // 10秒超时
+  hookTimeout: 8000, // 8秒hook超时
 });
 
 // 导出测试辅助函数
 export const getTestDatabase = () => {
   const db = (globalThis as any).__TEST_DATABASE__;
   if (!db) {
-    throw new Error('测试数据库未初始化，请确保在 beforeAll 钩子中正确设置');
+    throw new Error("测试数据库未初始化，请确保在 beforeAll 钩子中正确设置");
   }
   return db;
 };
@@ -190,9 +197,21 @@ export const getTestDatabase = () => {
 export const getTestDatabaseManager = () => {
   const manager = (globalThis as any).__TEST_DB_MANAGER__;
   if (!manager) {
-    throw new Error('测试数据库管理器未初始化');
+    throw new Error("测试数据库管理器未初始化");
   }
   return manager as TestDatabaseManager;
 };
 
-console.log('📋 内嵌数据库测试设置加载完成');
+// 集成测试数据共享辅助函数
+export const preserveTestData = () => {
+  console.log("📋 保持测试数据，不进行清理");
+};
+
+export const getSharedTestData = async () => {
+  const db = getTestDatabase();
+  const cases = await db.query("SELECT * FROM case");
+  const users = await db.query("SELECT * FROM user");
+  return { cases, users };
+};
+
+console.log("📋 内嵌数据库测试设置加载完成");

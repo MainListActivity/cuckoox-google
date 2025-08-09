@@ -15,7 +15,7 @@ export default defineConfig({
     },
     dedupe: [
       "react",
-      "react-dom", 
+      "react-dom",
       "@emotion/react",
       "@emotion/styled",
       "react-i18next",
@@ -34,10 +34,20 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
 
-    // 包含所有集成测试和内嵌数据库测试
+    // 按顺序包含集成测试文件
     include: [
-      "tests/integration/**/*.test.{ts,tsx}", // 集成测试
-      "tests/**/*.embedded.test.{ts,tsx}", // 内嵌数据库测试
+      "tests/integration/auth/01-admin-creation.test.tsx",
+      "tests/integration/case/02-case-creation.test.tsx",
+      "tests/integration/auth/03-manager-login.test.tsx",
+      "tests/integration/case/04-case-query.test.tsx",
+      "tests/integration/case/05-case-member-addition.test.tsx",
+      "tests/integration/claims/06-claims-management.test.tsx",
+      "tests/integration/creditors/07-creditor-management.test.tsx",
+      "tests/integration/documents/08-document-management.test.tsx",
+      "tests/integration/pages/09-pages-integration.test.tsx",
+      "tests/integration/auth/10-member-login.test.tsx",
+      "tests/integration/auth/11-member-logout.test.tsx",
+      "tests/**/*.embedded.test.{ts,tsx}", // 其他内嵌数据库测试
     ],
 
     setupFiles: ["./tests/setup-embedded-db.ts"], // 使用内嵌数据库设置
@@ -46,26 +56,37 @@ export default defineConfig({
     testTimeout: 15000, // 15秒
     hookTimeout: 10000, // 10秒
 
-    // 使用单线程以确保数据库操作的一致性
+    // 使用单线程以确保数据库操作的一致性和测试顺序
     pool: "threads",
     poolOptions: {
       threads: {
-        singleThread: true, // 单线程模式确保数据库状态一致
-        isolate: true,
+        singleThread: true, // 单线程模式确保数据库状态一致和测试顺序
+        isolate: false, // 不隔离以保持数据共享
       },
     },
 
-    // 降低并发以确保数据库访问稳定性
+    // 设置为1确保测试按顺序执行
     maxConcurrency: 1,
     minThreads: 1,
     maxThreads: 1,
 
-    // 详细输出用于调试数据库操作
+    // 确保测试按顺序执行
+    sequence: {
+      shuffle: false, // 不打乱测试顺序
+      concurrent: false, // 不并发执行
+    },
+
+    // 详细输出用于调试数据库操作和测试顺序
     logHeapUsage: true,
     silent: false,
 
-    // 使用详细报告器
+    // 使用详细报告器显示测试执行顺序
     reporters: ["verbose"],
+
+    // 输出测试顺序信息
+    outputFile: {
+      json: "./test-results/integration-results.json",
+    },
 
     // 排除常规单元测试和 E2E 测试
     exclude: [

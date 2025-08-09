@@ -26,6 +26,16 @@ const RealSurrealTestProvider: React.FC<RealSurrealTestProviderProps> = ({
 }) => {
   const testDb = database || getTestDatabase();
 
+  // 暴露 Surreal client 到全局，便于集成测试中的真实用户操作模块使用
+  React.useEffect(() => {
+    (globalThis as any).__TEST_CLIENT__ = testDb;
+    return () => {
+      if ((globalThis as any).__TEST_CLIENT__ === testDb) {
+        delete (globalThis as any).__TEST_CLIENT__;
+      }
+    };
+  }, [testDb]);
+
   // 如果指定了认证用户，设置认证状态
   React.useEffect(() => {
     if (authUserId) {

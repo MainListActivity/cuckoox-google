@@ -58,8 +58,7 @@ export class TestDatabaseManager {
       // 加载并执行数据库Schema
       await this.loadSchema();
 
-      // 定义数据库登录 Access（测试环境与生产一致）
-      await this.defineAccountAccess();
+      // 注意：account ACCESS已在Schema中定义，无需重复定义
 
       // 基础元数据最小化初始化（角色、菜单、操作）
       await this.ensureCoreMetadata();
@@ -117,6 +116,25 @@ export class TestDatabaseManager {
         }
       }
 
+      // 在集成测试中动态添加DEFINE ACCESS account配置
+      // 这样可以避免在生产环境中暴露用户名密码登录方式
+      const testAccessStatement = `
+        DEFINE ACCESS account ON DATABASE TYPE RECORD
+          SIGNIN (
+            SELECT * FROM user
+            WHERE username = $username
+            AND crypto::argon2::compare(password_hash, $pass)
+          )
+          DURATION FOR TOKEN 8m, FOR SESSION 8m;
+      `;
+
+      try {
+        await this.db.query(testAccessStatement);
+        console.log("测试环境DEFINE ACCESS account配置已添加");
+      } catch (error) {
+        console.warn("添加测试ACCESS配置时出现警告:", error);
+      }
+
       console.log(`Schema加载完成，执行了${statements.length}个语句`);
     } catch (error) {
       console.error("加载Schema失败:", error);
@@ -142,36 +160,27 @@ export class TestDatabaseManager {
   }
 
   /**
-   * 定义数据库 Access（与生产一致的 SIGNIN 方式）
-   */
-  private async defineAccountAccess(): Promise<void> {
-    if (!this.db) throw new Error("数据库未初始化");
-    try {
-      await this.db.query(`
-DEFINE ACCESS account ON DATABASE TYPE RECORD
-  SIGNIN ( SELECT * FROM user WHERE username = $username AND crypto::argon2::compare(password_hash, $pass) )
-  DURATION FOR TOKEN 15m, FOR SESSION 12h
-;
-`);
-    } catch {
-      // 向后兼容 SurrealDB 1.x：若 ACCESS 定义失败，使用 SCOPE 定义
-      await this.db.query(`
-DEFINE SCOPE account SESSION 12h
-  SIGNIN ( SELECT * FROM user WHERE username = $username AND crypto::argon2::compare(password_hash, $pass) );
-`);
-    }
-  }
-
-  /**
-   * 简化的基础关系设置（依赖Schema和生产系统默认数据）
+   * 重新创建基础关系（用户角色关系等）
    */
   private async ensureCoreRelations(): Promise<void> {
     if (!this.db) throw new Error("数据库未初始化");
 
     try {
-      console.log("基础关系已通过Schema定义创建，依赖生产系统权限配置");
-      // Schema应该已经创建了基础的角色权限关系
-      // 测试环境应该依赖生产系统的权限配置而不是手动创建
+      // 重新创建用户角色关系，这些在resetDatabase时被删除了
+      // 根据项目要求，只处理admin用户，其他用户应通过页面方法调用创建
+      const relationStatements = [
+        "RELATE user:admin->has_role->role:admin SET assigned_at = time::now();",
+      ];
+
+      for (const statement of relationStatements) {
+        try {
+          await this.db.query(statement);
+        } catch (error) {
+          // 关系可能已存在，继续执行其他语句
+          console.warn(`创建关系时出现警告: ${statement}`, error);
+        }
+      }
+
       console.log("核心关系确保完成");
     } catch (error) {
       console.error("确保核心关系失败:", error);
@@ -186,9 +195,6 @@ DEFINE SCOPE account SESSION 12h
     if (!this.db) throw new Error("数据库未初始化");
     const stmts = [
       "UPDATE user:admin SET username = 'admin', password_hash = crypto::argon2::generate('admin123');",
-      "UPDATE user:case_manager SET username = 'case_manager', password_hash = crypto::argon2::generate('test123');",
-      "UPDATE user:creditor_user SET username = 'creditor_user', password_hash = crypto::argon2::generate('test123');",
-      "UPDATE user:test_user SET username = 'test_user', password_hash = crypto::argon2::generate('test123');",
     ];
     for (const s of stmts) {
       try {
@@ -331,59 +337,6 @@ DEFINE SCOPE account SESSION 12h
     const pwd = uname === "admin" ? "admin123" : "test123";
     await this.signIn(uname, pwd);
     console.log(`已登录用户: ${userId}`);
-    try {
-      const res = await this.db.query(`
-        SELECT ->has_role->role.* AS roles FROM $auth;
-      `);
-      const rows = Array.isArray(res?.[0]) ? (res[0] as any[]) : [];
-      const first = rows[0] || {};
-      const roles = Array.isArray((first as any).roles)
-        ? (first as any).roles
-        : [];
-      const names = roles.map((r: any) => r?.name).filter(Boolean);
-      console.log("[调试] 当前用户角色：", names);
-    } catch (e) {
-      console.warn("查询用户角色列表失败：", e);
-    }
-
-    // 追加：逐步调试权限查询链
-    try {
-      // 步骤1: 检查用户角色关系
-      console.log("[调试步骤1] 检查用户角色关系...");
-      const step1Res = await this.db.query(`SELECT ->has_role FROM $auth;`);
-      const step1Data = Array.isArray(step1Res?.[0]) ? (step1Res[0] as any[]) : [];
-      console.log("[调试步骤1] 用户角色关系：", JSON.stringify(step1Data, null, 2));
-
-      // 步骤2: 检查角色信息
-      console.log("[调试步骤2] 检查角色信息...");
-      const step2Res = await this.db.query(`SELECT ->has_role->role FROM $auth;`);
-      const step2Data = Array.isArray(step2Res?.[0]) ? (step2Res[0] as any[]) : [];
-      console.log("[调试步骤2] 角色信息：", JSON.stringify(step2Data, null, 2));
-
-      // 步骤3: 检查角色操作权限关系
-      console.log("[调试步骤3] 检查角色操作权限关系...");
-      const step3Res = await this.db.query(`SELECT ->has_role->role->can_execute_operation FROM $auth;`);
-      const step3Data = Array.isArray(step3Res?.[0]) ? (step3Res[0] as any[]) : [];
-      console.log("[调试步骤3] 角色操作权限关系：", JSON.stringify(step3Data, null, 2));
-
-      // 步骤4: 检查操作元数据
-      console.log("[调试步骤4] 检查操作元数据...");
-      const step4Res = await this.db.query(`SELECT ->has_role->role->can_execute_operation->operation_metadata FROM $auth;`);
-      const step4Data = Array.isArray(step4Res?.[0]) ? (step4Res[0] as any[]) : [];
-      console.log("[调试步骤4] 操作元数据：", JSON.stringify(step4Data, null, 2));
-
-      // 步骤5: 最终查询操作ID
-      console.log("[调试步骤5] 查询操作ID...");
-      const step5Res = await this.db.query(`
-        SELECT ->has_role->role->can_execute_operation->operation_metadata.operation_id AS operation_ids
-        FROM $auth;
-      `);
-      const step5Data = Array.isArray(step5Res?.[0]) ? (step5Res[0] as any[]) : [];
-      console.log("[调试步骤5] 最终操作ID：", JSON.stringify(step5Data, null, 2));
-
-    } catch (e) {
-      console.warn("调试权限查询失败：", e);
-    }
   }
 
   /**
@@ -433,7 +386,7 @@ DEFINE SCOPE account SESSION 12h
       // 确保核心元数据存在（角色/菜单/操作）
       await this.ensureCoreMetadata();
 
-      // 重新插入测试数据
+      // 重新插入必要数据（仅 admin 账号）
       await this.insertTestData();
       // 重新设置测试用户的用户名与口令哈希，确保 SIGNIN 可用
       await this.ensureTestUserCredentials();
@@ -507,7 +460,9 @@ DEFINE SCOPE account SESSION 12h
         `数据库状态验证: 用户=${userCount}, 案件=${caseCount}, 角色=${roleCount}`,
       );
 
-      return caseCount > 0 && roleCount > 0;
+      // 只验证核心基础数据：至少有一个用户(admin)和角色数据
+      // 案件数据应该通过页面方法调用创建，不在此验证
+      return userCount > 0 && roleCount > 0;
     } catch (error) {
       console.error("数据库状态验证失败:", error);
       return false;
