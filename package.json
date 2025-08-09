@@ -13,7 +13,8 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run --run",
     "test:integration": "vitest run --run --config vitest.integration.config.ts --reporter=verbose",
-    "test:all": "npm run test:fast && npm run test:integration",
+    "test:embedded": "vitest run --run --config vitest.embedded-surreal.config.ts --reporter=verbose",
+    "test:all": "npm run test:fast && npm run test:integration && npm run test:embedded",
     "test:coverage": "vitest run --coverage",
     "test:simple": "vitest run --run --reporter=./tests/reporters/file-status-reporter.ts",
     "test:e2e": "playwright test"
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.53.1",
+    "@surrealdb/node": "^1.0.0-beta.3",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",

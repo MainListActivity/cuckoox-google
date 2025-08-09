@@ -48,10 +48,11 @@ export default defineConfig(({ mode }) => {
   // 自定义环境变量加载逻辑
   const env = {} as Record<string, string>;
 
-  // 加载顺序：.env.local -> .env.dev (dev模式) -> .env
+  // 加载顺序：.env.local -> .env.dev (dev模式) -> .env -> .env.test (test模式)
   const envFiles = [
     ".env", // 基础配置
     ...(mode === "development" ? [".env.dev"] : []), // dev模式时加载.env.dev
+    ...(mode === "test" || process.env.NODE_ENV === "test" ? [".env.test"] : []), // test模式时加载.env.test
     ".env.local", // 本地配置（最高优先级）
   ];
 
