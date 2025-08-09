@@ -100,7 +100,9 @@ export class RealSurrealTestHelpers {
    */
   static async create(table: string, data: Record<string, any>) {
     if (!this.db) this.initialize();
-    return await this.db.create(table, data);
+    const res = await this.db.create(table, data);
+    // 规范返回为单条记录对象
+    return Array.isArray(res) ? res[0] : res;
   }
 
   /**
@@ -177,7 +179,8 @@ export class RealSurrealTestHelpers {
    */
   static async getRecordCount(table: string): Promise<number> {
     try {
-      const result = await this.query(`SELECT count() AS count FROM ${table};`);
+      // Surreal 统计建议使用 GROUP ALL 聚合
+      const result = await this.query(`SELECT count() AS count FROM ${table} GROUP ALL;`);
       const count = result?.[0]?.[0]?.count;
       return typeof count === 'number' ? count : 0;
     } catch (error) {

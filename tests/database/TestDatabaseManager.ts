@@ -282,9 +282,9 @@ export class TestDatabaseManager {
 
     try {
       // 检查关键表是否有数据
-      const userResult = await this.db.query('SELECT count() AS count FROM user;');
-      const caseResult = await this.db.query('SELECT count() AS count FROM case;');
-      const roleResult = await this.db.query('SELECT count() AS count FROM role;');
+      const userResult = await this.db.query('SELECT count() AS count FROM user GROUP ALL;');
+      const caseResult = await this.db.query('SELECT count() AS count FROM case GROUP ALL;');
+      const roleResult = await this.db.query('SELECT count() AS count FROM role GROUP ALL;');
       
       const userCount = userResult?.[0]?.[0]?.count || 0;
       const caseCount = caseResult?.[0]?.[0]?.count || 0;
@@ -312,7 +312,7 @@ export class TestDatabaseManager {
       
       for (const table of tables) {
         try {
-          const result = await this.db.query(`SELECT count() AS count FROM ${table};`);
+          const result = await this.db.query(`SELECT count() AS count FROM ${table} GROUP ALL;`);
           stats[table] = result?.[0]?.[0]?.count || 0;
         } catch (error) {
           stats[table] = 0;
