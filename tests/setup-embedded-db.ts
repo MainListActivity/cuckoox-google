@@ -19,36 +19,41 @@ import {
 // } from "./test-service-worker/test-sw-registration";
 
 // 全局数据库管理器实例
-let testDbManager: TestDatabaseManager;
+let testDbManager: TestDatabaseManager | null = null;
 
 // 初始化内嵌数据库测试环境
 beforeAll(async () => {
   console.log("🚀 正在初始化内嵌数据库测试环境...");
 
-  // 获取测试数据库管理器
-  testDbManager = TestDatabaseManager.getInstance();
+  try {
+    // 获取测试数据库管理器单例
+    testDbManager = TestDatabaseManager.getInstance();
 
-  // 初始化数据库 - 这会创建内嵌数据库实例并加载测试数据
-  await testDbManager.initialize();
+    // 初始化数据库 - 这会创建内嵌数据库实例并加载测试数据
+    await testDbManager.initialize();
 
-  // 验证数据库状态
-  const isValid = await testDbManager.validateDatabaseState();
-  if (!isValid) {
-    throw new Error("测试数据库初始化失败 - 数据验证不通过");
+    // 验证数据库状态
+    const isValid = await testDbManager.validateDatabaseState();
+    if (!isValid) {
+      throw new Error("测试数据库初始化失败 - 数据验证不通过");
+    }
+
+    const stats = await testDbManager.getDatabaseStats();
+    console.log("📊 数据库初始化完成，统计信息:", stats);
+
+    // 设置全局数据库实例供测试使用
+    (globalThis as any).__TEST_DATABASE__ = testDbManager.getDatabase();
+    (globalThis as any).__TEST_DB_MANAGER__ = testDbManager;
+
+    // Node.js环境中不支持Service Worker，跳过注册
+    console.log("ℹ️ 跳过Service Worker注册，直接使用数据库连接");
+  } catch (error) {
+    console.error("❌ 测试数据库初始化失败:", error);
+    throw error;
   }
-
-  const stats = await testDbManager.getDatabaseStats();
-  console.log("📊 数据库初始化完成，统计信息:", stats);
-
-  // 设置全局数据库实例供测试使用
-  (globalThis as any).__TEST_DATABASE__ = testDbManager.getDatabase();
-  (globalThis as any).__TEST_DB_MANAGER__ = testDbManager;
-
-  // Node.js环境中不支持Service Worker，跳过注册
-  console.log("ℹ️ 跳过Service Worker注册，直接使用数据库连接");
 }, 30000); // 30秒超时，给数据库初始化足够时间
 
-// 清理数据库测试环境
+// 清理数据库测试环境 - 只在最后一个测试文件完成时关闭
 afterAll(async () => {
   console.log("🧹 正在清理内嵌数据库测试环境...");
 
@@ -57,8 +62,8 @@ afterAll(async () => {
     delete (globalThis as any).__TEST_DATABASE__;
     delete (globalThis as any).__TEST_DB_MANAGER__;
 
-    // 关闭数据库连接
-    await closeTestDatabase();
+    // 注意：不关闭数据库连接，让它在所有测试完成后自动关闭
+    // await closeTestDatabase();
     console.log("✅ 数据库测试环境清理完成");
   } catch (error) {
     console.warn("⚠️ 清理数据库环境时出现警告:", error);
@@ -152,32 +157,91 @@ vi.mock("react-i18next", () => ({
   },
 }));
 
-// Mock react-router-dom
-vi.mock("react-router-dom", async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    useNavigate: () => vi.fn(),
-    useLocation: () => ({
-      pathname: "/",
-      search: "",
-      hash: "",
-      state: null,
-      key: "default",
+// Mock Service Worker 相关功能
+vi.mock("@/src/contexts/SurrealProvider", () => ({
+  SurrealProvider: ({ children }: { children: React.ReactNode }) => children,
+  useServiceWorkerComm: () => ({
+    sendMessage: vi.fn().mockImplementation((type: string, data: any) => {
+      // Mock Service Worker responses
+      if (type === 'get_connection_state') {
+        return Promise.resolve({
+          isAuthenticated: false,
+          isConnected: true,
+          currentUser: null
+        });
+      }
+      if (type === 'authenticate') {
+        return Promise.resolve({
+          success: true,
+          user: { id: 'user:admin', name: '系统管理员' }
+        });
+      }
+      return Promise.resolve({});
     }),
-    useParams: () => ({}),
-    BrowserRouter: ({ children, ...props }: any) =>
-      React.createElement(
-        "div",
-        { "data-testid": "mock-browser-router", key: Math.random(), ...props },
-        children,
-      ),
-    Route: ({ children }: any) =>
-      React.createElement("div", { "data-testid": "mock-route" }, children),
-    Routes: ({ children }: any) =>
-      React.createElement("div", { "data-testid": "mock-routes" }, children),
-  };
-});
+    isReady: true,
+    worker: null
+  }),
+  useSurrealData: () => ({
+    data: [],
+    isLoading: false,
+    error: null,
+    refetch: vi.fn()
+  }),
+  useSurrealClient: () => ({
+    client: null,
+    isConnected: false,
+    connect: vi.fn(),
+    disconnect: vi.fn()
+  }),
+  useSurreal: () => ({
+    db: null,
+    isConnected: false,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    query: vi.fn().mockResolvedValue([])
+  })
+}));
+
+// Mock AuthService
+vi.mock("@/src/services/authService", () => ({
+  default: {
+    authenticateUser: vi.fn().mockResolvedValue({
+      success: true,
+      user: { id: 'user:admin', name: '系统管理员', email: 'admin@test.com' }
+    }),
+    getCurrentUser: vi.fn().mockResolvedValue({ 
+      id: 'user:admin', 
+      name: '系统管理员',
+      email: 'admin@test.com' 
+    }),
+    logout: vi.fn().mockResolvedValue(true),
+    checkAuthStatus: vi.fn().mockResolvedValue(true),
+    setSurrealClient: vi.fn()
+  }
+}));
+
+// Mock react-router-dom
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
+  useLocation: () => ({
+    pathname: "/",
+    search: "",
+    hash: "",
+    state: null,
+    key: "default",
+  }),
+  useParams: () => ({}),
+  BrowserRouter: ({ children, ...props }: any) =>
+    React.createElement(
+      "div",
+      { "data-testid": "mock-browser-router", key: Math.random(), ...props },
+      children,
+    ),
+  Route: ({ children }: any) =>
+    React.createElement("div", { "data-testid": "mock-route" }, children),
+  Routes: ({ children }: any) =>
+    React.createElement("div", { "data-testid": "mock-routes" }, children),
+}));
 
 // 设置测试超时 - 减少超时时间避免hang
 vi.setConfig({
@@ -189,15 +253,36 @@ vi.setConfig({
 export const getTestDatabase = () => {
   const db = (globalThis as any).__TEST_DATABASE__;
   if (!db) {
+    console.warn("⚠️ 测试数据库未初始化，尝试重新初始化...");
+    // 尝试从当前管理器获取数据库
+    if (testDbManager) {
+      try {
+        const database = testDbManager.getDatabase();
+        (globalThis as any).__TEST_DATABASE__ = database;
+        return database;
+      } catch (error) {
+        console.error("❌ 无法获取测试数据库实例:", error);
+        throw new Error("测试数据库未初始化，请确保在 beforeAll 钩子中正确设置");
+      }
+    }
     throw new Error("测试数据库未初始化，请确保在 beforeAll 钩子中正确设置");
   }
   return db;
 };
 
 export const getTestDatabaseManager = () => {
-  const manager = (globalThis as any).__TEST_DB_MANAGER__;
+  const manager = (globalThis as any).__TEST_DB_MANAGER__ || testDbManager;
   if (!manager) {
-    throw new Error("测试数据库管理器未初始化");
+    console.warn("⚠️ 测试数据库管理器未初始化，尝试获取单例...");
+    // 尝试获取单例实例
+    try {
+      const dbManager = TestDatabaseManager.getInstance();
+      (globalThis as any).__TEST_DB_MANAGER__ = dbManager;
+      return dbManager;
+    } catch (error) {
+      console.error("❌ 无法获取测试数据库管理器:", error);
+      throw new Error("测试数据库管理器未初始化");
+    }
   }
   return manager as TestDatabaseManager;
 };

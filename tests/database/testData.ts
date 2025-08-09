@@ -193,14 +193,73 @@ export class TestDataGenerator {
    * 生成测试债权人数据
    */
   generateCreditors(): TestCreditor[] {
-    return [];
+    const now = new Date();
+    const caseId = new RecordId("case", "test_case_1");
+
+    return [
+      {
+        id: new RecordId("creditor", "test_creditor_1"),
+        case_id: caseId,
+        name: "北京某某科技有限公司",
+        phone: "010-12345678",
+        email: "contact@company1.com",
+        address: "北京市海淀区科技园区123号",
+        organization_code: "91110108123456789X",
+        creditor_type: "enterprise",
+        created_at: now,
+        updated_at: now,
+      },
+      {
+        id: new RecordId("creditor", "test_creditor_2"),
+        case_id: caseId,
+        name: "张三",
+        phone: "138-0013-8000",
+        email: "zhangsan@example.com",
+        address: "上海市浦东新区某某路456号",
+        id_number: "310101199001011234",
+        creditor_type: "individual",
+        created_at: now,
+        updated_at: now,
+      },
+    ];
   }
 
   /**
    * 生成测试债权申报数据
    */
   generateClaims(): TestClaim[] {
-    return [];
+    const now = new Date();
+    const caseId = new RecordId("case", "test_case_1");
+    const creditor1Id = new RecordId("creditor", "test_creditor_1");
+    const creditor2Id = new RecordId("creditor", "test_creditor_2");
+    const createdBy = new RecordId("user", "admin");
+
+    return [
+      {
+        id: new RecordId("claim", "test_claim_1"),
+        case_id: caseId,
+        creditor_id: creditor1Id,
+        created_by: createdBy,
+        claim_amount: 500000,
+        claim_nature: "ordinary",
+        claim_description: "货款债务",
+        review_status: "approved",
+        created_at: now,
+        updated_at: now,
+      },
+      {
+        id: new RecordId("claim", "test_claim_2"),
+        case_id: caseId,
+        creditor_id: creditor2Id,
+        created_by: createdBy,
+        claim_amount: 100000,
+        claim_nature: "priority",
+        claim_description: "工资债务",
+        review_status: "submitted",
+        created_at: now,
+        updated_at: now,
+      },
+    ];
   }
 
   /**
@@ -236,6 +295,7 @@ export class TestDataGenerator {
       `
       CREATE user:admin SET
         github_id = '--admin--',
+        username = 'admin',
         name = '系统管理员',
         email = 'admin@cuckoox.cn',
         avatar_url = 'https://via.placeholder.com/40',
@@ -244,9 +304,36 @@ export class TestDataGenerator {
     `.trim(),
     );
 
+    // 为admin用户分配admin角色
+    statements.push(`
+      RELATE user:admin->has_role->role:admin SET
+        created_at = time::now(),
+        updated_at = time::now();
+    `.trim());
+
+    // 插入测试案件数据
+    const cases = this.generateCases();
+    for (const testCase of cases) {
+      statements.push(`
+        CREATE case:${testCase.id.id} SET
+          acceptance_date = d'${testCase.acceptance_date.toISOString().split('T')[0]}',
+          case_manager_name = '${testCase.case_manager_name}',
+          case_number = '${testCase.case_number}',
+          case_procedure = '${testCase.case_procedure}',
+          name = '${testCase.name}',
+          procedure_phase = '${testCase.procedure_phase}',
+          created_by_user = ${testCase.created_by_user.toString()},
+          created_at = time::now(),
+          updated_at = time::now();
+      `.trim());
+    }
+
+    // 暂时跳过债权人和债权申报数据，因为它们需要特殊的权限认证
+    // 这些数据将在特定的页面测试中通过TestHelpers.create()方法创建
+    
     // 由于Schema中已经定义了完整的权限系统和初始数据，
     // 包括角色、操作元数据、菜单元数据、用户角色关系等，
-    // 这里只需要确保基础用户存在即可
+    // 这里只需要确保基础数据存在即可
 
     return statements;
   }

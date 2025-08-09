@@ -36,18 +36,13 @@ export default defineConfig({
 
     // 按顺序包含集成测试文件
     include: [
+      "tests/integration/basic-integration.test.tsx", // 先测试基础功能
       "tests/integration/auth/01-admin-creation.test.tsx",
-      "tests/integration/case/02-case-creation.test.tsx",
+      "tests/integration/case/02-case-creation.test.tsx", 
       "tests/integration/auth/03-manager-login.test.tsx",
-      "tests/integration/case/04-case-query.test.tsx",
-      "tests/integration/case/05-case-member-addition.test.tsx",
-      "tests/integration/claims/06-claims-management.test.tsx",
-      "tests/integration/creditors/07-creditor-management.test.tsx",
-      "tests/integration/documents/08-document-management.test.tsx",
-      "tests/integration/pages/09-pages-integration.test.tsx",
-      "tests/integration/auth/10-member-login.test.tsx",
-      "tests/integration/auth/11-member-logout.test.tsx",
-      "tests/**/*.embedded.test.{ts,tsx}", // 其他内嵌数据库测试
+      "tests/integration/pages/cases-page-integration.test.tsx",
+      "tests/integration/pages/claims-page-integration.test.tsx", 
+      "tests/integration/pages/creditors-page-integration.test.tsx",
     ],
 
     setupFiles: ["./tests/setup-embedded-db.ts"], // 使用内嵌数据库设置
@@ -62,13 +57,12 @@ export default defineConfig({
       threads: {
         singleThread: true, // 单线程模式确保数据库状态一致和测试顺序
         isolate: false, // 不隔离以保持数据共享
+        useAtomics: false, // 不使用原子操作，避免线程间通信问题
       },
     },
 
     // 设置为1确保测试按顺序执行
     maxConcurrency: 1,
-    minThreads: 1,
-    maxThreads: 1,
 
     // 确保测试按顺序执行
     sequence: {

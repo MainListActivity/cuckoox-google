@@ -84,12 +84,44 @@ export function renderWithRealSurreal(
  * 测试数据库查询辅助函数
  */
 export class RealSurrealTestHelpers {
-  private static db: Surreal;
-  private static manager: any;
+  private static db: Surreal | null = null;
+  private static manager: any = null;
 
   static initialize() {
-    this.db = getTestDatabase();
-    this.manager = getTestDatabaseManager();
+    try {
+      this.db = getTestDatabase();
+      this.manager = getTestDatabaseManager();
+    } catch (error) {
+      console.warn("⚠️ 无法初始化测试数据库辅助工具:", error);
+      // 在某些测试环境下可能暂时无法获取，不抛出异常
+    }
+  }
+
+  /**
+   * 重新初始化数据库连接
+   */
+  static async reinitialize() {
+    try {
+      console.log("🔄 正在重新初始化数据库连接...");
+      this.manager = getTestDatabaseManager();
+      this.db = await this.manager.initialize();
+      console.log("✅ 数据库连接重新初始化成功");
+    } catch (error) {
+      console.error("❌ 数据库重新初始化失败:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 确保数据库已初始化
+   */
+  private static ensureInitialized() {
+    if (!this.db || !this.manager) {
+      this.initialize();
+      if (!this.db || !this.manager) {
+        throw new Error("测试数据库未初始化，无法执行数据库操作");
+      }
+    }
   }
 
   // 过滤只读字段，避免写操作触发 READONLY 约束
@@ -102,42 +134,69 @@ export class RealSurrealTestHelpers {
   }
 
   /**
-   * 执行数据库查询
+   * 执行数据库查询，支持自动重连
    */
   static async query(sql: string, vars?: Record<string, any>) {
-    if (!this.db) this.initialize();
-    const raw = await this.db.query(sql, vars);
-
-    // 规范化：支持 SurrealDB 返回 { status, result } 结构，确保每条语句的返回均为数组
-    const normalizeOne = (item: any) => {
-      if (item == null) return [];
-      if (Array.isArray(item)) return item;
-      if (typeof item === "object" && "result" in item) {
-        const r = (item as any).result;
-        return Array.isArray(r) ? r : r == null ? [] : [r];
-      }
-      return [item];
-    };
-    const res = Array.isArray(raw)
-      ? raw.map(normalizeOne)
-      : [normalizeOne(raw)];
-
-    // 调试：当检测到角色查询时，安全打印角色名列表，便于定位权限/数据问题
     try {
-      if (/->has_role->role\.\*\s+AS\s+roles/i.test(sql)) {
-        const rows = Array.isArray(res?.[0]) ? (res[0] as any[]) : [];
-        const first = rows[0] || {};
-        const roles = Array.isArray(first.roles) ? first.roles : [];
-        const names = roles
-          .map((r: any) => (r && r.name) || null)
-          .filter(Boolean);
-        console.log("[角色查询调试] 当前用户角色：", names);
-      }
-    } catch {
-      // 打印失败不影响测试流程
-    }
+      this.ensureInitialized();
+      const raw = await this.db!.query(sql, vars);
 
-    return res;
+      // 规范化：支持 SurrealDB 返回 { status, result } 结构，确保每条语句的返回均为数组
+      const normalizeOne = (item: any) => {
+        if (item == null) return [];
+        if (Array.isArray(item)) return item;
+        if (typeof item === "object" && "result" in item) {
+          const r = (item as any).result;
+          return Array.isArray(r) ? r : r == null ? [] : [r];
+        }
+        return [item];
+      };
+      const res = Array.isArray(raw)
+        ? raw.map(normalizeOne)
+        : [normalizeOne(raw)];
+
+      // 调试：当检测到角色查询时，安全打印角色名列表，便于定位权限/数据问题
+      try {
+        if (/->has_role->role\.\*\s+AS\s+roles/i.test(sql)) {
+          const rows = Array.isArray(res?.[0]) ? (res[0] as any[]) : [];
+          const first = rows[0] || {};
+          const roles = Array.isArray(first.roles) ? first.roles : [];
+          const names = roles
+            .map((r: any) => (r && r.name) || null)
+            .filter(Boolean);
+          console.log("[角色查询调试] 当前用户角色：", names);
+        }
+      } catch {
+        // 打印失败不影响测试流程
+      }
+
+      return res;
+    } catch (error: any) {
+      // 处理连接丢失的情况
+      if (error.message && error.message.includes('no connection available')) {
+        console.warn("⚠️ 数据库连接已断开，尝试重新初始化...");
+        try {
+          // 重新初始化数据库连接
+          await this.reinitialize();
+          // 重试查询
+          const raw = await this.db!.query(sql, vars);
+          const normalizeOne = (item: any) => {
+            if (item == null) return [];
+            if (Array.isArray(item)) return item;
+            if (typeof item === "object" && "result" in item) {
+              const r = (item as any).result;
+              return Array.isArray(r) ? r : r == null ? [] : [r];
+            }
+            return [item];
+          };
+          return Array.isArray(raw) ? raw.map(normalizeOne) : [normalizeOne(raw)];
+        } catch (retryError) {
+          console.error("❌ 数据库重连失败:", retryError);
+          throw retryError;
+        }
+      }
+      throw error;
+    }
   }
 
   /**
@@ -186,7 +245,7 @@ export class RealSurrealTestHelpers {
   }
 
   static async create(table: string, data: Record<string, any>) {
-    if (!this.db) this.initialize();
+    this.ensureInitialized();
     const payload = this.sanitizeDataForWrite(data);
     // 针对 claim：补齐必须的对象字段，避免 NONE 违约
     if (table === "claim" && (payload as any).asserted_claim_details == null) {
@@ -204,7 +263,7 @@ export class RealSurrealTestHelpers {
         (payload as any).file_size = 0;
       }
     }
-    let res: any = await this.db.create(table, payload);
+    let res: any = await this.db!.create(table, payload);
     // 兼容 SurrealDB { status, result } 返回
     if (res && typeof res === "object" && "result" in res) {
       res = (res as any).result;
@@ -218,8 +277,8 @@ export class RealSurrealTestHelpers {
    * 查询测试记录
    */
   static async select(thing: string) {
-    if (!this.db) this.initialize();
-    let res: any = await this.db.select(thing);
+    this.ensureInitialized();
+    let res: any = await this.db!.select(thing);
     if (res && typeof res === "object" && "result" in res) {
       res = (res as any).result;
     }
@@ -231,9 +290,9 @@ export class RealSurrealTestHelpers {
    * 更新测试记录
    */
   static async update(thing: string, data: Record<string, any>) {
-    if (!this.db) this.initialize();
+    this.ensureInitialized();
     const payload = this.sanitizeDataForWrite(data);
-    let res: any = await this.db.update(thing, payload);
+    let res: any = await this.db!.update(thing, payload);
     if (res && typeof res === "object" && "result" in res) {
       res = (res as any).result;
     }
@@ -244,32 +303,32 @@ export class RealSurrealTestHelpers {
    * 删除测试记录
    */
   static async delete(thing: string) {
-    if (!this.db) this.initialize();
-    return await this.db.delete(thing);
+    this.ensureInitialized();
+    return await this.db!.delete(thing);
   }
 
   /**
    * 设置认证用户
    */
   static async setAuthUser(userId: string) {
-    if (!this.manager) this.initialize();
-    await this.manager.setAuthUser(userId);
+    this.ensureInitialized();
+    await this.manager!.setAuthUser(userId);
   }
 
   /**
    * 清除认证状态
    */
   static async clearAuth() {
-    if (!this.manager) this.initialize();
-    await this.manager.clearAuth();
+    this.ensureInitialized();
+    await this.manager!.clearAuth();
   }
 
   /**
    * 重置数据库状态
    */
   static async resetDatabase() {
-    if (!this.manager) this.initialize();
-    await this.manager.resetDatabase();
+    this.ensureInitialized();
+    await this.manager!.resetDatabase();
   }
 
   /**
@@ -353,16 +412,16 @@ export class RealSurrealTestHelpers {
    * 获取数据库统计信息
    */
   static async getDatabaseStats() {
-    if (!this.manager) this.initialize();
-    return await this.manager.getDatabaseStats();
+    this.ensureInitialized();
+    return await this.manager!.getDatabaseStats();
   }
 
   /**
    * 验证数据库状态
    */
   static async validateDatabaseState() {
-    if (!this.manager) this.initialize();
-    return await this.manager.validateDatabaseState();
+    this.ensureInitialized();
+    return await this.manager!.validateDatabaseState();
   }
 }
 
