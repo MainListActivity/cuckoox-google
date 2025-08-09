@@ -298,11 +298,15 @@ describe("认证服务 - 真实数据库测试（使用 $auth）", () => {
         case_id: new RecordId("case", "test_case_1"),
         creditor_id: new RecordId("creditor", "creditor_1"),
         created_by: new RecordId("user", "creditor_user"),
+        claim_number: "AUTO-TEST-0001",
         claim_amount: 50000.0,
         claim_nature: "一般债权",
         asserted_claim_details: {
           principal: 50000.0,
           interest: 0,
+          nature: "一般债权",
+          currency: "CNY",
+          total_asserted_amount: 50000.0,
           // 使用刚创建的 document 记录作为附件ID
           attachment_doc_id: new RecordId("document", (doc as any).id.id),
         },

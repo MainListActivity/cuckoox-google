@@ -395,18 +395,11 @@ describe("案件管理 - 真实数据库集成测试", () => {
       expect(accDate instanceof Date && !isNaN(accDate.getTime())).toBe(true);
       expect(annDate instanceof Date && !isNaN(annDate.getTime())).toBe(true);
 
-      // 从数据库重新查询验证
-      const __idVal: any = (caseResult as any).id;
-      const __caseThingId =
-        typeof __idVal === "string"
-          ? __idVal
-          : __idVal && typeof __idVal.toString === "function"
-            ? __idVal.toString()
-            : `case:${__idVal?.id}`;
-      const savedCase = await TestHelpers.select(__caseThingId);
-      const saved = Array.isArray(savedCase)
-        ? (savedCase[0] as any)
-        : (savedCase as any);
+      // 从数据库重新查询验证（通过 case_number 避免 ID 形态差异）
+      const savedRes = await TestHelpers.query(
+        "SELECT * FROM case WHERE case_number = '(2024)日期测试001';",
+      );
+      const saved = ((savedRes?.[0] as any[]) || [])[0];
       expect(saved).toBeTruthy();
       const acc2 = saved.acceptance_date as unknown;
       const ann2 = saved.announcement_date as unknown;
