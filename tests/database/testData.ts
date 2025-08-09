@@ -204,24 +204,24 @@ export class TestDataGenerator {
   }
 
   /**
-   * 生成测试角色数据
+   * 生成测试角色数据（依赖Schema创建）
    */
   generateRoles(): TestRole[] {
-    return [];
+    return []; // Schema会自动创建角色数据
   }
 
   /**
-   * 生成测试操作元数据
+   * 生成测试操作元数据（依赖Schema创建）
    */
   generateOperationMetadata(): TestOperationMetadata[] {
-    return [];
+    return []; // Schema会自动创建操作元数据
   }
 
   /**
-   * 生成测试菜单元数据
+   * 生成测试菜单元数据（依赖Schema创建）
    */
   generateMenuMetadata(): TestMenuMetadata[] {
-    return [];
+    return []; // Schema会自动创建菜单元数据
   }
 
   /**
@@ -343,28 +343,8 @@ export class TestDataGenerator {
       );
     }
 
-    // 插入用户角色关系
-    statements.push(
-      "RELATE user:admin->has_role->role:admin SET assigned_at = time::now();",
-    );
-    statements.push(
-      "RELATE user:case_manager->has_role->role:case_manager SET assigned_at = time::now();",
-    );
-    statements.push(
-      "RELATE user:creditor_user->has_role->role:creditor_representative SET assigned_at = time::now();",
-    );
-
-    // 为admin角色分配所有操作权限
-
-    // 为case_manager角色分配案件相关权限
-
-    // 为creditor角色分配债权申报权限
-
-    // 为admin角色分配所有菜单权限
-
-    // 为case_manager角色分配菜单权限
-
-    // 为creditor角色分配菜单权限
+    // 权限和角色关系将由Schema默认数据或应用逻辑创建
+    // 这里不再手动创建权限关系
 
     return statements;
   }

@@ -21,6 +21,7 @@ This is a React + TypeScript + Vite application using Bun as the package manager
 ### Testing Commands
 - `bun run test:ui` - Run tests with Vitest UI
 - `bun run test:run` - Run tests once (non-watch mode)
+- `bun run test:integration` - Run integration tests once (non-watch mode)
 - `bun run test:e2e` - Run Playwright E2E tests
 - `bunx playwright install --with-deps` - Install Playwright browsers (first-time setup)
 - `bunx playwright show-report` - View test reports

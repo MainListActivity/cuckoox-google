@@ -2,6 +2,12 @@
 
 本文档说明在单元测试环境中如何使用“内嵌 SurrealDB + 生产 schema 脚本”完成端到端的数据校验，同时描述为保证可测性而引入的最小化覆盖策略与注意事项。
 
+## 测试架构
+通过页面测试，和底层数据库切换，完成对项目全链路的覆盖集成测试。
+
+测试过程只需切换底层数据库 -> 加载生产数据库schema -> 执行测试用例文件 -> 调用页面功能完成数据创建（案件、成员、权限） -> 开始单个用例测试
+
+
 ## 目标与收益
 
 - 使用真实的 SurrealDB 引擎（内存模式）替代数据 mock，提高测试可信度与维护效率。
@@ -59,7 +65,7 @@
 
 测试环境直接读取并执行 `src/lib/surreal_schemas.surql`。管理器会将 surql 文件按分号分割为语句顺序执行（忽略 `--` 开头的注释）。若个别语句在测试环境下产生警告，会记录并继续执行，以保证最大化完成 schema 初始化。
 
-执行完成后，额外进行“测试环境兼容性覆盖”，保证用例在不依赖真实 OIDC/Scope 权限体系情况下，聚焦业务逻辑验证。
+执行完成后，额外进行“测试环境兼容性覆盖”，用例需要按照account类型进行认证。
 
 ---
 
@@ -73,54 +79,6 @@ DEFINE ACCESS account ON DATABASE TYPE RECORD
 ;
 查询数据时，直接按照代码逻辑，无需特殊处理，测试环境执行数据库定义也无需特殊处理
 
----
-
-## 认证变量在测试环境的约定
-
-- `$auth` 是 SurrealDB 的保留变量，不能在 SQL 中直接 `LET/DEFINE PARAM` 赋值。
-- 测试环境约定使用 `$current_user` 来表示“当前用户”：
-  - 设定：`DEFINE PARAM $current_user VALUE user:admin;`
-  - 使用：`SELECT * FROM $current_user;` 或者在关系查询中作为起点
-- 若仅需临时构造记录 ID，可使用 `type::thing('user','admin')`。
-
-在应用代码中，真实页面/服务默认通过 `queryWithAuth()` 追加 `return $auth;` 并由 Service Worker 进行鉴权/缓存语义。内嵌 DB 的组件级测试（如需）也可使用 `renderWithRealSurreal({ authUserId })` 自动设定 `$current_user`。
-
----
-
-## 如何在测试中使用真实 DB
-
-- 渲染组件
-  - 使用 `renderWithRealSurreal(ui, { authUserId?: 'user:admin' })` 包裹组件，内部提供真实 `SurrealProvider`，并可自动设置“当前用户”。
-- 直接操作数据库
-  - 使用 `TestHelpers`：
-    - `query(sql, vars?)` 执行原始 SQL
-    - `create(table, data)` 插入并返回单条记录
-    - `select(thing)` / `update(thing, data)` / `delete(thing)`
-    - `getRecordCount(table)` / `assertRecordCount(table, n)`
-    - `setAuthUser('user:admin')` / `clearAuth()` / `resetDatabase()`
-    - `waitForDatabaseOperation(fn, maxAttempts, delayMs)` 轮询等待异步一致
-
-示例（伪代码）：
-```
-import { renderWithRealSurreal, TestHelpers, TEST_IDS } from '../utils/realSurrealTestUtils';
-
-it('能够创建并查询案件', async () => {
-  await TestHelpers.resetDatabase();
-  await TestHelpers.setAuthUser(TEST_IDS.USERS.ADMIN);
-
-  await TestHelpers.create('case', {
-    name: '测试案件',
-    case_number: '(2025)测001',
-    case_manager_name: '张三',
-    acceptance_date: new Date(),
-    case_procedure: '破产清算',
-    procedure_phase: '立案',
-  });
-
-  const count = await TestHelpers.getRecordCount('case');
-  expect(count).toBeGreaterThan(0);
-});
-```
 
 ---
 
@@ -134,23 +92,8 @@ it('能够创建并查询案件', async () => {
 完成修改后：
 1) 运行 `bun run test:run` 确认测试通过；
 2) 运行 `bun run lint` 确保无 ESLint 错误；
-3) 如涉及数据生成，请同步更新 `tests/database/testData.ts` 的标准数据，保证统计/关系用例稳定。
 
-注意：测试管理器仅在测试环境“放宽权限+补齐兼容字段”，不要在生产脚本中硬编码测试专属字段或放宽 PERMISSIONS。
 
----
-
-## 常见问题排查（FAQ）
-
-- 报错“权限不足/无法选择表数据”
-  - 确认测试覆盖已生效（表已放宽为 `SCHEMALESS PERMISSIONS FULL`）。
-  - 若依赖 `$auth` 的 select 逻辑，改用 `$current_user` 或直接放宽（测试环境）。
-- 找不到 `name/display_name`
-  - 确认覆盖逻辑已执行（`operation_metadata` 与 `menu_metadata` 会映射补齐）。
-- 历史用例依赖 `menu.name === 'claims'`
-  - 测试覆盖会把 `menu_id = 'claims_list'` 的记录 `name` 统一更新为 `'claims'`。
-- 冲突/重复数据
-  - 测试数据插入前会清空权限关系与元数据表，减少冲突。如仍有冲突，请检查 `testData.ts` 与生产脚本新增的“唯一索引”。
 
 ---
 
@@ -158,7 +101,6 @@ it('能够创建并查询案件', async () => {
 
 - 单测：`bun run test:run`
   - 运行单个文件：`bun run test:run -- tests/unit/pages/login.test.tsx`
-- E2E：`bun run test:e2e`
 - Lint：`bun run lint`
 
 请在合并前确保：
@@ -171,7 +113,7 @@ it('能够创建并查询案件', async () => {
 ## 约定回顾
 
 - 数据库操作优先通过 Service Worker 通路；组件侧统一使用 `queryWithAuth`（产品代码）。
-- 单元测试如需真实 DB，则通过“内嵌 Surreal + 生产 schema + 测试覆盖”的方式进行，不 mock 上层服务代码（除 SW 通道必要模拟外）。
+- 单元测试如需真实 DB，则通过“内嵌 Surreal + 生产 schema + 测试覆盖”的方式进行，不 mock 上层服务代码。
 - 不随意修改全局测试超时配置；如需等待异步一致，使用 `waitForDatabaseOperation`。
 
 如需扩展/优化测试覆盖策略，请提交变更说明至本文件并评审后同步实施。
