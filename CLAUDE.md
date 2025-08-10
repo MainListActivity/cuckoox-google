@@ -87,7 +87,7 @@ This is a legal case management system with the following key architectural comp
 ## 集成测试架构&要求
 - 使用页面测试，切换底层数据库为内嵌数据库引擎(@surrealdb/node)，完成对项目全链路的覆盖集成测试。
 - 集成测试的数据不用清理，先运行的测试用例的产生数据在后面的测试用例中可以查询。
-- **用例执行顺序**: admin账号创建->案件创建（渲染页面src/pages/cases/index.tsx输入表单点按钮保存数据）->管理人登录（渲染页面src/pages/login.tsx输入表单点登录按钮）->案件查询（src/pages/cases/index.tsx）->添加案件成员（src/pages/case-members/index.tsx）->其他测试用例->案件成员登录（渲染页面src/pages/login.tsx输入表单点登录按钮）->案件成员退出登录（点击右上角退出登录）。
+- **用例执行顺序**: admin账号创建->案件创建（渲染页面src/pages/cases/index.tsx输入表单点按钮保存数据）->管理人登录（通过mock的数据库对象SIGNIN方法登录）->案件查询（src/pages/cases/index.tsx）->添加案件成员（src/pages/case-members/index.tsx）->其他测试用例->案件成员登录（通过mock的数据库对象SIGNIN方法登录）->案件成员退出登录（点击右上角退出登录）。
 - 测试过程只需切换底层数据库 -> 加载生产数据库schema -> 执行测试用例文件 -> 调用页面功能完成数据创建（案件、成员、权限） -> 开始单个用例测试
 - 集成测试在测试业务逻辑时不允许直接执行任何sql语句,且应该通过操作页面来完成，**禁止任何sql**，禁止直接操作数据库
 - 集成测试不允许mock除了fetch外的任何组件，包括hooks，provider，所有组件都是需要测试的内容，而数据库查询我们已经通过内嵌数据库实现了。

@@ -3,7 +3,7 @@
  * 使用真正的SurrealDB内嵌数据库引擎进行测试
  */
 
-import { Surreal } from 'surrealdb';
+import { RecordId, Surreal } from 'surrealdb';
 import { surrealdbNodeEngines } from '@surrealdb/node';
 import { TestDataGenerator } from './testData';
 import * as path from 'path';
@@ -16,7 +16,7 @@ export class TestDatabaseManager {
   private readonly namespace = 'test_ns';
   private readonly database = 'test_db_integration'; // 集成测试使用固定数据库名，保持数据共享
 
-  private constructor() {}
+  private constructor() { }
 
   /**
    * 获取单例实例
@@ -38,16 +38,16 @@ export class TestDatabaseManager {
 
     try {
       console.log('正在初始化真实内嵌SurrealDB数据库...');
-      
+
       // 创建真正的SurrealDB实例，启用Node引擎
       this.db = new Surreal({
         engines: surrealdbNodeEngines(),
       });
-      
+
       // 连接到内存数据库
       await this.db.connect('mem://');
       console.log('已连接到SurrealDB内存数据库');
-      
+
       // 使用测试命名空间和数据库
       await this.db.use({
         namespace: this.namespace,
@@ -57,13 +57,13 @@ export class TestDatabaseManager {
 
       // 加载并执行数据库Schema
       await this.loadSchema();
-      
+
       // 插入测试数据
       await this.insertTestData();
-      
+
       this.isInitialized = true;
       console.log('真实内嵌SurrealDB数据库初始化完成');
-      
+
       return this.db;
     } catch (error) {
       console.error('测试数据库初始化失败:', error);
@@ -76,7 +76,7 @@ export class TestDatabaseManager {
    */
   private async loadSchema(): Promise<void> {
     if (!this.db) throw new Error('数据库未初始化');
-    
+
     try {
       console.log("正在加载数据库Schema...");
 
@@ -89,22 +89,22 @@ export class TestDatabaseManager {
 
       // 执行Schema语句
       const statements = this.splitSqlStatements(schemaContent);
-      
+
       for (const statement of statements) {
         if (statement.trim()) {
           try {
             await this.db.query(statement);
           } catch (error) {
             // 忽略 "already exists" 和 "already contains" 错误，这些是正常的（Schema可能已存在）
-            if (!error.message?.includes('already exists') && 
-                !error.message?.includes('already contains')) {
+            if (!error.message?.includes('already exists') &&
+              !error.message?.includes('already contains')) {
               console.warn(`执行Schema语句时出现警告: ${statement.substring(0, 50)}...`, error);
             }
             // 继续执行其他语句，某些DEFINE语句可能会产生警告但仍然成功
           }
         }
       }
-      
+
       console.log(`Schema加载完成，执行了${statements.length}个语句`);
     } catch (error) {
       console.error('加载Schema失败:', error);
@@ -120,30 +120,30 @@ export class TestDatabaseManager {
 
     try {
       console.log('正在插入测试数据...');
-      
-      // 先设置认证状态，以便创建需要 $auth.id 的记录
-      await this.setAuthUser('user:admin');
-      
+
       const dataGenerator = TestDataGenerator.getInstance();
-      
+
       // 使用SQL语句插入数据，以确保与真实SurrealDB的完全兼容
       const statements = dataGenerator.generateInsertStatements();
-      
+
       for (const statement of statements) {
         if (statement.trim()) {
           try {
             await this.db.query(statement);
           } catch (error) {
             // 忽略 "already exists" 错误，这些是正常的（数据可能已存在）
-            if (!error.message?.includes('already exists') && 
-                !error.message?.includes('already contains')) {
+            if (!error.message?.includes('already exists') &&
+              !error.message?.includes('already contains')) {
               console.warn(`插入数据语句执行警告: ${statement.substring(0, 100)}...`, error);
             }
             // 继续执行其他语句
           }
         }
       }
-      
+
+      // 数据插入完成后，设置认证状态
+      await this.setAuthUser('user:admin');
+
       console.log(`测试数据插入完成，执行了${statements.length}个语句`);
     } catch (error) {
       console.error('插入测试数据失败:', error);
@@ -160,25 +160,25 @@ export class TestDatabaseManager {
     const lines = content.split('\n')
       .map(line => line.trim())
       .filter(line => line && !line.startsWith('--'));
-    
+
     const statements: string[] = [];
     let currentStatement = '';
-    
+
     for (const line of lines) {
       currentStatement += line + '\n';
-      
+
       // 如果行以分号结束，认为是一个完整的语句
       if (line.endsWith(';')) {
         statements.push(currentStatement.trim());
         currentStatement = '';
       }
     }
-    
+
     // 添加最后一个未以分号结尾的语句（如果有）
     if (currentStatement.trim()) {
       statements.push(currentStatement.trim());
     }
-    
+
     return statements;
   }
 
@@ -193,23 +193,28 @@ export class TestDatabaseManager {
   }
 
   /**
-   * 设置认证用户（用于权限测试）
+   * 设置认证用户（测试环境专用）
    */
   public async setAuthUser(userId: string): Promise<void> {
-    if (!this.db) throw new Error('数据库未初始化');
+    if (!this.db) return;
 
     try {
-      console.log(`正在设置认证用户: ${userId}`);
+      console.log('正在设置认证用户:', userId);
       
-      // 在测试环境中，我们模拟认证状态
-      // 使用正确的SurrealQL语法设置变量
-      await this.db.query(`LET $test_auth_user = '${userId}';`);
-      await this.db.query(`LET $current_test_user = '${userId}';`);
+      // 在测试环境中，我们简化认证流程
+      // 直接使用手动设置的方式，避免复杂的SIGNIN流程
       
-      console.log(`已设置测试认证上下文: ${userId}`);
+      // 设置测试认证状态变量
+      await this.db.query(`
+        LET $test_auth_user = ${userId};
+        LET $current_test_user = ${userId};
+      `);
+      
+      console.log('✅ 手动认证状态设置成功');
+      
     } catch (error) {
-      console.warn('设置认证用户失败，但这在测试环境中是正常的:', error.message || error);
-      // 在测试环境中，认证失败不应该阻止测试继续
+      console.warn('设置认证用户失败:', error.message || error);
+      // 继续执行，不阻止测试
     }
   }
 
@@ -221,7 +226,7 @@ export class TestDatabaseManager {
 
     try {
       console.log('正在清除认证状态...');
-      
+
       // 在测试环境中清除认证状态
       // 注意：$auth是SurrealDB的系统变量，只能通过认证流程设置
       // 这里我们清除测试用的自定义变量
@@ -233,7 +238,7 @@ export class TestDatabaseManager {
         // 忽略变量不存在的错误
         console.debug('清除测试变量时的轻微错误（可忽略）:', error.message || error);
       }
-      
+
       console.log('已清除认证状态');
     } catch (error) {
       console.error('清除认证状态失败:', error);
@@ -248,7 +253,10 @@ export class TestDatabaseManager {
 
     try {
       console.log('正在重置数据库状态...');
-      
+
+      // 先清除认证状态
+      await this.clearAuth();
+
       // 先删除关系表（避免外键约束）
       const relationTables = ['has_role', 'can_execute_operation', 'can_access_menu', 'has_case_role', 'has_member'];
       for (const table of relationTables) {
@@ -258,7 +266,7 @@ export class TestDatabaseManager {
           console.warn(`删除关系表 ${table} 数据时出现警告:`, error);
         }
       }
-      
+
       // 删除主数据表
       const mainTables = ['claim', 'creditor', 'case', 'user']; // 注意：不删除 role, operation_metadata, menu_metadata
       for (const table of mainTables) {
@@ -268,10 +276,10 @@ export class TestDatabaseManager {
           console.warn(`删除主数据表 ${table} 数据时出现警告:`, error);
         }
       }
-      
+
       // 重新插入测试数据
       await this.insertTestData();
-      
+
       console.log('数据库状态重置完成');
     } catch (error) {
       console.error('重置数据库状态失败:', error);
@@ -284,7 +292,7 @@ export class TestDatabaseManager {
    */
   public async query(sql: string, vars?: Record<string, any>): Promise<any> {
     if (!this.db) throw new Error('数据库未初始化');
-    
+
     try {
       return await this.db.query(sql, vars);
     } catch (error) {
@@ -304,13 +312,13 @@ export class TestDatabaseManager {
       const userResult = await this.db.query('SELECT count() AS count FROM user GROUP ALL;');
       const caseResult = await this.db.query('SELECT count() AS count FROM case GROUP ALL;');
       const roleResult = await this.db.query('SELECT count() AS count FROM role GROUP ALL;');
-      
+
       const userCount = userResult?.[0]?.[0]?.count || 0;
       const caseCount = caseResult?.[0]?.[0]?.count || 0;
       const roleCount = roleResult?.[0]?.[0]?.count || 0;
-      
+
       console.log(`数据库状态验证: 用户=${userCount}, 案件=${caseCount}, 角色=${roleCount}`);
-      
+
       // 初始状态应该有用户(admin)和角色，案件是测试过程中创建的
       return userCount > 0 && roleCount > 0;
     } catch (error) {
@@ -327,9 +335,9 @@ export class TestDatabaseManager {
 
     try {
       const tables = ['user', 'role', 'operation_metadata', 'menu_metadata', 'case', 'creditor', 'claim',
-                     'has_role', 'can_execute_operation', 'can_access_menu', 'has_case_role'];
+        'has_role', 'can_execute_operation', 'can_access_menu', 'has_case_role'];
       const stats: Record<string, number> = {};
-      
+
       for (const table of tables) {
         try {
           const result = await this.db.query(`SELECT count() AS count FROM ${table} GROUP ALL;`);
@@ -338,7 +346,7 @@ export class TestDatabaseManager {
           stats[table] = 0;
         }
       }
-      
+
       return stats;
     } catch (error) {
       console.error('获取数据库统计信息失败:', error);

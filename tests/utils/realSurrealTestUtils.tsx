@@ -45,7 +45,7 @@ const RealSurrealTestProvider: React.FC<RealSurrealTestProviderProps> = ({
   }, [authUserId]);
 
   return (
-    <BrowserRouter key={Math.random()}>
+    <BrowserRouter>
       <SurrealProvider client={testDb} autoConnect={false}>
         <AuthProvider>
           <SnackbarProvider>{children}</SnackbarProvider>

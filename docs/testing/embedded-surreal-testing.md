@@ -76,8 +76,8 @@
 在测试环境中通过定义登录方式和初始化user表的数据，来实现$auth的引用，进而完全保证测试环境和生产环境的一致性
 
 DEFINE ACCESS account ON DATABASE TYPE RECORD
-	SIGNIN ( SELECT * FROM user WHERE username = $username AND crypto::argon2::compare(pass, $pass) )
-	DURATION FOR TOKEN 15m, FOR SESSION 12h
+	SIGNIN ( SELECT * FROM user WHERE username = $username AND crypto::argon2::compare(password_hash, $pass) )
+	DURATION FOR TOKEN 15m, FOR SESSION 12m
 ;
 查询数据时，直接按照代码逻辑，无需特殊处理，测试环境执行数据库定义也无需特殊处理
 

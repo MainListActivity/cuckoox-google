@@ -299,6 +299,7 @@ export class TestDataGenerator {
         name = '系统管理员',
         email = 'admin@cuckoox.cn',
         avatar_url = 'https://via.placeholder.com/40',
+        password_hash = crypto::argon2::generate('admin123'),
         created_at = time::now(),
         updated_at = time::now();
     `.trim(),

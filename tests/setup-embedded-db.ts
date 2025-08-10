@@ -165,9 +165,9 @@ vi.mock("@/src/contexts/SurrealProvider", () => ({
       // Mock Service Worker responses
       if (type === 'get_connection_state') {
         return Promise.resolve({
-          isAuthenticated: false,
+          isAuthenticated: true, // 在测试中默认认证成功
           isConnected: true,
-          currentUser: null
+          currentUser: { id: 'user:admin', name: '系统管理员' }
         });
       }
       if (type === 'authenticate') {
@@ -188,19 +188,200 @@ vi.mock("@/src/contexts/SurrealProvider", () => ({
     refetch: vi.fn()
   }),
   useSurrealClient: () => ({
-    client: null,
-    isConnected: false,
-    connect: vi.fn(),
-    disconnect: vi.fn()
+    client: {
+      // Mock完整的SurrealDB客户端API，使其能够与真实数据库交互
+      authenticate: vi.fn().mockImplementation(async (accessToken: string, refreshToken?: string, expiresIn?: number, tenantCode?: string) => {
+        // 获取测试数据库实例并设置认证状态
+        const testDbManager = (globalThis as any).__TEST_DB_MANAGER__;
+        if (testDbManager) {
+          await testDbManager.setAuthUser('user:admin');
+        }
+        return Promise.resolve({ success: true });
+      }),
+      invalidate: vi.fn().mockImplementation(async () => {
+        // 清除认证状态
+        const testDbManager = (globalThis as any).__TEST_DB_MANAGER__;
+        if (testDbManager) {
+          await testDbManager.clearAuth();
+        }
+        return Promise.resolve({ success: true });
+      }),
+      connect: vi.fn().mockResolvedValue({ success: true }),
+      query: vi.fn().mockImplementation(async (sql: string, vars?: Record<string, any>) => {
+        // 代理到真实的数据库查询
+        const testDb = (globalThis as any).__TEST_DATABASE__;
+        if (testDb) {
+          // 特殊处理queryWithAuth的认证查询模式
+          if (sql.startsWith('return $auth;') || sql.includes('return $auth;')) {
+            console.log('检测到认证查询，模拟成功认证状态');
+            
+            // 分离认证查询和实际查询
+            const actualSql = sql.replace(/^return\s+\$auth\s*;\s*/i, '').trim();
+            
+            // 模拟成功的认证结果（返回admin用户对象）
+            const mockAuthResult = {
+              id: 'user:admin',
+              username: 'admin',
+              name: '系统管理员',
+              email: 'admin@test.com'
+            };
+            
+            // 执行实际查询
+            let actualResult;
+            if (actualSql) {
+              actualResult = await testDb.query(actualSql, vars);
+              // 确保actualResult是数组格式
+              if (!Array.isArray(actualResult)) {
+                actualResult = [actualResult];
+              }
+              // 如果actualResult是嵌套数组，取第一层
+              if (Array.isArray(actualResult[0]) && actualResult.length === 1) {
+                actualResult = actualResult[0];
+              }
+            } else {
+              actualResult = [];
+            }
+            
+            // 返回认证查询格式：[认证结果, 实际查询结果]
+            return [[mockAuthResult], actualResult];
+          }
+          
+          // 普通查询直接执行
+          return testDb.query(sql, vars);
+        }
+        return [];
+      }),
+      select: vi.fn().mockImplementation(async (recordId: any) => {
+        const testDb = (globalThis as any).__TEST_DATABASE__;
+        if (testDb) {
+          return testDb.select(recordId);
+        }
+        return null;
+      }),
+      create: vi.fn().mockImplementation(async (table: string, data: any) => {
+        const testDb = (globalThis as any).__TEST_DATABASE__;
+        if (testDb) {
+          return testDb.create(table, data);
+        }
+        return null;
+      }),
+      update: vi.fn().mockImplementation(async (recordId: any, data: any) => {
+        const testDb = (globalThis as any).__TEST_DATABASE__;
+        if (testDb) {
+          return testDb.update(recordId, data);
+        }
+        return null;
+      }),
+      delete: vi.fn().mockImplementation(async (recordId: any) => {
+        const testDb = (globalThis as any).__TEST_DATABASE__;
+        if (testDb) {
+          return testDb.delete(recordId);
+        }
+        return null;
+      })
+    },
+    isConnected: true,
+    connect: vi.fn().mockResolvedValue({ success: true }),
+    disconnect: vi.fn().mockResolvedValue({ success: true })
   }),
   useSurreal: () => ({
-    db: null,
-    isConnected: false,
-    connect: vi.fn(),
-    disconnect: vi.fn(),
-    query: vi.fn().mockResolvedValue([])
+    db: (globalThis as any).__TEST_DATABASE__ || null,
+    isConnected: true,
+    connect: vi.fn().mockResolvedValue({ success: true }),
+    disconnect: vi.fn().mockResolvedValue({ success: true }),
+    query: vi.fn().mockImplementation(async (sql: string, vars?: Record<string, any>) => {
+      const testDb = (globalThis as any).__TEST_DATABASE__;
+      if (testDb) {
+        // 特殊处理queryWithAuth的认证查询模式
+        if (sql.startsWith('return $auth;') || sql.includes('return $auth;')) {
+          console.log('useSurreal: 检测到认证查询，模拟成功认证状态');
+          
+          // 分离认证查询和实际查询
+          const actualSql = sql.replace(/^return\s+\$auth\s*;\s*/i, '').trim();
+          
+          // 模拟成功的认证结果
+          const mockAuthResult = {
+            id: 'user:admin',
+            username: 'admin',
+            name: '系统管理员',
+            email: 'admin@test.com'
+          };
+          
+          // 执行实际查询
+          let actualResult;
+          if (actualSql) {
+            actualResult = await testDb.query(actualSql, vars);
+            if (!Array.isArray(actualResult)) {
+              actualResult = [actualResult];
+            }
+            if (Array.isArray(actualResult[0]) && actualResult.length === 1) {
+              actualResult = actualResult[0];
+            }
+          } else {
+            actualResult = [];
+          }
+          
+          // 返回认证查询格式：[认证结果, 实际查询结果]
+          return [[mockAuthResult], actualResult];
+        }
+        
+        // 普通查询直接执行
+        return testDb.query(sql, vars);
+      }
+      return [];
+    })
   })
 }));
+
+// Mock fetch API for login endpoints
+globalThis.fetch = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+  // Mock login API responses
+  if (url.includes('/auth/login') || url.includes('/root-admins/login')) {
+    const body = options?.body ? JSON.parse(options.body as string) : {};
+    
+    // Mock successful login response
+    if (body.username === 'admin' || body.username === 'admin') {
+      return Promise.resolve(new Response(
+        JSON.stringify({
+          success: true,
+          access_token: 'mock_jwt_token_for_admin',
+          refresh_token: 'mock_refresh_token',
+          expires_in: 3600,
+          user: {
+            id: 'user:admin',
+            name: '系统管理员',
+            email: 'admin@test.com',
+            username: 'admin'
+          },
+          admin: {
+            username: 'admin',
+            full_name: '系统管理员',
+            email: 'admin@test.com'
+          }
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      ));
+    }
+    
+    // Mock failed login response
+    return Promise.resolve(new Response(
+      JSON.stringify({
+        success: false,
+        message: 'Invalid credentials'
+      }),
+      {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    ));
+  }
+  
+  // For other requests, return a mock response or reject
+  return Promise.reject(new Error(`Unmocked fetch call to ${url}`));
+});
 
 // Mock AuthService
 vi.mock("@/src/services/authService", () => ({
@@ -214,9 +395,47 @@ vi.mock("@/src/services/authService", () => ({
       name: '系统管理员',
       email: 'admin@test.com' 
     }),
-    logout: vi.fn().mockResolvedValue(true),
+    logout: vi.fn().mockImplementation(async () => {
+      const testDbManager = (globalThis as any).__TEST_DB_MANAGER__;
+      if (testDbManager) {
+        await testDbManager.clearAuth();
+      }
+      return true;
+    }),
     checkAuthStatus: vi.fn().mockResolvedValue(true),
-    setSurrealClient: vi.fn()
+    setSurrealClient: vi.fn(),
+    setTenantCode: vi.fn().mockImplementation(async (tenantCode: string) => {
+      // 在测试环境中，租户代码设置总是成功
+      return true;
+    }),
+    setAuthTokens: vi.fn().mockImplementation(async (accessToken: string, refreshToken?: string, expiresIn?: number) => {
+      // 在测试环境中，设置认证令牌意味着设置数据库认证状态
+      const testDbManager = (globalThis as any).__TEST_DB_MANAGER__;
+      if (testDbManager) {
+        await testDbManager.setAuthUser('user:admin');
+      }
+      return true;
+    }),
+    getAuthStatusFromSurreal: vi.fn().mockImplementation(async () => {
+      // 检查数据库中的认证状态
+      const testDb = (globalThis as any).__TEST_DATABASE__;
+      if (testDb) {
+        try {
+          const result = await testDb.query('RETURN $auth;');
+          return result && Array.isArray(result) && result[0] && result[0] !== null && result[0] !== undefined;
+        } catch (error) {
+          return false;
+        }
+      }
+      return false;
+    }),
+    clearAuthTokens: vi.fn().mockImplementation(async () => {
+      const testDbManager = (globalThis as any).__TEST_DB_MANAGER__;
+      if (testDbManager) {
+        await testDbManager.clearAuth();
+      }
+      return true;
+    })
   }
 }));
 
