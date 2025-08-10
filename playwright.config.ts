@@ -17,7 +17,7 @@ export default defineConfig({
   // 配置输出目录
   outputDir: './playwright-report/test-results',
   use: {
-    baseURL: 'http://localhost:5173', // Assuming Vite's default dev server port
+    baseURL: 'http://localhost:5174', // Updated port for E2E testing
     trace: 'on-first-retry',
     // 配置截图存储位置
     screenshot: 'only-on-failure',
@@ -44,18 +44,11 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  // 配置测试服务器
-  webServer: {
-    command: `VITE_SURREALDB_WS_URL=${process.env.VITE_SURREALDB_WS_URL || ''} VITE_DB_ACCESS_MODE=${process.env.VITE_DB_ACCESS_MODE || 'service-worker'} VITE_API_URL=${process.env.VITE_API_URL || ''} bun run dev`,
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    env: {
-      // 使用.env文件中的配置
-      NODE_ENV: 'test',
-      VITE_SURREALDB_WS_URL: process.env.VITE_SURREALDB_WS_URL || '',
-      VITE_DB_ACCESS_MODE: process.env.VITE_DB_ACCESS_MODE || 'service-worker',
-      VITE_API_URL: process.env.VITE_API_URL || '',
-      VITE_TURNSTILE_SITE_KEY: process.env.VITE_TURNSTILE_SITE_KEY || '',
-    },
-  },
+  // 配置测试服务器 - 假设服务器已启动
+  // webServer: {
+  //   command: 'node scripts/dev-e2e.js',
+  //   url: 'http://localhost:5173',
+  //   reuseExistingServer: true,
+  //   timeout: 120 * 1000,
+  // },
 });

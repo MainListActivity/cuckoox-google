@@ -24,6 +24,9 @@ import { PWASecurityManager, type PWASecurityConfig } from './pwa-security-manag
 // 导入新的连接管理器
 import { SurrealDBConnectionManager } from './surreal-connection-manager.js';
 
+// 导入 WASM shim 来初始化 SurrealDB WASM 引擎
+import './wasm-shim.js';
+
 // --- 立即注册事件监听器（确保在任何异步代码之前注册） ---
 console.log(`Service Worker script executing - ${SW_VERSION}`);
 
@@ -4069,9 +4072,12 @@ async function initializeSurreal(): Promise<void> {
   }
 
   try {
-    // Create a new SurrealDB instance (singleton)
-    db = new Surreal();
-    console.log("ServiceWorker: SurrealDB singleton initialized successfully");
+    // Create a new SurrealDB instance with WASM engines (singleton)
+    const wasmEngines = await getWasmEngines();
+    db = new Surreal({
+      engines: wasmEngines
+    });
+    console.log("ServiceWorker: SurrealDB singleton initialized successfully with WASM engines");
 
     // 设置连接事件监听器
     setupConnectionEventListeners();
