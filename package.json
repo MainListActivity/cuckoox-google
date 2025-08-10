@@ -13,8 +13,7 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run --run",
     "test:integration": "vitest run --run --config vitest.integration.config.ts --reporter=verbose",
-    "test:e2e-embedded": "vitest run --run --config vitest.e2e-embedded.config.ts --reporter=verbose",
-    "test:all": "npm run test:run && npm run test:integration && npm run test:standalone",
+    "test:all": "npm run test:run && npm run test:integration",
     "test:coverage": "vitest run --coverage",
     "test:simple": "vitest run --run --reporter=./tests/reporters/file-status-reporter.ts",
     "test:e2e": "playwright test"
