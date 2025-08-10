@@ -355,11 +355,18 @@ export class TestDatabaseManager {
   }
 
   /**
-   * 关闭数据库连接
+   * 关闭数据库连接（改进的版本，更好的资源管理）
    */
   public async close(): Promise<void> {
     if (this.db) {
       try {
+        // 首先清除认证状态
+        await this.clearAuth();
+        
+        // 等待一段时间确保所有操作完成
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // 关闭数据库连接
         await this.db.close();
         console.log('真实内嵌SurrealDB连接已关闭');
       } catch (error) {
@@ -369,6 +376,22 @@ export class TestDatabaseManager {
         this.isInitialized = false;
       }
     }
+  }
+
+  /**
+   * 安全地重启数据库连接
+   */
+  public async restart(): Promise<Surreal> {
+    console.log('🔄 正在重启数据库连接...');
+    
+    // 先关闭现有连接
+    await this.close();
+    
+    // 等待一段时间
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 重新初始化
+    return await this.initialize();
   }
 
   /**

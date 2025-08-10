@@ -11,6 +11,7 @@ import {
   TestDatabaseManager,
   closeTestDatabase,
 } from "./database/TestDatabaseManager";
+import { TestDiagnostics } from "./utils/testDiagnostics";
 // Service Worker测试在Node.js环境中不可用，移除相关导入
 // import {
 //   registerTestServiceWorker,
@@ -40,6 +41,9 @@ beforeAll(async () => {
 
     const stats = await testDbManager.getDatabaseStats();
     console.log("📊 数据库初始化完成，统计信息:", stats);
+
+    // 运行诊断检查
+    await TestDiagnostics.generateDiagnosticReport();
 
     // 设置全局数据库实例供测试使用
     (globalThis as any).__TEST_DATABASE__ = testDbManager.getDatabase();
