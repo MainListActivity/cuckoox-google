@@ -16,7 +16,8 @@
     "test:all": "npm run test:run && npm run test:integration",
     "test:coverage": "vitest run --coverage",
     "test:simple": "vitest run --run --reporter=./tests/reporters/file-status-reporter.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "playwright test --reporter=list"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -69,6 +70,7 @@
     "@vitejs/plugin-react": "^4.5.2",
     "@vitest/ui": "3.2.4",
     "autoprefixer": "^10.4.21",
+    "dotenv": "^17.2.1",
     "eslint": "^8.57.1",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",

@@ -1,18 +1,23 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './helpers/login';
 
-test.describe('Creditors Management', () => {
+test.describe('债权人管理测试 - 使用 TEST1 租户', () => {
   test.beforeEach(async ({ page }) => {
-    // Each test starts fresh
+    // 每个测试前先登录
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      console.log('登录失败，将跳过债权人管理测试');
+    }
   });
 
-  test('should navigate to creditors list page', async ({ page }) => {
+  test('应该成功导航到债权人列表页面', async ({ page }) => {
     await page.goto('/creditors');
     await page.waitForLoadState('networkidle');
     
     // If redirected to login
     if (page.url().includes('/login')) {
       await expect(page.getByLabel(/用户名|Username/i)).toBeVisible();
-      test.skip('Authentication required - skipping creditors test');
+      test.skip(true, '需要认证 - 跳过债权人测试');
       return;
     }
 

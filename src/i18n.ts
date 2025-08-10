@@ -37,6 +37,29 @@ const resources = {
       "login_github_prompt": "请使用您的 GitHub 帐号登录以继续。",
       "login_github_button": "使用 GitHub 登录",
       "login_github_redirect_info": "您将被重定向到 GitHub进行身份验证。",
+      
+      // Form fields
+      "tenant_code_label": "租户代码",
+      "tenant_code_placeholder": "请输入租户代码",
+      "admin_username_label": "用户名",
+      "admin_username_placeholder": "请输入用户名",
+      "root_admin_username_placeholder": "请输入根管理员用户名",
+      "admin_password_label": "密码",
+      "admin_password_placeholder": "请输入管理员密码",
+      "login_button": "登录",
+      "verifying_button": "验证中...",
+      "welcome_to_cuckoox": "欢迎使用 CuckooX",
+      "login_hero_subtitle": "使用我们强大的平台简化您的案件管理",
+      "root_admin_login_subtitle": "根管理员登录",
+      "tenant_login_subtitle": "租户登录",
+      
+      // Error messages
+      "error_invalid_credentials_or_server": "凭据无效或服务器错误",
+      "error_admin_credentials_required": "用户名和密码为必填项",
+      "error_tenant_code_required": "租户代码为必填项",
+      "error_turnstile_failed": "人机验证失败，请重试",
+      "error_turnstile_expired": "验证已过期，请重新验证",
+      "redirecting_admin": "正在跳转到管理员仪表板...",
 
       // CaseSelectionPage
       "case_selection_title": "选择案件",

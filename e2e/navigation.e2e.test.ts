@@ -1,21 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './helpers/login';
 
 test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
-  // 通用登录辅助函数
-  async function loginAsAdmin(page: any) {
-    await page.goto('/login');
-    await page.waitForLoadState('networkidle');
-    
-    // 使用 TEST1 租户管理员登录
-    await page.getByLabel(/租户代码|Tenant Code/i).fill('TEST1');
-    await page.getByLabel(/用户名|Username/i).fill('admin');
-    await page.getByLabel(/密码|Password/i).fill('admin123');
-    await page.getByRole('button', { name: /登录|Login/i }).click();
-    
-    // 等待登录完成
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
-  }
 
   test('应该显示登录页面的基本导航', async ({ page }) => {
     await page.goto('/login');
@@ -51,7 +37,11 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该显示登录后的主导航菜单', async ({ page }) => {
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      test.skip(true, '登录失败，跳过主导航菜单测试');
+      return;
+    }
     
     // 尝试导航到主页面
     const mainPages = ['/dashboard', '/cases', '/'];
@@ -69,7 +59,7 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
     }
 
     if (!mainPageLoaded) {
-      test.skip('无法加载主页面进行导航测试');
+      test.skip(true, '无法访问任何主页面进行导航测试');
       return;
     }
 
@@ -114,7 +104,11 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该能够正确导航到各个主要页面', async ({ page }) => {
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      test.skip(true, '登录失败，跳过页面导航测试');
+      return;
+    }
     
     // 测试主要页面导航
     const pagesToTest = [
@@ -144,7 +138,8 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
           console.log(`${name} 需要额外权限或重定向到登录`);
         }
       } catch (e) {
-        console.log(`导航到 ${name} 失败: ${e.message}`);
+        console.log(`导航到 ${name} 失败: ${(e as Error).message}`);
+        continue;
       }
       
       await page.waitForTimeout(500);
@@ -155,14 +150,18 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该显示用户信息和退出登录功能', async ({ page }) => {
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      test.skip(true, '登录失败，跳过用户信息测试');
+      return;
+    }
     
     // 导航到一个主页面
     await page.goto('/cases');
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('无法访问主页面进行用户信息测试');
+      test.skip(true, '无法访问主页面进行用户信息测试');
       return;
     }
 
@@ -208,7 +207,10 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
             console.log('退出登录功能正常工作');
             
             // 重新登录以便后续测试
-            await loginAsAdmin(page);
+            const reloginSuccessful = await loginAsAdmin(page);
+            if (!reloginSuccessful) {
+              console.log('重新登录失败');
+            }
           }
         } catch (e) {
           console.log('退出登录测试失败');
@@ -226,14 +228,18 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该在移动设备上显示响应式导航', async ({ page }) => {
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      test.skip(true, '登录失败，跳过移动端导航测试');
+      return;
+    }
     
     // 导航到主页面
     await page.goto('/cases');
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('无法访问主页面进行移动端导航测试');
+      test.skip(true, '无法访问主页面进行移动端导航测试');
       return;
     }
 
@@ -289,14 +295,18 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该显示面包屑导航', async ({ page }) => {
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      test.skip(true, '登录失败，跳过面包屑导航测试');
+      return;
+    }
     
     // 导航到一个可能有面包屑的页面
     await page.goto('/cases');
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('无法访问页面进行面包屑测试');
+      test.skip(true, '无法访问页面进行面包屑测试');
       return;
     }
 
@@ -330,14 +340,18 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该支持键盘导航', async ({ page }) => {
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      test.skip(true, '登录失败，跳过键盘导航测试');
+      return;
+    }
     
     // 导航到主页面
     await page.goto('/cases');
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('无法访问页面进行键盘导航测试');
+      test.skip(true, '无法访问页面进行键盘导航测试');
       return;
     }
 
@@ -383,14 +397,18 @@ test.describe('导航和布局测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该正确处理页面刷新和返回', async ({ page }) => {
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      test.skip(true, '登录失败，跳过页面状态测试');
+      return;
+    }
     
     // 导航到案件页面
     await page.goto('/cases');
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('无法访问页面进行页面状态测试');
+      test.skip(true, '无法访问页面进行页面状态测试');
       return;
     }
 

@@ -1,18 +1,23 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './helpers/login';
 
-test.describe('Dashboard', () => {
+test.describe('仪表板测试 - 使用 TEST1 租户', () => {
   test.beforeEach(async ({ page }) => {
-    // Each test starts fresh
+    // 每个测试前先登录
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      console.log('登录失败，将跳过仪表板测试');
+    }
   });
 
-  test('should navigate to dashboard and verify basic layout', async ({ page }) => {
+  test('应该成功导航到仪表板页面并验证基本布局', async ({ page }) => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
     
     // If redirected to login
     if (page.url().includes('/login')) {
       await expect(page.getByLabel(/用户名|Username/i)).toBeVisible();
-      test.skip('Authentication required - skipping dashboard test');
+      test.skip(true, '需要认证 - 跳过仪表板测试');
       return;
     }
 

@@ -1,20 +1,13 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './helpers/login';
 
 test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
   test.beforeEach(async ({ page }) => {
-    // 先登录为管理员用户
-    await page.goto('/login');
-    await page.waitForLoadState('networkidle');
-    
-    // 使用 TEST1 租户管理员登录
-    await page.getByLabel(/租户代码|Tenant Code/i).fill('TEST1');
-    await page.getByLabel(/用户名|Username/i).fill('admin');
-    await page.getByLabel(/密码|Password/i).fill('admin123');
-    await page.getByRole('button', { name: /登录|Login/i }).click();
-    
-    // 等待登录完成
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
+    // 使用改进的登录辅助函数
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      console.log('登录失败，将跳过此测试');
+    }
   });
 
   test('应该成功访问管理员面板', async ({ page }) => {
@@ -23,7 +16,7 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
     
     // 如果重定向到登录页面，说明认证失败
     if (page.url().includes('/login')) {
-      test.skip('认证失败 - 跳过管理员面板测试');
+      test.skip(true, '认证失败 - 跳过管理员面板测试');
       return;
     }
 
@@ -75,7 +68,7 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过统计信息测试');
+      test.skip(true, '需要认证 - 跳过统计信息测试');
       return;
     }
 
@@ -116,7 +109,7 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过用户管理测试');
+      test.skip(true, '需要认证 - 跳过用户管理测试');
       return;
     }
 
@@ -170,7 +163,7 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过权限管理测试');
+      test.skip(true, '需要认证 - 跳过权限管理测试');
       return;
     }
 
@@ -222,7 +215,7 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过系统设置测试');
+      test.skip(true, '需要认证 - 跳过系统设置测试');
       return;
     }
 
@@ -274,7 +267,7 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过数据导出测试');
+      test.skip(true, '需要认证 - 跳过数据导出测试');
       return;
     }
 
@@ -337,7 +330,7 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过移动端测试');
+      test.skip(true, '需要认证 - 跳过移动端测试');
       return;
     }
 
@@ -347,10 +340,8 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
       page.getByRole('button', { name: /菜单|Menu/i }),
     ];
 
-    let hasMobileUI = false;
     for (const element of mobileElements) {
       if (await element.count() > 0) {
-        hasMobileUI = true;
         console.log('发现移动端管理员UI');
         break;
       }

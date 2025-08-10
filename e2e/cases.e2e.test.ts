@@ -1,25 +1,13 @@
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
+import { loginAsAdmin } from './helpers/login';
 
 test.describe('案件管理测试 - 使用 TEST1 租户', () => {
-  // 通用登录辅助函数
-  async function loginAsAdmin(page: any) {
-    await page.goto('/login');
-    await page.waitForLoadState('networkidle');
-    
-    // 使用 TEST1 租户管理员登录
-    await page.getByLabel(/租户代码|Tenant Code/i).fill('TEST1');
-    await page.getByLabel(/用户名|Username/i).fill('admin');
-    await page.getByLabel(/密码|Password/i).fill('admin123');
-    await page.getByRole('button', { name: /登录|Login/i }).click();
-    
-    // 等待登录完成
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(3000);
-  }
-
   test.beforeEach(async ({ page }) => {
     // 每个测试前先登录
-    await loginAsAdmin(page);
+    const loginSuccessful = await loginAsAdmin(page);
+    if (!loginSuccessful) {
+      console.log('登录失败，将跳过案件管理测试');
+    }
   });
 
   test('应该显示案件列表页面', async ({ page }) => {
@@ -28,7 +16,7 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     
     // 如果重定向到登录页面，跳过测试
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过案件列表测试');
+      test.skip(true, '需要认证 - 跳过案件列表测试');
       return;
     }
 
@@ -68,7 +56,7 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过案件创建测试');
+      test.skip(true, '需要认证 - 跳过案件创建测试');
       return;
     }
 
@@ -161,13 +149,13 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过案件搜索测试');
+      test.skip(true, '需要认证 - 跳过案件搜索测试');
       return;
     }
 
     // 查找搜索框
     const searchElements = [
-      page.getByPlaceholderText(/搜索|Search/i),
+      page.getByPlaceholder(/搜索|Search/i),
       page.getByLabel(/搜索|Search/i),
       page.locator('input[type="search"], input[type="text"]').first(),
     ];
@@ -210,7 +198,7 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过案件详情测试');
+      test.skip(true, '需要认证 - 跳过案件详情测试');
       return;
     }
 
@@ -277,7 +265,7 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过案件筛选测试');
+      test.skip(true, '需要认证 - 跳过案件筛选测试');
       return;
     }
 
@@ -328,7 +316,7 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过批量操作测试');
+      test.skip(true, '需要认证 - 跳过批量操作测试');
       return;
     }
 
@@ -380,7 +368,7 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过移动端案件列表测试');
+      test.skip(true, '需要认证 - 跳过移动端案件列表测试');
       return;
     }
 
@@ -391,10 +379,8 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
       page.getByRole('button', { name: /菜单|Menu/i }),
     ];
 
-    let hasMobileLayout = false;
     for (const element of mobileElements) {
       if (await element.count() > 0) {
-        hasMobileLayout = true;
         console.log('发现移动端布局');
         break;
       }
@@ -414,7 +400,7 @@ test.describe('案件管理测试 - 使用 TEST1 租户', () => {
     await page.waitForLoadState('networkidle');
     
     if (page.url().includes('/login')) {
-      test.skip('需要认证 - 跳过案件导出测试');
+      test.skip(true, '需要认证 - 跳过案件导出测试');
       return;
     }
 

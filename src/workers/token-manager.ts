@@ -80,6 +80,13 @@ export class TokenManager {
   }
 
   /**
+   * 检查 TokenManager 是否已初始化
+   */
+  get initialized(): boolean {
+    return this.isInitialized;
+  }
+
+  /**
    * 创建 token 表结构
    */
   private async createTokenTable(): Promise<void> {

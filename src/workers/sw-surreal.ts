@@ -5,7 +5,7 @@ declare const self: ServiceWorkerGlobalScope & {
 };
 
 // Service Worker 版本号
-const SW_VERSION = 'v1.0.1';
+const SW_VERSION = 'v1.0.3-fix-tokenmanager-lock';
 const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
 
 // Workbox 预缓存支持
@@ -47,6 +47,9 @@ let pwaSecurityManager: PWASecurityManager | null = null;
 
 // 🌟 新的统一连接管理器实例
 let connectionManager: SurrealDBConnectionManager | null = null;
+
+// TokenManager 初始化锁定
+let tokenManagerInitializing = false;
 
 // Workbox 预缓存和路由设置
 const manifest = self.__WB_MANIFEST;
@@ -352,9 +355,11 @@ const eventHandlers = {
     try {
       switch (type) {
         case 'connect': {
+          // Always ensure TokenManager is initialized for connect operations
+          await ensureTokenManager();
+          
           // Sync token information from localStorage if provided
           if (payload.sync_tokens) {
-            await ensureTokenManager();
             const tokenInfo: Partial<TokenInfo> = {
               access_token: payload.sync_tokens.access_token,
               refresh_token: payload.sync_tokens.refresh_token,
@@ -2087,6 +2092,49 @@ const eventHandlers = {
           break;
         }
 
+        case 'debug_tokenmanager_init': {
+          try {
+            console.log('ServiceWorker: Debug TokenManager initialization request');
+            
+            // 检查当前状态
+            const currentState = {
+              tokenManagerExists: !!tokenManager,
+              tokenManagerInitialized: tokenManager?.initialized || false,
+              localDbExists: !!localDb,
+              localDbInitialized: isLocalDbInitialized
+            };
+            
+            console.log('ServiceWorker: Current TokenManager state:', currentState);
+            
+            // 尝试初始化
+            try {
+              await ensureTokenManager();
+              respond({
+                success: true,
+                beforeState: currentState,
+                afterState: {
+                  tokenManagerExists: !!tokenManager,
+                  tokenManagerInitialized: tokenManager?.initialized || false,
+                  localDbExists: !!localDb,
+                  localDbInitialized: isLocalDbInitialized
+                }
+              });
+            } catch (initError) {
+              console.error('ServiceWorker: TokenManager init failed:', initError);
+              respond({
+                success: false,
+                error: (initError as Error).message,
+                stack: (initError as Error).stack,
+                currentState
+              });
+            }
+          } catch (error) {
+            console.error('ServiceWorker: Debug TokenManager init error:', error);
+            respondError(error as Error);
+          }
+          break;
+        }
+
         default:
           console.warn(`ServiceWorker: Unknown message type received: ${type}`);
           respondError(new Error(`Unknown message type: ${type}`));
@@ -2253,6 +2301,45 @@ function stopAuthStateRefresh() {
     clearInterval(authStateTimer);
     authStateTimer = null;
     console.log('ServiceWorker: Auth state refresh timer stopped');
+  }
+}
+
+/**
+ * 等待 TokenManager 初始化完成后刷新认证状态缓存
+ */
+async function waitForTokenManagerAndRefreshAuth(): Promise<void> {
+  try {
+    // 等待 TokenManager 初始化完成
+    const maxWaitTime = 5000; // 最大等待 5 秒
+    const checkInterval = 50; // 每 50ms 检查一次
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      try {
+        await ensureTokenManager();
+        // 如果成功获取到 TokenManager，则跳出循环
+        break;
+      } catch (error) {
+        // TokenManager 还未初始化，继续等待
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+      }
+    }
+    
+    // 再次尝试获取 TokenManager
+    await ensureTokenManager();
+    
+    // TokenManager 已经初始化，现在可以安全地刷新认证状态缓存
+    console.log('ServiceWorker: TokenManager initialized, refreshing auth cache');
+    await refreshAuthStateCache();
+    
+  } catch (error) {
+    console.warn('ServiceWorker: Failed to wait for TokenManager or refresh auth cache:', error);
+    // 如果 TokenManager 初始化失败，仍然尝试刷新缓存（但可能会失败）
+    try {
+      await refreshAuthStateCache();
+    } catch (refreshError) {
+      console.warn('ServiceWorker: Fallback auth cache refresh also failed:', refreshError);
+    }
   }
 }
 
@@ -2954,9 +3041,9 @@ function setupConnectionEventListeners() {
     notifyConnectionStateChange();
     startConnectionHealthCheck();
 
-    // 连接成功后，尝试刷新认证状态缓存
+    // 连接成功后，等待 TokenManager 初始化完成再刷新认证状态缓存
     if (db) {
-      refreshAuthStateCache().catch(error => {
+      waitForTokenManagerAndRefreshAuth().catch((error: unknown) => {
         console.warn('ServiceWorker: Failed to refresh auth cache after connection:', error);
       });
     }
@@ -3179,8 +3266,51 @@ async function initializeTokenManager(): Promise<void> {
  * 确保 TokenManager 已初始化
  */
 async function ensureTokenManager(): Promise<void> {
-  if (!tokenManager) {
+  // 如果已经有 TokenManager 且已初始化，直接返回
+  if (tokenManager && tokenManager.initialized) {
+    return;
+  }
+
+  // 如果正在初始化中，等待初始化完成
+  if (tokenManagerInitializing) {
+    let retries = 0;
+    const maxRetries = 50; // 最多等待 5 秒
+    while (tokenManagerInitializing && retries < maxRetries) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      retries++;
+    }
+    
+    // 如果等待超时或初始化失败，抛出错误
+    if (tokenManagerInitializing || !tokenManager || !tokenManager.initialized) {
+      throw new Error('TokenManager initialization timeout or failed');
+    }
+    return;
+  }
+
+  // 开始初始化
+  tokenManagerInitializing = true;
+  
+  try {
+    // 清除可能存在的未完全初始化的实例
+    if (tokenManager && !tokenManager.initialized) {
+      console.log('ServiceWorker: Clearing uninitialized TokenManager instance');
+      tokenManager = null;
+    }
+    
     await initializeTokenManager();
+    
+    // 验证初始化是否成功
+    if (!tokenManager || !tokenManager.initialized) {
+      throw new Error('TokenManager initialization validation failed');
+    }
+    
+    console.log('ServiceWorker: TokenManager ensured and validated');
+  } catch (error) {
+    console.error('ServiceWorker: Failed to ensure TokenManager:', error);
+    tokenManager = null; // 清理失败的实例
+    throw error;
+  } finally {
+    tokenManagerInitializing = false;
   }
 }
 
@@ -3807,6 +3937,14 @@ async function getCurrentUserId(): Promise<string | undefined> {
       return undefined;
     }
 
+    // 确保 TokenManager 已初始化再执行认证查询
+    try {
+      await ensureTokenManager();
+    } catch (error) {
+      console.warn('ServiceWorker: TokenManager not ready for getCurrentUserId, returning undefined:', error);
+      return undefined;
+    }
+
     // 执行查询并更新缓存
     const authResult = await db!.query('RETURN $auth;');
 
@@ -4109,37 +4247,53 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<Co
         isAuthenticated = true;
         console.log('ServiceWorker: Authentication status from cache: authenticated');
       } else {
-        // 缓存不可用时，使用简单的查询测试连接和认证状态
-        const result = await Promise.race([
-          db.query('return $auth;'),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Connection test timeout')), 8000)
-          )
-        ]);
+        // 缓存不可用时，检查 TokenManager 是否已初始化
+        let result: any = null;
+        try {
+          await ensureTokenManager();
+          
+          // TokenManager 已初始化，使用简单的查询测试连接和认证状态
+          result = await Promise.race([
+            db.query('return $auth;'),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Connection test timeout')), 8000)
+            )
+          ]);
+          
+          // 查询成功，连接正常
+          if (!isConnected) {
+            isConnected = true;
+            console.log('ServiceWorker: Connection state corrected to connected after test');
+          }
 
-        // 查询成功，连接正常
-        if (!isConnected) {
-          isConnected = true;
-          console.log('ServiceWorker: Connection state corrected to connected after test');
+          // 检查认证状态
+          let authResult = null;
+          if (Array.isArray(result) && result.length > 0) {
+            authResult = result[0];
+          } else {
+            authResult = result;
+          }
+
+          isAuthenticated = authResult &&
+            typeof authResult === 'object' &&
+            authResult !== null;
+
+          console.log('ServiceWorker: Authentication status from query:', isAuthenticated ? 'authenticated' : 'not authenticated');
+
+          // 更新认证状态缓存
+          const userId = isAuthenticated ? String((authResult as any).id || null) : null;
+          await updateAuthStateCache(userId, isAuthenticated);
+        } catch (tokenError) {
+          console.log('ServiceWorker: TokenManager not ready for auth check, assuming unauthenticated:', tokenError);
+          // TokenManager 未初始化，假设未认证状态，但连接是正常的
+          isAuthenticated = false;
+          
+          // 仍然标记连接为正常，因为这只是 TokenManager 初始化问题
+          if (!isConnected) {
+            isConnected = true;
+            console.log('ServiceWorker: Connection state corrected to connected (TokenManager not ready)');
+          }
         }
-
-        // 检查认证状态
-        let authResult = null;
-        if (Array.isArray(result) && result.length > 0) {
-          authResult = result[0];
-        } else {
-          authResult = result;
-        }
-
-        isAuthenticated = authResult &&
-          typeof authResult === 'object' &&
-          authResult !== null;
-
-        console.log('ServiceWorker: Authentication status from query:', isAuthenticated ? 'authenticated' : 'not authenticated');
-
-        // 更新认证状态缓存
-        const userId = isAuthenticated ? String((authResult as any).id || null) : null;
-        await updateAuthStateCache(userId, isAuthenticated);
 
         // 确保 isAuthenticated 是明确的 boolean 值
         isAuthenticated = Boolean(isAuthenticated);
@@ -4200,6 +4354,9 @@ async function ensureConnection(newConfig?: typeof connectionConfig): Promise<Co
 
         // 重新测试认证状态
         try {
+          // 确保 TokenManager 已初始化再执行认证查询
+          await ensureTokenManager();
+          
           const retestResult = await db.query<RecordId[]>('return $auth;');
           let retestAuthResult = null;
           if (Array.isArray(retestResult) && retestResult.length > 0) {
