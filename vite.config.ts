@@ -202,6 +202,7 @@ export default defineConfig(({ mode }) => {
         strict: false,
       },
       host: true,
+      port: 5173, // 使用标准 Vite 端口
       allowedHosts: ["dev.cuckoox.cn", "dc.cuckoox.cn", "code.cuckoox.cn"],
     },
     preview: {

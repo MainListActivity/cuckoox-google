@@ -17,7 +17,7 @@ export default defineConfig({
   // 配置输出目录
   outputDir: './playwright-report/test-results',
   use: {
-    baseURL: 'http://localhost:5174', // Updated port for E2E testing
+    baseURL: 'http://localhost:5173', // 使用标准 Vite 开发服务器端口
     trace: 'on-first-retry',
     // 配置截图存储位置
     screenshot: 'only-on-failure',
@@ -44,11 +44,11 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  // 配置测试服务器 - 假设服务器已启动
-  // webServer: {
-  //   command: 'node scripts/dev-e2e.js',
-  //   url: 'http://localhost:5173',
-  //   reuseExistingServer: true,
-  //   timeout: 120 * 1000,
-  // },
+  // 配置测试服务器 - 复用现有开发服务器
+  webServer: {
+    command: 'bun run dev',
+    url: 'http://localhost:5173',
+    reuseExistingServer: !process.env.CI, // 总是复用现有服务器
+    timeout: 120 * 1000,
+  },
 });

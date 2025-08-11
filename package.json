@@ -16,7 +16,7 @@
     "test:all": "npm run test:run && npm run test:integration",
     "test:coverage": "vitest run --coverage",
     "test:simple": "vitest run --run --reporter=./tests/reporters/file-status-reporter.ts",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --project=chromium",
     "test:e2e:ci": "playwright test --reporter=list"
   },
   "dependencies": {
