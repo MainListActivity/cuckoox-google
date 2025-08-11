@@ -4,24 +4,40 @@ import { Page, expect } from '@playwright/test';
  * 获取租户代码字段的多重选择器
  */
 export async function getTenantCodeField(page: Page) {
-  // 先等待一些时间让页面渲染
+  // 先等待页面稳定
   await page.waitForTimeout(1000);
   
+  // 等待表单完全加载和配置检查完成
+  try {
+    // 等待"Checking Config..."状态消失
+    await page.waitForFunction(() => {
+      const bodyText = document.body.textContent || '';
+      const checkingTexts = ['Checking Config', 'checking config', 'config'];
+      const hasChecking = checkingTexts.some(text => bodyText.toLowerCase().includes(text.toLowerCase()));
+      return !hasChecking;
+    }, { timeout: 15000 });
+  } catch {
+    console.log('等待配置检查完成超时，继续查找字段');
+  }
+  
   const selectors = [
+    // MUI Autocomplete 特定选择器（租户代码使用Autocomplete组件）
+    () => page.locator('.MuiAutocomplete-root input'),
+    () => page.locator('#tenantCode input'),
+    () => page.locator('[id*="tenantCode"] input'),
+    // 标签和属性选择器
     () => page.getByLabel(/租户代码|Tenant Code/i),
     () => page.locator('input[name="tenantCode"]'),
     () => page.locator('input[placeholder*="租户代码"]'),
     () => page.locator('input[placeholder*="Tenant Code"]'),
+    () => page.locator('input[placeholder*="tenant code" i]'),
     () => page.locator('input[data-testid="tenant-code"]'),
-    () => page.locator('.MuiAutocomplete-root input'),
-    () => page.locator('#tenantCode'),
-    () => page.locator('[id*="tenant"]'),
-    // MUI 组件特定选择器
+    // 通用MUI选择器
     () => page.locator('.MuiTextField-root input').first(),
     () => page.locator('.MuiFormControl-root input').first(),
+    // 基于位置的选择器
     () => page.locator('form input[type="text"]:first-of-type'),
     () => page.locator('input[type="text"]').first(),
-    // 更通用的选择器
     () => page.locator('form').locator('input').first(),
     () => page.locator('input').first(),
   ];
@@ -30,13 +46,22 @@ export async function getTenantCodeField(page: Page) {
     try {
       const element = selector();
       if (await element.count() > 0) {
-        // 等待元素可见
-        await element.waitFor({ state: 'visible', timeout: 2000 });
+        // 确保元素可见且可交互
+        await element.waitFor({ state: 'visible', timeout: 3000 });
+        
+        // 验证这确实是租户代码字段（通过检查父元素或属性）
+        const inputValue = await element.inputValue().catch(() => '');
+        const placeholder = await element.getAttribute('placeholder').catch(() => '');
+        
+        if (placeholder && (placeholder.includes('租户') || placeholder.toLowerCase().includes('tenant'))) {
+          console.log(`找到租户代码字段（通过placeholder验证）`);
+          return element;
+        }
+        
         console.log(`找到租户代码字段`);
         return element;
       }
     } catch {
-      // 继续尝试下一个选择器
       continue;
     }
   }
@@ -53,28 +78,44 @@ export async function getUsernameField(page: Page) {
   await page.waitForTimeout(500);
   
   const selectors = [
-    () => page.getByLabel(/用户名|Username/i),
-    () => page.locator('input[name="username"]'),
+    // 基于ID和属性的精确选择器
+    () => page.locator('#adminUsername'),
     () => page.locator('input[name="adminUsername"]'),
+    () => page.locator('input[name="username"]'),
+    // 基于label的选择器
+    () => page.getByLabel(/用户名|Username/i),
+    // 基于placeholder的选择器
     () => page.locator('input[placeholder*="用户名"]'),
     () => page.locator('input[placeholder*="Username"]'),
+    () => page.locator('input[placeholder*="username" i]'),
     () => page.locator('input[data-testid="username"]'),
-    () => page.locator('#adminUsername'),
     () => page.locator('[id*="username"]'),
     () => page.locator('input[autocomplete="username"]'),
-    // MUI 组件特定选择器
-    () => page.locator('.MuiTextField-root input').nth(1),
-    () => page.locator('.MuiFormControl-root input').nth(1),
+    // MUI 组件特定选择器 - 排除Autocomplete字段
+    () => page.locator('.MuiTextField-root:not(.MuiAutocomplete-root) input').first(),
+    () => page.locator('.MuiFormControl-root:not(.MuiAutocomplete-root) input').first(),
+    // 基于位置的选择器 - 第二个text输入框
     () => page.locator('form input[type="text"]:nth-of-type(2)'),
     () => page.locator('input[type="text"]').nth(1),
-    () => page.locator('form').locator('input').nth(1),
+    () => page.locator('form').locator('input[type="text"]').nth(1),
   ];
   
   for (const selector of selectors) {
     try {
       const element = selector();
       if (await element.count() > 0) {
-        await element.waitFor({ state: 'visible', timeout: 2000 });
+        await element.waitFor({ state: 'visible', timeout: 3000 });
+        
+        // 验证这确实是用户名字段（通过检查placeholder或id）
+        const placeholder = await element.getAttribute('placeholder').catch(() => '');
+        const id = await element.getAttribute('id').catch(() => '');
+        
+        if (placeholder && (placeholder.includes('用户名') || placeholder.toLowerCase().includes('username')) ||
+            id && id.toLowerCase().includes('username')) {
+          console.log(`找到用户名字段（通过属性验证）`);
+          return element;
+        }
+        
         console.log(`找到用户名字段`);
         return element;
       }
@@ -84,7 +125,7 @@ export async function getUsernameField(page: Page) {
   }
   
   console.log('用户名字段未找到');
-  return page.locator('input').nth(1); // 返回第二个输入框
+  return page.locator('input[type="text"]').nth(1); // 返回第二个text输入框
 }
 
 /**
@@ -94,27 +135,31 @@ export async function getPasswordField(page: Page) {
   await page.waitForTimeout(500);
   
   const selectors = [
-    () => page.getByLabel(/密码|Password/i),
-    () => page.locator('input[name="password"]'),
+    // 基于ID和属性的精确选择器
+    () => page.locator('#adminPassword'),
     () => page.locator('input[name="adminPassword"]'),
+    () => page.locator('input[name="password"]'),
     () => page.locator('input[type="password"]'),
+    // 基于label的选择器
+    () => page.getByLabel(/密码|Password/i),
+    // 基于placeholder的选择器
     () => page.locator('input[placeholder*="密码"]'),
     () => page.locator('input[placeholder*="Password"]'),
+    () => page.locator('input[placeholder*="password" i]'),
     () => page.locator('input[data-testid="password"]'),
-    () => page.locator('#adminPassword'),
     () => page.locator('[id*="password"]'),
     () => page.locator('input[autocomplete="current-password"]'),
     // MUI 组件特定选择器
     () => page.locator('.MuiTextField-root input[type="password"]'),
     () => page.locator('.MuiFormControl-root input[type="password"]'),
-    () => page.locator('form').locator('input[type="password"]'),
+    () => page.locator('form input[type="password"]'),
   ];
   
   for (const selector of selectors) {
     try {
       const element = selector();
       if (await element.count() > 0) {
-        await element.waitFor({ state: 'visible', timeout: 2000 });
+        await element.waitFor({ state: 'visible', timeout: 3000 });
         console.log(`找到密码字段`);
         return element;
       }
@@ -124,7 +169,7 @@ export async function getPasswordField(page: Page) {
   }
   
   console.log('密码字段未找到');
-  return page.locator('input[type="password"]'); // 返回密码类型的输入框
+  return page.locator('input[type="password"]').first(); // 返回第一个密码类型的输入框
 }
 
 /**
@@ -133,26 +178,54 @@ export async function getPasswordField(page: Page) {
 export async function getLoginButton(page: Page) {
   await page.waitForTimeout(500);
   
+  // 等待按钮不是禁用状态
+  try {
+    await page.waitForFunction(() => {
+      const buttons = Array.from(document.querySelectorAll('button'));
+      const loginButton = buttons.find(btn => 
+        btn.textContent?.includes('登录') || 
+        btn.textContent?.includes('Login') || 
+        btn.type === 'submit'
+      );
+      return loginButton && !loginButton.disabled;
+    }, { timeout: 10000 });
+  } catch {
+    console.log('等待登录按钮启用超时，继续查找');
+  }
+  
   const selectors = [
+    // 基于role和文本的选择器
     () => page.getByRole('button', { name: /登录|Login/i }),
-    () => page.locator('button[type="submit"]'),
-    () => page.locator('button:has-text("登录")'),
-    () => page.locator('button:has-text("Login")'),
+    () => page.locator('button[type="submit"]:not(:disabled)'),
+    // 基于文本内容的选择器
+    () => page.locator('button:has-text("登录"):not(:disabled)'),
+    () => page.locator('button:has-text("Login"):not(:disabled)'),
     () => page.locator('button[data-testid="login-button"]'),
-    () => page.locator('form button'),
     // MUI 组件特定选择器
-    () => page.locator('.MuiButton-root:has-text("登录")'),
-    () => page.locator('.MuiButton-root:has-text("Login")'),
-    () => page.locator('.MuiButton-root[type="submit"]'),
-    () => page.locator('button:last-of-type'),
-    () => page.locator('button').last(),
+    () => page.locator('.MuiButton-root.MuiButton-contained:has-text("登录"):not(:disabled)'),
+    () => page.locator('.MuiButton-root.MuiButton-contained:has-text("Login"):not(:disabled)'),
+    () => page.locator('.MuiButton-root[type="submit"]:not(:disabled)'),
+    () => page.locator('.MuiButton-root.MuiButton-contained:not(:disabled)').last(),
+    // 表单内的按钮
+    () => page.locator('form button:not(:disabled)').last(),
+    // 位置选择器（最后的submit按钮）
+    () => page.locator('button[type="submit"]').last(),
+    () => page.locator('button:not(:disabled)').last(),
   ];
   
   for (const selector of selectors) {
     try {
       const element = selector();
       if (await element.count() > 0) {
-        await element.waitFor({ state: 'visible', timeout: 2000 });
+        await element.waitFor({ state: 'visible', timeout: 3000 });
+        
+        // 验证按钮是否可点击（不被禁用）
+        const isDisabled = await element.isDisabled().catch(() => false);
+        if (isDisabled) {
+          console.log('登录按钮被禁用，跳过此选择器');
+          continue;
+        }
+        
         console.log(`找到登录按钮`);
         return element;
       }

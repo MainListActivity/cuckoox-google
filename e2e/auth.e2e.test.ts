@@ -7,8 +7,30 @@ test.describe('认证流程测试 - 使用 TEST1 租户', () => {
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
     
-    // 额外等待，确保React组件完全加载
-    await page.waitForTimeout(2000);
+    // 等待登录页面完全加载 - 等待加载状态消失
+    try {
+      // 等待"正在加载中..."文本消失
+      await page.waitForFunction(() => {
+        const bodyText = document.body.textContent || '';
+        const loadingTexts = ['正在加载中', '正在加载会话', 'Loading session', '加载中'];
+        const hasLoading = loadingTexts.some(text => bodyText.includes(text));
+        return !hasLoading;
+      }, { timeout: 30000 });
+      
+      // 等待登录表单出现
+      await page.waitForSelector('form', { timeout: 10000 });
+      
+      // 等待输入框出现
+      await page.waitForSelector('input[type="text"]', { timeout: 10000 });
+      
+      // 额外等待让组件完全稳定
+      await page.waitForTimeout(1000);
+      
+    } catch (error) {
+      console.log('等待页面加载超时，继续测试:', error.message);
+      // 额外等待后继续
+      await page.waitForTimeout(3000);
+    }
     
     // 调试：输出页面内容
     const content = await page.content();
