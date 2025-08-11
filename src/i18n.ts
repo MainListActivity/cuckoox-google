@@ -59,6 +59,8 @@ const resources = {
       "error_tenant_code_required": "租户代码为必填项",
       "error_turnstile_failed": "人机验证失败，请重试",
       "error_turnstile_expired": "验证已过期，请重新验证",
+      "turnstile_enabled_hint": "此租户已启用人机验证",
+      "turnstile_disabled_hint": "此租户已禁用人机验证",
       "redirecting_admin": "正在跳转到管理员仪表板...",
 
       // CaseSelectionPage

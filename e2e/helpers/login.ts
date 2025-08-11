@@ -1,4 +1,5 @@
 import { Page, expect } from '@playwright/test';
+import { getTestCredentials } from '../config/test-credentials';
 
 /**
  * 获取租户代码字段的多重选择器
@@ -244,11 +245,14 @@ export async function getLoginButton(page: Page) {
 export async function loginAsAdmin(page: Page) {
   console.log('开始管理员登录流程...');
   
+  // 获取测试凭据
+  const credentials = getTestCredentials();
+  
   await page.goto('/login');
   await page.waitForLoadState('networkidle');
   
-  // 等待应用初始化完成，关键是等待“正在加载会话”消失且表单出现
-  console.log('等待“正在加载会话...”消失且表单出现...');
+  // 等待应用初始化完成，关键是等待"正在加载会话"消失且表单出现
+  console.log('等待"正在加载会话..."消失且表单出现...');
   
   try {
     // 等待加载页面消失并且登录表单出现
@@ -302,7 +306,7 @@ export async function loginAsAdmin(page: Page) {
     const usernameField = page.locator('input[type="text"]').nth(1);
     // 密码字段（第一个 password 类型输入框）
     const passwordField = page.locator('input[type="password"]').first();
-    // 登录按钮（submit 类型或包含“登录”文本的按钮）
+    // 登录按钮（submit 类型或包含"登录"文本的按钮）
     const loginButton = page.locator('button[type="submit"]').or(
       page.locator('button:has-text("登录")')
     ).first();
@@ -316,15 +320,15 @@ export async function loginAsAdmin(page: Page) {
     
     console.log('填写登录表单...');
     // 缓慢填写表单，每个字段间适当等待
-    await tenantCodeField.fill('TEST1');
-    console.log('租户代码已填写');
+    await tenantCodeField.fill(credentials.tenantCode);
+    console.log(`租户代码已填写: ${credentials.tenantCode}`);
     await page.waitForTimeout(500);
     
-    await usernameField.fill('admin');
-    console.log('用户名已填写');
+    await usernameField.fill(credentials.username);
+    console.log(`用户名已填写: ${credentials.username}`);
     await page.waitForTimeout(500);
     
-    await passwordField.fill('admin123');
+    await passwordField.fill(credentials.password);
     console.log('密码已填写');
     await page.waitForTimeout(500);
     

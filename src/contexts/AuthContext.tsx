@@ -539,8 +539,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
 
     try {
-      // 等待Service Worker就绪
-      await serviceWorkerComm.waitForReady();
+      // 等待Service Worker就绪，但设置超时避免无限等待
+      const waitPromise = serviceWorkerComm.waitForReady();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Service Worker wait timeout')), 10000)
+      );
+      
+      try {
+        await Promise.race([waitPromise, timeoutPromise]);
+      } catch (waitError) {
+        console.warn('🔧 Service Worker wait timeout, continuing without full initialization:', waitError.message);
+        // 继续执行，不让Service Worker问题阻塞用户认证检查
+      }
 
       const result = await queryWithAuth<AppUser[]>(client, 'select * from user where id=$auth;');
       // 从SurrealDB获取登录状态
@@ -556,14 +566,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (error) {
       console.error("Error checking current user session:", error);
-      // 只有在关键错误时才清除状态，而不是每次都清除
-      if (isMounted() && isConnected) {
-        await clearAuthState(false);
+      
+      // 🔧 离线优先策略：连接失败时尝试使用本地缓存数据
+      if (isMounted()) {
+        try {
+          // 尝试从localStorage获取上次的用户会话
+          const cachedUserData = localStorage.getItem('cuckoox-last-user');
+          if (cachedUserData) {
+            console.log('🔧 Using cached user data for offline mode');
+            const userData = JSON.parse(cachedUserData);
+            // 设置用户状态但标记为离线模式
+            setUser(userData);
+            setIsLoggedIn(true);
+            console.log('🔧 Offline mode activated with cached user data');
+          }
+        } catch (cacheError) {
+          console.warn('Failed to load cached user data:', cacheError);
+        }
+        
+        // 清除认证状态只在明确的认证错误时进行
+        if (isConnected && error.message?.includes('auth')) {
+          await clearAuthState(false);
+        }
       }
     } finally {
       isCheckingUser.current = false;
       if (isMounted()) setIsLoading(false);
     }
+    
+    // 🔧 额外的安全网：确保isLoading在15秒后一定会变为false
+    setTimeout(() => {
+      if (isMounted() && isCheckingUser.current === false) {
+        console.warn('🔧 AuthContext: Force setting isLoading to false after timeout');
+        setIsLoading(false);
+      }
+    }, 15000);
   }, [serviceWorkerComm, getAuthStatus, isConnected, initializeUserSession, clearAuthState]);
 
   useEffect(() => {

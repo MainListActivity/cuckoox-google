@@ -2,10 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 import { config } from 'dotenv';
 import path from 'path';
 
-// 优先加载 .env.test 文件用于测试环境
-config({ path: path.resolve('.env.test') });
-// 然后加载默认的 .env 作为fallback
-config();
+// 加载环境变量文件，按优先级顺序：.env.test.local > .env.test > .env
+// 先加载基础配置
+config(); // 加载 .env
+config({ path: path.resolve('.env.test'), override: true }); // 加载 .env.test 覆盖 .env
+config({ path: path.resolve('.env.test.local'), override: true }); // 加载 .env.test.local 覆盖前面的
 
 export default defineConfig({
   testDir: './e2e', // Directory for E2E test files
@@ -18,8 +19,10 @@ export default defineConfig({
   preserveOutput: 'always',
   // 配置输出目录，确保报告保存
   outputDir: './playwright-report/test-results',
+  // 设置全局默认超时时间为30秒
+  timeout: 30000,
   use: {
-    baseURL: 'http://localhost:5173', // 使用标准 Vite 开发服务器端口
+    baseURL: 'http://localhost:4173', // 统一使用4173端口
     trace: 'on-first-retry',
     // 配置截图存储位置
     screenshot: 'only-on-failure',
@@ -46,11 +49,11 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  // 配置测试服务器 - 复用现有开发服务器
-  webServer: {
-    command: 'bun run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI, // 总是复用现有服务器
-    timeout: 120 * 1000,
-  },
+  // 配置测试服务器 - 使用preview服务器（现在禁用，使用手动启动的服务器）
+  // webServer: {
+  //   command: 'bun run build && bun run preview',
+  //   url: 'http://localhost:4173',
+  //   reuseExistingServer: true, // 总是复用现有服务器
+  //   timeout: 180 * 1000, // 增加到3分钟，因为需要构建
+  // },
 });

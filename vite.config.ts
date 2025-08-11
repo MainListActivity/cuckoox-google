@@ -206,7 +206,7 @@ export default defineConfig(({ mode }) => {
       allowedHosts: ["dev.cuckoox.cn", "dc.cuckoox.cn", "code.cuckoox.cn"],
     },
     preview: {
-      port: 5173,
+      port: 4173, // 使用Vite官方推荐的preview端口
     },
     test: {
       // Vitest configuration

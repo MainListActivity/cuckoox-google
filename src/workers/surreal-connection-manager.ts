@@ -275,7 +275,7 @@ class ReconnectManager {
  */
 class HealthChecker {
   private healthCheckTimer: NodeJS.Timeout | null = null;
-  private readonly healthCheckInterval = 30000; // 30秒
+  private readonly healthCheckInterval = 15000; // 15秒，更频繁的检测
 
   constructor(private connectionManager: SurrealDBConnectionManager) {}
 
@@ -313,12 +313,26 @@ class HealthChecker {
         return;
       }
 
-      // 执行简单的连接测试
+      // 🔧 增强的连接状态检测
+      // 首先检查 SurrealDB 内部连接状态
+      const dbStatus = remoteDb.status;
+      if (dbStatus !== 1) { // ConnectionStatus.Connected = 1
+        console.warn('ConnectionManager: Health check - DB status indicates disconnection:', dbStatus);
+        this.connectionManager.updateConnectionState({ 
+          status: 'error',
+          healthStatus: 'unhealthy',
+          error: new Error(`Database connection status: ${dbStatus}`) 
+        });
+        this.connectionManager.triggerReconnection();
+        return;
+      }
+
+      // 执行心跳查询测试
       const startTime = Date.now();
       const testResult = await Promise.race([
         remoteDb.query('return 1;'),
         new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Health check timeout')), 5000)
+          setTimeout(() => reject(new Error('Health check timeout')), 3000) // 缩短超时时间
         )
       ]);
       const endTime = Date.now();
@@ -327,21 +341,31 @@ class HealthChecker {
       if (testResult) {
         console.log('ConnectionManager: Health check passed, latency:', latency + 'ms');
         this.connectionManager.updateConnectionState({ 
-          healthStatus: latency < 100 ? 'healthy' : latency < 1000 ? 'degraded' : 'unhealthy',
-          latency 
+          healthStatus: latency < 200 ? 'healthy' : latency < 1000 ? 'degraded' : 'unhealthy',
+          latency,
+          error: null
         });
       }
 
     } catch (testError) {
       console.warn('ConnectionManager: Health check failed:', testError);
+      
+      // 🔧 区分不同类型的连接错误
+      const errorMessage = (testError as Error).message;
+      const isTimeoutError = errorMessage.includes('timeout');
+      const isNetworkError = errorMessage.includes('network') || errorMessage.includes('WebSocket');
+      
       this.connectionManager.updateConnectionState({ 
         status: 'error',
         healthStatus: 'unhealthy',
         error: testError as Error 
       });
       
-      // 触发重连
-      this.connectionManager.triggerReconnection();
+      // 对于超时和网络错误，立即触发重连
+      if (isTimeoutError || isNetworkError) {
+        console.log('ConnectionManager: Detected potential WebSocket disconnect, triggering immediate reconnection');
+        this.connectionManager.triggerReconnection();
+      }
     }
   }
 }

@@ -92,7 +92,7 @@ const LoginPage: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setTurnstileRequired(data.turnstile_enabled || false);
+        setTurnstileRequired(data.turnstile_enabled === true);
         console.log(`租户 ${tenantCode} Turnstile配置:`, data.turnstile_enabled ? '启用' : '禁用');
       } else {
         // 如果查询失败，默认需要验证
@@ -539,11 +539,9 @@ const LoginPage: React.FC = () => {
                         if (adminLoginError) setAdminLoginError(null);
                         // 用户输入时也检查配置（去抖动处理）
                         if (newInputValue.trim()) {
-                          const debounceTimer = setTimeout(() => {
+                          setTimeout(() => {
                             checkTenantTurnstileConfig(newInputValue.toUpperCase());
                           }, 500);
-                          // 清理之前的定时器
-                          return () => clearTimeout(debounceTimer);
                         }
                       }}
                       freeSolo

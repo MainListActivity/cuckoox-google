@@ -5,7 +5,7 @@ declare const self: ServiceWorkerGlobalScope & {
 };
 
 // Service Worker 版本号
-const SW_VERSION = 'v1.0.3-fix-tokenmanager-lock';
+const SW_VERSION = 'v1.0.3-fix-tokenmanager-lock-1754900850736';
 const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
 
 // Workbox 预缓存支持
@@ -23,6 +23,20 @@ import { PWASecurityManager, type PWASecurityConfig } from './pwa-security-manag
 
 // 导入新的连接管理器
 import { SurrealDBConnectionManager } from './surreal-connection-manager.js';
+
+// 🔧 导入简化的连接管理器补丁
+import { 
+  initializeSimplifiedConnectionManager,
+  getSimplifiedConnectionManager,
+  connectWithSimplifiedManager,
+  forceReconnectWithSimplifiedManager,
+  getSimplifiedConnectionState,
+  getDatabaseFromSimplifiedManager,
+  isConnectedViaSimplifiedManager,
+  isAuthenticatedViaSimplifiedManager,
+  disconnectSimplifiedManager,
+  disposeSimplifiedConnectionManager
+} from './sw-surreal-connection-patch';
 
 // 导入 WASM shim 来初始化 SurrealDB WASM 引擎
 import './wasm-shim.js';
@@ -51,6 +65,27 @@ let pwaSecurityManager: PWASecurityManager | null = null;
 // 🌟 新的统一连接管理器实例
 let connectionManager: SurrealDBConnectionManager | null = null;
 
+// 🔧 使用简化连接管理器的标志（默认启用）
+const USE_SIMPLIFIED_CONNECTION_MANAGER = true;
+
+// 🔧 获取当前数据库实例的辅助函数
+function getCurrentDatabase(): Surreal | null {
+  if (USE_SIMPLIFIED_CONNECTION_MANAGER) {
+    return getDatabaseFromSimplifiedManager();
+  } else {
+    return db;
+  }
+}
+
+// 🔧 检查连接状态的辅助函数
+function checkCurrentConnectionState(): boolean {
+  if (USE_SIMPLIFIED_CONNECTION_MANAGER) {
+    return isConnectedViaSimplifiedManager();
+  } else {
+    return isConnected;
+  }
+}
+
 // TokenManager 初始化锁定
 let tokenManagerInitializing = false;
 
@@ -78,7 +113,7 @@ registerRoute(
 
 const eventHandlers = {
   install: (event: ExtendableEvent) => {
-    console.log(`Service Worker installing - ${SW_VERSION}`);
+    console.log(`🔧 Service Worker installing - ${SW_VERSION}`);
     event.waitUntil(
       Promise.all([
         self.skipWaiting(),
@@ -99,7 +134,8 @@ const eventHandlers = {
   },
 
   activate: (event: ExtendableEvent) => {
-    console.log(`Service Worker activating - ${SW_VERSION}`);
+    console.log(`🔧 Service Worker activating - ${SW_VERSION}`);
+    console.log(`🔧 USE_SIMPLIFIED_CONNECTION_MANAGER = ${USE_SIMPLIFIED_CONNECTION_MANAGER}`);
     event.waitUntil(
       Promise.all([
         self.clients.claim(),
@@ -107,20 +143,31 @@ const eventHandlers = {
         cleanupOldCaches()
       ]).then(async () => {
         try {
-          // 🚀 使用新的连接管理器统一初始化
-          console.log('ServiceWorker: Initializing new connection manager...');
-          
-          // 获取连接管理器实例（单例模式）
-          connectionManager = await SurrealDBConnectionManager.getInstance();
-          
-          // 🔄 尝试恢复连接状态
-          const restoredSuccessfully = await connectionManager.restoreState();
-          if (restoredSuccessfully) {
-            console.log('ServiceWorker: Connection state restored successfully');
-          }
+          if (USE_SIMPLIFIED_CONNECTION_MANAGER) {
+            // 🔧 使用简化的连接管理器
+            console.log('🔧 ServiceWorker: Initializing simplified connection manager...');
+            await initializeSimplifiedConnectionManager();
+            console.log('🔧 ServiceWorker: Simplified connection manager initialized successfully');
+            
+            // 🎯 初始化依赖组件
+            await initializeAllDependentComponents();
+            
+          } else {
+            // 🚀 使用原有的连接管理器统一初始化
+            console.log('ServiceWorker: Initializing new connection manager...');
+            
+            // 获取连接管理器实例（单例模式）
+            connectionManager = await SurrealDBConnectionManager.getInstance();
+            
+            // 🔄 尝试恢复连接状态
+            const restoredSuccessfully = await connectionManager.restoreState();
+            if (restoredSuccessfully) {
+              console.log('ServiceWorker: Connection state restored successfully');
+            }
 
-          // 🎯 初始化依赖组件（使用新管理器提供的数据库实例）
-          await initializeAllDependentComponents();
+            // 🎯 初始化依赖组件（使用新管理器提供的数据库实例）
+            await initializeAllDependentComponents();
+          }
 
           // 🧹 清理工作
           console.log('ServiceWorker: Activation completed successfully');
@@ -358,33 +405,93 @@ const eventHandlers = {
     try {
       switch (type) {
         case 'connect': {
-          // Always ensure TokenManager is initialized for connect operations
-          await ensureTokenManager();
-          
-          // Sync token information from localStorage if provided
-          if (payload.sync_tokens) {
-            const tokenInfo: Partial<TokenInfo> = {
-              access_token: payload.sync_tokens.access_token,
-              refresh_token: payload.sync_tokens.refresh_token,
-              token_expires_at: payload.sync_tokens.token_expires_at,
-              tenant_code: payload.sync_tokens.tenant_code,
-            };
-            await tokenManager!.storeToken(tokenInfo);
+          if (USE_SIMPLIFIED_CONNECTION_MANAGER) {
+            // 🔧 使用简化连接管理器处理连接
+            console.log('🔧 SW: Using simplified connection manager for connect');
+            console.log('🔧 SW: Payload received:', {
+              endpoint: payload.endpoint,
+              namespace: payload.namespace,
+              database: payload.database,
+              hasToken: !!payload.token,
+              hasSyncTokens: !!payload.sync_tokens
+            });
+            
+            await ensureTokenManager();
+            
+            // Sync token information from localStorage if provided
+            if (payload.sync_tokens) {
+              console.log('🔧 SW: Syncing tokens to token manager...');
+              const tokenInfo: Partial<TokenInfo> = {
+                access_token: payload.sync_tokens.access_token,
+                refresh_token: payload.sync_tokens.refresh_token,
+                token_expires_at: payload.sync_tokens.token_expires_at,
+                tenant_code: payload.sync_tokens.tenant_code,
+              };
+              await tokenManager!.storeToken(tokenInfo);
+              console.log('🔧 SW: Tokens synced successfully');
+            }
+            
+            try {
+              const connectionConfig = {
+                endpoint: payload.endpoint,
+                namespace: payload.namespace,
+                database: payload.database,
+                auth: payload.token ? { token: payload.token } : undefined
+              };
+              
+              console.log('🔧 SW: About to call connectWithSimplifiedManager...');
+              await connectWithSimplifiedManager(connectionConfig);
+              console.log('🔧 SW: connectWithSimplifiedManager completed');
+              
+              const state = getSimplifiedConnectionState();
+              console.log('🔧 SW: Final connection state:', state);
+              
+              respond({
+                status: state.isConnected ? 'connected' : 'disconnected',
+                state: state.state,
+                isAuthenticated: state.isAuthenticated,
+                hasDb: state.hasDb,
+                error: state.error
+              });
+              
+            } catch (error) {
+              console.error('🔧 SW: Simplified connection failed:', error);
+              respond({
+                status: 'disconnected',
+                state: 'error',
+                isAuthenticated: false,
+                hasDb: false,
+                error: (error as Error).message
+              });
+            }
+            
+          } else {
+            // 🔄 使用原有逻辑
+            await ensureTokenManager();
+            
+            if (payload.sync_tokens) {
+              const tokenInfo: Partial<TokenInfo> = {
+                access_token: payload.sync_tokens.access_token,
+                refresh_token: payload.sync_tokens.refresh_token,
+                token_expires_at: payload.sync_tokens.token_expires_at,
+                tenant_code: payload.sync_tokens.tenant_code,
+              };
+              await tokenManager!.storeToken(tokenInfo);
+            }
+            
+            const connectionState = await ensureConnection(payload);
+            if (connectionState.isConnected && connectionConfig) {
+              await saveConnectionConfig(connectionConfig);
+            }
+            
+            respond({
+              status: connectionState.isConnected ? 'connected' : 'disconnected',
+              state: connectionState.state,
+              isAuthenticated: connectionState.isAuthenticated,
+              hasDb: connectionState.hasDb,
+              error: connectionState.error
+            });
           }
-          const connectionState = await ensureConnection(payload);
-
-          // 如果连接成功，保存连接配置
-          if (connectionState.isConnected && connectionConfig) {
-            await saveConnectionConfig(connectionConfig);
-          }
-
-          respond({
-            status: connectionState.isConnected ? 'connected' : 'disconnected',
-            state: connectionState.state,
-            isAuthenticated: connectionState.isAuthenticated,
-            hasDb: connectionState.hasDb,
-            error: connectionState.error
-          });
           break;
         }
 
@@ -756,45 +863,65 @@ const eventHandlers = {
         }
 
         case 'get_connection_state': {
-          // 使用整合后的 ensureConnection 检查连接状态
-          const connectionState = await ensureConnection();
-          respond({
-            state: connectionState.state,
-            isConnected: connectionState.isConnected,
-            isAuthenticated: connectionState.isAuthenticated,
-            hasDb: connectionState.hasDb,
-            isReconnecting: isReconnecting,
-            reconnectAttempts: reconnectAttempts,
-            endpoint: connectionConfig?.endpoint,
-            error: connectionState.error
-          });
+          if (USE_SIMPLIFIED_CONNECTION_MANAGER) {
+            // 🔧 使用简化连接管理器获取状态
+            const state = getSimplifiedConnectionState();
+            console.log('🔧 SW get_connection_state (SimplifiedConnectionManager):', state);
+            respond(state);
+          } else {
+            // 🔄 使用原有逻辑
+            const connectionState = await ensureConnection();
+            respond({
+              state: connectionState.state,
+              isConnected: connectionState.isConnected,
+              isAuthenticated: connectionState.isAuthenticated,
+              hasDb: connectionState.hasDb,
+              isReconnecting: isReconnecting,
+              reconnectAttempts: reconnectAttempts,
+              endpoint: connectionConfig?.endpoint,
+              error: connectionState.error
+            });
+          }
           break;
         }
 
         case 'force_reconnect': {
-          console.log('ServiceWorker: Force reconnection requested by client');
-          stopConnectionHealthCheck();
-          if (db) {
+          if (USE_SIMPLIFIED_CONNECTION_MANAGER) {
+            // 🔧 使用简化连接管理器处理强制重连
+            console.log('ServiceWorker: Force reconnection requested by client (simplified manager)');
             try {
-              await db.close();
-              console.log('ServiceWorker: Closed connection for force reconnect');
-            } catch (e) {
-              console.warn('ServiceWorker: Error closing connection during force reconnect:', e);
+              await forceReconnectWithSimplifiedManager();
+              respond({ success: true });
+            } catch (error) {
+              console.error('ServiceWorker: Simplified force reconnect failed:', error);
+              respond({ success: false, error: (error as Error).message });
             }
+          } else {
+            // 🔄 使用原有逻辑
+            console.log('ServiceWorker: Force reconnection requested by client');
+            stopConnectionHealthCheck();
+            if (db) {
+              try {
+                await db.close();
+                console.log('ServiceWorker: Closed connection for force reconnect');
+              } catch (e) {
+                console.warn('ServiceWorker: Error closing connection during force reconnect:', e);
+              }
+            }
+            isConnected = false;
+            console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 强制重连', {
+              timestamp: new Date().toISOString(),
+              previousState: true,
+              newState: false,
+              reason: '强制重连',
+              dbStatus: db?.status,
+              reconnectAttempts: reconnectAttempts,
+              stackTrace: new Error().stack
+            });
+            stopReconnection();
+            triggerReconnection();
+            respond({ success: true });
           }
-          isConnected = false;
-          console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: 强制重连', {
-            timestamp: new Date().toISOString(),
-            previousState: true,
-            newState: false,
-            reason: '强制重连',
-            dbStatus: db?.status,
-            reconnectAttempts: reconnectAttempts,
-            stackTrace: new Error().stack
-          });
-          stopReconnection();
-          triggerReconnection();
-          respond({ success: true });
           break;
         }
 
@@ -2612,13 +2739,33 @@ function startConnectionHealthCheck() {
         return;
       }
 
-      // 执行简单的连接测试并计算延迟
+      // 🔧 增强的连接状态检测
       try {
+        // 首先检查 SurrealDB 内部连接状态
+        const dbStatus = db.status;
+        if (dbStatus !== ConnectionStatus.Connected) {
+          console.warn('ServiceWorker: Health check - DB status indicates disconnection:', dbStatus);
+          const wasConnected = isConnected;
+          isConnected = false;
+          console.log('ServiceWorker: [连接状态变更] isConnected 设置为 false - 原因: DB状态检查显示断开连接', {
+            timestamp: new Date().toISOString(),
+            previousState: wasConnected,
+            newState: false,
+            dbStatus,
+            reason: 'DB状态检查显示断开连接',
+            stackTrace: new Error().stack
+          });
+          notifyConnectionStateChange();
+          triggerReconnection();
+          return;
+        }
+
+        // 执行心跳查询测试
         const startTime = Date.now();
         const testResult = await Promise.race([
           db.query('return 1;'),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Health check timeout')), 5000)
+            setTimeout(() => reject(new Error('Health check timeout')), 3000) // 缩短超时时间
           )
         ]);
         const endTime = Date.now();
@@ -2645,6 +2792,11 @@ function startConnectionHealthCheck() {
       } catch (testError) {
         console.warn('ServiceWorker: Health check failed - connection appears broken:', testError);
 
+        // 🔧 区分不同类型的连接错误
+        const errorMessage = testError instanceof Error ? testError.message : String(testError);
+        const isTimeoutError = errorMessage.includes('timeout');
+        const isNetworkError = errorMessage.includes('network') || errorMessage.includes('WebSocket');
+
         // 健康检查失败，更新连接状态
         const previousState = isConnected;
         isConnected = false;
@@ -2654,11 +2806,17 @@ function startConnectionHealthCheck() {
           newState: false,
           reason: '健康检查失败',
           error: testError,
+          errorType: isTimeoutError ? 'timeout' : isNetworkError ? 'network' : 'other',
           dbStatus: db?.status,
           reconnectAttempts: reconnectAttempts,
           stackTrace: new Error().stack
         });
         notifyConnectionStateChange();
+
+        // 对于超时和网络错误，立即触发重连
+        if (isTimeoutError || isNetworkError) {
+          console.log('ServiceWorker: Detected potential WebSocket disconnect, triggering immediate reconnection');
+        }
 
         // 触发重连
         if (!isReconnecting) {
@@ -2686,7 +2844,7 @@ function startConnectionHealthCheck() {
         triggerReconnection();
       }
     }
-  }, 30000); // 每30秒检查一次
+  }, 15000); // 每15秒检查一次，更频繁检测
 
   console.log('ServiceWorker: Connection health check started');
 }
@@ -2992,7 +3150,8 @@ function setupConnectionEventListeners() {
     clearAuthStateCache();
     stopAuthStateRefresh();
 
-    // 立即触发重连
+    // 🔧 增强重连策略 - WebSocket断开时立即重连，不等待延迟
+    console.log('ServiceWorker: WebSocket disconnected event detected, triggering immediate reconnection');
     if (!isReconnecting) {
       triggerReconnection();
     }

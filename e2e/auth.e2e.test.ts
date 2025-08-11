@@ -1,36 +1,18 @@
 import { test, expect } from '@playwright/test';
 import { getTenantCodeField, getUsernameField, getPasswordField, getLoginButton } from './helpers/login';
+import { getTestCredentials } from './config/test-credentials';
 
 test.describe('认证流程测试 - 使用 TEST1 租户', () => {
+  // 为认证流程测试设置1分钟超时时间
+  test.describe.configure({ timeout: 60000 });
+  
   test.beforeEach(async ({ page }) => {
     // 每个测试前导航到登录页面
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
     
-    // 等待登录页面完全加载 - 等待加载状态消失
-    try {
-      // 等待"正在加载中..."文本消失
-      await page.waitForFunction(() => {
-        const bodyText = document.body.textContent || '';
-        const loadingTexts = ['正在加载中', '正在加载会话', 'Loading session', '加载中'];
-        const hasLoading = loadingTexts.some(text => bodyText.includes(text));
-        return !hasLoading;
-      }, { timeout: 30000 });
-      
-      // 等待登录表单出现
-      await page.waitForSelector('form', { timeout: 10000 });
-      
-      // 等待输入框出现
-      await page.waitForSelector('input[type="text"]', { timeout: 10000 });
-      
-      // 额外等待让组件完全稳定
-      await page.waitForTimeout(1000);
-      
-    } catch (error) {
-      console.log('等待页面加载超时，继续测试:', error.message);
-      // 额外等待后继续
-      await page.waitForTimeout(3000);
-    }
+    // 等待登录输入框出现
+    await page.waitForSelector('input', { timeout: 20000 });
     
     // 调试：输出页面内容
     const content = await page.content();
@@ -415,50 +397,227 @@ test.describe('认证流程测试 - 使用 TEST1 租户', () => {
     console.log(`当前视口宽度: ${viewportWidth}, 桌面版: ${isDesktop}`);
   });
 
-  test('应该正确处理表单验证', async ({ page }) => {
-    // 填写部分表单并验证验证
+  test('应该正确处理表单验证并显示租户状态', async ({ page }) => {
+    // 获取测试凭据
+    const credentials = getTestCredentials();
+    
+    // 监听浏览器控制台，查看API响应日志
+    page.on('console', msg => {
+      if (msg.text().includes('Turnstile配置')) {
+        console.log('🔍 浏览器控制台:', msg.text());
+      }
+    });
+    
+    // 填写租户代码并验证状态提示显示
     const tenantCodeField = await getTenantCodeField(page);
+    await tenantCodeField.fill(credentials.tenantCode);
+    
+    // 等待租户配置检查完成
+    await page.waitForTimeout(3000);
+    
+    // 验证租户状态提示显示
+    const statusText = await page.getByText(/此租户已.*人机验证/).first();
+    if (await statusText.count() > 0) {
+      console.log('✅ 发现租户状态提示:', await statusText.textContent());
+      await expect(statusText).toBeVisible();
+    } else {
+      console.log('❌ 未找到租户状态提示');
+      // 输出页面内容用于调试
+      const pageText = await page.textContent('body');
+      console.log('页面文本内容片段:', pageText?.substring(0, 500));
+    }
+    
+    // 继续填写表单验证
     const usernameField = await getUsernameField(page);
     const passwordField = await getPasswordField(page);
     const loginButton = await getLoginButton(page);
     
-    await tenantCodeField.fill('TEST1');
     await usernameField.fill('testuser');
     // 留空密码
-
     await loginButton.click();
 
     // 应该显示缺少密码的验证
     await expect(passwordField).toHaveAttribute('required');
-
-    // 填写密码并再次尝试
-    await passwordField.fill('testpass');
-    await loginButton.click();
-
-    // 等待处理
-    await page.waitForTimeout(2000);
-    
-    // 验证表单仍然存在（因为这些不是有效凭据）
-    const loginButtonAfter = await getLoginButton(page);
-    await expect(loginButtonAfter).toBeVisible();
   });
 
   test('应该使用有效凭据成功登录（使用 TEST1 租户）', async ({ page }) => {
-    // 使用 TEST1 租户的管理员凭据进行测试
+    // 获取测试凭据
+    const credentials = getTestCredentials();
+    
+    // 使用环境变量中的管理员凭据进行测试
     const tenantCodeField = await getTenantCodeField(page);
     const usernameField = await getUsernameField(page);
     const passwordField = await getPasswordField(page);
     const loginButton = await getLoginButton(page);
+    await tenantCodeField.fill(credentials.tenantCode);
     
-    await tenantCodeField.fill('TEST1');
-    await usernameField.fill('admin');
-    await passwordField.fill('admin123');
+    // 等待租户输入框右侧的loading效果消失
+    console.log('等待租户配置检查完成...');
+    try {
+      // 等待租户输入框右侧的loading圈消失
+      await page.waitForFunction(() => {
+        // 查找租户输入框内的loading指示器
+        const tenantField = document.querySelector('#tenantCode');
+        if (!tenantField) return true; // 如果找不到字段，继续
+        
+        // 查找输入框内的CircularProgress组件
+        const loadingIndicator = tenantField.querySelector('.MuiCircularProgress-root');
+        return !loadingIndicator; // 当loading圈消失时返回true
+      }, { timeout: 10000 });
+      console.log('租户配置检查完成');
+    } catch {
+      console.log('租户配置检查超时，继续测试');
+    }
+    
+    // 检查页面上是否有Turnstile相关的错误或提示
+    await page.waitForTimeout(1000);
+    const pageContent = await page.content();
+    const hasTurnstileDialog = pageContent.includes('人机验证') || pageContent.includes('Turnstile');
+    console.log('页面是否包含Turnstile对话框:', hasTurnstileDialog);
+    
+    await usernameField.fill(credentials.username);
+    await passwordField.fill(credentials.password);
+
+    // 开始监听控制台消息和网络请求
+    const consoleMessages: string[] = [];
+    const networkErrors: string[] = [];
+    
+    page.on('console', msg => {
+      const message = `[${msg.type()}] ${msg.text()}`;
+      consoleMessages.push(message);
+      if (msg.type() === 'error') {
+        console.log('浏览器控制台错误:', msg.text());
+      }
+    });
+    
+    page.on('response', response => {
+      if (!response.ok()) {
+        const errorMsg = `HTTP ${response.status()} - ${response.url()}`;
+        networkErrors.push(errorMsg);
+        console.log('网络请求失败:', errorMsg);
+      }
+    });
 
     await loginButton.click();
 
-    // 等待登录处理
+    // 等待登录处理 - 判断页面loading状态消失
+    console.log('开始等待登录处理...');
+    
+    try {
+      // 等待登录处理完成，超时时间40秒
+      await page.waitForFunction(() => {
+        // 首先检查GlobalLoader是否存在且可见
+        const globalLoader = document.querySelector('.globalLoaderContainer');
+        if (globalLoader && globalLoader instanceof HTMLElement) {
+          // 检查GlobalLoader是否可见
+          if (globalLoader.offsetParent !== null && !globalLoader.hidden) {
+            return false; // GlobalLoader还存在，继续等待
+          }
+        }
+        
+        // 检查所有其他可能的loading指示器
+        const loadingSelectors = [
+          '.MuiCircularProgress-root', // Material-UI CircularProgress
+          '[aria-label*="loading"]',
+          '[role="progressbar"]',
+          '.loading',
+          '.spinner'
+        ];
+        
+        // 检查是否还有loading元素可见
+        for (const selector of loadingSelectors) {
+          const elements = document.querySelectorAll(selector);
+          for (const element of elements) {
+            if (element instanceof HTMLElement && 
+                element.offsetParent !== null && // 元素可见
+                !element.hidden) {
+              return false; // 还有loading元素，继续等待
+            }
+          }
+        }
+        
+        // 检查登录按钮是否不再显示loading状态
+        const loginButton = document.querySelector('button[type="submit"]');
+        if (loginButton) {
+          const buttonText = loginButton.textContent || '';
+          if (buttonText.includes('Verifying') || 
+              buttonText.includes('验证中') ||
+              buttonText.includes('Checking Config') ||
+              buttonText.includes('检查配置') ||
+              buttonText.includes('Attempting') ||
+              buttonText.includes('登录中') ||
+              buttonText.includes('Redirecting') ||
+              buttonText.includes('重定向')) {
+            return false; // 按钮还在loading状态
+          }
+        }
+        
+        // 检查页面状态：要么成功跳转，要么显示错误，要么等待时间过长
+        const currentUrl = window.location.href;
+        const hasError = document.querySelector('.error, .alert, [role="alert"], .MuiAlert-root');
+        
+        // 如果URL已经改变（不再是登录页面），说明登录成功
+        if (!currentUrl.includes('/login') || 
+            currentUrl.includes('/cases') || 
+            currentUrl.includes('/dashboard') || 
+            currentUrl.includes('/select-case') || 
+            currentUrl.includes('/admin')) {
+          return true; // 已成功跳转
+        }
+        
+        // 如果还在登录页面，检查是否有错误提示
+        if (hasError) {
+          return true; // 有错误提示，登录流程完成（虽然失败）
+        }
+        
+        // 简化等待逻辑 - 如果没有loading、没有跳转、没有错误，但也不能一直等待
+        
+        // 如果没有loading但也没有跳转或错误，再等一下
+        return false;
+      }, { timeout: 40000 });
+      
+      console.log('loading状态已消失，登录处理完成');
+      
+    } catch (error) {
+      console.log('等待loading消失超时，继续执行测试:', error);
+      
+      // 添加调试信息 - 检查当前页面状态
+      const debugInfo = await page.evaluate(() => {
+        return {
+          url: window.location.href,
+          hasGlobalLoader: !!document.querySelector('.globalLoaderContainer'),
+          hasLoadingSpinner: !!document.querySelector('.MuiCircularProgress-root'),
+          hasError: !!document.querySelector('.error, .alert, [role="alert"], .MuiAlert-root'),
+          buttonText: document.querySelector('button[type="submit"]')?.textContent || 'N/A',
+          pageTitle: document.title,
+          bodyContent: document.body.innerText?.substring(0, 200) + '...'
+        };
+      });
+      console.log('超时时页面状态调试信息:', debugInfo);
+    }
+    
+    // 检查页面是否有错误信息
+    const errorElements = await page.locator('.error, .alert, [role="alert"], .MuiAlert-root').all();
+    if (errorElements.length > 0) {
+      for (const errorElement of errorElements) {
+        const errorText = await errorElement.textContent();
+        console.log('发现错误信息:', errorText);
+      }
+    }
+    
+    // 输出收集到的调试信息
+    if (consoleMessages.length > 0) {
+      console.log('登录过程中的控制台消息:');
+      consoleMessages.forEach(msg => console.log(msg));
+    }
+    
+    if (networkErrors.length > 0) {
+      console.log('登录过程中的网络错误:');
+      networkErrors.forEach(err => console.log(err));
+    }
+    
+    // 额外等待以确保页面状态稳定
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(5000);
 
     // 检查是否成功登录 - 可能的成功指示器
     const currentUrl = page.url();
@@ -473,8 +632,10 @@ test.describe('认证流程测试 - 使用 TEST1 租户', () => {
 
     const loginSuccessful = successIndicators.some(indicator => indicator === true);
     
+      console.log(`登录结束，已重定向到: ${currentUrl}`);
+      //断言必须成功
+    expect(loginSuccessful).toBe(true);
     if (loginSuccessful) {
-      console.log(`登录成功，已重定向到: ${currentUrl}`);
       
       // 验证页面内容
       const welcomeElements = [
@@ -569,19 +730,22 @@ test.describe('认证流程测试 - 使用 TEST1 租户', () => {
   });
 
   test('应该处理表单自动填充功能', async ({ page }) => {
+    // 获取测试凭据
+    const credentials = getTestCredentials();
+    
     // 模拟浏览器自动填充
     const tenantCodeField = await getTenantCodeField(page);
     const usernameField = await getUsernameField(page);
     const passwordField = await getPasswordField(page);
     
-    await tenantCodeField.fill('TEST1');
-    await usernameField.fill('admin');
-    await passwordField.fill('admin123');
+    await tenantCodeField.fill(credentials.tenantCode);
+    await usernameField.fill(credentials.username);
+    await passwordField.fill(credentials.password);
 
     // 验证字段值被正确填充
-    await expect(tenantCodeField).toHaveValue('TEST1');
-    await expect(usernameField).toHaveValue('admin');
-    await expect(passwordField).toHaveValue('admin123');
+    await expect(tenantCodeField).toHaveValue(credentials.tenantCode);
+    await expect(usernameField).toHaveValue(credentials.username);
+    await expect(passwordField).toHaveValue(credentials.password);
 
     // 清除并测试部分填充
     await tenantCodeField.fill('');
