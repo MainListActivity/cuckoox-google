@@ -14,7 +14,9 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? 'github' : [['html', { open: 'never', outputFolder: './playwright-report' }], ['list']],
-  // 配置输出目录
+  // 保留测试结果和报告
+  preserveOutput: 'always',
+  // 配置输出目录，确保报告保存
   outputDir: './playwright-report/test-results',
   use: {
     baseURL: 'http://localhost:5173', // 使用标准 Vite 开发服务器端口

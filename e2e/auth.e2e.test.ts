@@ -135,7 +135,7 @@ test.describe('认证流程测试 - 使用 TEST1 租户', () => {
     // 确保所有必要的表单元素都找到了
     if (!tenantFieldFound) {
       console.log('租户代码字段未找到，尝试截图查看页面内容');
-      await page.screenshot({ path: 'tenant-field-debug.png' });
+      await page.screenshot({ path: 'playwright-report/test-results/tenant-field-debug.png' });
     }
     if (!usernameFieldFound) {
       console.log('用户名字段未找到');

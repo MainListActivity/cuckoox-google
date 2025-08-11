@@ -24,13 +24,15 @@ This is a React + TypeScript + Vite application using Bun as the package manager
 - `bun run test:ui` - Run tests with Vitest UI
 - `bun run test:run` - Run tests once (non-watch mode)
 - `bun run test:integration` - Run integration tests once (non-watch mode)
-- `bun run test:e2e` - Run Playwright E2E tests
+- `bun run test:e2e` - Run Playwright E2E tests (快速返回，保留报告)
+- `bun run test:e2e:report` - Run E2E tests and show report (运行测试并自动显示报告)
+- `bun run show-report` - View existing test reports
 - `bunx playwright install --with-deps` - Install Playwright browsers (first-time setup)
-- `bunx playwright show-report` - View test reports
 
 ### Single Test Execution
 - `bun run test:run -- tests/unit/path/to/specific.test.tsx` - Run specific unit test
-- `bunx playwright test e2e/specific.e2e.test.ts` - Run specific E2E test
+- `bun run test:e2e e2e/specific.e2e.test.ts` - Run specific E2E test (快速返回)
+- `bun run test:e2e:report e2e/specific.e2e.test.ts` - Run specific E2E test with report
 
 ## Architecture Overview
 

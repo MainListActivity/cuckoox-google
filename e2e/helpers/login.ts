@@ -42,7 +42,7 @@ export async function getTenantCodeField(page: Page) {
   }
   
   console.log('租户代码字段未找到，尝试截图查看页面内容');
-  await page.screenshot({ path: 'tenant-code-debug.png' });
+  await page.screenshot({ path: 'playwright-report/test-results/tenant-code-debug.png' });
   return page.locator('input').first(); // 返回第一个输入框
 }
 
@@ -205,7 +205,7 @@ export async function loginAsAdmin(page: Page) {
     console.log('登录表单已加载完成!');
   } catch (error) {
     console.log('等待登录表单加载超时，尝试继续...');
-    await page.screenshot({ path: 'form-loading-timeout.png' });
+    await page.screenshot({ path: 'playwright-report/test-results/form-loading-timeout.png' });
   }
   
   // 略微等待让输入框稳定
@@ -270,14 +270,14 @@ export async function loginAsAdmin(page: Page) {
       console.log(`✓ 登录成功! 当前页面: ${currentUrl}`);
     } else {
       console.log(`✗ 登录失败，仍在登录页面: ${currentUrl}`);
-      await page.screenshot({ path: 'login-failed-debug.png' });
+      await page.screenshot({ path: 'playwright-report/test-results/login-failed-debug.png' });
     }
     
     return loginSuccessful;
     
   } catch (error) {
     console.error('登录过程中发生错误:', error);
-    await page.screenshot({ path: 'login-error-debug.png' });
+    await page.screenshot({ path: 'playwright-report/test-results/login-error-debug.png' });
     return false;
   }
 }
