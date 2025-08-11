@@ -6,36 +6,39 @@ import React, {
   useState,
   useRef,
   useCallback,
-} from 'react';
-import { RecordId } from 'surrealdb';
-import { authService } from '@/src/services/authService';
+} from "react";
+import { RecordId } from "surrealdb";
+import { authService } from "@/src/services/authService";
 
 // Define AnyAuth type based on the WASM version
-export type AnyAuth = {
-  username: string;
-  password: string;
-} | {
-  token: string;
-} | {
-  namespace: string;
-  database: string;
-  scope: string;
-  [key: string]: unknown;
-};
+export type AnyAuth =
+  | {
+      username: string;
+      password: string;
+    }
+  | {
+      token: string;
+    }
+  | {
+      namespace: string;
+      database: string;
+      scope: string;
+      [key: string]: unknown;
+    };
 
 // Custom error for authentication required
 export class AuthenticationRequiredError extends Error {
-  constructor(message: string = '用户未登录，请先登录') {
+  constructor(message: string = "用户未登录，请先登录") {
     super(message);
-    this.name = 'AuthenticationRequiredError';
+    this.name = "AuthenticationRequiredError";
   }
 }
 
 // 租户代码检查错误类型
 export class TenantCodeMissingError extends Error {
-  constructor(message: string = 'Tenant code is missing') {
+  constructor(message: string = "Tenant code is missing") {
     super(message);
-    this.name = 'TenantCodeMissingError';
+    this.name = "TenantCodeMissingError";
   }
 }
 
@@ -50,18 +53,22 @@ function deserializeRecordIds(obj: any): any {
   }
 
   // 检查是否是被序列化的RecordId对象（具有id和tb属性）
-  if (typeof obj === 'object' && Object.prototype.hasOwnProperty.call(obj, 'id') && Object.prototype.hasOwnProperty.call(obj, 'tb')) {
+  if (
+    typeof obj === "object" &&
+    Object.prototype.hasOwnProperty.call(obj, "id") &&
+    Object.prototype.hasOwnProperty.call(obj, "tb")
+  ) {
     // 这很可能是一个被序列化的RecordId，重新构造它
     return new RecordId(obj.tb, obj.id);
   }
 
   // 如果是数组，递归处理每个元素
   if (Array.isArray(obj)) {
-    return obj.map(item => deserializeRecordIds(item));
+    return obj.map((item) => deserializeRecordIds(item));
   }
 
   // 如果是对象，递归处理每个属性
-  if (typeof obj === 'object') {
+  if (typeof obj === "object") {
     const result: any = {};
     for (const [key, value] of Object.entries(obj)) {
       result[key] = deserializeRecordIds(value);
@@ -83,8 +90,15 @@ export interface SurrealWorkerAPI {
   update(thing: string | RecordId, data: unknown): Promise<any>;
   merge(thing: string | RecordId, data: unknown): Promise<any>;
   delete(thing: string | RecordId): Promise<any>;
-  live(query: string, callback: (action: string, result: any) => void, vars?: Record<string, unknown>): Promise<string>;
-  subscribeLive(uuid: string, callback: (action: string, result: any) => void): Promise<void>;
+  live(
+    query: string,
+    callback: (action: string, result: any) => void,
+    vars?: Record<string, unknown>,
+  ): Promise<string>;
+  subscribeLive(
+    uuid: string,
+    callback: (action: string, result: any) => void,
+  ): Promise<void>;
   kill(uuid: string): Promise<void>;
   connect(config: {
     endpoint: string;
@@ -98,7 +112,12 @@ export interface SurrealWorkerAPI {
       tenant_code?: string | null;
     };
   }): Promise<boolean>;
-  authenticate(token: string, refreshToken?: string, expiresIn?: number, tenantCode?: string): Promise<void>;
+  authenticate(
+    token: string,
+    refreshToken?: string,
+    expiresIn?: number,
+    tenantCode?: string,
+  ): Promise<void>;
   invalidate(): Promise<void>;
   setConfig(config: {
     namespace?: string;
@@ -165,11 +184,16 @@ export interface SurrealContextValue {
   disposeSurrealClient: () => Promise<void>;
 
   // 数据库连接管理
-  checkDatabaseConnection: () => Promise<{ isConnected: boolean; error?: string }>;
+  checkDatabaseConnection: () => Promise<{
+    isConnected: boolean;
+    error?: string;
+  }>;
   initializeDatabaseConnection: () => Promise<void>;
 }
 
-const SurrealContext = createContext<SurrealContextValue | undefined>(undefined);
+const SurrealContext = createContext<SurrealContextValue | undefined>(
+  undefined,
+);
 
 export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   children,
@@ -181,10 +205,14 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   const [error, setError] = useState<Error | null>(null);
 
   // ServiceWorker 相关状态
-  const [serviceWorker, setServiceWorker] = useState<ServiceWorker | null>(null);
+  const [serviceWorker, setServiceWorker] = useState<ServiceWorker | null>(
+    null,
+  );
   const pendingMessagesRef = useRef(new Map<string, PendingMessage>());
   const messageCounterRef = useRef(0);
-  const liveQueryCallbacksRef = useRef(new Map<string, (action: string, result: any) => void>());
+  const liveQueryCallbacksRef = useRef(
+    new Map<string, (action: string, result: any) => void>(),
+  );
   const isInitializedRef = useRef(false);
   const initializationPromiseRef = useRef<Promise<void> | null>(null);
 
@@ -192,15 +220,15 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
    * 检查租户代码是否存在，如果不存在则清除认证状态并重定向到登录页面
    */
   const checkTenantCodeAndRedirect = useCallback((): boolean => {
-    const tenantCode = localStorage.getItem('tenant_code');
+    const tenantCode = localStorage.getItem("tenant_code");
 
     if (!tenantCode) {
       // 清除认证状态
-      localStorage.removeItem('cuckoox-selectedCaseId');
+      localStorage.removeItem("cuckoox-selectedCaseId");
 
       // 重定向到登录页面
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
       }
 
       return false;
@@ -213,8 +241,8 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
    * 设置消息处理器
    */
   const setupMessageHandler = useCallback(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (event) => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", (event) => {
         handleMessage(event.data);
       });
     }
@@ -226,7 +254,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   const handleMessage = useCallback((data: any) => {
     const { type, messageId, payload } = deserializeRecordIds(data);
 
-    if (type === 'live_update') {
+    if (type === "live_update") {
       // Handle live query updates
       const { uuid, action, result } = payload;
       const callback = liveQueryCallbacksRef.current.get(uuid);
@@ -236,55 +264,66 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       return;
     }
 
-    if (type === 'request_token_sync') {
+    if (type === "request_token_sync") {
       // Service Worker 请求同步 token
       handleTokenSyncRequest();
       return;
     }
 
-    if (type === 'connection_state_changed') {
+    if (type === "connection_state_changed") {
       // Handle connection state changes
-      console.log('SurrealProvider: Connection state changed:', payload);
+      console.log("SurrealProvider: Connection state changed:", payload);
       handleConnectionStateChange(payload);
       return;
     }
 
-    if (type === 'live_query_uuid_changed') {
+    if (type === "live_query_uuid_changed") {
       // Handle live query UUID changes
       const { oldUuid, newUuid } = payload;
       const callback = liveQueryCallbacksRef.current.get(oldUuid);
       if (callback) {
         liveQueryCallbacksRef.current.delete(oldUuid);
         liveQueryCallbacksRef.current.set(newUuid, callback);
-        console.log(`SurrealProvider: Live query UUID updated from ${oldUuid} to ${newUuid}`);
+        console.log(
+          `SurrealProvider: Live query UUID updated from ${oldUuid} to ${newUuid}`,
+        );
       }
       return;
     }
 
-    if (type === 'live_query_resubscribe_failed') {
+    if (type === "live_query_resubscribe_failed") {
       // Handle live query resubscription failures
       const { uuid, error } = payload;
-      console.error(`SurrealProvider: Live query ${uuid} resubscription failed:`, error);
+      console.error(
+        `SurrealProvider: Live query ${uuid} resubscription failed:`,
+        error,
+      );
       return;
     }
 
-    if (type === 'auth_state_changed') {
+    if (type === "auth_state_changed") {
       // Handle authentication state changes
       const { isAuthenticated, reason, timestamp } = payload;
-      console.log('SurrealProvider: Authentication state changed:', { isAuthenticated, reason, timestamp });
-
-      // 发送自定义事件给应用程序其他部分
-      const event = new CustomEvent('auth-state-changed', {
-        detail: { isAuthenticated, reason, timestamp }
+      console.log("SurrealProvider: Authentication state changed:", {
+        isAuthenticated,
+        reason,
+        timestamp,
       });
 
-      if (typeof window !== 'undefined') {
+      // 发送自定义事件给应用程序其他部分
+      const event = new CustomEvent("auth-state-changed", {
+        detail: { isAuthenticated, reason, timestamp },
+      });
+
+      if (typeof window !== "undefined") {
         window.dispatchEvent(event);
       }
 
       // 如果用户未认证，可以考虑清理本地状态
       if (!isAuthenticated) {
-        console.log('SurrealProvider: User not authenticated, may need to redirect to login');
+        console.log(
+          "SurrealProvider: User not authenticated, may need to redirect to login",
+        );
         // 这里可以添加重定向到登录页面的逻辑
       }
 
@@ -296,10 +335,10 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       const pending = pendingMessagesRef.current.get(messageId)!;
       pendingMessagesRef.current.delete(messageId);
 
-      if (type.endsWith('_response')) {
+      if (type.endsWith("_response")) {
         pending.resolve(payload);
-      } else if (type.endsWith('_error')) {
-        pending.reject(new Error(payload.message || 'Unknown error'));
+      } else if (type.endsWith("_error")) {
+        pending.reject(new Error(payload.message || "Unknown error"));
       }
     }
   }, []);
@@ -311,27 +350,30 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     const { state, previousState, error: connectionError, timestamp } = payload;
 
     // 可以在这里添加自定义的连接状态处理逻辑
-    if (state === 'connected' && previousState !== 'connected') {
-      console.log('SurrealProvider: Connection established');
+    if (state === "connected" && previousState !== "connected") {
+      console.log("SurrealProvider: Connection established");
       setConnected(true);
       setError(null);
-    } else if (state === 'disconnected' || state === 'error') {
-      console.warn('SurrealProvider: Connection lost or error occurred', connectionError);
+    } else if (state === "disconnected" || state === "error") {
+      console.warn(
+        "SurrealProvider: Connection lost or error occurred",
+        connectionError,
+      );
       setConnected(false);
       if (connectionError) {
         setError(new Error(connectionError));
       }
-    } else if (state === 'reconnecting') {
-      console.log('SurrealProvider: Attempting to reconnect...');
+    } else if (state === "reconnecting") {
+      console.log("SurrealProvider: Attempting to reconnect...");
       setConnecting(true);
     }
 
     // 发送自定义事件给应用程序其他部分
-    const event = new CustomEvent('surreal-connection-state-changed', {
-      detail: { state, previousState, error: connectionError, timestamp }
+    const event = new CustomEvent("surreal-connection-state-changed", {
+      detail: { state, previousState, error: connectionError, timestamp },
     });
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       window.dispatchEvent(event);
     }
   }, []);
@@ -343,19 +385,25 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     try {
       // Service Worker 现在完全管理 token，客户端不再需要同步 localStorage token
       // 只需要同步租户代码用于数据库连接
-      const tenantCode = localStorage.getItem('tenant_code');
-      const database = tenantCode || 'test';
+      const tenantCode = localStorage.getItem("tenant_code");
+      const database = tenantCode || "test";
 
-      await sendMessage('connect', {
-        endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-        namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
+      await sendMessage("connect", {
+        endpoint:
+          import.meta.env.VITE_SURREALDB_WS_URL || "ws://localhost:8000/rpc",
+        namespace: import.meta.env.VITE_SURREALDB_NS || "ck_go",
         database: database,
         // Service Worker 将使用其内部存储的 token
       });
 
-      console.log('SurrealProvider: Successfully synced connection config to Service Worker');
+      console.log(
+        "SurrealProvider: Successfully synced connection config to Service Worker",
+      );
     } catch (error) {
-      console.error('SurrealProvider: Failed to sync connection config to Service Worker:', error);
+      console.error(
+        "SurrealProvider: Failed to sync connection config to Service Worker:",
+        error,
+      );
     }
   }, []);
 
@@ -364,135 +412,159 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
    */
   const handleServiceWorkerUpdate = useCallback((newWorker: ServiceWorker) => {
     // 可以在这里显示通知给用户，或者自动更新
-    console.log('SurrealProvider: 发现新版本的 Service Worker');
+    console.log("SurrealProvider: 发现新版本的 Service Worker");
 
     // 在 Service Worker 更新前，记录当前的连接配置
     const currentConnectionConfig = {
-      endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-      namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
-      database: localStorage.getItem('tenant_code') || 'test',
+      endpoint:
+        import.meta.env.VITE_SURREALDB_WS_URL || "ws://localhost:8000/rpc",
+      namespace: import.meta.env.VITE_SURREALDB_NS || "ck_go",
+      database: localStorage.getItem("tenant_code") || "test",
       // Service Worker 将使用其内部存储的 token，不需要同步 localStorage
     };
 
     // 设置一个超时刷新机制，防止controllerchange事件未触发
     const forceRefreshTimeout = setTimeout(() => {
-      console.log('SurrealProvider: Service Worker更新超时，强制刷新页面');
+      console.log("SurrealProvider: Service Worker更新超时，强制刷新页面");
       window.location.reload();
     }, 5000); // 5秒超时
 
     // 监听新worker的状态变化，确保在正确的时机发送SKIP_WAITING
     const handleStateChange = () => {
-      console.log('SurrealProvider: 新Service Worker状态:', newWorker.state);
-      if (newWorker.state === 'installed') {
-        console.log('SurrealProvider: 发送SKIP_WAITING消息给新Service Worker');
-        newWorker.postMessage({ type: 'SKIP_WAITING' });
-        newWorker.removeEventListener('statechange', handleStateChange);
-      } else if (newWorker.state === 'activated') {
-        console.log('SurrealProvider: 新Service Worker已激活');
+      console.log("SurrealProvider: 新Service Worker状态:", newWorker.state);
+      if (newWorker.state === "installed") {
+        console.log("SurrealProvider: 发送SKIP_WAITING消息给新Service Worker");
+        newWorker.postMessage({ type: "SKIP_WAITING" });
+        newWorker.removeEventListener("statechange", handleStateChange);
+      } else if (newWorker.state === "activated") {
+        console.log("SurrealProvider: 新Service Worker已激活");
         // 清除超时计时器，因为controllerchange事件应该会处理刷新
         clearTimeout(forceRefreshTimeout);
 
         // 新的 Service Worker 激活后，发送连接配置以便重连
-        console.log('SurrealProvider: 向新Service Worker发送连接配置');
+        console.log("SurrealProvider: 向新Service Worker发送连接配置");
         newWorker.postMessage({
-          type: 'connect',
-          payload: currentConnectionConfig
+          type: "connect",
+          payload: currentConnectionConfig,
         });
 
         // 延迟一点时间后刷新页面，让新的 Service Worker 有时间处理连接
         setTimeout(() => {
           if (navigator.serviceWorker.controller) {
-            console.log('SurrealProvider: Service Worker激活完成，刷新页面');
+            console.log("SurrealProvider: Service Worker激活完成，刷新页面");
             window.location.reload();
           }
         }, 1000);
-        newWorker.removeEventListener('statechange', handleStateChange);
+        newWorker.removeEventListener("statechange", handleStateChange);
       }
     };
 
     // 如果已经是installed状态，直接发送消息
-    if (newWorker.state === 'installed') {
-      console.log('SurrealProvider: 新Service Worker已安装，发送SKIP_WAITING消息');
-      newWorker.postMessage({ type: 'SKIP_WAITING' });
+    if (newWorker.state === "installed") {
+      console.log(
+        "SurrealProvider: 新Service Worker已安装，发送SKIP_WAITING消息",
+      );
+      newWorker.postMessage({ type: "SKIP_WAITING" });
     } else {
       // 否则监听状态变化
-      newWorker.addEventListener('statechange', handleStateChange);
+      newWorker.addEventListener("statechange", handleStateChange);
     }
 
     // 额外的激活监听器，用于清理超时
     const handleActivation = () => {
-      console.log('SurrealProvider: Service Worker activated事件触发');
+      console.log("SurrealProvider: Service Worker activated事件触发");
       clearTimeout(forceRefreshTimeout);
-      newWorker.removeEventListener('activate', handleActivation);
+      newWorker.removeEventListener("activate", handleActivation);
     };
 
-    if (newWorker.state === 'activating' || newWorker.state === 'activated') {
+    if (newWorker.state === "activating" || newWorker.state === "activated") {
       clearTimeout(forceRefreshTimeout);
     } else {
-      newWorker.addEventListener('activate', handleActivation);
+      newWorker.addEventListener("activate", handleActivation);
     }
   }, []);
 
   /**
    * 等待 Service Worker 就绪
    */
-  const waitForServiceWorkerWithRetry = useCallback(async (registration: ServiceWorkerRegistration): Promise<void> => {
-    const maxRetries = 5;
-    const baseDelay = 1000; // 1 second
+  const waitForServiceWorkerWithRetry = useCallback(
+    async (registration: ServiceWorkerRegistration): Promise<void> => {
+      const maxRetries = 5;
+      const baseDelay = 1000; // 1 second
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        console.log(`SurrealProvider: Attempt ${attempt + 1} to get service worker`);
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          console.log(
+            `SurrealProvider: Attempt ${attempt + 1} to get service worker`,
+          );
 
-        // Check if we have a service worker now
-        const sw = registration.active || registration.waiting || registration.installing;
+          // Check if we have a service worker now
+          const sw =
+            registration.active ||
+            registration.waiting ||
+            registration.installing;
 
-        if (sw) {
-          console.log(`SurrealProvider: Got service worker on attempt ${attempt + 1}`);
-          setServiceWorker(sw);
-          return;
-        }
+          if (sw) {
+            console.log(
+              `SurrealProvider: Got service worker on attempt ${attempt + 1}`,
+            );
+            setServiceWorker(sw);
+            return;
+          }
 
-        // Wait for the service worker to be ready with a shorter timeout
-        const readyPromise = navigator.serviceWorker.ready;
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Service Worker ready timeout')), 3000);
-        });
+          // Wait for the service worker to be ready with a shorter timeout
+          const readyPromise = navigator.serviceWorker.ready;
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(
+              () => reject(new Error("Service Worker ready timeout")),
+              3000,
+            );
+          });
 
-        await Promise.race([readyPromise, timeoutPromise]);
+          await Promise.race([readyPromise, timeoutPromise]);
 
-        // Check again after ready
-        const swAfterReady = registration.active || registration.waiting || registration.installing;
+          // Check again after ready
+          const swAfterReady =
+            registration.active ||
+            registration.waiting ||
+            registration.installing;
 
-        if (swAfterReady) {
-          console.log(`SurrealProvider: Service worker ready on attempt ${attempt + 1}`);
-          setServiceWorker(swAfterReady);
-          return;
-        }
+          if (swAfterReady) {
+            console.log(
+              `SurrealProvider: Service worker ready on attempt ${attempt + 1}`,
+            );
+            setServiceWorker(swAfterReady);
+            return;
+          }
 
-        // If this is not the last attempt, wait before retrying
-        if (attempt < maxRetries - 1) {
+          // If this is not the last attempt, wait before retrying
+          if (attempt < maxRetries - 1) {
+            const delay = baseDelay * Math.pow(2, attempt);
+            console.log(`SurrealProvider: Waiting ${delay}ms before retry...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        } catch (error) {
+          console.warn(
+            `SurrealProvider: Attempt ${attempt + 1} failed:`,
+            error,
+          );
+
+          // If this is the last attempt, throw the error
+          if (attempt === maxRetries - 1) {
+            throw error;
+          }
+
+          // Wait before retrying
           const delay = baseDelay * Math.pow(2, attempt);
           console.log(`SurrealProvider: Waiting ${delay}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         }
-      } catch (error) {
-        console.warn(`SurrealProvider: Attempt ${attempt + 1} failed:`, error);
-
-        // If this is the last attempt, throw the error
-        if (attempt === maxRetries - 1) {
-          throw error;
-        }
-
-        // Wait before retrying
-        const delay = baseDelay * Math.pow(2, attempt);
-        console.log(`SurrealProvider: Waiting ${delay}ms before retry...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
       }
-    }
 
-    throw new Error('Failed to get service worker after multiple attempts');
-  }, []);
+      throw new Error("Failed to get service worker after multiple attempts");
+    },
+    [],
+  );
 
   /**
    * 确保 Service Worker 可用
@@ -502,8 +574,8 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       return serviceWorker;
     }
 
-    if (!('serviceWorker' in navigator)) {
-      throw new Error('Service Workers are not supported in this browser');
+    if (!("serviceWorker" in navigator)) {
+      throw new Error("Service Workers are not supported in this browser");
     }
 
     try {
@@ -511,7 +583,8 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       const registration = await navigator.serviceWorker.ready;
 
       // Try to get a service worker instance right away
-      let sw = registration.active || registration.waiting || registration.installing;
+      let sw =
+        registration.active || registration.waiting || registration.installing;
 
       if (sw) {
         setServiceWorker(sw);
@@ -522,15 +595,18 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       await waitForServiceWorkerWithRetry(registration);
 
       // After waiting, get the actual service worker from registration
-      sw = registration.active || registration.waiting || registration.installing;
+      sw =
+        registration.active || registration.waiting || registration.installing;
 
       if (!sw) {
-        throw new Error('Service Worker not available after registration and waiting');
+        throw new Error(
+          "Service Worker not available after registration and waiting",
+        );
       }
 
       return sw;
     } catch (error) {
-      console.error('SurrealProvider: Service Worker access failed:', error);
+      console.error("SurrealProvider: Service Worker access failed:", error);
       throw error;
     }
   }, [serviceWorker, waitForServiceWorkerWithRetry]);
@@ -538,46 +614,52 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   /**
    * 发送消息到 Service Worker
    */
-  const sendMessage = useCallback(async (type: string | RecordId, payload?: any): Promise<any> => {
-    // 确保ServiceWorker可用，获取实际的ServiceWorker实例
-    const currentServiceWorker = await ensureServiceWorker();
+  const sendMessage = useCallback(
+    async (type: string | RecordId, payload?: any): Promise<any> => {
+      // 确保ServiceWorker可用，获取实际的ServiceWorker实例
+      const currentServiceWorker = await ensureServiceWorker();
 
-    const messageId = `msg_${++messageCounterRef.current}`;
+      const messageId = `msg_${++messageCounterRef.current}`;
 
-    return new Promise((resolve, reject) => {
-      pendingMessagesRef.current.set(messageId, { resolve, reject });
+      return new Promise((resolve, reject) => {
+        pendingMessagesRef.current.set(messageId, { resolve, reject });
 
-      // Set a timeout for the message
-      setTimeout(() => {
-        if (pendingMessagesRef.current.has(messageId)) {
-          pendingMessagesRef.current.delete(messageId);
-          reject(new Error(`Message timeout: ${type}`));
-        }
-      }, 30000); // 30 second timeout
+        // Set a timeout for the message
+        setTimeout(() => {
+          if (pendingMessagesRef.current.has(messageId)) {
+            pendingMessagesRef.current.delete(messageId);
+            reject(new Error(`Message timeout: ${type}`));
+          }
+        }, 30000); // 30 second timeout
 
-      currentServiceWorker.postMessage({
-        type,
-        messageId,
-        payload
+        currentServiceWorker.postMessage({
+          type,
+          messageId,
+          payload,
+        });
       });
-    });
-  }, [ensureServiceWorker]);
+    },
+    [ensureServiceWorker],
+  );
 
   /**
    * 检查数据库连接状态 (用于外部调用)
    */
-  const checkDatabaseConnection = useCallback(async (): Promise<{ isConnected: boolean; error?: string }> => {
+  const checkDatabaseConnection = useCallback(async (): Promise<{
+    isConnected: boolean;
+    error?: string;
+  }> => {
     try {
-      const result = await sendMessage('get_connection_state', {});
+      const result = await sendMessage("get_connection_state", {});
       return {
         isConnected: result.isConnected || false,
-        error: result.error
+        error: result.error,
       };
     } catch (error) {
-      console.error('SurrealProvider: 数据库连接检查失败:', error);
+      console.error("SurrealProvider: 数据库连接检查失败:", error);
       return {
         isConnected: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : "Unknown error",
       };
     }
   }, [sendMessage]);
@@ -588,23 +670,26 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   const initializeDatabaseConnection = useCallback(async (): Promise<void> => {
     try {
       // Service Worker 现在完全管理 token，只需要提供基本连接信息
-      const tenantCode = localStorage.getItem('tenant_code');
-      const database = tenantCode || 'test';
+      const tenantCode = localStorage.getItem("tenant_code");
+      const database = tenantCode || "test";
 
-      const result = await sendMessage('connect', {
-        endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-        namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
+      const result = await sendMessage("connect", {
+        endpoint:
+          import.meta.env.VITE_SURREALDB_WS_URL || "ws://localhost:8000/rpc",
+        namespace: import.meta.env.VITE_SURREALDB_NS || "ck_go",
         database: database,
         // Service Worker 将使用其内部存储的 token
       });
 
-      if (result.status !== 'connected') {
-        throw new Error(`Database connection failed: ${result.error || 'Unknown error'}`);
+      if (result.status !== "connected") {
+        throw new Error(
+          `Database connection failed: ${result.error || "Unknown error"}`,
+        );
       }
 
-      console.log('SurrealProvider: 数据库连接初始化成功');
+      console.log("SurrealProvider: 数据库连接初始化成功");
     } catch (error) {
-      console.error('SurrealProvider: 数据库连接初始化失败:', error);
+      console.error("SurrealProvider: 数据库连接初始化失败:", error);
       throw error;
     }
   }, [sendMessage]);
@@ -612,113 +697,146 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   /**
    * 内部使用的数据库连接检查（直接与SW通信，避免循环依赖）
    */
-  const checkDatabaseConnectionInternal = useCallback(async (sw: ServiceWorker): Promise<{ isConnected: boolean; error?: string }> => {
-    try {
-      console.log('SurrealProvider: 正在检查数据库连接状态...');
+  const checkDatabaseConnectionInternal = useCallback(
+    async (
+      sw: ServiceWorker,
+    ): Promise<{ isConnected: boolean; error?: string }> => {
+      try {
+        console.log("SurrealProvider: 正在检查数据库连接状态...");
 
-      const result = await new Promise<any>((resolve, reject) => {
-        const messageId = `check_connection_${Date.now()}`;
+        const result = await new Promise<any>((resolve, reject) => {
+          const messageId = `check_connection_${Date.now()}`;
 
-        const handleMessage = (event: MessageEvent) => {
-          if (event.data.messageId === messageId) {
-            navigator.serviceWorker.removeEventListener('message', handleMessage);
-            if (event.data.type.endsWith('_response')) {
-              resolve(event.data.payload);
-            } else {
-              reject(new Error(event.data.payload?.message || 'Connection check failed'));
+          const handleMessage = (event: MessageEvent) => {
+            if (event.data.messageId === messageId) {
+              navigator.serviceWorker.removeEventListener(
+                "message",
+                handleMessage,
+              );
+              if (event.data.type.endsWith("_response")) {
+                resolve(event.data.payload);
+              } else {
+                reject(
+                  new Error(
+                    event.data.payload?.message || "Connection check failed",
+                  ),
+                );
+              }
             }
-          }
-        };
+          };
 
-        navigator.serviceWorker.addEventListener('message', handleMessage);
+          navigator.serviceWorker.addEventListener("message", handleMessage);
 
-        sw.postMessage({
-          type: 'get_connection_state',
-          messageId,
-          payload: {}
+          sw.postMessage({
+            type: "get_connection_state",
+            messageId,
+            payload: {},
+          });
+
+          // 3秒超时
+          setTimeout(() => {
+            navigator.serviceWorker.removeEventListener(
+              "message",
+              handleMessage,
+            );
+            reject(new Error("Connection check timeout"));
+          }, 3000);
         });
 
-        // 3秒超时
-        setTimeout(() => {
-          navigator.serviceWorker.removeEventListener('message', handleMessage);
-          reject(new Error('Connection check timeout'));
-        }, 3000);
-      });
+        console.log("SurrealProvider: 数据库连接状态检查结果:", result);
 
-      console.log('SurrealProvider: 数据库连接状态检查结果:', result);
-
-      return {
-        isConnected: result.isConnected || false,
-        error: result.error
-      };
-    } catch (error) {
-      console.error('SurrealProvider: 数据库连接检查失败:', error);
-      return {
-        isConnected: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
-    }
-  }, []);
+        return {
+          isConnected: result.isConnected || false,
+          error: result.error,
+        };
+      } catch (error) {
+        console.error("SurrealProvider: 数据库连接检查失败:", error);
+        return {
+          isConnected: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        };
+      }
+    },
+    [],
+  );
 
   /**
    * 内部使用的数据库连接初始化（直接与SW通信，避免循环依赖）
    */
-  const initializeDatabaseConnectionInternal = useCallback(async (sw: ServiceWorker): Promise<void> => {
-    try {
-      console.log('SurrealProvider: 正在初始化数据库连接...');
+  const initializeDatabaseConnectionInternal = useCallback(
+    async (sw: ServiceWorker): Promise<void> => {
+      try {
+        console.log("SurrealProvider: 正在初始化数据库连接...");
 
-      // Service Worker 现在完全管理 token，只需要提供基本连接信息
-      const tenantCode = localStorage.getItem('tenant_code');
-      const database = tenantCode || 'test';
+        // Service Worker 现在完全管理 token，只需要提供基本连接信息
+        const tenantCode = localStorage.getItem("tenant_code");
+        const database = tenantCode || "test";
 
-      // 发送连接请求
-      const result = await new Promise<any>((resolve, reject) => {
-        const messageId = `init_connection_${Date.now()}`;
+        // 发送连接请求
+        const result = await new Promise<any>((resolve, reject) => {
+          const messageId = `init_connection_${Date.now()}`;
 
-        const handleMessage = (event: MessageEvent) => {
-          if (event.data.messageId === messageId) {
-            navigator.serviceWorker.removeEventListener('message', handleMessage);
-            if (event.data.type.endsWith('_response')) {
-              resolve(event.data.payload);
-            } else {
-              reject(new Error(event.data.payload?.message || 'Connection initialization failed'));
+          const handleMessage = (event: MessageEvent) => {
+            if (event.data.messageId === messageId) {
+              navigator.serviceWorker.removeEventListener(
+                "message",
+                handleMessage,
+              );
+              if (event.data.type.endsWith("_response")) {
+                resolve(event.data.payload);
+              } else {
+                reject(
+                  new Error(
+                    event.data.payload?.message ||
+                      "Connection initialization failed",
+                  ),
+                );
+              }
             }
-          }
-        };
+          };
 
-        navigator.serviceWorker.addEventListener('message', handleMessage);
+          navigator.serviceWorker.addEventListener("message", handleMessage);
 
-        sw.postMessage({
-          type: 'connect',
-          messageId,
-          payload: {
-            endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-            namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
-            database: database,
-            // Service Worker 将使用其内部存储的 token
-          }
+          sw.postMessage({
+            type: "connect",
+            messageId,
+            payload: {
+              endpoint:
+                import.meta.env.VITE_SURREALDB_WS_URL ||
+                "ws://localhost:8000/rpc",
+              namespace: import.meta.env.VITE_SURREALDB_NS || "ck_go",
+              database: database,
+              // Service Worker 将使用其内部存储的 token
+            },
+          });
+
+          // 15秒超时 - 给service worker更多时间进行连接和重连
+          setTimeout(() => {
+            navigator.serviceWorker.removeEventListener(
+              "message",
+              handleMessage,
+            );
+            reject(new Error("Connection initialization timeout"));
+          }, 15000);
         });
 
-        // 15秒超时 - 给service worker更多时间进行连接和重连
-        setTimeout(() => {
-          navigator.serviceWorker.removeEventListener('message', handleMessage);
-          reject(new Error('Connection initialization timeout'));
-        }, 15000);
-      });
+        if (result.status !== "connected") {
+          throw new Error(
+            `Database connection failed: ${result.error || "Unknown error"}`,
+          );
+        }
 
-      if (result.status !== 'connected') {
-        throw new Error(`Database connection failed: ${result.error || 'Unknown error'}`);
+        console.log("SurrealProvider: 数据库连接初始化成功");
+      } catch (error) {
+        console.error("SurrealProvider: 数据库连接初始化失败:", error);
+        throw error;
       }
-
-      console.log('SurrealProvider: 数据库连接初始化成功');
-    } catch (error) {
-      console.error('SurrealProvider: 数据库连接初始化失败:', error);
-      throw error;
-    }
-  }, []);
+    },
+    [],
+  );
 
   /**
-   * 预初始化 ServiceWorker
+   * 预初始化 ServiceWorker - 优化版本，支持超时和非阻塞模式
    */
   const initialize = useCallback(async (): Promise<void> => {
     if (isInitializedRef.current) {
@@ -729,32 +847,76 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       return initializationPromiseRef.current;
     }
 
-    console.log('SurrealProvider: 正在初始化 ServiceWorker...');
+    console.log("SurrealProvider: 正在初始化 ServiceWorker...");
     initializationPromiseRef.current = (async () => {
       try {
         const sw = await ensureServiceWorker();
 
-        // 检查数据库连接状态
-        const connectionState = await checkDatabaseConnectionInternal(sw);
+        // 🔧 使用更短的超时时间进行数据库连接检查
+        const connectionCheckPromise = checkDatabaseConnectionInternal(sw);
+        const connectionTimeout = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Connection check timeout")), 2000); // 2秒超时
+        });
+
+        let connectionState;
+        try {
+          connectionState = await Promise.race([
+            connectionCheckPromise,
+            connectionTimeout,
+          ]);
+        } catch (timeoutError) {
+          console.warn(
+            "🔧 Connection check timeout, assuming disconnected state",
+          );
+          connectionState = { isConnected: false, error: "timeout" };
+        }
 
         if (!connectionState.isConnected) {
-          console.log('SurrealProvider: 数据库连接异常，正在重新初始化连接...');
-          await initializeDatabaseConnectionInternal(sw);
+          console.log("SurrealProvider: 数据库连接异常，正在重新初始化连接...");
+
+          // 🔧 使用超时机制避免长时间阻塞
+          const initPromise = initializeDatabaseConnectionInternal(sw);
+          const initTimeout = new Promise((_, reject) => {
+            setTimeout(
+              () => reject(new Error("Database initialization timeout")),
+              3000,
+            ); // 3秒超时
+          });
+
+          try {
+            await Promise.race([initPromise, initTimeout]);
+            console.log("SurrealProvider: 数据库连接重新初始化成功");
+          } catch (initError) {
+            console.warn(
+              "🔧 Database initialization timeout, marking as initialized anyway:",
+              initError,
+            );
+            // 🔧 即使初始化失败也标记为已初始化，避免阻塞
+          }
         } else {
-          console.log('SurrealProvider: 数据库连接正常');
+          console.log("SurrealProvider: 数据库连接正常");
         }
 
         isInitializedRef.current = true;
-        console.log('SurrealProvider: 初始化完成');
+        console.log("SurrealProvider: 初始化完成");
       } catch (error) {
-        console.error('SurrealProvider: 初始化失败:', error);
+        console.error("SurrealProvider: 初始化失败:", error);
+        // 🔧 在失败情况下也标记为初始化完成，避免阻塞页面
+        console.warn(
+          "🔧 Marking as initialized despite failure to prevent page blocking",
+        );
+        isInitializedRef.current = true;
+        // 清理状态以允许后续重试
         initializationPromiseRef.current = null;
-        throw error;
       }
     })();
 
-    await initializationPromiseRef.current;
-  }, [ensureServiceWorker, checkDatabaseConnectionInternal, initializeDatabaseConnectionInternal]);
+    return initializationPromiseRef.current;
+  }, [
+    ensureServiceWorker,
+    checkDatabaseConnectionInternal,
+    initializeDatabaseConnectionInternal,
+  ]);
 
   /**
    * 创建内置的 SurrealWorkerAPI 实现
@@ -762,57 +924,72 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   const createInternalClient = useCallback((): SurrealWorkerAPI => {
     return {
       async connect(config) {
-        const result = await sendMessage('connect', config);
-        return result.status === 'connected';
+        const result = await sendMessage("connect", config);
+        return result.status === "connected";
       },
 
-      async authenticate(token: string, refreshToken?: string, expiresIn?: number, tenantCode?: string) {
-        await sendMessage('authenticate', {
+      async authenticate(
+        token: string,
+        refreshToken?: string,
+        expiresIn?: number,
+        tenantCode?: string,
+      ) {
+        await sendMessage("authenticate", {
           token,
           refresh_token: refreshToken,
           expires_in: expiresIn,
-          tenant_code: tenantCode
+          tenant_code: tenantCode,
         });
       },
 
       async invalidate() {
-        await sendMessage('invalidate');
+        await sendMessage("invalidate");
       },
 
       async setConfig(config) {
-        await sendMessage('setConfig', config);
+        await sendMessage("setConfig", config);
       },
 
-      async query<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
-        return await sendMessage('query', { sql, vars });
+      async query<T = unknown>(
+        sql: string,
+        vars?: Record<string, unknown>,
+      ): Promise<T> {
+        return await sendMessage("query", { sql, vars });
       },
 
-      async mutate<T = unknown>(sql: string, vars?: Record<string, unknown>): Promise<T> {
-        return await sendMessage('mutate', { sql, vars });
+      async mutate<T = unknown>(
+        sql: string,
+        vars?: Record<string, unknown>,
+      ): Promise<T> {
+        return await sendMessage("mutate", { sql, vars });
       },
 
       async create(thing: string | RecordId, data: unknown) {
-        return await sendMessage('create', { thing, data });
+        return await sendMessage("create", { thing, data });
       },
 
       async select(thing: string | RecordId) {
-        return await sendMessage('select', { thing });
+        return await sendMessage("select", { thing });
       },
 
       async update(thing: string | RecordId, data: unknown) {
-        return await sendMessage('update', { thing, data });
+        return await sendMessage("update", { thing, data });
       },
 
       async merge(thing: string | RecordId, data: unknown) {
-        return await sendMessage('merge', { thing, data });
+        return await sendMessage("merge", { thing, data });
       },
 
       async delete(thing: string | RecordId) {
-        return await sendMessage('delete', { thing });
+        return await sendMessage("delete", { thing });
       },
 
-      async live(query: string, callback: (action: string, result: any) => void, vars?: Record<string, unknown>): Promise<string> {
-        const result = await sendMessage('live', { query, vars });
+      async live(
+        query: string,
+        callback: (action: string, result: any) => void,
+        vars?: Record<string, unknown>,
+      ): Promise<string> {
+        const result = await sendMessage("live", { query, vars });
         const uuid = result.uuid;
 
         // Store the callback for this live query
@@ -821,35 +998,41 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
         return uuid;
       },
 
-      async subscribeLive(uuid: string, callback: (action: string, result: any) => void) {
+      async subscribeLive(
+        uuid: string,
+        callback: (action: string, result: any) => void,
+      ) {
         // For Service Worker implementation, this is handled by the live() method
         // We just update the callback
         liveQueryCallbacksRef.current.set(uuid, callback);
       },
 
       async kill(uuid: string) {
-        await sendMessage('kill', { uuid });
+        await sendMessage("kill", { uuid });
         liveQueryCallbacksRef.current.delete(uuid);
       },
 
       async close() {
         // In Service Worker context, we don't really "close" the connection
         // since it persists across tabs. We could implement a reference counting system.
-        console.log('SurrealProvider: close() called - connection persists in Service Worker');
+        console.log(
+          "SurrealProvider: close() called - connection persists in Service Worker",
+        );
       },
 
       async recoverTokens() {
-        await sendMessage('recover_tokens');
+        await sendMessage("recover_tokens");
       },
 
       async getConnectionState() {
-        return await sendMessage('get_connection_state');
+        return await sendMessage("get_connection_state");
       },
-
     };
   }, [sendMessage]);
 
-  const [internalClient, setInternalClient] = useState<SurrealWorkerAPI | null>(null);
+  const [internalClient, setInternalClient] = useState<SurrealWorkerAPI | null>(
+    null,
+  );
 
   /**
    * 单次连接尝试（不包含重试逻辑）
@@ -887,72 +1070,94 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     // Setup client getter for services that need it
     const clientGetter = async () => {
       if (!client) {
-        throw new Error('SurrealDB client not available');
+        throw new Error("SurrealDB client not available");
       }
       return client;
     };
 
     // Import and setup services dynamically to avoid circular dependencies
     try {
-      const { messageService } = await import('@/src/services/messageService');
+      const { messageService } = await import("@/src/services/messageService");
       messageService.setClientGetter(clientGetter);
 
-      const { businessNotificationService } = await import('@/src/services/businessNotificationService');
+      const { businessNotificationService } = await import(
+        "@/src/services/businessNotificationService"
+      );
       businessNotificationService.setClientGetter(clientGetter);
 
-      const { caseReminderService } = await import('@/src/services/caseReminderService');
+      const { caseReminderService } = await import(
+        "@/src/services/caseReminderService"
+      );
       caseReminderService.setClientGetter(clientGetter);
 
-      const { groupManager } = await import('@/src/services/groupManager');
+      const { groupManager } = await import("@/src/services/groupManager");
       groupManager.setClientGetter(clientGetter);
 
-      const { bidirectionalSyncService } = await import('@/src/services/bidirectionalSyncService');
+      const { bidirectionalSyncService } = await import(
+        "@/src/services/bidirectionalSyncService"
+      );
       bidirectionalSyncService.setServiceWorkerComm(serviceWorkerComm);
 
-      const { pageDataCacheService } = await import('@/src/services/pageDataCacheService');
+      const { pageDataCacheService } = await import(
+        "@/src/services/pageDataCacheService"
+      );
       pageDataCacheService.setServiceWorkerComm(serviceWorkerComm);
 
-      const { incrementalSyncService } = await import('@/src/services/incrementalSyncService');
+      const { incrementalSyncService } = await import(
+        "@/src/services/incrementalSyncService"
+      );
       incrementalSyncService.setServiceWorkerComm(serviceWorkerComm);
     } catch (error) {
-      console.warn('SurrealProvider: Some services could not be initialized:', error);
+      console.warn(
+        "SurrealProvider: Some services could not be initialized:",
+        error,
+      );
     }
-
   }, [externalClient, initialize, createInternalClient, sendMessage]);
 
   /**
    * 手动重连（委托给Service Worker）
    */
   const reconnect = useCallback(async () => {
-    console.log('SurrealProvider: 手动重连委托给Service Worker');
+    console.log("SurrealProvider: 手动重连委托给Service Worker");
     try {
-      await sendMessage('force_reconnect');
+      await sendMessage("force_reconnect");
     } catch (error) {
-      console.error('SurrealProvider: 手动重连失败:', error);
+      console.error("SurrealProvider: 手动重连失败:", error);
     }
   }, [sendMessage]);
 
   /**
    * Service Worker 通信方法
    */
-  const sendServiceWorkerMessage = useCallback(async (type: string, payload?: any): Promise<any> => {
-    if (externalClient) {
-      // For test environments, return mock response
-      console.log('SurrealProvider: Mock Service Worker message:', type, payload);
-      return Promise.resolve({ success: true });
-    }
+  const sendServiceWorkerMessage = useCallback(
+    async (type: string, payload?: any): Promise<any> => {
+      if (externalClient) {
+        // For test environments, return mock response
+        console.log(
+          "SurrealProvider: Mock Service Worker message:",
+          type,
+          payload,
+        );
+        return Promise.resolve({ success: true });
+      }
 
-    if (!internalClient) {
-      throw new Error('SurrealDB client not available');
-    }
+      if (!internalClient) {
+        throw new Error("SurrealDB client not available");
+      }
 
-    try {
-      return await sendMessage(type, payload);
-    } catch (error) {
-      console.error('SurrealProvider: Service Worker communication error:', error);
-      throw error;
-    }
-  }, [externalClient, internalClient, sendMessage]);
+      try {
+        return await sendMessage(type, payload);
+      } catch (error) {
+        console.error(
+          "SurrealProvider: Service Worker communication error:",
+          error,
+        );
+        throw error;
+      }
+    },
+    [externalClient, internalClient, sendMessage],
+  );
 
   /**
    * 检查 Service Worker 是否可用
@@ -963,11 +1168,11 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       return true;
     }
 
-    return typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
+    return typeof navigator !== "undefined" && "serviceWorker" in navigator;
   }, [externalClient]);
 
   /**
-   * 等待 Service Worker 就绪
+   * 等待 Service Worker 就绪 - 优化版本，支持快速超时
    */
   const waitForServiceWorkerReady = useCallback(async (): Promise<void> => {
     if (externalClient) {
@@ -980,8 +1185,30 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
       return;
     }
 
-    // 否则进行初始化
-    await initialize();
+    // 🔧 设置更短的超时时间，避免阻塞页面
+    const initializePromise = initialize();
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      setTimeout(() => {
+        console.warn(
+          "🔧 ServiceWorker initialization timeout, allowing page to continue",
+        );
+        reject(new Error("ServiceWorker initialization timeout"));
+      }, 3000); // 3秒超时
+    });
+
+    try {
+      await Promise.race([initializePromise, timeoutPromise]);
+    } catch (error) {
+      if (error.message === "ServiceWorker initialization timeout") {
+        // 🔧 超时时仍然标记为已初始化，允许页面继续工作
+        console.warn(
+          "🔧 ServiceWorker initialization timed out, marking as initialized anyway",
+        );
+        isInitializedRef.current = true;
+        return;
+      }
+      throw error;
+    }
   }, [externalClient, serviceWorker, initialize]);
 
   /**
@@ -996,7 +1223,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     try {
       return await authService.getAuthStatusFromSurreal();
     } catch (error) {
-      console.error('SurrealProvider: 获取认证状态失败:', error);
+      console.error("SurrealProvider: 获取认证状态失败:", error);
       return false;
     }
   }, [externalClient]);
@@ -1036,13 +1263,28 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   const dummyClient = useMemo(() => {
     const handler: ProxyHandler<Record<string, unknown>> = {
       get(_, prop) {
-        if (prop === 'query' || prop === 'mutate' || prop === 'create' || prop === 'select' ||
-          prop === 'update' || prop === 'merge' || prop === 'delete' || prop === 'live' ||
-          prop === 'subscribeLive' || prop === 'kill') {
+        if (
+          prop === "query" ||
+          prop === "mutate" ||
+          prop === "create" ||
+          prop === "select" ||
+          prop === "update" ||
+          prop === "merge" ||
+          prop === "delete" ||
+          prop === "live" ||
+          prop === "subscribeLive" ||
+          prop === "kill"
+        ) {
           // Return a function that indicates the client is not ready
           return () => {
-            console.log(`Surreal client not ready – attempted to call "${String(prop)}" before connection established`);
-            return Promise.reject(new Error(`Surreal client not ready – attempted to call "${String(prop)}" before connection established`));
+            console.log(
+              `Surreal client not ready – attempted to call "${String(prop)}" before connection established`,
+            );
+            return Promise.reject(
+              new Error(
+                `Surreal client not ready – attempted to call "${String(prop)}" before connection established`,
+              ),
+            );
           };
         }
         // For other properties, return undefined to indicate they don't exist
@@ -1052,42 +1294,61 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
     return new Proxy({}, handler) as unknown as SurrealWorkerAPI;
   }, []);
 
-  const value = useMemo<SurrealContextValue>(() => ({
-    // 只有在测试环境中使用 externalClient 时才使用 dummyClient，否则使用真实的 client 或 null
-    client: externalClient ? (internalClient ?? dummyClient) : internalClient,
-    surreal: externalClient ? (internalClient ?? dummyClient) : internalClient, // Backward compatibility alias
-    isConnected,
-    isConnecting,
-    error,
-    isSuccess: isConnected, // Backward compatibility
-    reconnect,
-    // Service Worker communication interface
-    sendServiceWorkerMessage,
-    isServiceWorkerAvailable,
-    waitForServiceWorkerReady,
-    // Authentication status
-    getAuthStatus,
-    // 租户代码检查和重定向
-    checkTenantCodeAndRedirect,
-    // 客户端清理
-    disposeSurrealClient,
+  const value = useMemo<SurrealContextValue>(
+    () => ({
+      // 只有在测试环境中使用 externalClient 时才使用 dummyClient，否则使用真实的 client 或 null
+      client: externalClient ? (internalClient ?? dummyClient) : internalClient,
+      surreal: externalClient
+        ? (internalClient ?? dummyClient)
+        : internalClient, // Backward compatibility alias
+      isConnected,
+      isConnecting,
+      error,
+      isSuccess: isConnected, // Backward compatibility
+      reconnect,
+      // Service Worker communication interface
+      sendServiceWorkerMessage,
+      isServiceWorkerAvailable,
+      waitForServiceWorkerReady,
+      // Authentication status
+      getAuthStatus,
+      // 租户代码检查和重定向
+      checkTenantCodeAndRedirect,
+      // 客户端清理
+      disposeSurrealClient,
 
-    // 数据库连接管理
-    checkDatabaseConnection,
-    initializeDatabaseConnection,
-  }), [
-    internalClient, dummyClient, isConnected, isConnecting, error, reconnect, sendServiceWorkerMessage,
-    getAuthStatus, externalClient, checkTenantCodeAndRedirect, disposeSurrealClient, isServiceWorkerAvailable,
-    waitForServiceWorkerReady, checkDatabaseConnection, initializeDatabaseConnection
-  ]);
+      // 数据库连接管理
+      checkDatabaseConnection,
+      initializeDatabaseConnection,
+    }),
+    [
+      internalClient,
+      dummyClient,
+      isConnected,
+      isConnecting,
+      error,
+      reconnect,
+      sendServiceWorkerMessage,
+      getAuthStatus,
+      externalClient,
+      checkTenantCodeAndRedirect,
+      disposeSurrealClient,
+      isServiceWorkerAvailable,
+      waitForServiceWorkerReady,
+      checkDatabaseConnection,
+      initializeDatabaseConnection,
+    ],
+  );
 
-  return <SurrealContext.Provider value={value}>{children}</SurrealContext.Provider>;
+  return (
+    <SurrealContext.Provider value={value}>{children}</SurrealContext.Provider>
+  );
 };
 
 // Hook exports
 export const useSurreal = () => {
   const ctx = useContext(SurrealContext);
-  if (!ctx) throw new Error('useSurreal must be used within a SurrealProvider');
+  if (!ctx) throw new Error("useSurreal must be used within a SurrealProvider");
   return ctx;
 };
 
@@ -1097,11 +1358,18 @@ export const useSurrealContext = useSurreal; // Alias for backward compatibility
 // Service Worker communication hooks
 export const useServiceWorkerComm = () => {
   const ctx = useSurreal();
-  return useMemo(() => ({
-    sendMessage: ctx.sendServiceWorkerMessage,
-    isAvailable: ctx.isServiceWorkerAvailable,
-    waitForReady: ctx.waitForServiceWorkerReady,
-  }), [ctx.sendServiceWorkerMessage, ctx.isServiceWorkerAvailable, ctx.waitForServiceWorkerReady]);
+  return useMemo(
+    () => ({
+      sendMessage: ctx.sendServiceWorkerMessage,
+      isAvailable: ctx.isServiceWorkerAvailable,
+      waitForReady: ctx.waitForServiceWorkerReady,
+    }),
+    [
+      ctx.sendServiceWorkerMessage,
+      ctx.isServiceWorkerAvailable,
+      ctx.waitForServiceWorkerReady,
+    ],
+  );
 };
 
 // 租户代码检查 hook
@@ -1134,19 +1402,27 @@ export const useSurrealClientSingleton = () => {
 
   const getSurrealClient = useCallback(async (): Promise<SurrealWorkerAPI> => {
     if (!client) {
-      throw new Error('SurrealDB client not available - ensure SurrealProvider is connected');
+      throw new Error(
+        "SurrealDB client not available - ensure SurrealProvider is connected",
+      );
     }
     return client;
   }, [client]);
 
-  const getSurrealClientSafe = useCallback(async (): Promise<SurrealWorkerAPI> => {
-    // 在非登录页面时检查租户代码
-    if (window.location.pathname !== '/login' && !checkTenantCodeAndRedirect()) {
-      throw new TenantCodeMissingError('Tenant code is missing, redirecting to login');
-    }
+  const getSurrealClientSafe =
+    useCallback(async (): Promise<SurrealWorkerAPI> => {
+      // 在非登录页面时检查租户代码
+      if (
+        window.location.pathname !== "/login" &&
+        !checkTenantCodeAndRedirect()
+      ) {
+        throw new TenantCodeMissingError(
+          "Tenant code is missing, redirecting to login",
+        );
+      }
 
-    return getSurrealClient();
-  }, [getSurrealClient, checkTenantCodeAndRedirect]);
+      return getSurrealClient();
+    }, [getSurrealClient, checkTenantCodeAndRedirect]);
 
   return {
     surrealClient: getSurrealClient,
