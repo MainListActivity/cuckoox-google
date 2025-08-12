@@ -20,36 +20,15 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 
-// Define constants for SurrealDB connection from .env
-const surrealEndpoint = import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc';
-const surrealNamespace = import.meta.env.VITE_SURREALDB_NAMESPACE || 'ck_go';
-const surrealDatabase = import.meta.env.VITE_SURREALDB_DATABASE || 'ck_go';
-
 // REMOVED: renderApp, renderError functions, and connectSurrealDB() promise handling
 
 const queryClient = new QueryClient(); // ADDED
-
-// Authentication error handler (session/token expired)
-const handleSessionExpired = () => {
-  console.warn('Authentication error (session/token expired), clearing storage and redirecting to login...');
-  // Clear only non-token localStorage items (tokens are managed by Service Worker)
-  localStorage.removeItem('cuckoox-selectedCaseId');
-  // Note: tokens are now managed by Service Worker, no need to clear them from localStorage
-
-  // Redirect to login page by reloading
-  window.location.href = '/login';
-};
 
 root.render(
   <React.StrictMode>
     <I18nextProvider i18n={i18n}>
       <QueryClientProvider client={queryClient}> {/* ADDED */}
-        <SurrealProvider
-          endpoint={surrealEndpoint}
-          namespace={surrealNamespace}
-          database={surrealDatabase}
-          onSessionExpired={handleSessionExpired}
-        >
+        <SurrealProvider autoConnect >
           {/* SurrealWorkerProvider does not yet expose sessionExpired handler; can extend later */}
           <StyledEngineProvider injectFirst> {/* ADDED */}
             <BrowserRouter>

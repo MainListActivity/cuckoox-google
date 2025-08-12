@@ -22,7 +22,7 @@ export default defineConfig({
   // 设置全局默认超时时间为30秒
   timeout: 30000,
   use: {
-    baseURL: 'http://localhost:4173', // 统一使用4173端口
+    baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
     // 配置截图存储位置
     screenshot: 'only-on-failure',

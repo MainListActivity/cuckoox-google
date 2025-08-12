@@ -175,13 +175,18 @@ class AuthService {
 
   // Token Management
   async setAuthTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void> {
-    const client = await this.getSurrealClient();
-
-    // Service Worker client handles token storage and management
-    const tenantCode = localStorage.getItem('tenant_code');
-    await client.authenticate(accessToken, refreshToken, expiresIn, tenantCode || undefined);
+    // 新的Service Worker架构中，认证由SurrealProvider统一管理
+    // authService只需要存储token到localStorage，让Service Worker处理认证
+    localStorage.setItem('access_token', accessToken);
+    if (refreshToken) {
+      localStorage.setItem('refresh_token', refreshToken);
+    }
+    if (expiresIn) {
+      localStorage.setItem('token_expires_in', expiresIn.toString());
+    }
 
     this.isAuthenticated = true;
+    console.log('Auth tokens stored, Service Worker will handle authentication');
   }
 
   async clearAuthTokens(): Promise<void> {
@@ -215,20 +220,9 @@ class AuthService {
     // Store tenant code in localStorage for service worker access
     localStorage.setItem('tenant_code', tenantCode);
 
-    // Reconnect with new tenant database
-    const client = await this.getSurrealClient();
-
-    // Check if client has connect method (Service Worker mode)
-    if (client.connect) {
-      await client.connect({
-        endpoint: import.meta.env.VITE_SURREALDB_WS_URL || 'ws://localhost:8000/rpc',
-        namespace: import.meta.env.VITE_SURREALDB_NS || 'ck_go',
-        database: tenantCode,
-        // Service Worker 将使用其内部存储的 token，不需要同步 localStorage token
-      });
-    }
-
-    console.log('Tenant code set and connection updated:', tenantCode);
+    // 新的Service Worker架构不需要在authService中处理连接
+    // SurrealProvider会通过switchTenant方法处理租户切换
+    console.log('Tenant code set:', tenantCode);
   }
 
   async getTenantCode(): Promise<string | null> {
