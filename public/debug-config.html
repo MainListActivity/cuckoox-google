@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>配置调试</title>
+</head>
+<body>
+    <h1>环境变量调试</h1>
+    <div id="config"></div>
+    <script>
+        const config = {
+            VITE_SURREALDB_WS_URL: import.meta.env.VITE_SURREALDB_WS_URL,
+            VITE_SURREALDB_NS: import.meta.env.VITE_SURREALDB_NS,
+            NODE_ENV: import.meta.env.NODE_ENV,
+            VITE_NODE_ENV: import.meta.env.VITE_NODE_ENV,
+            VITE_DB_ACCESS_MODE: import.meta.env.VITE_DB_ACCESS_MODE
+        };
+        document.getElementById('config').innerHTML = '<pre>' + JSON.stringify(config, null, 2) + '</pre>';
+    </script>
+</body>
+</html>

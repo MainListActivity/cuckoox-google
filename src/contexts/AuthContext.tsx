@@ -1,11 +1,23 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo, useRef } from 'react';
-import authService from '@/src/services/authService';
-import { useSurrealClient, useServiceWorkerComm, useSurreal } from '@/src/contexts/SurrealProvider';
-import { queryWithAuth } from '@/src/utils/surrealAuth';
-import { User as OidcUser } from 'oidc-client-ts';
-import { jsonify, RecordId } from 'surrealdb';
-import { menuService } from '@/src/services/menuService';
-
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
+import authService from "@/src/services/authService";
+import {
+  useSurrealClient,
+  useServiceWorkerComm,
+  useSurreal,
+} from "@/src/contexts/SurrealProvider";
+import { queryWithAuth } from "@/src/utils/surrealAuth";
+import { User as OidcUser } from "oidc-client-ts";
+import { jsonify, RecordId } from "surrealdb";
+import { menuService } from "@/src/services/menuService";
 
 // Matches AppUser in authService and user table in SurrealDB
 export interface AppUser {
@@ -46,7 +58,6 @@ export interface Role {
   // Add other role properties
 }
 
-
 // 权限检查结果接口
 export interface PermissionCheckResult {
   hasPermission: boolean;
@@ -82,13 +93,29 @@ export interface AuthContextType {
 
   // Permission related methods (compatible with usePermission hooks)
   useOperationPermission: (operationId: string) => PermissionCheckResult;
-  useOperationPermissions: (operationIds: string[]) => { permissions: Record<string, boolean>; isLoading: boolean; error: string | null };
+  useOperationPermissions: (operationIds: string[]) => {
+    permissions: Record<string, boolean>;
+    isLoading: boolean;
+    error: string | null;
+  };
   useMenuPermission: (menuId: string) => PermissionCheckResult;
-  useDataPermission: (tableName: string, crudType: 'create' | 'read' | 'update' | 'delete') => PermissionCheckResult;
-  useUserRoles: () => { roles: string[]; isLoading: boolean; error: string | null };
-  useClearPermissionCache: () => { clearUserPermissions: (caseId?: string) => Promise<void>; clearAllPermissions: () => Promise<void> };
-  useSyncPermissions: () => { syncPermissions: (userData: unknown) => Promise<void> };
-  
+  useDataPermission: (
+    tableName: string,
+    crudType: "create" | "read" | "update" | "delete",
+  ) => PermissionCheckResult;
+  useUserRoles: () => {
+    roles: string[];
+    isLoading: boolean;
+    error: string | null;
+  };
+  useClearPermissionCache: () => {
+    clearUserPermissions: (caseId?: string) => Promise<void>;
+    clearAllPermissions: () => Promise<void>;
+  };
+  useSyncPermissions: () => {
+    syncPermissions: (userData: unknown) => Promise<void>;
+  };
+
   // Permission preloading methods to avoid render loop issues
   preloadOperationPermission: (operationId: string) => Promise<void>;
   preloadOperationPermissions: (operationIds: string[]) => Promise<void>;
@@ -99,9 +126,10 @@ export interface AuthContextType {
   __TEST_setUserCases?: (cases: Case[]) => void;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const CREDITOR_MANAGEMENT_PATH = '/creditors'; // Define target path
-
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined,
+);
+const CREDITOR_MANAGEMENT_PATH = "/creditors"; // Define target path
 
 // 序列化RecordId为localStorage
 const serializeRecordId = (recordId: RecordId | null): string => {
@@ -112,14 +140,16 @@ const serializeRecordId = (recordId: RecordId | null): string => {
 const deserializeRecordId = (recordIdJson: string): RecordId | null => {
   const parsed = JSON.parse(recordIdJson);
   if (!parsed) return null;
-  if (typeof parsed === 'string') {
-    const parts = parsed.split(':');
+  if (typeof parsed === "string") {
+    const parts = parsed.split(":");
     return new RecordId(parts[0], parts[1]);
   }
   return parsed;
 };
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const client = useSurrealClient(); // Use SurrealClient directly
   const serviceWorkerComm = useServiceWorkerComm();
   const { isConnected, getAuthStatus, surreal } = useSurreal(); // 获取连接状态
@@ -130,11 +160,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const isCheckingUser = useRef<boolean>(false); // 追踪是否正在检查用户状态
   authService.setSurrealClient(surreal);
 
+  // 🔧 添加全局超时，确保loading状态不会永远持续
+  useEffect(() => {
+    const globalTimeout = setTimeout(() => {
+      console.warn(
+        "🚨 AuthContext: Global timeout reached, forcing isLoading to false",
+      );
+      setIsLoading(false);
+    }, 5000); // 5秒全局超时
+
+    return () => clearTimeout(globalTimeout);
+  }, []); // 只在组件挂载时设置一次
+
   // 注意：现在直接使用queryWithAuth，通过service worker进行数据库查询
-  const [selectedCaseId, setSelectedCaseId] = useState<RecordId | null>(deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null'));
+  const [selectedCaseId, setSelectedCaseId] = useState<RecordId | null>(
+    deserializeRecordId(
+      localStorage.getItem("cuckoox-selectedCaseId") || "null",
+    ),
+  );
   const [userCases, setUserCases] = useState<Case[]>([]);
   const selectedCase = useMemo(() => {
-    return userCases.find(c => selectedCaseId && String(c.id) === String(selectedCaseId)) || null;
+    return (
+      userCases.find(
+        (c) => selectedCaseId && String(c.id) === String(selectedCaseId),
+      ) || null
+    );
   }, [userCases, selectedCaseId]);
   const [currentUserCaseRoles, setCurrentUserCaseRoles] = useState<Role[]>([]);
   const [isCaseLoading, setIsCaseLoading] = useState<boolean>(false);
@@ -143,10 +193,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [navigateTo, setNavigateTo] = useState<string | null>(null); // Navigation state
 
   // 权限缓存状态
-  const [operationPermissionsCache, setOperationPermissionsCache] = useState<Record<string, boolean>>({});
-  const [menuPermissionsCache, setMenuPermissionsCache] = useState<Record<string, boolean>>({});
-  const [dataPermissionsCache, setDataPermissionsCache] = useState<Record<string, boolean>>({});
-  const [permissionsLoading, setPermissionsLoading] = useState<Record<string, boolean>>({});
+  const [operationPermissionsCache, setOperationPermissionsCache] = useState<
+    Record<string, boolean>
+  >({});
+  const [menuPermissionsCache, setMenuPermissionsCache] = useState<
+    Record<string, boolean>
+  >({});
+  const [dataPermissionsCache, setDataPermissionsCache] = useState<
+    Record<string, boolean>
+  >({});
+  const [permissionsLoading, setPermissionsLoading] = useState<
+    Record<string, boolean>
+  >({});
 
   // Services are now automatically initialized in SurrealProvider
 
@@ -161,205 +219,268 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   // 异步加载权限并更新缓存
-  const loadOperationPermission = useCallback(async (operationId: string): Promise<boolean> => {
-    if (!user || !client) return false;
+  const loadOperationPermission = useCallback(
+    async (operationId: string): Promise<boolean> => {
+      if (!user || !client) return false;
 
-    // 管理员拥有所有权限
-    if (user.github_id === '--admin--') {
-      setOperationPermissionsCache(prev => ({ ...prev, [operationId]: true }));
-      return true;
-    }
+      // 管理员拥有所有权限
+      if (user.github_id === "--admin--") {
+        setOperationPermissionsCache((prev) => ({
+          ...prev,
+          [operationId]: true,
+        }));
+        return true;
+      }
 
-    try {
-      setPermissionsLoading(prev => ({ ...prev, [operationId]: true }));
-      const result = await menuService.hasOperation(client, operationId, selectedCaseId);
-      setOperationPermissionsCache(prev => ({ ...prev, [operationId]: result }));
-      return result;
-    } catch (error) {
-      console.error('Error checking operation permission:', error);
-      setOperationPermissionsCache(prev => ({ ...prev, [operationId]: false }));
-      return false;
-    } finally {
-      setPermissionsLoading(prev => ({ ...prev, [operationId]: false }));
-    }
-  }, [user, client, selectedCaseId]);
+      try {
+        setPermissionsLoading((prev) => ({ ...prev, [operationId]: true }));
+        const result = await menuService.hasOperation(
+          client,
+          operationId,
+          selectedCaseId,
+        );
+        setOperationPermissionsCache((prev) => ({
+          ...prev,
+          [operationId]: result,
+        }));
+        return result;
+      } catch (error) {
+        console.error("Error checking operation permission:", error);
+        setOperationPermissionsCache((prev) => ({
+          ...prev,
+          [operationId]: false,
+        }));
+        return false;
+      } finally {
+        setPermissionsLoading((prev) => ({ ...prev, [operationId]: false }));
+      }
+    },
+    [user, client, selectedCaseId],
+  );
 
-  const loadOperationPermissions = useCallback(async (operationIds: string[]): Promise<Record<string, boolean>> => {
-    if (!user || !client) {
-      const result: Record<string, boolean> = {};
-      operationIds.forEach(id => {
-        result[id] = false;
-      });
-      return result;
-    }
+  const loadOperationPermissions = useCallback(
+    async (operationIds: string[]): Promise<Record<string, boolean>> => {
+      if (!user || !client) {
+        const result: Record<string, boolean> = {};
+        operationIds.forEach((id) => {
+          result[id] = false;
+        });
+        return result;
+      }
 
-    // 管理员拥有所有权限
-    if (user.github_id === '--admin--') {
-      const result: Record<string, boolean> = {};
-      operationIds.forEach(id => {
-        result[id] = true;
-      });
-      setOperationPermissionsCache(prev => ({ ...prev, ...result }));
-      return result;
-    }
+      // 管理员拥有所有权限
+      if (user.github_id === "--admin--") {
+        const result: Record<string, boolean> = {};
+        operationIds.forEach((id) => {
+          result[id] = true;
+        });
+        setOperationPermissionsCache((prev) => ({ ...prev, ...result }));
+        return result;
+      }
 
-    try {
-      operationIds.forEach(id => {
-        setPermissionsLoading(prev => ({ ...prev, [id]: true }));
-      });
-      const result = await menuService.hasOperations(client, operationIds, selectedCaseId);
-      setOperationPermissionsCache(prev => ({ ...prev, ...result }));
-      return result;
-    } catch (error) {
-      console.error('Error checking operation permissions:', error);
-      const result: Record<string, boolean> = {};
-      operationIds.forEach(id => {
-        result[id] = false;
-      });
-      setOperationPermissionsCache(prev => ({ ...prev, ...result }));
-      return result;
-    } finally {
-      operationIds.forEach(id => {
-        setPermissionsLoading(prev => ({ ...prev, [id]: false }));
-      });
-    }
-  }, [user, client, selectedCaseId]);
+      try {
+        operationIds.forEach((id) => {
+          setPermissionsLoading((prev) => ({ ...prev, [id]: true }));
+        });
+        const result = await menuService.hasOperations(
+          client,
+          operationIds,
+          selectedCaseId,
+        );
+        setOperationPermissionsCache((prev) => ({ ...prev, ...result }));
+        return result;
+      } catch (error) {
+        console.error("Error checking operation permissions:", error);
+        const result: Record<string, boolean> = {};
+        operationIds.forEach((id) => {
+          result[id] = false;
+        });
+        setOperationPermissionsCache((prev) => ({ ...prev, ...result }));
+        return result;
+      } finally {
+        operationIds.forEach((id) => {
+          setPermissionsLoading((prev) => ({ ...prev, [id]: false }));
+        });
+      }
+    },
+    [user, client, selectedCaseId],
+  );
 
   // 权限 hooks 实现 - 修复无限循环问题
-  const useOperationPermission = useCallback((operationId: string): PermissionCheckResult => {
-    if (!user || !client) {
-      return { hasPermission: false, isLoading: false, error: null };
-    }
-
-    // 管理员拥有所有权限
-    if (user.github_id === '--admin--') {
-      return { hasPermission: true, isLoading: false, error: null };
-    }
-
-    const hasPermission = operationPermissionsCache[operationId] !== undefined
-      ? operationPermissionsCache[operationId]
-      : false;
-    const isLoading = permissionsLoading[operationId] || false;
-
-    return {
-      hasPermission,
-      isLoading,
-      error: null
-    };
-  }, [operationPermissionsCache, permissionsLoading, user, client]);
-
-  // 添加权限预加载方法
-  const preloadOperationPermission = useCallback(async (operationId: string): Promise<void> => {
-    if (!user || !client || user.github_id === '--admin--') {
-      return;
-    }
-
-    // 如果权限已在缓存中或正在加载，不需要重复加载
-    if (operationPermissionsCache[operationId] !== undefined || permissionsLoading[operationId]) {
-      return;
-    }
-
-    try {
-      await loadOperationPermission(operationId);
-    } catch (error) {
-      console.error('Error preloading operation permission:', error);
-    }
-  }, [user, client, operationPermissionsCache, permissionsLoading, loadOperationPermission]);
-
-  const useOperationPermissions = useCallback((operationIds: string[]) => {
-    if (!user || !client) {
-      const permissions: Record<string, boolean> = {};
-      operationIds.forEach(id => {
-        permissions[id] = false;
-      });
-      return { permissions, isLoading: false, error: null };
-    }
-
-    // 管理员拥有所有权限
-    if (user.github_id === '--admin--') {
-      const permissions: Record<string, boolean> = {};
-      operationIds.forEach(id => {
-        permissions[id] = true;
-      });
-      return { permissions, isLoading: false, error: null };
-    }
-
-    const permissions: Record<string, boolean> = {};
-    let isLoading = false;
-
-    operationIds.forEach(id => {
-      permissions[id] = operationPermissionsCache[id] !== undefined
-        ? operationPermissionsCache[id]
-        : false;
-      if (permissionsLoading[id]) {
-        isLoading = true;
+  const useOperationPermission = useCallback(
+    (operationId: string): PermissionCheckResult => {
+      if (!user || !client) {
+        return { hasPermission: false, isLoading: false, error: null };
       }
-    });
 
-    return {
-      permissions,
-      isLoading,
-      error: null
-    };
-  }, [operationPermissionsCache, permissionsLoading, user, client]);
-
-  // 添加批量权限预加载方法
-  const preloadOperationPermissions = useCallback(async (operationIds: string[]): Promise<void> => {
-    if (!user || !client || user.github_id === '--admin--') {
-      return;
-    }
-
-    // 检查是否有未缓存的权限需要加载
-    const uncachedIds = operationIds.filter(id =>
-      operationPermissionsCache[id] === undefined && !permissionsLoading[id]
-    );
-    
-    if (uncachedIds.length > 0) {
-      try {
-        await loadOperationPermissions(uncachedIds);
-      } catch (error) {
-        console.error('Error preloading operation permissions:', error);
-      }
-    }
-  }, [user, client, operationPermissionsCache, permissionsLoading, loadOperationPermissions]);
-
-  const useMenuPermission = useCallback((menuId: string): PermissionCheckResult => {
-    // 先检查当前已加载的菜单项中是否包含该菜单
-    if (navMenuItems) {
-      const hasMenu = navMenuItems.some(menu => menu.id === menuId);
-      if (hasMenu) {
+      // 管理员拥有所有权限
+      if (user.github_id === "--admin--") {
         return { hasPermission: true, isLoading: false, error: null };
       }
-    }
 
-    const hasPermission = menuPermissionsCache[menuId] || false;
-    const isLoading = permissionsLoading[menuId] || false;
+      const hasPermission =
+        operationPermissionsCache[operationId] !== undefined
+          ? operationPermissionsCache[operationId]
+          : false;
+      const isLoading = permissionsLoading[operationId] || false;
 
-    return {
-      hasPermission,
-      isLoading,
-      error: null
-    };
-  }, [navMenuItems, menuPermissionsCache, permissionsLoading]);
+      return {
+        hasPermission,
+        isLoading,
+        error: null,
+      };
+    },
+    [operationPermissionsCache, permissionsLoading, user, client],
+  );
 
-  const useDataPermission = useCallback((tableName: string, crudType: 'create' | 'read' | 'update' | 'delete'): PermissionCheckResult => {
-    const cacheKey = `${tableName}:${crudType}`;
-    const hasPermission = dataPermissionsCache[cacheKey] || false;
-    const isLoading = permissionsLoading[cacheKey] || false;
+  // 添加权限预加载方法
+  const preloadOperationPermission = useCallback(
+    async (operationId: string): Promise<void> => {
+      if (!user || !client || user.github_id === "--admin--") {
+        return;
+      }
 
-    return {
-      hasPermission,
-      isLoading,
-      error: null
-    };
-  }, [dataPermissionsCache, permissionsLoading]);
+      // 如果权限已在缓存中或正在加载，不需要重复加载
+      if (
+        operationPermissionsCache[operationId] !== undefined ||
+        permissionsLoading[operationId]
+      ) {
+        return;
+      }
+
+      try {
+        await loadOperationPermission(operationId);
+      } catch (error) {
+        console.error("Error preloading operation permission:", error);
+      }
+    },
+    [
+      user,
+      client,
+      operationPermissionsCache,
+      permissionsLoading,
+      loadOperationPermission,
+    ],
+  );
+
+  const useOperationPermissions = useCallback(
+    (operationIds: string[]) => {
+      if (!user || !client) {
+        const permissions: Record<string, boolean> = {};
+        operationIds.forEach((id) => {
+          permissions[id] = false;
+        });
+        return { permissions, isLoading: false, error: null };
+      }
+
+      // 管理员拥有所有权限
+      if (user.github_id === "--admin--") {
+        const permissions: Record<string, boolean> = {};
+        operationIds.forEach((id) => {
+          permissions[id] = true;
+        });
+        return { permissions, isLoading: false, error: null };
+      }
+
+      const permissions: Record<string, boolean> = {};
+      let isLoading = false;
+
+      operationIds.forEach((id) => {
+        permissions[id] =
+          operationPermissionsCache[id] !== undefined
+            ? operationPermissionsCache[id]
+            : false;
+        if (permissionsLoading[id]) {
+          isLoading = true;
+        }
+      });
+
+      return {
+        permissions,
+        isLoading,
+        error: null,
+      };
+    },
+    [operationPermissionsCache, permissionsLoading, user, client],
+  );
+
+  // 添加批量权限预加载方法
+  const preloadOperationPermissions = useCallback(
+    async (operationIds: string[]): Promise<void> => {
+      if (!user || !client || user.github_id === "--admin--") {
+        return;
+      }
+
+      // 检查是否有未缓存的权限需要加载
+      const uncachedIds = operationIds.filter(
+        (id) =>
+          operationPermissionsCache[id] === undefined &&
+          !permissionsLoading[id],
+      );
+
+      if (uncachedIds.length > 0) {
+        try {
+          await loadOperationPermissions(uncachedIds);
+        } catch (error) {
+          console.error("Error preloading operation permissions:", error);
+        }
+      }
+    },
+    [
+      user,
+      client,
+      operationPermissionsCache,
+      permissionsLoading,
+      loadOperationPermissions,
+    ],
+  );
+
+  const useMenuPermission = useCallback(
+    (menuId: string): PermissionCheckResult => {
+      // 先检查当前已加载的菜单项中是否包含该菜单
+      if (navMenuItems) {
+        const hasMenu = navMenuItems.some((menu) => menu.id === menuId);
+        if (hasMenu) {
+          return { hasPermission: true, isLoading: false, error: null };
+        }
+      }
+
+      const hasPermission = menuPermissionsCache[menuId] || false;
+      const isLoading = permissionsLoading[menuId] || false;
+
+      return {
+        hasPermission,
+        isLoading,
+        error: null,
+      };
+    },
+    [navMenuItems, menuPermissionsCache, permissionsLoading],
+  );
+
+  const useDataPermission = useCallback(
+    (
+      tableName: string,
+      crudType: "create" | "read" | "update" | "delete",
+    ): PermissionCheckResult => {
+      const cacheKey = `${tableName}:${crudType}`;
+      const hasPermission = dataPermissionsCache[cacheKey] || false;
+      const isLoading = permissionsLoading[cacheKey] || false;
+
+      return {
+        hasPermission,
+        isLoading,
+        error: null,
+      };
+    },
+    [dataPermissionsCache, permissionsLoading],
+  );
 
   const useUserRoles = useCallback(() => {
-    const roles = currentUserCaseRoles.map(role => role.name);
+    const roles = currentUserCaseRoles.map((role) => role.name);
     return {
       roles,
       isLoading: false,
-      error: null
+      error: null,
     };
   }, [currentUserCaseRoles]);
 
@@ -369,23 +490,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       try {
         // 清除用户缓存数据
-        await serviceWorkerComm.sendMessage('clear_user_cache', {
+        await serviceWorkerComm.sendMessage("clear_user_cache", {
           userId: user.id,
-          caseId: caseId || null
+          caseId: caseId || null,
         });
         clearPermissionCache();
       } catch (error) {
-        console.error('Error clearing user permissions:', error);
+        console.error("Error clearing user permissions:", error);
       }
     };
 
     const clearAllPermissions = async () => {
       try {
         // 清除所有缓存
-        await serviceWorkerComm.sendMessage('clear_all_cache', {});
+        await serviceWorkerComm.sendMessage("clear_all_cache", {});
         clearPermissionCache();
       } catch (error) {
-        console.error('Error clearing all permissions:', error);
+        console.error("Error clearing all permissions:", error);
       }
     };
 
@@ -398,12 +519,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       try {
         // 同步用户数据
-        await serviceWorkerComm.sendMessage('sync_user_data', {
+        await serviceWorkerComm.sendMessage("sync_user_data", {
           userId: user.id,
-          userData
+          userData,
         });
       } catch (error) {
-        console.error('Error syncing permissions:', error);
+        console.error("Error syncing permissions:", error);
         throw error;
       }
     };
@@ -416,158 +537,288 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     clearPermissionCache();
   }, [user, selectedCaseId, clearPermissionCache]);
 
-  const loadUserCasesAndRoles = useCallback(async (currentAppUser: AppUser | null) => {
-    if (!currentAppUser || !currentAppUser.id || !isConnected) {
-      if (!isConnected) {
-        console.log('loadUserCasesAndRoles: SurrealDB not connected, skipping...');
-      }
-      setUserCases([]);
-      setCurrentUserCaseRoles([]);
-      setSelectedCaseId(null);
-      localStorage.removeItem('cuckoox-selectedCaseId');
-      setNavMenuItems([]); // Clear menu if no user
-      return;
-    }
-    setIsCaseLoading(true);
-    try {
-      // 直接查询用户可访问的案件列表
-      const casesQuery = `SELECT * FROM case;`;
-      const fetchedCases: Case[] = await queryWithAuth(client, casesQuery);
-      
-      setUserCases(fetchedCases || []);
-
-      // 确定要选择的案件
-      const lastCaseId = currentAppUser.last_login_case_id;
-      const previouslySelectedCaseId = deserializeRecordId(localStorage.getItem('cuckoox-selectedCaseId') || 'null');
-
-      let caseToSelect: RecordId | null = null;
-
-      // 优先使用localStorage中的选择
-      if (previouslySelectedCaseId && fetchedCases?.some(c => String(c.id) === String(previouslySelectedCaseId))) {
-        caseToSelect = previouslySelectedCaseId;
-      } 
-      // 其次使用用户上次登录的案件
-      else if (lastCaseId && fetchedCases?.some(c => String(c.id) === String(lastCaseId))) {
-        caseToSelect = lastCaseId;
-      } 
-      // 最后选择第一个可用案件
-      else if (fetchedCases && fetchedCases.length > 0 && fetchedCases[0].id) {
-        caseToSelect = fetchedCases[0].id;
-      }
-
-      if (caseToSelect) {
-        setSelectedCaseId(caseToSelect);
-        localStorage.setItem('cuckoox-selectedCaseId', serializeRecordId(caseToSelect));
-        // 清空当前案件角色，后续通过权限系统查询
-        setCurrentUserCaseRoles([]);
-      } else {
+  const loadUserCasesAndRoles = useCallback(
+    async (currentAppUser: AppUser | null) => {
+      if (!currentAppUser || !currentAppUser.id || !isConnected) {
+        if (!isConnected) {
+          console.log(
+            "loadUserCasesAndRoles: SurrealDB not connected, skipping...",
+          );
+        }
+        setUserCases([]);
         setCurrentUserCaseRoles([]);
         setSelectedCaseId(null);
-        localStorage.removeItem('cuckoox-selectedCaseId');
-        setNavMenuItems([]); // Clear menu if no case is selected after loading
+        localStorage.removeItem("cuckoox-selectedCaseId");
+        setNavMenuItems([]); // Clear menu if no user
+        return;
+      }
+      setIsCaseLoading(true);
+      try {
+        // 直接查询用户可访问的案件列表
+        const casesQuery = `SELECT * FROM case;`;
+        const fetchedCases: Case[] = await queryWithAuth(client, casesQuery);
+
+        setUserCases(fetchedCases || []);
+
+        // 确定要选择的案件
+        const lastCaseId = currentAppUser.last_login_case_id;
+        const previouslySelectedCaseId = deserializeRecordId(
+          localStorage.getItem("cuckoox-selectedCaseId") || "null",
+        );
+
+        let caseToSelect: RecordId | null = null;
+
+        // 优先使用localStorage中的选择
+        if (
+          previouslySelectedCaseId &&
+          fetchedCases?.some(
+            (c) => String(c.id) === String(previouslySelectedCaseId),
+          )
+        ) {
+          caseToSelect = previouslySelectedCaseId;
+        }
+        // 其次使用用户上次登录的案件
+        else if (
+          lastCaseId &&
+          fetchedCases?.some((c) => String(c.id) === String(lastCaseId))
+        ) {
+          caseToSelect = lastCaseId;
+        }
+        // 最后选择第一个可用案件
+        else if (
+          fetchedCases &&
+          fetchedCases.length > 0 &&
+          fetchedCases[0].id
+        ) {
+          caseToSelect = fetchedCases[0].id;
+        }
+
+        if (caseToSelect) {
+          setSelectedCaseId(caseToSelect);
+          localStorage.setItem(
+            "cuckoox-selectedCaseId",
+            serializeRecordId(caseToSelect),
+          );
+          // 清空当前案件角色，后续通过权限系统查询
+          setCurrentUserCaseRoles([]);
+        } else {
+          setCurrentUserCaseRoles([]);
+          setSelectedCaseId(null);
+          localStorage.removeItem("cuckoox-selectedCaseId");
+          setNavMenuItems([]); // Clear menu if no case is selected after loading
+        }
+      } catch (error) {
+        console.error("Error loading user cases and roles:", error);
+        setUserCases([]);
+        setCurrentUserCaseRoles([]);
+        setSelectedCaseId(null);
+        localStorage.removeItem("cuckoox-selectedCaseId");
+        setNavMenuItems([]); // Clear menu on error
+      } finally {
+        setIsCaseLoading(false);
+      }
+    },
+    [isConnected, client],
+  ); // 简化依赖
+
+  const clearAuthState = useCallback(
+    async (shouldInvalidate: boolean = true) => {
+      const currentUser = user;
+
+      // 如果已经是清空状态，避免重复清除
+      if (!currentUser && !isLoggedIn) {
+        console.log(
+          "AuthContext: Already in cleared state, skipping clearAuthState",
+        );
+        return;
       }
 
-    } catch (error) {
-      console.error("Error loading user cases and roles:", error);
+      setUser(null);
+      setOidcUser(null);
+      setIsLoggedIn(false);
+      setSelectedCaseId(null);
       setUserCases([]);
       setCurrentUserCaseRoles([]);
-      setSelectedCaseId(null);
-      localStorage.removeItem('cuckoox-selectedCaseId');
-      setNavMenuItems([]); // Clear menu on error
-    } finally {
-      setIsCaseLoading(false);
-    }
-  }, [isConnected, client]); // 简化依赖
+      setNavMenuItems([]);
 
-  const clearAuthState = useCallback(async (shouldInvalidate: boolean = true) => {
-    const currentUser = user;
+      // 只有在明确需要时才调用 invalidate
+      if (shouldInvalidate) {
+        authService.clearTokens(); // Clear tokens from localStorage
+      }
 
-    // 如果已经是清空状态，避免重复清除
-    if (!currentUser && !isLoggedIn) {
-      console.log('AuthContext: Already in cleared state, skipping clearAuthState');
-      return;
-    }
+      localStorage.removeItem("cuckoox-selectedCaseId");
+      // 清理租户代码
+      localStorage.removeItem("tenant_code");
+    },
+    [user, isLoggedIn],
+  );
+  const initializeUserSession = useCallback(
+    async (appUser: AppUser, oidcUserInstance?: OidcUser | null) => {
+      setUser(appUser);
+      setOidcUser(oidcUserInstance || null);
+      setIsLoggedIn(true);
 
-    setUser(null);
-    setOidcUser(null);
-    setIsLoggedIn(false);
-    setSelectedCaseId(null);
-    setUserCases([]);
-    setCurrentUserCaseRoles([]);
-    setNavMenuItems([]);
+      // 注意：现在不需要手动保存用户数据，queryWithAuth会自动缓存
 
-    // 只有在明确需要时才调用 invalidate
-    if (shouldInvalidate) {
-      authService.clearTokens(); // Clear tokens from localStorage
-    }
-
-
-    localStorage.removeItem('cuckoox-selectedCaseId');
-    // 清理租户代码
-    localStorage.removeItem('tenant_code');
-  }, [user, isLoggedIn]);
-  const initializeUserSession = useCallback(async (appUser: AppUser, oidcUserInstance?: OidcUser | null) => {
-    setUser(appUser);
-    setOidcUser(oidcUserInstance || null);
-    setIsLoggedIn(true);
-
-    // 注意：现在不需要手动保存用户数据，queryWithAuth会自动缓存
-
-    await loadUserCasesAndRoles(appUser);
-  }, [loadUserCasesAndRoles]);
+      await loadUserCasesAndRoles(appUser);
+    },
+    [loadUserCasesAndRoles],
+  );
   // 检查当前用户的函数
-  const checkCurrentUser = useCallback(async (isMounted: () => boolean) => {
-    if (!isMounted()) return;
+  const checkCurrentUser = useCallback(
+    async (isMounted: () => boolean) => {
+      if (!isMounted()) return;
 
-    // 防止重复检查
-    if (isCheckingUser.current) {
-      console.log('AuthContext: Already checking user, skipping duplicate call');
-      return;
-    }
+      // 防止重复检查
+      if (isCheckingUser.current) {
+        console.log(
+          "AuthContext: Already checking user, skipping duplicate call",
+        );
+        return;
+      }
 
-    // 使用函数内部的状态检查而不是依赖闭包
-    const currentUser = user;
-    const currentIsLoggedIn = isLoggedIn;
+      // 使用函数内部的状态检查而不是依赖闭包
+      const currentUser = user;
+      const currentIsLoggedIn = isLoggedIn;
 
-    // 如果已经有用户且已登录，避免重复检查
-    if (currentUser && currentIsLoggedIn) {
-      console.log('AuthContext: User already authenticated, skipping checkCurrentUser');
-      return;
-    }
+      // 如果已经有用户且已登录，避免重复检查
+      if (currentUser && currentIsLoggedIn) {
+        console.log(
+          "AuthContext: User already authenticated, skipping checkCurrentUser",
+        );
+        setIsLoading(false); // 🔧 确保loading状态正确
+        return;
+      }
 
-    isCheckingUser.current = true;
-    setIsLoading(true);
+      isCheckingUser.current = true;
+      console.log("🔧 AuthContext: Starting user authentication check");
+      setIsLoading(true);
 
-    try {
-      // 等待Service Worker就绪
-      await serviceWorkerComm.waitForReady();
+      try {
+        // 🔧 优化：Service Worker等待逻辑，更短超时时间，更好的降级处理
+        let serviceWorkerReady = false;
+        try {
+          const waitPromise = serviceWorkerComm.waitForReady();
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Service Worker wait timeout")),
+              3000, // 🔧 缩短到3秒，避免长时间阻塞
+            ),
+          );
 
-      const result = await queryWithAuth<AppUser[]>(client, 'select * from user where id=$auth;');
-      // 从SurrealDB获取登录状态
-      if (result && result.length > 0) {
-        await initializeUserSession(result[0], null);
+          await Promise.race([waitPromise, timeoutPromise]);
+          serviceWorkerReady = true;
+          console.log(
+            "🔧 Service Worker ready, proceeding with authentication check",
+          );
+        } catch (waitError) {
+          console.warn(
+            "🔧 Service Worker not ready within timeout, proceeding with fallback mode:",
+            waitError.message,
+          );
+          // 🔧 即使Service Worker未就绪也继续，使用降级模式
+          serviceWorkerReady = false;
+        }
+
+        // 🔧 根据Service Worker状态决定认证策略
+        if (serviceWorkerReady) {
+          try {
+            const result = await queryWithAuth<AppUser[]>(
+              client,
+              "select * from user where id=$auth;",
+            );
+            // 从SurrealDB获取登录状态
+            if (result && result.length > 0) {
+              await initializeUserSession(result[0], null);
+              if (isMounted()) {
+                setIsLoading(false);
+              }
+              return;
+            }
+          } catch (authError) {
+            console.warn(
+              "🔧 queryWithAuth failed, falling back to cached data:",
+              authError,
+            );
+          }
+        }
+
+        // 🔧 Service Worker未就绪或认证失败时，尝试使用缓存数据
+        const cachedUserData = localStorage.getItem("cuckoox-last-user");
+        if (cachedUserData) {
+          try {
+            console.log(
+              "🔧 Using cached user data due to Service Worker unavailability",
+            );
+            const userData = JSON.parse(cachedUserData);
+            setUser(userData);
+            setIsLoggedIn(true);
+            if (isMounted()) {
+              setIsLoading(false);
+            }
+            return;
+          } catch (cacheError) {
+            console.warn("Failed to parse cached user data:", cacheError);
+          }
+        }
+
+        // 🔧 如果没有缓存数据，正常结束loading状态
         if (isMounted()) {
           setIsLoading(false);
         }
-        return;
+      } catch (error) {
+        console.error("Error checking current user session:", error);
+
+        // 🔧 错误处理：连接失败时的降级策略
+        if (isMounted()) {
+          console.error("Authentication check failed:", error);
+
+          // 🔧 如果是明确的认证错误且已连接，清除状态
+          if (isConnected && error.message?.includes("auth")) {
+            await clearAuthState(false);
+          } else {
+            // 🔧 其他错误情况（网络问题等），尝试使用缓存但不清除认证状态
+            try {
+              const cachedUserData = localStorage.getItem("cuckoox-last-user");
+              if (cachedUserData) {
+                console.log("🔧 Using cached user data due to network error");
+                const userData = JSON.parse(cachedUserData);
+                setUser(userData);
+                setIsLoggedIn(true);
+                console.log("🔧 Offline mode activated due to error");
+              }
+            } catch (cacheError) {
+              console.warn("Failed to load cached user data:", cacheError);
+            }
+          }
+        }
+      } finally {
+        isCheckingUser.current = false;
+        console.log("🔧 AuthContext: User authentication check completed");
+        if (isMounted()) setIsLoading(false);
       }
-      if (isMounted()) {
-        setIsLoading(false);
-      }
-    } catch (error) {
-      console.error("Error checking current user session:", error);
-      // 只有在关键错误时才清除状态，而不是每次都清除
-      if (isMounted() && isConnected) {
-        await clearAuthState(false);
-      }
-    } finally {
-      isCheckingUser.current = false;
-      if (isMounted()) setIsLoading(false);
-    }
-  }, [serviceWorkerComm, getAuthStatus, isConnected, initializeUserSession, clearAuthState]);
+    },
+    [
+      serviceWorkerComm,
+      getAuthStatus,
+      isConnected,
+      initializeUserSession,
+      clearAuthState,
+    ],
+  );
 
   useEffect(() => {
     let isMounted = true;
+
+    // 🔧 立即设置较短的超时，确保页面不会长时间阻塞
+    const emergencyTimeout = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.warn(
+          "🚨 AuthContext: Emergency timeout triggered, forcing isLoading to false",
+        );
+        setIsLoading(false);
+      }
+    }, 3000); // 3秒紧急超时
 
     // 创建一个稳定的检查函数，避免依赖checkCurrentUser本身
     const performUserCheck = async () => {
@@ -575,38 +826,76 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // 防止重复检查
       if (isCheckingUser.current) {
-        console.log('AuthContext: Already checking user, skipping duplicate call');
+        console.log(
+          "AuthContext: Already checking user, skipping duplicate call",
+        );
         return;
       }
 
       // 如果已经有用户且已登录，避免重复检查
       if (user && isLoggedIn) {
-        console.log('AuthContext: User already authenticated, skipping checkCurrentUser');
+        console.log(
+          "AuthContext: User already authenticated, skipping checkCurrentUser",
+        );
+        setIsLoading(false); // 🔧 确保已认证用户的loading状态为false
         return;
       }
 
       await checkCurrentUser(() => isMounted);
     };
 
-    // 只有在有意义的状态变化时才检查用户
+    // 🔧 无论连接状态如何，都尝试检查用户，但有更短的超时
     if (isConnected) {
+      console.log(
+        "🔧 AuthContext: SurrealDB connected, checking user authentication",
+      );
       performUserCheck();
+    } else {
+      console.log(
+        "🔧 AuthContext: SurrealDB not connected, checking cached authentication",
+      );
+      // 🔧 即使未连接也尝试使用缓存数据，避免无限loading
+      setTimeout(() => {
+        if (isMounted && isLoading) {
+          try {
+            const cachedUserData = localStorage.getItem("cuckoox-last-user");
+            if (cachedUserData) {
+              console.log(
+                "🔧 Using cached user data due to connection unavailability",
+              );
+              const userData = JSON.parse(cachedUserData);
+              setUser(userData);
+              setIsLoggedIn(true);
+            }
+          } catch (error) {
+            console.warn("Failed to load cached user data:", error);
+          }
+          setIsLoading(false);
+        }
+      }, 1000); // 1秒后如果还在loading就使用缓存或设置为false
     }
 
     return () => {
       isMounted = false;
+      clearTimeout(emergencyTimeout);
     };
-  }, [isConnected]); // 移除checkCurrentUser依赖
+  }, [isConnected, user, isLoggedIn]); // 🔧 添加更多依赖确保状态同步
 
   // 监听认证状态变化事件
   useEffect(() => {
     const handleAuthStateChange = (event: CustomEvent) => {
       const { isAuthenticated, reason, timestamp } = event.detail;
-      console.log('AuthContext: Received auth state change event:', { isAuthenticated, reason, timestamp });
+      console.log("AuthContext: Received auth state change event:", {
+        isAuthenticated,
+        reason,
+        timestamp,
+      });
 
       // 如果用户未认证，立即清除认证状态并重定向到登录页面
       if (!isAuthenticated) {
-        console.log('AuthContext: User not authenticated, clearing auth state immediately');
+        console.log(
+          "AuthContext: User not authenticated, clearing auth state immediately",
+        );
 
         try {
           // 立即同步清除认证状态，确保状态立即更新
@@ -614,58 +903,67 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           clearAuthState(true);
 
           // 重定向到登录页面
-          if (window.location.pathname !== '/login') {
-            console.log('AuthContext: Redirecting to login page');
-            window.location.href = '/login';
+          if (window.location.pathname !== "/login") {
+            console.log("AuthContext: Redirecting to login page");
+            window.location.href = "/login";
           }
         } catch (error) {
-          console.error('AuthContext: Error clearing auth state:', error);
+          console.error("AuthContext: Error clearing auth state:", error);
         }
       }
     };
 
     // 添加事件监听器
-    window.addEventListener('auth-state-changed', handleAuthStateChange as EventListener);
+    window.addEventListener(
+      "auth-state-changed",
+      handleAuthStateChange as EventListener,
+    );
 
     // 清理事件监听器
     return () => {
-      window.removeEventListener('auth-state-changed', handleAuthStateChange as EventListener);
+      window.removeEventListener(
+        "auth-state-changed",
+        handleAuthStateChange as EventListener,
+      );
     };
   }, [clearAuthState]);
 
-  const setAuthState = (appUser: AppUser, oidcUserInstance?: OidcUser | null) => {
+  const setAuthState = (
+    appUser: AppUser,
+    oidcUserInstance?: OidcUser | null,
+  ) => {
     initializeUserSession(appUser, oidcUserInstance);
   };
 
   // 更新菜单状态
   const fetchAndUpdateMenuPermissions = useCallback(async () => {
-    console.log('fetchAndUpdateMenuPermissions called');
+    console.log("fetchAndUpdateMenuPermissions called");
 
     if (!user) {
-      console.log('No user, clearing menu items');
+      console.log("No user, clearing menu items");
       setNavMenuItems([]);
       return;
     }
 
     if (!client) {
-      console.log('No client available, skipping menu load');
+      console.log("No client available, skipping menu load");
       return;
     }
 
-    console.log('Loading menus for user:', user.id, 'case:', selectedCaseId);
+    console.log("Loading menus for user:", user.id, "case:", selectedCaseId);
     setIsMenuLoading(true);
 
     try {
       // 直接使用图查询函数加载用户可访问的菜单
-      console.log('Loading menus using fn::get_user_menus...');
+      console.log("Loading menus using fn::get_user_menus...");
       const dbMenuItems = await menuService.loadUserMenus(
         client,
-        selectedCaseId || null
+        selectedCaseId || null,
       );
-      console.log('Database menu items:', dbMenuItems);
+      console.log("Database menu items:", dbMenuItems);
 
       // 只有当菜单项确实发生变化时才更新状态
-      setNavMenuItems(prevMenuItems => {
+      setNavMenuItems((prevMenuItems) => {
         // 比较新旧菜单项是否相同
         if (JSON.stringify(prevMenuItems) === JSON.stringify(dbMenuItems)) {
           return prevMenuItems; // 返回旧状态，避免不必要的重新渲染
@@ -673,14 +971,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return dbMenuItems;
       });
 
-      console.log('Menu items loaded:', {
+      console.log("Menu items loaded:", {
         userId: user.id.toString(),
         caseId: selectedCaseId?.toString() || null,
-        menuCount: dbMenuItems.length
+        menuCount: dbMenuItems.length,
       });
-
     } catch (error) {
-      console.error('Error updating menu permissions:', error);
+      console.error("Error updating menu permissions:", error);
       // 出错时设置为空菜单
       setNavMenuItems([]);
     } finally {
@@ -689,38 +986,50 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user, selectedCaseId, client]); // 修复依赖
 
   // Helper function to update last selected case in DB
-  const updateLastSelectedCaseInDB = async (userId: RecordId, caseId: RecordId) => {
+  const updateLastSelectedCaseInDB = async (
+    userId: RecordId,
+    caseId: RecordId,
+  ) => {
     if (!userId || !caseId || !isConnected) {
-      console.warn('updateLastSelectedCaseInDB: missing userId/caseId or DB not connected.');
+      console.warn(
+        "updateLastSelectedCaseInDB: missing userId/caseId or DB not connected.",
+      );
       return;
     }
     try {
-      await queryWithAuth(client, 'UPDATE user SET last_login_case_id = $caseId WHERE id = $userId;', {
-        userId,
-        caseId,
-      });
-      console.log(`Successfully updated last_selected_case_id for user ${userId} to ${caseId}`);
+      await queryWithAuth(
+        client,
+        "UPDATE user SET last_login_case_id = $caseId WHERE id = $userId;",
+        {
+          userId,
+          caseId,
+        },
+      );
+      console.log(
+        `Successfully updated last_selected_case_id for user ${userId} to ${caseId}`,
+      );
     } catch (error) {
-      console.error('Failed to update last_selected_case_id in DB:', error);
+      console.error("Failed to update last_selected_case_id in DB:", error);
     }
   };
 
-
   const selectCase = async (caseIdToSelect: RecordId | string) => {
     if (!user || !user.id || !isConnected) {
-      console.error("User not available or SurrealDB not connected for selecting case.");
+      console.error(
+        "User not available or SurrealDB not connected for selecting case.",
+      );
       setIsCaseLoading(false); // Ensure loading state is reset
       return;
     }
 
     // 将字符串转换为RecordId对象
     let recordId: RecordId;
-    if (typeof caseIdToSelect === 'string') {
-      if (caseIdToSelect.includes(':')) {
-        const parts = caseIdToSelect.split(':');
+    if (typeof caseIdToSelect === "string") {
+      if (caseIdToSelect.includes(":")) {
+        const parts = caseIdToSelect.split(":");
         recordId = new RecordId(parts[0], parts[1]);
       } else {
-        recordId = new RecordId('case', caseIdToSelect);
+        recordId = new RecordId("case", caseIdToSelect);
       }
     } else {
       recordId = caseIdToSelect;
@@ -729,16 +1038,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsCaseLoading(true);
     try {
       // 检查案件是否在用户可访问的案件列表中
-      const caseExistsForUser = userCases.some(c => c.id.toString() === recordId.toString());
+      const caseExistsForUser = userCases.some(
+        (c) => c.id.toString() === recordId.toString(),
+      );
       if (!caseExistsForUser) {
-        console.warn("selectCase called with a caseId not in the current userCases list.");
+        console.warn(
+          "selectCase called with a caseId not in the current userCases list.",
+        );
         return;
       }
 
       // 直接设置选中的案件ID
       setSelectedCaseId(recordId);
-      localStorage.setItem('cuckoox-selectedCaseId', serializeRecordId(recordId));
-      
+      localStorage.setItem(
+        "cuckoox-selectedCaseId",
+        serializeRecordId(recordId),
+      );
+
       // 清空当前案件角色，后续通过权限系统查询
       setCurrentUserCaseRoles([]);
 
@@ -746,13 +1062,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await client.merge(user.id, { last_login_case_id: recordId });
 
       // 更新本地用户对象
-      setUser(prevUser => prevUser ? { ...prevUser, last_login_case_id: recordId } : null);
-
-      // 更新数据库中的last_login_case_id（备用方式）
-      if (user?.id) {
-        await updateLastSelectedCaseInDB(user.id, recordId);
-      }
-
+      setUser((prevUser) =>
+        prevUser ? { ...prevUser, last_login_case_id: recordId } : null,
+      );
     } catch (error) {
       console.error(`Error selecting case ${recordId}:`, error);
     } finally {
@@ -764,7 +1076,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (user && isConnected) {
       await loadUserCasesAndRoles(user);
     } else if (!isConnected) {
-      console.log('refreshUserCasesAndRoles: SurrealDB not connected, skipping...');
+      console.log(
+        "refreshUserCasesAndRoles: SurrealDB not connected, skipping...",
+      );
     }
   };
 
@@ -778,9 +1092,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setIsLoading(true);
-    const isAdmin = user.github_id === '--admin--';
-    const isRootAdmin = user.github_id.startsWith('root_admin_');
-    const isPasswordUser = user.github_id.startsWith('local_') || isRootAdmin;
+    const isAdmin = user.github_id === "--admin--";
+    const isRootAdmin = user.github_id.startsWith("root_admin_");
+    const isPasswordUser = user.github_id.startsWith("local_") || isRootAdmin;
 
     try {
       // 统一先清理本地存储和状态
@@ -789,13 +1103,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 根据用户类型执行不同的登出操作
       if (isAdmin) {
         await authService.signout();
-        console.log('Admin user signed out from SurrealDB.');
+        console.log("Admin user signed out from SurrealDB.");
       } else if (isPasswordUser) {
         // 密码登录用户，只清理令牌，不走 OIDC 流程
         await authService.signout();
-        console.log('Password user signed out from SurrealDB.');
+        console.log("Password user signed out from SurrealDB.");
         // 直接重定向到登录页面
-        window.location.href = '/login';
+        window.location.href = "/login";
       } else {
         // OIDC 登录用户，走 OIDC 退出流程
         await authService.logoutRedirect();
@@ -804,7 +1118,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // 统一错误处理
       console.error("Error during logout process:", error);
       // 确保即使出错也能重定向到登录页面
-      window.location.href = '/login';
+      window.location.href = "/login";
     } finally {
       setIsLoading(false);
     }
@@ -813,23 +1127,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     // 只有当用户存在并且 SurrealDB 连接已建立并且 client 可用时才加载菜单
     if (user && isConnected && client) {
-      console.log('User ready and SurrealDB connected, loading menus...');
+      console.log("User ready and SurrealDB connected, loading menus...");
       fetchAndUpdateMenuPermissions();
     } else if (!user) {
       setNavMenuItems([]); // Clear menu if no user
     } else if (user && !isConnected) {
-      console.log('User ready but SurrealDB not connected yet, waiting...');
+      console.log("User ready but SurrealDB not connected yet, waiting...");
     } else if (user && isConnected && !client) {
-      console.log('User ready and SurrealDB connected but client not available yet, waiting...');
+      console.log(
+        "User ready and SurrealDB connected but client not available yet, waiting...",
+      );
     }
-  }, [user, isConnected, selectedCaseId, fetchAndUpdateMenuPermissions, client]);
+  }, [
+    user,
+    isConnected,
+    selectedCaseId,
+    fetchAndUpdateMenuPermissions,
+    client,
+  ]);
 
   // Effect for automatic navigation to creditor management
   useEffect(() => {
-    if (isLoggedIn && selectedCaseId && userCases.length > 0 && navMenuItems && !isCaseLoading && !isMenuLoading) {
-      const selectedCase = userCases.find(c => c.id === selectedCaseId);
-      if (selectedCase && selectedCase.status === '立案') {
-        const canNavigateToCreditors = navMenuItems.some(item => item.path === CREDITOR_MANAGEMENT_PATH);
+    if (
+      isLoggedIn &&
+      selectedCaseId &&
+      userCases.length > 0 &&
+      navMenuItems &&
+      !isCaseLoading &&
+      !isMenuLoading
+    ) {
+      const selectedCase = userCases.find((c) => c.id === selectedCaseId);
+      if (selectedCase && selectedCase.status === "立案") {
+        const canNavigateToCreditors = navMenuItems.some(
+          (item) => item.path === CREDITOR_MANAGEMENT_PATH,
+        );
         if (canNavigateToCreditors) {
           // Check if already on the creditors page to prevent navigation loop
           // This requires access to current location, which is not ideal in context.
@@ -838,7 +1169,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       }
     }
-  }, [isLoggedIn, selectedCaseId, userCases, navMenuItems, isCaseLoading, isMenuLoading]);
+  }, [
+    isLoggedIn,
+    selectedCaseId,
+    userCases,
+    navMenuItems,
+    isCaseLoading,
+    isMenuLoading,
+  ]);
 
   const hasRole = (roleName: string): boolean => {
     // 如果没有用户登录,直接返回false
@@ -847,12 +1185,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // 检查是否为管理员
-    if (user.github_id === '--admin--') {
+    if (user.github_id === "--admin--") {
       return true; // 管理员拥有所有权限
     }
 
     // 对于普通用户,需要检查具体角色权限
-    if (roleName === 'admin') {
+    if (roleName === "admin") {
       return false; // 非管理员用户没有admin权限
     }
 
@@ -863,49 +1201,54 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     // 检查用户在当前案件中是否拥有指定角色
-    return currentUserCaseRoles.some(role => role.name === roleName);
+    return currentUserCaseRoles.some((role) => role.name === roleName);
   };
 
   // Test-only methods
-  const __TEST_setCurrentUserCaseRoles = process.env.NODE_ENV === 'test' ? setCurrentUserCaseRoles : undefined;
-  const __TEST_setSelectedCaseId = process.env.NODE_ENV === 'test' ? setSelectedCaseId : undefined;
-  const __TEST_setUserCases = process.env.NODE_ENV === 'test' ? setUserCases : undefined;
+  const __TEST_setCurrentUserCaseRoles =
+    process.env.NODE_ENV === "test" ? setCurrentUserCaseRoles : undefined;
+  const __TEST_setSelectedCaseId =
+    process.env.NODE_ENV === "test" ? setSelectedCaseId : undefined;
+  const __TEST_setUserCases =
+    process.env.NODE_ENV === "test" ? setUserCases : undefined;
 
   return (
-    <AuthContext.Provider value={{
-      isLoggedIn,
-      user,
-      oidcUser,
-      setAuthState,
-      logout,
-      isLoading,
-      selectedCaseId,
-      selectedCase,
-      userCases,
-      currentUserCaseRoles,
-      isCaseLoading,
-      selectCase,
-      hasRole,
-      refreshUserCasesAndRoles,
-      navMenuItems,
-      isMenuLoading, // Expose new menu state
-      navigateTo,
-      clearNavigateTo, // Expose navigation state and clear function
-      // Permission related methods (compatible with usePermission hooks)
-      useOperationPermission,
-      useOperationPermissions,
-      useMenuPermission,
-      useDataPermission,
-      useUserRoles,
-      useClearPermissionCache,
-      useSyncPermissions,
-      // Permission preloading methods to avoid render loop issues
-      preloadOperationPermission,
-      preloadOperationPermissions,
-      __TEST_setCurrentUserCaseRoles,
-      __TEST_setSelectedCaseId,
-      __TEST_setUserCases // Expose test-only methods
-    }}>
+    <AuthContext.Provider
+      value={{
+        isLoggedIn,
+        user,
+        oidcUser,
+        setAuthState,
+        logout,
+        isLoading,
+        selectedCaseId,
+        selectedCase,
+        userCases,
+        currentUserCaseRoles,
+        isCaseLoading,
+        selectCase,
+        hasRole,
+        refreshUserCasesAndRoles,
+        navMenuItems,
+        isMenuLoading, // Expose new menu state
+        navigateTo,
+        clearNavigateTo, // Expose navigation state and clear function
+        // Permission related methods (compatible with usePermission hooks)
+        useOperationPermission,
+        useOperationPermissions,
+        useMenuPermission,
+        useDataPermission,
+        useUserRoles,
+        useClearPermissionCache,
+        useSyncPermissions,
+        // Permission preloading methods to avoid render loop issues
+        preloadOperationPermission,
+        preloadOperationPermissions,
+        __TEST_setCurrentUserCaseRoles,
+        __TEST_setSelectedCaseId,
+        __TEST_setUserCases, // Expose test-only methods
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -914,7 +1257,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

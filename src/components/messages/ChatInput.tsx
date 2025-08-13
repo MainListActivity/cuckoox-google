@@ -118,7 +118,6 @@ const EMOJI_DATA = {
   '🥵': 'hot_face',
   '🥶': 'cold_face',
   '😳': 'flushed',
-  '🤪': 'zany_face',
   '😵': 'dizzy_face',
   '🥴': 'woozy_face',
   '😠': 'angry',

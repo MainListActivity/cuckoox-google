@@ -48,10 +48,11 @@ export default defineConfig(({ mode }) => {
   // 自定义环境变量加载逻辑
   const env = {} as Record<string, string>;
 
-  // 加载顺序：.env.local -> .env.dev (dev模式) -> .env
+  // 加载顺序：.env.local -> .env.dev (dev模式) -> .env -> .env.test (test模式)
   const envFiles = [
     ".env", // 基础配置
     ...(mode === "development" ? [".env.dev"] : []), // dev模式时加载.env.dev
+    ...(mode === "test" || process.env.NODE_ENV === "test" ? [".env.test"] : []), // test模式时加载.env.test
     ".env.local", // 本地配置（最高优先级）
   ];
 
@@ -201,10 +202,11 @@ export default defineConfig(({ mode }) => {
         strict: false,
       },
       host: true,
+      port: 5173, // 使用标准 Vite 端口
       allowedHosts: ["dev.cuckoox.cn", "dc.cuckoox.cn", "code.cuckoox.cn"],
     },
     preview: {
-      port: 5173,
+      port: 4173, // 使用Vite官方推荐的preview端口
     },
     test: {
       // Vitest configuration

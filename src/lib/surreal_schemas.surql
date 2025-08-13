@@ -8,11 +8,11 @@ OPTION IMPORT;
 -- TABLE: case
 -- ------------------------------
 
-DEFINE TABLE case TYPE NORMAL SCHEMAFULL PERMISSIONS 
-  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'read'],
-  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'create'],
-  FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'update'],
-  FOR delete WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'delete'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'delete'];
+DEFINE TABLE case TYPE NORMAL SCHEMAFULL PERMISSIONS
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'read'] OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'create'] OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'update'] OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'delete'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case' AND operation_type = 'delete'] OR $auth.id->has_role->role.name CONTAINS 'admin';
 
 DEFINE FIELD acceptance_date ON case TYPE datetime PERMISSIONS FULL;
 DEFINE FIELD announcement_date ON case TYPE option<datetime> PERMISSIONS FULL;
@@ -38,13 +38,13 @@ DEFINE FIELD second_creditor_meeting_date ON case TYPE option<datetime> PERMISSI
 DEFINE FIELD selected_theme_name ON case TYPE option<string> PERMISSIONS FULL;
 DEFINE FIELD updated_at ON case TYPE datetime READONLY VALUE time::now() ASSERT $value != NONE PERMISSIONS FULL;
 
-
+DEFINE INDEX case_number_unique_idx ON case FIELDS case_number UNIQUE;
 
 -- ------------------------------
 -- TABLE: case_bot
 -- ------------------------------
 
-DEFINE TABLE case_bot TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE case_bot TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'read'],
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'create'],
   FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'case_bot' AND operation_type = 'update'],
@@ -78,7 +78,7 @@ DEFINE INDEX user_case_bot_subscription_idx ON case_bot_subscription FIELDS user
 -- TABLE: claim
 -- ------------------------------
 
-DEFINE TABLE claim TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE claim TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim' AND operation_type = 'read'] OR (created_by = $auth.id),
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim' AND operation_type = 'create'],
   FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim' AND operation_type = 'update'] OR (created_by = $auth.id AND review_status_id.name = '待提交'),
@@ -105,7 +105,7 @@ DEFINE FIELD case_id ON claim TYPE record<case> PERMISSIONS FULL;
 DEFINE FIELD claim_number ON claim TYPE string PERMISSIONS FULL;
 DEFINE FIELD comments_doc_id ON claim TYPE option<record<document>> PERMISSIONS FULL;
 DEFINE FIELD created_at ON claim TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
-DEFINE FIELD created_by ON claim TYPE record<user> VALUE $auth.id PERMISSIONS FULL;
+DEFINE FIELD created_by ON claim TYPE record<user> VALUE $value OR $auth.id PERMISSIONS FULL;
 DEFINE FIELD creditor_id ON claim TYPE record<creditor> PERMISSIONS FULL;
 DEFINE FIELD review_comments ON claim TYPE option<string> PERMISSIONS FULL;
 DEFINE FIELD review_status_id ON claim TYPE option<record<claim_review_status_definition>> PERMISSIONS FULL;
@@ -117,6 +117,10 @@ DEFINE FIELD updated_at ON claim TYPE datetime READONLY VALUE time::now() ASSERT
 DEFINE FIELD current_version ON claim TYPE int DEFAULT 1 PERMISSIONS FULL;
 DEFINE FIELD last_operation_time ON claim TYPE datetime VALUE time::now() PERMISSIONS FULL;
 DEFINE FIELD operation_count ON claim TYPE int DEFAULT 0 PERMISSIONS FULL;
+DEFINE FIELD claim_amount ON claim TYPE decimal PERMISSIONS FULL;
+DEFINE FIELD claim_nature ON claim TYPE string PERMISSIONS FULL;
+DEFINE FIELD claim_description ON claim TYPE option<string> PERMISSIONS FULL;
+DEFINE FIELD review_status ON claim TYPE option<string> PERMISSIONS FULL;
 
 DEFINE INDEX claim_case_creditor_idx ON claim FIELDS case_id, creditor_id;
 DEFINE INDEX claim_case_number_idx ON claim FIELDS case_id, claim_number UNIQUE;
@@ -126,7 +130,7 @@ DEFINE INDEX claim_case_status_idx ON claim FIELDS case_id, review_status_id;
 DEFINE INDEX claim_creditor_amount_idx ON claim FIELDS creditor_id, status, asserted_claim_details.total_asserted_amount;
 DEFINE INDEX claim_case_creditor_amount_idx ON claim FIELDS case_id, creditor_id, asserted_claim_details.total_asserted_amount;
 
--- 全文搜索分析器 - 支持债权高级搜索功能  
+-- 全文搜索分析器 - 支持债权高级搜索功能
 DEFINE ANALYZER claim_search_analyzer TOKENIZERS blank,punct,camel,class FILTERS lowercase,ascii;
 
 -- 债权全文搜索索引
@@ -139,15 +143,15 @@ DEFINE INDEX claim_search_optimized_idx ON claim FIELDS case_id, status, created
 DEFINE INDEX claim_creditor_search_idx ON claim FIELDS case_id, creditor_id, status;
 
 -- 版本控制和操作追踪相关索引
-DEFINE INDEX claim_version_idx ON claim FIELDS id, current_version;
-DEFINE INDEX claim_last_operation_idx ON claim FIELDS last_operation_time DESC;
+DEFINE INDEX claim_version_idx ON claim FIELDS current_version;
+DEFINE INDEX claim_last_operation_idx ON claim FIELDS last_operation_time;
 
 
 -- ------------------------------
 -- TABLE: claim_nature_definition
 -- ------------------------------
 
-DEFINE TABLE claim_nature_definition TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->(select * from role where name='admin');
+DEFINE TABLE claim_nature_definition TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
 
 DEFINE FIELD created_at ON claim_nature_definition TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
 DEFINE FIELD description ON claim_nature_definition TYPE option<string> PERMISSIONS FULL;
@@ -163,7 +167,7 @@ DEFINE INDEX claim_nature_name_idx ON claim_nature_definition FIELDS name UNIQUE
 -- TABLE: claim_review_status_definition
 -- ------------------------------
 
-DEFINE TABLE claim_review_status_definition TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->(select * from role where name='admin');
+DEFINE TABLE claim_review_status_definition TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
 
 DEFINE FIELD created_at ON claim_review_status_definition TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
 DEFINE FIELD description ON claim_review_status_definition TYPE option<string> PERMISSIONS FULL;
@@ -179,7 +183,7 @@ DEFINE INDEX claim_review_status_name_idx ON claim_review_status_definition FIEL
 -- TABLE: creditor
 -- ------------------------------
 
-DEFINE TABLE creditor TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE creditor TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'creditor' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'creditor' AND operation_type = 'read'] OR (created_by = $auth.id),
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'creditor' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'creditor' AND operation_type = 'create'],
   FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'creditor' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'creditor' AND operation_type = 'update'] OR (created_by = $auth.id),
@@ -199,7 +203,7 @@ DEFINE FIELD updated_at ON creditor TYPE datetime READONLY VALUE time::now() ASS
 
 DEFINE INDEX creditor_case_legal_id_idx ON creditor FIELDS case_id, legal_id UNIQUE;
 
--- 全文搜索分析器 - 支持债权人高级搜索功能  
+-- 全文搜索分析器 - 支持债权人高级搜索功能
 DEFINE ANALYZER creditor_search_analyzer TOKENIZERS blank,punct,camel,class FILTERS lowercase,ascii;
 
 -- 债权人全文搜索索引
@@ -210,7 +214,7 @@ DEFINE INDEX creditor_fulltext_contact_phone_idx ON creditor FIELDS contact_phon
 DEFINE INDEX creditor_fulltext_address_idx ON creditor FIELDS contact_address SEARCH ANALYZER creditor_search_analyzer BM25 HIGHLIGHTS;
 
 -- 优化债权人搜索性能的复合索引
-DEFINE INDEX creditor_search_optimized_idx ON creditor FIELDS case_id, type, created_at DESC;
+DEFINE INDEX creditor_search_optimized_idx ON creditor FIELDS case_id, type, created_at;
 DEFINE INDEX creditor_name_search_idx ON creditor FIELDS case_id, name;
 DEFINE INDEX creditor_contact_search_idx ON creditor FIELDS case_id, contact_person_name, contact_phone;
 
@@ -276,7 +280,7 @@ DEFINE INDEX doc_comment_doc_idx ON document_comment FIELDS document_id;
 -- TABLE: document_version
 -- ------------------------------
 
-DEFINE TABLE document_version TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select, create WHERE $auth.id, FOR update, delete WHERE $auth.id->has_role->(select * from role where name='admin');
+DEFINE TABLE document_version TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select, create WHERE $auth.id, FOR update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
 
 DEFINE FIELD change_summary ON document_version TYPE option<string> PERMISSIONS FULL;
 DEFINE FIELD content ON document_version TYPE string PERMISSIONS FULL;
@@ -292,7 +296,7 @@ DEFINE INDEX doc_version_idx ON document_version FIELDS document_id, version_num
 -- TABLE: meeting
 -- ------------------------------
 
-DEFINE TABLE meeting TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE meeting TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'meeting' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'meeting' AND operation_type = 'read'],
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'meeting' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'meeting' AND operation_type = 'create'],
   FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'meeting' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'meeting' AND operation_type = 'update'],
@@ -319,7 +323,7 @@ DEFINE INDEX meeting_case_idx ON meeting FIELDS case_id;
 -- TABLE: message
 -- ------------------------------
 
-DEFINE TABLE message TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE message TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'read'] OR sender_id = $auth.id OR target_user_id = $auth.id OR conversation_id.participants CONTAINS $auth.id,
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'create'],
   FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'message' AND operation_type = 'update'] OR sender_id = $auth.id,
@@ -352,23 +356,23 @@ DEFINE FIELD reply_to ON message TYPE option<record<message>> PERMISSIONS FULL;
 DEFINE FIELD is_pinned ON message TYPE bool DEFAULT false PERMISSIONS FULL;
 DEFINE FIELD mentioned_users ON message TYPE option<array<record<user>>> PERMISSIONS FULL;
 
-DEFINE INDEX message_conversation_created_idx ON message FIELDS conversation_id, created_at DESC;
-DEFINE INDEX message_case_created_idx ON message FIELDS case_id, created_at DESC;
-DEFINE INDEX message_target_user_idx ON message FIELDS target_user_id, is_read, created_at DESC;
-DEFINE INDEX message_sender_idx ON message FIELDS sender_id, created_at DESC;
+DEFINE INDEX message_conversation_created_idx ON message FIELDS conversation_id, created_at;
+DEFINE INDEX message_case_created_idx ON message FIELDS case_id, created_at;
+DEFINE INDEX message_target_user_idx ON message FIELDS target_user_id, is_read, created_at;
+DEFINE INDEX message_sender_idx ON message FIELDS sender_id, created_at;
 
 -- WebRTC消息中心相关索引
-DEFINE INDEX message_group_idx ON message FIELDS group_id, created_at DESC;
-DEFINE INDEX message_target_type_idx ON message FIELDS target_type, created_at DESC;
-DEFINE INDEX message_type_idx ON message FIELDS message_type, created_at DESC;
-DEFINE INDEX message_pinned_idx ON message FIELDS group_id, is_pinned, created_at DESC;
+DEFINE INDEX message_group_idx ON message FIELDS group_id, created_at;
+DEFINE INDEX message_target_type_idx ON message FIELDS target_type, created_at;
+DEFINE INDEX message_type_idx ON message FIELDS message_type, created_at;
+DEFINE INDEX message_pinned_idx ON message FIELDS group_id, is_pinned, created_at;
 DEFINE INDEX message_reply_idx ON message FIELDS reply_to;
 
 -- ------------------------------
 -- TABLE: conversation
 -- ------------------------------
 
-DEFINE TABLE conversation TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE conversation TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id IN participants OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create WHERE $auth.id,
   FOR update WHERE $auth.id IN participants OR $auth.id->has_role->role.name CONTAINS 'admin',
@@ -388,13 +392,13 @@ DEFINE FIELD updated_at ON conversation TYPE datetime READONLY VALUE time::now()
 
 DEFINE INDEX conversation_participants_idx ON conversation FIELDS participants;
 DEFINE INDEX conversation_case_idx ON conversation FIELDS case_id;
-DEFINE INDEX conversation_last_message_idx ON conversation FIELDS last_message_at DESC;
+DEFINE INDEX conversation_last_message_idx ON conversation FIELDS last_message_at;
 
 -- ------------------------------
 -- TABLE: conversation_participant
 -- ------------------------------
 
-DEFINE TABLE conversation_participant TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE conversation_participant TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create WHERE $auth.id,
   FOR update WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
@@ -417,7 +421,7 @@ DEFINE INDEX conversation_participant_unique_idx ON conversation_participant FIE
 -- TABLE: message_group (WebRTC群组功能)
 -- ------------------------------
 
-DEFINE TABLE message_group TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE message_group TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.id) OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create WHERE $auth.id,
   FOR update WHERE $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
@@ -441,7 +445,7 @@ DEFINE INDEX message_group_type_idx ON message_group FIELDS group_type;
 -- TABLE: group_member (WebRTC群组成员关系表)
 -- ------------------------------
 
-DEFINE TABLE group_member TYPE RELATION IN user OUT message_group SCHEMAFULL PERMISSIONS 
+DEFINE TABLE group_member TYPE RELATION IN user OUT message_group SCHEMAFULL PERMISSIONS
   FOR select WHERE in = $auth.id OR $auth.id->group_member[WHERE role IN ['owner', 'admin']]->message_group OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create WHERE $auth.id->group_member[WHERE role IN ['owner', 'admin']]->message_group OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR update WHERE in = $auth.id OR $auth.id->group_member[WHERE role IN ['owner', 'admin']]->message_group OR $auth.id->has_role->role.name CONTAINS 'admin',
@@ -466,7 +470,7 @@ DEFINE INDEX conversation_participant_unread_idx ON conversation_participant FIE
 -- TABLE: claim_operation_log
 -- ------------------------------
 
-DEFINE TABLE claim_operation_log TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE claim_operation_log TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'read'],
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_operation_log' AND operation_type = 'create'],
   FOR update NONE,
@@ -491,17 +495,17 @@ DEFINE FIELD related_documents ON claim_operation_log TYPE option<array<record<d
 DEFINE FIELD business_context ON claim_operation_log TYPE option<object> PERMISSIONS FULL;
 
 -- 索引优化
-DEFINE INDEX claim_operation_claim_time_idx ON claim_operation_log FIELDS claim_id, operation_time DESC;
-DEFINE INDEX claim_operation_operator_idx ON claim_operation_log FIELDS operator_id, operation_time DESC;
-DEFINE INDEX claim_operation_type_idx ON claim_operation_log FIELDS operation_type, operation_time DESC;
-DEFINE INDEX claim_operation_result_idx ON claim_operation_log FIELDS operation_result, operation_time DESC;
+DEFINE INDEX claim_operation_claim_time_idx ON claim_operation_log FIELDS claim_id, operation_time;
+DEFINE INDEX claim_operation_operator_idx ON claim_operation_log FIELDS operator_id, operation_time;
+DEFINE INDEX claim_operation_type_idx ON claim_operation_log FIELDS operation_type, operation_time;
+DEFINE INDEX claim_operation_result_idx ON claim_operation_log FIELDS operation_result, operation_time;
 
 
 -- ------------------------------
 -- TABLE: claim_version_history
 -- ------------------------------
 
-DEFINE TABLE claim_version_history TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE claim_version_history TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'read'],
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_version_history' AND operation_type = 'create'],
   FOR update NONE,
@@ -520,15 +524,15 @@ DEFINE FIELD checksum ON claim_version_history TYPE option<string> PERMISSIONS F
 
 -- 索引优化
 DEFINE INDEX claim_version_claim_version_idx ON claim_version_history FIELDS claim_id, version_number UNIQUE;
-DEFINE INDEX claim_version_claim_time_idx ON claim_version_history FIELDS claim_id, created_at DESC;
-DEFINE INDEX claim_version_type_idx ON claim_version_history FIELDS version_type, created_at DESC;
+DEFINE INDEX claim_version_claim_time_idx ON claim_version_history FIELDS claim_id, created_at;
+DEFINE INDEX claim_version_type_idx ON claim_version_history FIELDS version_type, created_at;
 
 
 -- ------------------------------
 -- TABLE: claim_status_flow
 -- ------------------------------
 
-DEFINE TABLE claim_status_flow TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE claim_status_flow TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'read'],
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_status_flow' AND operation_type = 'create'],
   FOR update NONE,
@@ -548,16 +552,16 @@ DEFINE FIELD duration_in_previous_status ON claim_status_flow TYPE option<durati
 DEFINE FIELD related_operation_log_id ON claim_status_flow TYPE option<record<claim_operation_log>> PERMISSIONS FULL;
 
 -- 索引优化
-DEFINE INDEX claim_status_flow_claim_time_idx ON claim_status_flow FIELDS claim_id, transition_time DESC;
-DEFINE INDEX claim_status_flow_status_idx ON claim_status_flow FIELDS to_status, transition_time DESC;
-DEFINE INDEX claim_status_flow_operator_idx ON claim_status_flow FIELDS operator_id, transition_time DESC;
+DEFINE INDEX claim_status_flow_claim_time_idx ON claim_status_flow FIELDS claim_id, transition_time;
+DEFINE INDEX claim_status_flow_status_idx ON claim_status_flow FIELDS to_status, transition_time;
+DEFINE INDEX claim_status_flow_operator_idx ON claim_status_flow FIELDS operator_id, transition_time;
 
 
 -- ------------------------------
 -- TABLE: claim_access_log
 -- ------------------------------
 
-DEFINE TABLE claim_access_log TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE claim_access_log TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'read'],
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'claim_access_log' AND operation_type = 'create'],
   FOR update NONE,
@@ -577,16 +581,16 @@ DEFINE FIELD access_result ON claim_access_log TYPE string DEFAULT 'success' ASS
 DEFINE FIELD denial_reason ON claim_access_log TYPE option<string> PERMISSIONS FULL;
 
 -- 索引优化
-DEFINE INDEX claim_access_claim_time_idx ON claim_access_log FIELDS claim_id, access_time DESC;
-DEFINE INDEX claim_access_accessor_idx ON claim_access_log FIELDS accessor_id, access_time DESC;
-DEFINE INDEX claim_access_type_idx ON claim_access_log FIELDS access_type, access_time DESC;
+DEFINE INDEX claim_access_claim_time_idx ON claim_access_log FIELDS claim_id, access_time;
+DEFINE INDEX claim_access_accessor_idx ON claim_access_log FIELDS accessor_id, access_time;
+DEFINE INDEX claim_access_type_idx ON claim_access_log FIELDS access_type, access_time;
 
 
 -- ------------------------------
 -- TABLE: message_attachment
 -- ------------------------------
 
-DEFINE TABLE message_attachment TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE message_attachment TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE message_id.sender_id = $auth.id OR message_id.receiver_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create WHERE $auth.id,
   FOR update WHERE message_id.sender_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
@@ -607,7 +611,7 @@ DEFINE INDEX message_attachment_message_idx ON message_attachment FIELDS message
 -- TABLE: notification_rule
 -- ------------------------------
 
-DEFINE TABLE notification_rule TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->(select * from role where name='admin');
+DEFINE TABLE notification_rule TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
 
 DEFINE FIELD created_at ON notification_rule TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
 DEFINE FIELD is_active ON notification_rule TYPE bool DEFAULT true PERMISSIONS FULL;
@@ -626,7 +630,7 @@ DEFINE INDEX notification_rule_phase_idx ON notification_rule FIELDS procedure_p
 -- TABLE: role
 -- ------------------------------
 
-DEFINE TABLE role TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->(select * from role where name='admin');
+DEFINE TABLE role TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select FULL, FOR create, update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
 
 DEFINE FIELD created_at ON role TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
 DEFINE FIELD description ON role TYPE option<string> PERMISSIONS FULL;
@@ -642,10 +646,10 @@ DEFINE INDEX role_name_idx ON role FIELDS name UNIQUE;
 -- ------------------------------
 
 DEFINE TABLE user TYPE NORMAL SCHEMAFULL PERMISSIONS
-  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'read'] OR id = $auth.id,
-  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'create'],
-  FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'update'] OR id = $auth.id,
-  FOR delete WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'delete'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'delete'] OR id = $auth.id;
+  FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'read'] OR id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'create'] OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'update'] OR id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
+  FOR delete WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'delete'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'user' AND operation_type = 'delete'] OR id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin';
 
 
 DEFINE FIELD created_at ON user TYPE datetime DEFAULT time::now() READONLY ASSERT $value != NONE PERMISSIONS FULL;
@@ -664,7 +668,7 @@ DEFINE INDEX user_username_idx ON user COLUMNS username UNIQUE;
 -- TABLE: jwt_key_pair
 -- ------------------------------
 
-DEFINE TABLE jwt_key_pair TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select, create, update, delete WHERE $auth.id->has_role->(select * from role where name='admin');
+DEFINE TABLE jwt_key_pair TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select, create, update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
 
 DEFINE FIELD kid ON jwt_key_pair TYPE string PERMISSIONS FULL;
 DEFINE FIELD OVERWRITE private_key ON jwt_key_pair TYPE string PERMISSIONS FULL;
@@ -678,6 +682,8 @@ DEFINE INDEX jwt_key_pair_created_idx ON jwt_key_pair FIELDS created_at;
 
 -- Set the name of the token
 DEFINE ACCESS cuckoox_token ON DATABASE TYPE RECORD WITH JWT URL 'http://127.0.0.1:8080/.well-known/jwks.json' DURATION FOR TOKEN 1h, FOR SESSION 1h;
+
+
 
 -- ======================================
 -- 图数据库边表定义 (Graph Relations)
@@ -695,13 +701,14 @@ DEFINE INDEX unique_user_role ON has_role COLUMNS in, out UNIQUE;
 -- ------------------------------
 DEFINE TABLE has_case_role TYPE RELATION IN user OUT role SCHEMAFULL PERMISSIONS FULL;
 DEFINE FIELD case_id ON has_case_role TYPE record<case> PERMISSIONS FULL;
+DEFINE FIELD assigned_by ON has_case_role TYPE record<user> PERMISSIONS FULL;
 DEFINE FIELD assigned_at ON has_case_role TYPE datetime VALUE time::now() PERMISSIONS FULL;
 DEFINE INDEX unique_user_case_role ON has_case_role COLUMNS in, out, case_id UNIQUE;
 
 -- ------------------------------
 -- 案件拥有成员
 -- ------------------------------
-DEFINE TABLE has_member TYPE RELATION IN case OUT user SCHEMAFULL PERMISSIONS 
+DEFINE TABLE has_member TYPE RELATION IN case OUT user SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_member' AND operation_type = 'read'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_member' AND operation_type = 'read'],
   FOR create WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_member' AND operation_type = 'create'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_member' AND operation_type = 'create'],
   FOR update WHERE $auth.id->has_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_member' AND operation_type = 'update'] OR $auth.id->has_case_role->role->can_execute_operation->operation_metadata[WHERE tables CONTAINS 'has_member' AND operation_type = 'update'],
@@ -720,7 +727,7 @@ DEFINE INDEX unique_creditor_case ON belongs_to COLUMNS in, out UNIQUE;
 -- ------------------------------
 -- 菜单元数据表
 -- ------------------------------
-DEFINE TABLE menu_metadata TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select WHERE $auth.id->(select * from has_case_role,has_role where case_id = $case_id or case_id =none)->role->(select * from can_access_menu where can_access=true) for create, update, delete none;
+DEFINE TABLE menu_metadata TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select WHERE $auth.id->has_role->role->can_access_menu[WHERE can_access = true] OR $auth.id->has_case_role->role->can_access_menu[WHERE can_access = true] for create, update, delete none;
 
 DEFINE FIELD menu_id ON menu_metadata TYPE string PERMISSIONS FULL;
 DEFINE FIELD path ON menu_metadata TYPE string PERMISSIONS FULL;
@@ -738,7 +745,7 @@ DEFINE INDEX menu_metadata_path_idx ON menu_metadata FIELDS path UNIQUE;
 -- ------------------------------
 -- 操作元数据表
 -- ------------------------------
-DEFINE TABLE operation_metadata TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select WHERE $auth.id->(select * from has_case_role,has_role where case_id = $case_id or case_id =none)->role->(select * from can_execute_operation where can_execute=true) for create, update, delete none;
+DEFINE TABLE operation_metadata TYPE NORMAL SCHEMAFULL PERMISSIONS FOR select WHERE $auth.id->has_role->role->can_execute_operation[WHERE can_execute = true] OR $auth.id->has_case_role->role->can_execute_operation[WHERE can_execute = true] for create, update, delete none;
 
 DEFINE FIELD operation_id ON operation_metadata TYPE string PERMISSIONS FULL;
 DEFINE FIELD menu_id ON operation_metadata TYPE string PERMISSIONS FULL;
@@ -774,7 +781,7 @@ DEFINE INDEX unique_role_operation ON can_execute_operation COLUMNS in, out UNIQ
 -- ------------------------------
 
 -- 初始化角色
-INSERT INTO role (id, name, description, created_at, updated_at) VALUES 
+INSERT INTO role (id, name, description, created_at, updated_at) VALUES
 (role:admin, 'admin', '系统管理员，拥有所有权限', time::now(), time::now()),
 (role:case_manager, 'case_manager', '案件管理人，负责案件的全面管理', time::now(), time::now()),
 (role:creditor_representative, 'creditor_representative', '债权人代表，可以申报和查看债权', time::now(), time::now()),
@@ -782,7 +789,7 @@ INSERT INTO role (id, name, description, created_at, updated_at) VALUES
 (role:claim_reviewer, 'claim_reviewer', '债权审核员，负责审核债权申报', time::now(), time::now());
 
 -- 初始化菜单元数据
-INSERT INTO menu_metadata (menu_id, path, label_key, icon_name, display_order, is_active, created_at, updated_at) VALUES 
+INSERT INTO menu_metadata (menu_id, path, label_key, icon_name, display_order, is_active, created_at, updated_at) VALUES
 ('dashboard', '/dashboard', 'nav_dashboard', 'mdiViewDashboard', 1, true, time::now(), time::now()),
 ('cases', '/cases', 'nav_case_management', 'mdiBriefcase', 2, true, time::now(), time::now()),
 ('case_members', '/case-members', 'nav_case_member_management', 'mdiAccountGroup', 3, true, time::now(), time::now()),
@@ -795,7 +802,7 @@ INSERT INTO menu_metadata (menu_id, path, label_key, icon_name, display_order, i
 ('admin_home', '/admin', 'nav_system_management', 'mdiCog', 10, true, time::now(), time::now()),
 ('pdf-parser', '/pdf-parser', 'nav_pdf-parser', 'mdiFileDocumentSearchOutline', 60, true, time::now(), time::now());
 -- 初始化操作元数据
-INSERT INTO operation_metadata (operation_id, menu_id, operation_name, operation_type, description, tables, is_active, created_at, updated_at) VALUES 
+INSERT INTO operation_metadata (operation_id, menu_id, operation_name, operation_type, description, tables, is_active, created_at, updated_at) VALUES
 ('case_list_view', 'cases', '查看案件列表', 'read', '查看所有案件的列表', ['case'], true, time::now(), time::now()),
 ('case_create', 'cases', '创建案件', 'create', '创建新的破产案件', ['case'], true, time::now(), time::now()),
 ('case_view_detail', 'cases', '查看案件详情', 'read', '查看案件的详细信息', ['case'], true, time::now(), time::now()),
@@ -843,70 +850,42 @@ INSERT INTO operation_metadata (operation_id, menu_id, operation_name, operation
 
 -- 初始化角色菜单权限
 -- admin 拥有所有菜单权限
-FOR $menu IN (SELECT id FROM menu_metadata) {
-    RELATE role:admin->can_access_menu->$menu SET can_access = true, assigned_at = time::now();
-};
+RELATE role:admin->can_access_menu->(SELECT id FROM menu_metadata) SET can_access = true, assigned_at = time::now();
 
 -- case_manager 菜单权限
-FOR $menu_id IN ['dashboard', 'cases', 'case_members', 'creditors', 'claims_list', 'online_meetings', 'messages'] {
-    LET $menu = (SELECT id FROM menu_metadata WHERE menu_id = $menu_id)[0];
-    RELATE role:case_manager->can_access_menu->$menu SET can_access = true, assigned_at = time::now();
-};
+RELATE role:case_manager->can_access_menu->(SELECT id FROM menu_metadata WHERE menu_id INSIDE ['dashboard', 'cases', 'case_members', 'creditors', 'claims_list', 'online_meetings', 'messages']) SET can_access = true, assigned_at = time::now();
 
 -- creditor_representative 菜单权限
-FOR $menu_id IN ['dashboard', 'my_claims', 'claims_submit', 'online_meetings', 'messages'] {
-    LET $menu = (SELECT id FROM menu_metadata WHERE menu_id = $menu_id)[0];
-    RELATE role:creditor_representative->can_access_menu->$menu SET can_access = true, assigned_at = time::now();
-};
+RELATE role:creditor_representative->can_access_menu->(SELECT id FROM menu_metadata WHERE menu_id INSIDE ['dashboard', 'my_claims', 'claims_submit', 'online_meetings', 'messages']) SET can_access = true, assigned_at = time::now();
 
 -- assistant_lawyer 菜单权限
-FOR $menu_id IN ['dashboard', 'cases', 'creditors', 'claims_list', 'online_meetings', 'messages'] {
-    LET $menu = (SELECT id FROM menu_metadata WHERE menu_id = $menu_id)[0];
-    RELATE role:assistant_lawyer->can_access_menu->$menu SET can_access = true, assigned_at = time::now();
-};
+RELATE role:assistant_lawyer->can_access_menu->(SELECT id FROM menu_metadata WHERE menu_id INSIDE ['dashboard', 'cases', 'creditors', 'claims_list', 'online_meetings', 'messages']) SET can_access = true, assigned_at = time::now();
 
 -- claim_reviewer 菜单权限
-FOR $menu_id IN ['dashboard', 'claims_list'] {
-    LET $menu = (SELECT id FROM menu_metadata WHERE menu_id = $menu_id)[0];
-    RELATE role:claim_reviewer->can_access_menu->$menu SET can_access = true, assigned_at = time::now();
-};
+RELATE role:claim_reviewer->can_access_menu->(SELECT id FROM menu_metadata WHERE menu_id INSIDE ['dashboard', 'claims_list']) SET can_access = true, assigned_at = time::now();
 
 -- 初始化角色操作权限
 -- admin 拥有所有操作权限
-FOR $operation IN (SELECT id FROM operation_metadata) {
-    RELATE role:admin->can_execute_operation->$operation SET can_execute = true, assigned_at = time::now();
-};
+RELATE role:admin->can_execute_operation->(SELECT id FROM operation_metadata) SET can_execute = true, assigned_at = time::now();
 
 -- case_manager 操作权限
-FOR $op_id IN ['case_list_view', 'case_create', 'case_view_detail', 'case_edit', 'case_modify_status', 'case_manage_members', 'case_member_list_view', 'case_member_add', 'case_member_remove', 'case_member_change_owner', 'creditor_list_view', 'creditor_create', 'creditor_edit', 'creditor_delete', 'creditor_batch_import', 'creditor_print_waybill', 'claim_list_view', 'claim_create_admin', 'claim_review', 'claim_batch_reject', 'meeting_list_view', 'meeting_create', 'meeting_edit', 'meeting_cancel', 'meeting_minutes_edit', 'message_view', 'message_send', 'message_delete'] {
-    LET $operation = (SELECT id FROM operation_metadata WHERE operation_id = $op_id)[0];
-    RELATE role:case_manager->can_execute_operation->$operation SET can_execute = true, assigned_at = time::now();
-};
+RELATE role:case_manager->can_execute_operation->(SELECT id FROM operation_metadata WHERE operation_id INSIDE ['case_list_view', 'case_create', 'case_view_detail', 'case_edit', 'case_modify_status', 'case_manage_members', 'case_member_list_view', 'case_member_add', 'case_member_remove', 'case_member_change_owner', 'creditor_list_view', 'creditor_create', 'creditor_edit', 'creditor_delete', 'creditor_batch_import', 'creditor_print_waybill', 'claim_list_view', 'claim_create_admin', 'claim_review', 'claim_batch_reject', 'meeting_list_view', 'meeting_create', 'meeting_edit', 'meeting_cancel', 'meeting_minutes_edit', 'message_view', 'message_send', 'message_delete']) SET can_execute = true, assigned_at = time::now();
 
 -- creditor_representative 操作权限
-FOR $op_id IN ['claim_submit', 'claim_edit_draft', 'claim_view_own', 'meeting_list_view', 'message_view', 'message_send'] {
-    LET $operation = (SELECT id FROM operation_metadata WHERE operation_id = $op_id)[0];
-    RELATE role:creditor_representative->can_execute_operation->$operation SET can_execute = true, assigned_at = time::now();
-};
+RELATE role:creditor_representative->can_execute_operation->(SELECT id FROM operation_metadata WHERE operation_id INSIDE ['claim_submit', 'claim_edit_draft', 'claim_view_own', 'meeting_list_view', 'message_view', 'message_send']) SET can_execute = true, assigned_at = time::now();
 
 -- assistant_lawyer 操作权限
-FOR $op_id IN ['case_list_view', 'case_view_detail', 'creditor_list_view', 'claim_list_view', 'meeting_list_view', 'message_view', 'message_send'] {
-    LET $operation = (SELECT id FROM operation_metadata WHERE operation_id = $op_id)[0];
-    RELATE role:assistant_lawyer->can_execute_operation->$operation SET can_execute = true, assigned_at = time::now();
-};
+RELATE role:assistant_lawyer->can_execute_operation->(SELECT id FROM operation_metadata WHERE operation_id INSIDE ['case_list_view', 'case_view_detail', 'creditor_list_view', 'claim_list_view', 'meeting_list_view', 'message_view', 'message_send']) SET can_execute = true, assigned_at = time::now();
 
 -- claim_reviewer 操作权限
-FOR $op_id IN ['claim_list_view', 'claim_review'] {
-    LET $operation = (SELECT id FROM operation_metadata WHERE operation_id = $op_id)[0];
-    RELATE role:claim_reviewer->can_execute_operation->$operation SET can_execute = true, assigned_at = time::now();
-};
+RELATE role:claim_reviewer->can_execute_operation->(SELECT id FROM operation_metadata WHERE operation_id INSIDE ['claim_list_view', 'claim_review']) SET can_execute = true, assigned_at = time::now();
 
 -- ------------------------------
 -- WebRTC 相关表结构
 -- ------------------------------
 
 -- 通话记录表
-DEFINE TABLE call_record TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE call_record TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE $auth.id IN participants OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create WHERE $auth.id,
   FOR update WHERE $auth.id = initiator OR $auth.id->has_role->role.name CONTAINS 'admin',
@@ -929,12 +908,12 @@ DEFINE FIELD created_at ON call_record TYPE datetime DEFAULT time::now() READONL
 DEFINE FIELD updated_at ON call_record TYPE datetime READONLY VALUE time::now() PERMISSIONS FULL;
 
 DEFINE INDEX call_record_call_id ON call_record FIELDS call_id UNIQUE;
-DEFINE INDEX call_record_initiator_idx ON call_record FIELDS initiator, start_time DESC;
-DEFINE INDEX call_record_group_idx ON call_record FIELDS group_id, start_time DESC;
-DEFINE INDEX call_record_case_idx ON call_record FIELDS case_id, start_time DESC;
+DEFINE INDEX call_record_initiator_idx ON call_record FIELDS initiator, start_time;
+DEFINE INDEX call_record_group_idx ON call_record FIELDS group_id, start_time;
+DEFINE INDEX call_record_case_idx ON call_record FIELDS case_id, start_time;
 
 -- WebRTC信令消息表
-DEFINE TABLE webrtc_signal TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE webrtc_signal TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE from_user = $auth.id OR to_user = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id) OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create WHERE $auth.id,
   FOR update WHERE from_user = $auth.id,
@@ -950,13 +929,13 @@ DEFINE FIELD created_at ON webrtc_signal TYPE datetime DEFAULT time::now() READO
 DEFINE FIELD expires_at ON webrtc_signal TYPE datetime VALUE (time::now() + 1h) PERMISSIONS FULL;
 DEFINE FIELD processed ON webrtc_signal TYPE bool DEFAULT false PERMISSIONS FULL;
 
-DEFINE INDEX webrtc_signal_to_user_idx ON webrtc_signal FIELDS to_user, created_at DESC;
-DEFINE INDEX webrtc_signal_group_idx ON webrtc_signal FIELDS group_id, created_at DESC;
+DEFINE INDEX webrtc_signal_to_user_idx ON webrtc_signal FIELDS to_user, created_at;
+DEFINE INDEX webrtc_signal_group_idx ON webrtc_signal FIELDS group_id, created_at;
 DEFINE INDEX webrtc_signal_call_idx ON webrtc_signal FIELDS call_id;
 DEFINE INDEX webrtc_signal_expires_idx ON webrtc_signal FIELDS expires_at;
 
 -- 用户WebRTC状态表
-DEFINE TABLE user_webrtc_status TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE user_webrtc_status TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create, update WHERE user_id = $auth.id OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
@@ -972,10 +951,10 @@ DEFINE FIELD created_at ON user_webrtc_status TYPE datetime DEFAULT time::now() 
 DEFINE FIELD updated_at ON user_webrtc_status TYPE datetime READONLY VALUE time::now() PERMISSIONS FULL;
 
 DEFINE INDEX user_webrtc_status_user_idx ON user_webrtc_status FIELDS user_id UNIQUE;
-DEFINE INDEX user_webrtc_status_online_idx ON user_webrtc_status FIELDS is_online, last_seen DESC;
+DEFINE INDEX user_webrtc_status_online_idx ON user_webrtc_status FIELDS is_online, last_seen;
 
 -- 系统配置表
-DEFINE TABLE system_config TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE system_config TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select FULL,
   FOR create, update, delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
 
@@ -987,8 +966,8 @@ DEFINE FIELD updated_at ON system_config TYPE datetime READONLY VALUE time::now(
 
 DEFINE INDEX system_config_key_idx ON system_config FIELDS config_key UNIQUE;
 DEFINE INDEX system_config_value_idx ON system_config FIELDS config_value;
--- 群组消息已读状态表  
-DEFINE TABLE message_read_status TYPE NORMAL SCHEMAFULL PERMISSIONS 
+-- 群组消息已读状态表
+DEFINE TABLE message_read_status TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create, update WHERE user_id = $auth.id,
   FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
@@ -999,10 +978,10 @@ DEFINE FIELD read_at ON message_read_status TYPE datetime DEFAULT time::now() PE
 DEFINE FIELD group_id ON message_read_status TYPE record<message_group> PERMISSIONS FULL;
 
 DEFINE INDEX message_read_unique ON message_read_status FIELDS message_id, user_id UNIQUE;
-DEFINE INDEX message_read_group_user_idx ON message_read_status FIELDS group_id, user_id, read_at DESC;
+DEFINE INDEX message_read_group_user_idx ON message_read_status FIELDS group_id, user_id, read_at;
 
 -- 群组最后已读位置表（性能优化）
-DEFINE TABLE group_read_position TYPE NORMAL SCHEMAFULL PERMISSIONS 
+DEFINE TABLE group_read_position TYPE NORMAL SCHEMAFULL PERMISSIONS
   FOR select WHERE user_id = $auth.id OR $auth.id IN (SELECT user_id FROM group_member WHERE group_id = $parent.group_id AND role IN ['owner', 'admin']) OR $auth.id->has_role->role.name CONTAINS 'admin',
   FOR create, update WHERE user_id = $auth.id,
   FOR delete WHERE $auth.id->has_role->role.name CONTAINS 'admin';
@@ -1016,7 +995,7 @@ DEFINE FIELD unread_count ON group_read_position TYPE int DEFAULT 0 PERMISSIONS 
 DEFINE INDEX group_read_position_unique ON group_read_position FIELDS group_id, user_id UNIQUE;
 
 -- ------------------------------
--- 用户参与会话 (user <-> conversation 关系)  
+-- 用户参与会话 (user <-> conversation 关系)
 -- ------------------------------
 DEFINE TABLE participates_in TYPE RELATION IN user OUT conversation SCHEMAFULL PERMISSIONS FULL;
 DEFINE FIELD joined_at ON participates_in TYPE datetime VALUE time::now() PERMISSIONS FULL;
@@ -1024,7 +1003,7 @@ DEFINE INDEX unique_user_conversation ON participates_in COLUMNS in, out UNIQUE;
 
 -- ------------------------------
 -- 会议邀请关系 (message -> user 关系)
--- ------------------------------  
+-- ------------------------------
 DEFINE TABLE conference_invitation TYPE RELATION IN message OUT user SCHEMAFULL PERMISSIONS FULL;
 DEFINE FIELD target_user_id ON conference_invitation TYPE record<user> PERMISSIONS FULL;
 DEFINE FIELD status ON conference_invitation TYPE string DEFAULT 'pending' ASSERT $value INSIDE ['pending', 'accepted', 'rejected'] PERMISSIONS FULL;
@@ -1036,7 +1015,7 @@ DEFINE INDEX invitation_message_user ON conference_invitation COLUMNS in, out UN
 RELATE user:admin->has_role->role:admin SET assigned_at = time::now();
 
 -- 初始化通知规则数据
-INSERT INTO notification_rule (procedure_phase, trigger_condition, message_template, notification_frequency, notification_time, is_active, created_at, updated_at) VALUES 
+INSERT INTO notification_rule (procedure_phase, trigger_condition, message_template, notification_frequency, notification_time, is_active, created_at, updated_at) VALUES
 ('立案', '受理时间+25天-当前时间 <= 5天', '距离最迟公告时间仅有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now()),
 ('公告', '公告时间+30天-当前时间 <= 3天', '距离开始债权申报时间还有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now()),
 ('债权申报', '公告时间+3月-当前时间 <= 3天', '距离债权申报截止还有 {{days}} 天', 'DAILY', '10:00', true, time::now(), time::now()),
@@ -1055,7 +1034,7 @@ INSERT INTO system_config {
   config_value: {
     // WebRTC服务器配置
     stun_servers: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'],
-    
+
     // P2P文件传输限制
     max_file_size: 104857600, // 100MB
     file_chunk_size: 65536,   // 64KB
@@ -1063,7 +1042,7 @@ INSERT INTO system_config {
     supported_video_types: ['mp4', 'webm', 'mov', 'avi', 'wmv'],
     supported_audio_types: ['mp3', 'wav', 'ogg', 'aac', 'm4a'],
     supported_document_types: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt'],
-    
+
     // 功能开关
     enable_voice_call: true,
     enable_video_call: true,
@@ -1075,13 +1054,13 @@ INSERT INTO system_config {
     enable_message_edit: true,
     max_conference_participants: 8,
     max_group_members: 100,
-    
+
     // 超时设置
     file_transfer_timeout: 300000, // 5分钟
     call_timeout: 30000,          // 30秒
     signal_expiry: 3600000,       // 信令1小时过期
     message_recall_timeout: 120,  // 消息撤回时限(秒)
-    
+
     // 网络质量阈值
     network_quality_thresholds: {
       excellent: { bandwidth: 2000, latency: 50, packet_loss: 0.1 },
@@ -1089,7 +1068,7 @@ INSERT INTO system_config {
       fair: { bandwidth: 500, latency: 200, packet_loss: 1.0 },
       poor: { bandwidth: 200, latency: 300, packet_loss: 2.0 }
     },
-    
+
     // 质量设置
     video_quality: {
       low: { width: 320, height: 240, framerate: 15, bitrate: 150000 },
@@ -1102,7 +1081,7 @@ INSERT INTO system_config {
       medium: { bitrate: 64000, sampleRate: 44100 },
       high: { bitrate: 128000, sampleRate: 48000 }
     },
-    
+
     // 数据清理配置
     cleanup_config: {
       signal_retention_hours: 24,        // 信令消息保留24小时
@@ -1110,7 +1089,7 @@ INSERT INTO system_config {
       file_cache_retention_days: 30,     // 文件缓存保留30天
       read_status_retention_days: 90     // 已读状态保留90天
     },
-    
+
     // 性能优化配置
     performance_config: {
       message_batch_size: 50,            // 消息批量加载大小
@@ -1153,3 +1132,15 @@ INSERT INTO system_config {
   description: '数据清理定时任务配置',
   created_at: time::now()
 };
+
+-- 测试初始数据（通过 OPTION IMPORT 加载）
+
+-- 创建基础管理员用户
+CREATE user:admin SET name = '系统管理员', email = 'admin@cuckoox.cn', username = 'admin', password_hash = crypto::argon2::generate('admin123');
+
+-- 赋予基础角色
+RELATE user:admin->has_role->role:admin SET assigned_at = time::now();
+
+-- 其他用户应该通过页面方法调用创建，不在schema中硬编码
+
+-- 测试案件数据应该通过页面方法调用创建，不在schema中硬编码

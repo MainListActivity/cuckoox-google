@@ -48,17 +48,28 @@ class PWAManager {
         isUpdateAvailable: true,
         skipWaiting: async () => {
           if (event.sw) {
+            // 先通知新Service Worker跳过等待
             event.sw.postMessage({ type: 'SKIP_WAITING' });
+            
             // 等待新的 service worker 激活
-            await new Promise<void>((resolve) => {
-              const handleControlling = () => {
+            await new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => {
                 this.workbox?.removeEventListener('controlling', handleControlling);
+                reject(new Error('Service Worker activation timeout'));
+              }, 10000);
+
+              const handleControlling = () => {
+                clearTimeout(timeout);
+                this.workbox?.removeEventListener('controlling', handleControlling);
+                console.log('PWA: Service Worker activated and now controlling');
                 resolve();
               };
               this.workbox?.addEventListener('controlling', handleControlling);
             });
-            // 刷新页面以使用新的 service worker
-            window.location.reload();
+            
+            // 对于我们的应用，不需要强制刷新页面
+            // ServiceWorkerEngine会自动更新引用并继续使用新的Service Worker
+            console.log('PWA: Service Worker已更新，ServiceWorkerEngine将处理引用更新');
           }
         },
         registration: event.sw?.scriptURL ? 

@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Always respond in Chinese-simplified.
 
-注意在任务完成前根据mcp-feedback-enhanced工具的要求进行工具调用，用户确认完成任务后务必确认单元测试用例全部通过，执行命令 `bun run test:run`，并且确保 `bun run lint` 没有任何错误
+
+用户确认完成任务后务必确认单元测试用例全部通过，执行命令 `bun run test:e2e e2e/auth.e2e.test.ts`，并且确保 `bun run lint` 没有任何错误
 
 ## Development Commands
 
@@ -21,13 +22,16 @@ This is a React + TypeScript + Vite application using Bun as the package manager
 ### Testing Commands
 - `bun run test:ui` - Run tests with Vitest UI
 - `bun run test:run` - Run tests once (non-watch mode)
-- `bun run test:e2e` - Run Playwright E2E tests
+- `bun run test:integration` - Run integration tests once (non-watch mode)
+- `bun run test:e2e` - Run Playwright E2E tests (快速返回，保留报告)
+- `bun run test:e2e:report` - Run E2E tests and show report (运行测试并自动显示报告)
+- `bun run show-report` - View existing test reports
 - `bunx playwright install --with-deps` - Install Playwright browsers (first-time setup)
-- `bunx playwright show-report` - View test reports
 
 ### Single Test Execution
 - `bun run test:run -- tests/unit/path/to/specific.test.tsx` - Run specific unit test
-- `bunx playwright test e2e/specific.e2e.test.ts` - Run specific E2E test
+- `bun run test:e2e e2e/specific.e2e.test.ts` - Run specific E2E test (快速返回)
+- `bun run test:e2e:report e2e/specific.e2e.test.ts` - Run specific E2E test with report
 
 ## Architecture Overview
 
@@ -61,6 +65,7 @@ This is a legal case management system with the following key architectural comp
   - `usePageCacheManager.ts` - Page cache manager hooks
   - `usePermission.ts` - Permission checking hooks (based on new cache architecture)
 - `tests/unit/` - Unit tests (Vitest + Testing Library)
+- `tests/integration/` - 集成测试目录
 - `e2e/` - End-to-end tests (Playwright)
 
 ### Technology Stack Details
@@ -79,6 +84,14 @@ This is a legal case management system with the following key architectural comp
 - Multi-language support
 - Responsive design with theming support
 - Intelligent data caching and synchronization system
+
+## 集成测试架构&要求
+- 使用页面测试，切换底层数据库为内嵌数据库引擎(@surrealdb/node)，完成对项目全链路的覆盖集成测试。
+- 集成测试的数据不用清理，先运行的测试用例的产生数据在后面的测试用例中可以查询。
+- **用例执行顺序**: admin账号创建->案件创建（渲染页面src/pages/cases/index.tsx输入表单点按钮保存数据）->管理人登录（通过mock的数据库对象SIGNIN方法登录）->案件查询（src/pages/cases/index.tsx）->添加案件成员（src/pages/case-members/index.tsx）->其他测试用例->案件成员登录（通过mock的数据库对象SIGNIN方法登录）->案件成员退出登录（点击右上角退出登录）。
+- 测试过程只需切换底层数据库 -> 加载生产数据库schema -> 执行测试用例文件 -> 调用页面功能完成数据创建（案件、成员、权限） -> 开始单个用例测试
+- 集成测试在测试业务逻辑时不允许直接执行任何sql语句,且应该通过操作页面来完成，**禁止任何sql**，禁止直接操作数据库
+- 集成测试不允许mock除了fetch外的任何组件，包括hooks，provider，所有组件都是需要测试的内容，而数据库查询我们已经通过内嵌数据库实现了。
 
 ## Important Notes
 - Uses Bun as package manager instead of npm/yarn
@@ -146,6 +159,7 @@ import { Grid } from '@mui/material';
 - **永远不要**阻塞用户因为连接问题
 - **永远使用**Service Worker处理连接逻辑
 - **永远确保**离线时用户能访问缓存内容
+- **项目重构**重构时不要保留任何冗余代码，确保新的代码逻辑是精简且有效的
 
 ### 代码影响最小化
 - 尊重现有SW架构，在其基础上增强

@@ -37,6 +37,7 @@ export default defineConfig({
     target: 'esnext',
     outDir: 'public/sw/',
     emptyOutDir: false,
+    minify: false, // 禁用代码压缩和混淆
     rollupOptions: {
       input: {
         'wasm-shim': path.resolve(__dirname, 'src/workers/wasm-shim.ts'),

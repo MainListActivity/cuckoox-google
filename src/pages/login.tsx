@@ -53,6 +53,8 @@ const LoginPage: React.FC = () => {
   const [justClearedAuth, setJustClearedAuth] = useState<boolean>(false);
   const [tenantHistory, setTenantHistory] = useState<TenantHistoryItem[]>([]);
   const [realAuthStatus, setRealAuthStatus] = useState<boolean | null>(null);
+  const [turnstileRequired, setTurnstileRequired] = useState<boolean>(true); // 默认需要Turnstile验证
+  const [checkingTenantConfig, setCheckingTenantConfig] = useState<boolean>(false);
 
   const searchParams = new URLSearchParams(location.search);
   // 默认使用租户登录，除非明确指定root模式
@@ -70,6 +72,40 @@ const LoginPage: React.FC = () => {
     // Use the 'user' destructured from useAuth() context directly
     return user?.github_id === '--admin--';
   }, [user]);
+
+  // 检查租户是否启用Turnstile验证
+  const checkTenantTurnstileConfig = useCallback(async (tenantCode: string) => {
+    if (!tenantCode.trim()) {
+      setTurnstileRequired(true); // 没有租户代码时默认需要验证
+      return;
+    }
+
+    setCheckingTenantConfig(true);
+    try {
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/auth/tenant/${tenantCode}/turnstile-config`;
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTurnstileRequired(data.turnstile_enabled === true);
+        console.log(`租户 ${tenantCode} Turnstile配置:`, data.turnstile_enabled ? '启用' : '禁用');
+      } else {
+        // 如果查询失败，默认需要验证
+        console.warn(`查询租户 ${tenantCode} Turnstile配置失败，默认启用验证`);
+        setTurnstileRequired(true);
+      }
+    } catch (error) {
+      console.error('查询租户Turnstile配置出错:', error);
+      setTurnstileRequired(true); // 出错时默认需要验证
+    } finally {
+      setCheckingTenantConfig(false);
+    }
+  }, []);
 
   // 从URL参数或历史记录填充租户代码
   useEffect(() => {
@@ -89,6 +125,13 @@ const LoginPage: React.FC = () => {
       }
     }
   }, [tenantFromUrl, isRootAdminMode]);
+
+  // 监听租户代码变化，检查Turnstile配置
+  useEffect(() => {
+    if (!isRootAdminMode && tenantCode) {
+      checkTenantTurnstileConfig(tenantCode);
+    }
+  }, [tenantCode, isRootAdminMode, checkTenantTurnstileConfig]);
 
   // 直接查询Service Worker的认证状态，确保获取最新的真实状态
   useEffect(() => {
@@ -315,13 +358,20 @@ const LoginPage: React.FC = () => {
         throw new Error(t('error_tenant_code_required', 'Tenant code is required.'));
       }
 
-      // 显示 Turnstile 验证（Root管理员不需要）
       setIsProcessingAdminLogin(true);
+      
       if (isRootAdminMode) {
         // Root管理员直接登录，不需要Turnstile验证
         await handleAdminLoginWithToken('');
       } else {
-        setShowTurnstile(true);
+        // 租户登录：根据租户配置决定是否需要Turnstile验证
+        if (turnstileRequired) {
+          // 需要Turnstile验证
+          setShowTurnstile(true);
+        } else {
+          // 不需要Turnstile验证，直接登录
+          await handleAdminLoginWithToken('');
+        }
       }
       
     } catch (error: unknown) {
@@ -477,12 +527,22 @@ const LoginPage: React.FC = () => {
                         setTenantCode(code.toUpperCase());
                         // Clear error when user selects
                         if (adminLoginError) setAdminLoginError(null);
+                        // 立即检查租户配置
+                        if (code.trim()) {
+                          checkTenantTurnstileConfig(code.toUpperCase());
+                        }
                       }}
                       inputValue={tenantCode}
                       onInputChange={(_, newInputValue) => {
                         setTenantCode(newInputValue.toUpperCase());
                         // Clear error when user starts typing
                         if (adminLoginError) setAdminLoginError(null);
+                        // 用户输入时也检查配置（去抖动处理）
+                        if (newInputValue.trim()) {
+                          setTimeout(() => {
+                            checkTenantTurnstileConfig(newInputValue.toUpperCase());
+                          }, 500);
+                        }
                       }}
                       freeSolo
                       renderInput={(params) => (
@@ -498,6 +558,24 @@ const LoginPage: React.FC = () => {
                             ...params.inputProps,
                             style: { fontSize: 16 }, // Prevent zoom on iOS
                           }}
+                          InputProps={{
+                            ...params.InputProps,
+                            endAdornment: (
+                              <>
+                                {checkingTenantConfig && (
+                                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                                )}
+                                {params.InputProps.endAdornment}
+                              </>
+                            ),
+                          }}
+                          helperText={
+                            tenantCode && !checkingTenantConfig
+                              ? turnstileRequired
+                                ? t('turnstile_enabled_hint', '此租户已启用人机验证')
+                                : t('turnstile_disabled_hint', '此租户已禁用人机验证')
+                              : undefined
+                          }
                           sx={{
                             '& .MuiOutlinedInput-root': {
                               borderRadius: 2,
@@ -611,7 +689,7 @@ const LoginPage: React.FC = () => {
                   
                   <Button
                     type="submit"
-                    disabled={isProcessingAdminLogin}
+                    disabled={isProcessingAdminLogin || (checkingTenantConfig && !isRootAdminMode)}
                     fullWidth
                     variant="contained"
                     color="primary"
@@ -630,9 +708,14 @@ const LoginPage: React.FC = () => {
                         boxShadow: theme.shadows[8],
                       },
                     }}
-                    startIcon={isProcessingAdminLogin ? <CircularProgress size={20} color="inherit" /> : null}
+                    startIcon={(isProcessingAdminLogin || checkingTenantConfig) ? <CircularProgress size={20} color="inherit" /> : null}
                   >
-                    {isProcessingAdminLogin ? t('verifying_button', 'Verifying...') : t('login_button', 'Login')}
+                    {isProcessingAdminLogin 
+                      ? t('verifying_button', 'Verifying...') 
+                      : checkingTenantConfig 
+                        ? t('checking_config_button', 'Checking Config...')
+                        : t('login_button', 'Login')
+                    }
                   </Button>
 
                   <Divider sx={{ my: 3 }}>
