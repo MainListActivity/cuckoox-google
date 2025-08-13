@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSurrealContext } from "@/src/contexts/SurrealProvider";
-import { Table, Uuid } from "surrealdb";
+import { Table } from "surrealdb";
 
 // Generic type for count results
 interface CountResult {
@@ -182,7 +182,7 @@ function createLiveMetricHook<TResultType, TDataType>(
       }
 
       let isMounted = true;
-      let liveQueryId: Uuid | null = null;
+      let liveQuery: { kill: () => Promise<void> } | null = null;
 
       const setupLiveSubscription = async () => {
         try {
@@ -190,14 +190,18 @@ function createLiveMetricHook<TResultType, TDataType>(
           await fetchMetric(caseId);
           if (!isMounted) return;
 
-          // Step 2: Set up the live query for the entire claim table (no parameters allowed)
-          liveQueryId = await client.live(new Table("claim"), (_action, data) => {
+          // Step 2: Set up the live query for the entire claim table using new API
+          const claimTable = new Table("claim");
+          const live = await client.live(claimTable);
+          
+          // Step 3: Subscribe to live events with case filtering
+          live.subscribe((_action, result, _record) => {
             if (!isMounted) return;
 
             // Filter for relevant case_id changes
-            // data contains the changed record, check if it matches our caseId
-            if (data && typeof data === "object" && "case_id" in data) {
-              const recordCaseId = data.case_id;
+            // result contains the changed record, check if it matches our caseId
+            if (result && typeof result === "object" && "case_id" in result) {
+              const recordCaseId = result.case_id;
               if (recordCaseId === caseId || String(recordCaseId) === String(caseId)) {
                 // Re-fetch the metric when relevant claim changes
                 fetchMetric(caseId);
@@ -207,6 +211,8 @@ function createLiveMetricHook<TResultType, TDataType>(
               fetchMetric(caseId);
             }
           });
+
+          liveQuery = live;
 
         } catch (err) {
           if (!isMounted) return;
@@ -223,10 +229,10 @@ function createLiveMetricHook<TResultType, TDataType>(
       // Cleanup function
       return () => {
         isMounted = false;
-        if (liveQueryId && client) {
-          client.kill(liveQueryId).catch((killError) => {
+        if (liveQuery) {
+          liveQuery.kill().catch((killError) => {
             console.error(
-              `Error killing live query ${liveQueryId} for ${debugName}:`,
+              `Error killing live query for ${debugName}:`,
               killError,
             );
           });

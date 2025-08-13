@@ -1,4 +1,28 @@
-import { AbstractEngine, ConnectionStatus, Emitter, type RpcRequest, type RpcResponse,type Engines } from 'surrealdb';
+import {
+  ConnectionUnavailable,
+  EngineDisconnected,
+  ReconnectExhaustion,
+} from "surrealdb";
+
+import type {
+  ConnectionState,
+  DriverContext,
+  EngineEvents,
+  SurrealEngine,
+  RpcRequest, 
+  RpcResponse,
+  LiveMessage,
+} from "surrealdb";
+
+import { Publisher } from "surrealdb";
+
+
+
+interface Call<T> {
+  request: object;
+  resolve: (value: RpcResponse<T>) => void;
+  reject: (error: Error) => void;
+}
 
 /**
  * RPC请求消息接口
@@ -6,7 +30,7 @@ import { AbstractEngine, ConnectionStatus, Emitter, type RpcRequest, type RpcRes
 interface RpcRequestMessage {
   type: 'rpc_request';
   payload: {
-    requestId: number;
+    requestId: string;
     method: string;
     params: unknown[];
   };
@@ -18,7 +42,7 @@ interface RpcRequestMessage {
 interface RpcResponseMessage {
   type: 'rpc_response';
   payload: {
-    requestId: number;
+    requestId: string;
     result?: unknown;
     error?: {
       code: string;
@@ -42,166 +66,210 @@ interface LiveQueryCallbackMessage {
 }
 
 /**
- * Service Worker引擎上下文
- */
-class ServiceWorkerEngineContext {
-  readonly emitter: Emitter;
-  readonly encodeCbor: (value: unknown) => ArrayBuffer;
-  readonly decodeCbor: (value: ArrayBufferLike) => any;
-
-  constructor() {
-    this.emitter = new Emitter();
-    // 简化的CBOR编码/解码 - 实际项目中应该使用proper CBOR库
-    this.encodeCbor = (value: unknown) => {
-      return new TextEncoder().encode(JSON.stringify(value)).buffer;
-    };
-    this.decodeCbor = (value: ArrayBufferLike) => {
-      return JSON.parse(new TextDecoder().decode(value));
-    };
-  }
-}
-
-/**
  * Service Worker引擎
- * 基于SurrealDB AbstractEngine实现，通过Service Worker进行数据库操作
+ * 基于SurrealDB WebSocketEngine实现，通过Service Worker进行数据库操作
  */
-export class ServiceWorkerEngine extends AbstractEngine {
-  private serviceWorker?: ServiceWorker;
-  private requestId = 0;
-  private pendingRequests = new Map<number, {
-    resolve: (value: any) => void;
-    reject: (error: any) => void;
-  }>();
-  private liveQueryCallbacks = new Map<string, (action: string, result: unknown) => void>();
+export class ServiceWorkerEngine implements SurrealEngine {
+  #publisher = new Publisher<EngineEvents>();
+  #state: ConnectionState | undefined;
+  #serviceWorker?: ServiceWorker;
+  #calls = new Map<string, Call<unknown>>();
+  #context: DriverContext;
+  #active = false;
+  #terminated = false;
   private registration?: ServiceWorkerRegistration;
   private messageListener?: (event: MessageEvent) => void;
 
-  constructor() {
-    // 创建Service Worker引擎上下文
-    const context = new ServiceWorkerEngineContext();
-    super(context as any); // 类型断言，简化实现
+  subscribe<K extends keyof EngineEvents>(
+    event: K,
+    listener: (...payload: EngineEvents[K]) => void,
+  ): () => void {
+    return this.#publisher.subscribe(event, listener);
+  }
+
+  constructor(context: DriverContext) {
     console.log('ServiceWorkerEngine: 初始化Service Worker引擎');
-    
+    this.#context = context;
     // 初始化消息监听器
     this.messageListener = this.handleMessage.bind(this);
   }
 
   /**
-   * 设置连接状态
+   * 获取编码上下文（兼容性访问）
    */
-  private setStatus(status: ConnectionStatus): void {
-    this.status = status;
+  get context(): DriverContext {
+    return this.#context;
   }
 
   /**
-   * 连接到Service Worker引擎
+   * 打开连接到Service Worker引擎
    */
-  async connect(url: URL | string): Promise<void> {
-    // 将字符串URL转换为URL对象
-    const urlObj = typeof url === 'string' ? new URL(url) : url;
-    console.log('ServiceWorkerEngine: 开始连接Service Worker, URL:', urlObj.toString());
-    
-    this.setStatus(ConnectionStatus.Connecting);
-    
-    try {
-      await this.setupServiceWorkerConnection();
-      
-      this.connection.url = urlObj;
-      this.setStatus(ConnectionStatus.Connected);
-      
-      // 触发连接事件
-      this.emitter.emit('connected', []);
-      console.log('ServiceWorkerEngine: 连接成功');
-    } catch (error) {
-      console.error('ServiceWorkerEngine: 连接失败', error);
-      this.setStatus(ConnectionStatus.Error);
-      throw error;
-    }
+  open(state: ConnectionState): void {
+    this.#publisher.publish("connecting");
+    this.#terminated = false;
+    this.#state = state;
+
+    const { reconnect } = state;
+    console.log('ServiceWorkerEngine: 开始连接Service Worker, URL:', state.url.toString());
+
+    (async () => {
+      while (true) {
+        // 打开新连接并等待关闭
+        const error = await this.createServiceWorkerConnection(() => {
+          this.#active = true;
+          reconnect.reset();
+
+          // 重新发送所有待处理请求
+          for (const { request } of this.#calls.values()) {
+            this.#serviceWorker?.postMessage({
+              type: 'rpc_request',
+              payload: request
+            });
+          }
+
+          this.#publisher.publish("connected");
+        });
+
+        this.#serviceWorker = undefined;
+
+        if (error) {
+          this.#publisher.publish("error", error);
+        }
+
+        // 检查是否应该继续迭代和重连
+        if (this.#terminated || !reconnect.enabled || !reconnect.allowed) {
+          // 传播重连耗尽
+          if (reconnect.enabled && !reconnect.allowed) {
+            this.#publisher.publish("error", new ReconnectExhaustion());
+          }
+
+          // 可选择终止待处理调用
+          if (!this.#terminated) {
+            for (const { reject } of this.#calls.values()) {
+              reject(new EngineDisconnected());
+            }
+          }
+
+          this.#state = undefined;
+          this.#active = false;
+          this.#calls.clear();
+          this.#publisher.publish("disconnected");
+          break;
+        }
+
+        // 传播捕获的错误
+        if (error) {
+          reconnect.propagate(error);
+        }
+
+        this.#publisher.publish("reconnecting");
+
+        // 执行重连迭代冷却
+        await reconnect.iterate();
+      }
+    })();
   }
 
   /**
-   * 断开连接
+   * 关闭连接
    */
-  async disconnect(): Promise<void> {
+  async close(): Promise<void> {
     console.log('ServiceWorkerEngine: 断开连接');
-    
-    this.pendingRequests.clear();
-    this.liveQueryCallbacks.clear();
-    this.setStatus(ConnectionStatus.Disconnected);
-    
+
+    this.#state = undefined;
+    this.#terminated = true;
+
     // 清理消息监听器
     if (this.messageListener) {
       navigator.serviceWorker.removeEventListener('message', this.messageListener);
     }
-    
+
     // 清理Service Worker引用
-    this.serviceWorker = undefined;
+    this.#serviceWorker = undefined;
     this.registration = undefined;
-    
-    // 触发断开事件
-    this.emitter.emit("disconnected", []);
+
+    if (this.#active) {
+      await this.#publisher.subscribeFirst("disconnected");
+    }
   }
 
   /**
-   * 执行RPC请求
+   * 发送RPC请求
    */
-  async rpc<Method extends string, Params extends unknown[] | undefined, Result>(
-    request: RpcRequest<Method, Params>
+  send<Method extends string, Params extends unknown[] | undefined, Result>(
+    request: RpcRequest<Method, Params>,
   ): Promise<RpcResponse<Result>> {
-    if (this.status !== ConnectionStatus.Connected || !this.serviceWorker) {
-      throw new Error('Service Worker引擎未连接');
-    }
-
-    const requestId = ++this.requestId;
-    
-    console.log(`ServiceWorkerEngine: 发送RPC请求 ${request.method}`, request.params);
-
     return new Promise((resolve, reject) => {
-      // 存储pending请求
-      this.pendingRequests.set(requestId, { resolve, reject });
+      if (!this.#active) {
+        reject(new ConnectionUnavailable());
+        return;
+      }
+
+      const id = this.generateUniqueId();
+      const call: Call<Result> = {
+        request: { id, ...request },
+        resolve,
+        reject,
+      };
+
+      console.log(`ServiceWorkerEngine: 发送RPC请求 ${request.method}`, request.params);
+
+      this.#calls.set(id, call as Call<unknown>);
 
       // 发送RPC请求到Service Worker
       const message: RpcRequestMessage = {
         type: 'rpc_request',
         payload: {
-          requestId,
+          requestId: id,
           method: request.method,
           params: request.params || []
         }
       };
 
-      this.serviceWorker!.postMessage(message);
-
-      // 设置超时（30秒）
-      setTimeout(() => {
-        if (this.pendingRequests.has(requestId)) {
-          this.pendingRequests.delete(requestId);
-          reject(new Error(`RPC请求超时: ${request.method}`));
-        }
-      }, 30000);
+      this.#serviceWorker?.postMessage(message);
     });
   }
 
   /**
-   * 获取版本信息（简化实现）
-   */
-  async version(url: URL, timeout?: number): Promise<string> {
-    return '2.3.7';
-  }
-
-  /**
-   * 导出数据（简化实现）
-   */
-  async export(): Promise<string> {
-    const response = await this.rpc({ method: 'export', params: [] });
-    return response.result as string || '';
-  }
-
-  /**
-   * 导入数据（简化实现）
+   * 导入数据
    */
   async import(data: string): Promise<void> {
-    await this.rpc({ method: 'import', params: [data] });
+    if (!this.#state) {
+      throw new ConnectionUnavailable();
+    }
+
+    // 通过Service Worker代理导入请求
+    await this.send({ method: 'import', params: [data] });
+  }
+
+  /**
+   * 导出数据
+   */
+  async export(): Promise<string> {
+    if (!this.#state) {
+      throw new ConnectionUnavailable();
+    }
+
+    // 通过Service Worker代理导出请求
+    const response = await this.send<'export', undefined, string>({ method: 'export' });
+    return response.result || '';
+  }
+
+  /**
+   * 创建Service Worker连接
+   */
+  private async createServiceWorkerConnection(onConnected: () => void): Promise<Error | null> {
+    if (!this.#state) {
+      throw new ConnectionUnavailable();
+    }
+
+    try {
+      await this.setupServiceWorkerConnection();
+      onConnected();
+      return null;
+    } catch (error) {
+      return error as Error;
+    }
   }
 
   /**
@@ -217,25 +285,25 @@ export class ServiceWorkerEngine extends AbstractEngine {
     });
 
     // 尝试获取活跃的Service Worker
-    this.serviceWorker = this.registration.active || this.registration.waiting || this.registration.installing!;
+    this.#serviceWorker = this.registration.active || this.registration.waiting || this.registration.installing!;
 
-    if (!this.serviceWorker) {
+    if (!this.#serviceWorker) {
       throw new Error('Service Worker不可用 - 未找到任何可用的Service Worker实例');
     }
 
     // 如果Service Worker还在安装中，等待其激活
-    if (this.serviceWorker.state !== 'activated') {
+    if (this.#serviceWorker.state !== 'activated') {
       await new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           reject(new Error('Service Worker激活超时'));
         }, 10000);
 
-        this.serviceWorker!.addEventListener('statechange', () => {
-          console.log('ServiceWorkerEngine: Service Worker状态变更:', this.serviceWorker!.state);
-          if (this.serviceWorker!.state === 'activated') {
+        this.#serviceWorker!.addEventListener('statechange', () => {
+          console.log('ServiceWorkerEngine: Service Worker状态变更:', this.#serviceWorker!.state);
+          if (this.#serviceWorker!.state === 'activated') {
             clearTimeout(timeoutId);
             resolve(undefined);
-          } else if (this.serviceWorker!.state === 'redundant') {
+          } else if (this.#serviceWorker!.state === 'redundant') {
             clearTimeout(timeoutId);
             reject(new Error('Service Worker变为冗余状态'));
           }
@@ -250,13 +318,13 @@ export class ServiceWorkerEngine extends AbstractEngine {
 
     // 添加Service Worker消息监听器
     navigator.serviceWorker.addEventListener('message', this.messageListener!);
-    
+
     // 监听Service Worker更新
     this.setupServiceWorkerUpdateListener();
-    
+
     console.log('ServiceWorkerEngine: Service Worker连接已建立', {
-      state: this.serviceWorker.state,
-      scriptURL: this.serviceWorker.scriptURL
+      state: this.#serviceWorker.state,
+      scriptURL: this.#serviceWorker.scriptURL
     });
   }
 
@@ -276,17 +344,16 @@ export class ServiceWorkerEngine extends AbstractEngine {
     });
   }
 
-
   /**
    * 处理控制权变更 (与Workbox协作)
    */
   private async handleControllerChange(): Promise<void> {
     if (navigator.serviceWorker.controller) {
       console.log('ServiceWorkerEngine: Workbox已激活新Service Worker，更新引用');
-      
+
       // 更新Service Worker引用为当前控制器
-      this.serviceWorker = navigator.serviceWorker.controller;
-      
+      this.#serviceWorker = navigator.serviceWorker.controller;
+
       console.log('ServiceWorkerEngine: Service Worker引用已更新，通信将使用新实例');
     }
   }
@@ -296,10 +363,10 @@ export class ServiceWorkerEngine extends AbstractEngine {
    */
   private handleServiceWorkerActivated(payload: any): void {
     console.log('ServiceWorkerEngine: Service Worker已激活', payload);
-    
+
     // 更新Service Worker引用为当前控制器
     if (navigator.serviceWorker.controller) {
-      this.serviceWorker = navigator.serviceWorker.controller;
+      this.#serviceWorker = navigator.serviceWorker.controller;
     }
   }
 
@@ -308,20 +375,20 @@ export class ServiceWorkerEngine extends AbstractEngine {
    */
   private handleMessage(event: MessageEvent): void {
     const { type, payload } = event.data;
-    
+
     switch (type) {
       case 'rpc_response':
         this.handleRpcResponse(payload);
         break;
-        
+
       case 'live_query_callback':
         this.handleLiveQueryCallback(payload);
         break;
-        
+
       case 'sw-activated':
         this.handleServiceWorkerActivated(payload);
         break;
-        
+
       default:
         console.warn(`ServiceWorkerEngine: 未知消息类型 ${type}`);
     }
@@ -332,19 +399,21 @@ export class ServiceWorkerEngine extends AbstractEngine {
    */
   private handleRpcResponse(payload: RpcResponseMessage['payload']): void {
     const { requestId, result, error } = payload;
-    const pending = this.pendingRequests.get(requestId);
-    
-    if (pending) {
-      this.pendingRequests.delete(requestId);
-      
-      if (error) {
-        const errorObj = new Error(error.description);
-        (errorObj as any).code = error.code;
-        (errorObj as any).details = error.details;
-        (errorObj as any).information = error.information;
-        pending.reject(errorObj);
-      } else {
-        pending.resolve({ result });
+    const call = this.#calls.get(requestId);
+
+    if (call) {
+      try {
+        if (error) {
+          const errorObj = new Error(error.description);
+          (errorObj as any).code = error.code;
+          (errorObj as any).details = error.details;
+          (errorObj as any).information = error.information;
+          call.reject(errorObj);
+        } else {
+          call.resolve({ result } as RpcResponse<unknown>);
+        }
+      } finally {
+        this.#calls.delete(requestId);
       }
     }
   }
@@ -353,42 +422,20 @@ export class ServiceWorkerEngine extends AbstractEngine {
    * 处理Live Query回调
    */
   private handleLiveQueryCallback(payload: LiveQueryCallbackMessage['payload']): void {
-    const { subscriptionId, action, result } = payload;
-    const callback = this.liveQueryCallbacks.get(subscriptionId);
-    
-    if (callback) {
-      try {
-        callback(action, result);
-      } catch (error) {
-        console.error(`ServiceWorkerEngine: Live Query回调执行失败`, error);
-      }
-    }
+    const { result  } = payload;
+
+    // 发布live事件到订阅者
+    this.#publisher.publish("live", result as LiveMessage);
   }
 
   /**
-   * 注册Live Query回调
-   * @internal 此方法由SurrealDB SDK内部调用
+   * 生成唯一ID - 替代内部的getIncrementalID
    */
-  registerLiveQueryCallback(subscriptionId: string, callback: (action: string, result: unknown) => void): void {
-    this.liveQueryCallbacks.set(subscriptionId, callback);
-    console.log(`ServiceWorkerEngine: 注册Live Query回调 ${subscriptionId}`);
+  private generateUniqueId(): string {
+    // 使用时间戳 + 随机数 + 计数器确保唯一性
+    const timestamp = Date.now().toString(36);
+    const random = Math.random().toString(36).substring(2);
+    const counter = (this.#calls.size + 1).toString(36);
+    return `sw-${timestamp}-${random}-${counter}`;
   }
-
-  /**
-   * 取消Live Query回调
-   * @internal 此方法由SurrealDB SDK内部调用
-   */
-  unregisterLiveQueryCallback(subscriptionId: string): void {
-    this.liveQueryCallbacks.delete(subscriptionId);
-    console.log(`ServiceWorkerEngine: 取消Live Query回调 ${subscriptionId}`);
-  }
-}
-
-/**
- * 创建Service Worker引擎工厂函数
- */
-export function serviceWorkerEngines(): Engines {
-  return {
-    sw: ServiceWorkerEngine
-  };
 }

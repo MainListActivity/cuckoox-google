@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useSurrealContext } from "@/src/contexts/SurrealProvider";
-import { RecordId, Uuid } from "surrealdb";
+import { useSurreal } from "@/src/contexts/SurrealProvider";
+import { RecordId, Table } from "surrealdb";
 import {
   Message,
   ConversationSummary,
@@ -31,11 +31,11 @@ export function useConversationsList(userId: RecordId | null): {
   error: unknown;
   setConversations: React.Dispatch<React.SetStateAction<ConversationSummary[]>>; // Added setter
 } {
-  const { client, isConnected } = useSurrealContext();
+  const { client, isConnected } = useSurreal();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<unknown>(null);
-  const liveQueryIdRef = useRef<Uuid | null>(null);
+  const liveQueryRef = useRef<{ kill: () => Promise<void> } | null>(null);
 
   const fetchConversations = useCallback(
     async (currentUserId: RecordId) => {
@@ -148,26 +148,27 @@ export function useConversationsList(userId: RecordId | null): {
     if (userId && client && isConnected) {
       fetchConversations(userId);
 
-      // Simplified Live Query: Re-fetch all conversations on any change in 'conversation' or 'message' table.
-      // This is not optimal but serves as a basic starting point.
+      // Use new Live Query API to monitor message changes
       const setupLiveQueries = async () => {
-        // FIXED: Remove parameters from LIVE SELECT (not supported by SurrealDB)
-        const liveMessageQuery = `LIVE SELECT * FROM message;`; // Monitor all message changes
-
         try {
-          // Kill previous if any
-          if (liveQueryIdRef.current) await client.kill(liveQueryIdRef.current);
-
-          // Set up live query without parameters
-          const qid = (await client.query<[Uuid]>(liveMessageQuery))[0];
-          if (qid) {
-            liveQueryIdRef.current = qid;
-            client.subscribeLive(qid, (_action, _data) => {
-              // Re-fetch conversations on any message change
-              // This is broader than ideal but ensures we catch all relevant changes
-              fetchConversations(userId);
-            });
+          // Kill previous live query if any
+          if (liveQueryRef.current) {
+            await liveQueryRef.current.kill();
+            liveQueryRef.current = null;
           }
+
+          // Set up new live query using Table class and new API
+          const messageTable = new Table("message");
+          const live = await client.live(messageTable);
+          
+          // Subscribe to live events
+          live.subscribe((_action, _result, _record) => {
+            // Re-fetch conversations on any message change
+            // This ensures we catch all relevant changes
+            fetchConversations(userId);
+          });
+
+          liveQueryRef.current = live;
         } catch (e) {
           console.error("Error setting up live conversations query:", e);
         }
@@ -178,9 +179,9 @@ export function useConversationsList(userId: RecordId | null): {
     }
     return () => {
       // Cleanup
-      if (liveQueryIdRef.current && client && client.status === "connected") {
-        client.kill(liveQueryIdRef.current).catch(/* ignore */);
-        liveQueryIdRef.current = null;
+      if (liveQueryRef.current) {
+        liveQueryRef.current.kill().catch(/* ignore */);
+        liveQueryRef.current = null;
       }
     };
   }, [userId, client, isConnected, fetchConversations]);
@@ -208,7 +209,7 @@ export function useSystemNotifications(
   >([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<unknown>(null);
-  const liveQueryIdRef = useRef<Uuid | null>(null);
+  const liveQueryRef = useRef<{ kill: () => Promise<void> } | null>(null);
 
   const fetchNotifications = useCallback(
     async (currentUserId: RecordId, currentCaseId?: RecordId | null) => {
@@ -283,34 +284,39 @@ export function useSystemNotifications(
     if (userId && client && isConnected) {
       fetchNotifications(userId, caseId); // Pass caseId here
 
-      // FIXED: LIVE SELECT without parameters (SurrealDB limitation)
-      const liveQuery = `LIVE SELECT * FROM message;`;
-
+      // Use new Live Query API to monitor message changes
       const setupLiveQuery = async () => {
         try {
-          if (liveQueryIdRef.current) await client.kill(liveQueryIdRef.current);
+          // Kill previous live query if any
+          if (liveQueryRef.current) {
+            await liveQueryRef.current.kill();
+            liveQueryRef.current = null;
+          }
 
-          const qid = (await client.query<[Uuid]>(liveQuery))[0];
-          if (qid) {
-            liveQueryIdRef.current = qid;
-            client.subscribeLive(qid, (action, data) => {
-              // Filter relevant message changes on client side
-              if (data && typeof data === "object" && "type" in data) {
-                const isRelevant =
-                  (data.type === "CASE_ROBOT_REMINDER" &&
-                    (!caseId || data.case_id === caseId)) ||
-                  (data.type === "BUSINESS_NOTIFICATION" &&
-                    data.target_user_id === userId);
+          // Set up new live query using Table class and new API
+          const messageTable = new Table("message");
+          const live = await client.live(messageTable);
+          
+          // Subscribe to live events
+          live.subscribe((action, data, record) => {
+            // Filter relevant message changes on client side
+            if (data && typeof data === "object" && "type" in data) {
+              const isRelevant =
+                (data.type === "CASE_ROBOT_REMINDER" &&
+                  (!caseId || data.case_id === caseId)) ||
+                (data.type === "BUSINESS_NOTIFICATION" &&
+                  data.target_user_id === userId);
 
-                if (isRelevant) {
-                  fetchNotifications(userId, caseId);
-                }
-              } else {
-                // Fallback: refresh on any message change to be safe
+              if (isRelevant) {
                 fetchNotifications(userId, caseId);
               }
-            });
-          }
+            } else {
+              // Fallback: refresh on any message change to be safe
+              fetchNotifications(userId, caseId);
+            }
+          });
+
+          liveQueryRef.current = live;
         } catch (e) {
           console.error("Error setting up live system notifications query:", e);
         }
@@ -321,9 +327,9 @@ export function useSystemNotifications(
     }
     return () => {
       // Cleanup
-      if (liveQueryIdRef.current && client && client.status === "connected") {
-        client.kill(liveQueryIdRef.current).catch(/* ignore */);
-        liveQueryIdRef.current = null;
+      if (liveQueryRef.current) {
+        liveQueryRef.current.kill().catch(/* ignore */);
+        liveQueryRef.current = null;
       }
     };
   }, [userId, caseId, client, isConnected, fetchNotifications]);

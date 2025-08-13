@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RecordId, Uuid } from 'surrealdb';
+import { RecordId, Table } from 'surrealdb';
 import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { useSnackbar } from '@/src/contexts/SnackbarContext';
@@ -351,7 +351,7 @@ export function useGroupOperations() {
 
 // 群组实时更新Hook（使用SurrealDB的Live Query）
 export function useGroupLiveUpdates(groupId: RecordId | string | null) {
-  const [liveQueryId, setLiveQueryId] = useState<Uuid | null>(null);
+  const [liveQuery, setLiveQuery] = useState<{ kill: () => Promise<void> } | null>(null);
   const client = useSurrealClient();
 
   const setupLiveQuery = useCallback(async () => {
@@ -365,37 +365,50 @@ export function useGroupLiveUpdates(groupId: RecordId | string | null) {
         console.error('Invalid groupId format for live query:', groupId);
         return;
       }
-      const groupUuid = match[1];
 
-      // 监听群组成员变化
-      const query = `LIVE SELECT * FROM group_member WHERE group_id = type::thing('group', '${groupUuid}')`;
+      // 使用新的LiveQuery API监听群组成员变化
+      const groupMemberTable = new Table("group_member");
+      const live = await client.live(groupMemberTable);
       
-      const queryId = await client.live(query, (action: string, data: unknown) => {
-        // 处理实时更新
-        console.log('Group member update:', action, data);
-        // 这里可以触发组件重新加载或更新状态
-        // 例如通过事件系统通知其他组件
-        window.dispatchEvent(new CustomEvent('groupMemberUpdate', { 
-          detail: { action, data, groupId } 
-        }));
+      // 订阅实时事件
+      live.subscribe((action, result, record) => {
+        // 过滤相关的group_id变更
+        if (result && typeof result === "object" && "group_id" in result) {
+          const recordGroupId = result.group_id;
+          const recordGroupIdStr = recordGroupId?.toString();
+          const groupIdMatch =
+            recordGroupIdStr &&
+            (recordGroupIdStr === groupIdStr ||
+              recordGroupIdStr.replace(/[⟨⟩]/g, "") === groupIdStr ||
+              recordGroupId?.id === groupIdStr.split(":")[1]);
+
+          if (groupIdMatch) {
+            // 处理实时更新
+            console.log('Group member update:', action, result);
+            // 通过事件系统通知其他组件
+            window.dispatchEvent(new CustomEvent('groupMemberUpdate', { 
+              detail: { action, data: result, groupId } 
+            }));
+          }
+        }
       });
 
-      setLiveQueryId(queryId);
+      setLiveQuery(live);
     } catch (error) {
       console.error('Error setting up group live query:', error);
     }
   }, [groupId, client]);
 
   const cleanup = useCallback(async () => {
-    if (liveQueryId && client) {
+    if (liveQuery) {
       try {
-        await client.kill(liveQueryId);
-        setLiveQueryId(null);
+        await liveQuery.kill();
+        setLiveQuery(null);
       } catch (error) {
         console.error('Error cleaning up live query:', error);
       }
     }
-  }, [liveQueryId, client]);
+  }, [liveQuery]);
 
   useEffect(() => {
     setupLiveQuery();
@@ -404,7 +417,7 @@ export function useGroupLiveUpdates(groupId: RecordId | string | null) {
     };
   }, [setupLiveQuery, cleanup]);
 
-  return { liveQueryId, cleanup };
+  return { liveQuery, cleanup };
 }
 
 // 群组权限检查Hook
