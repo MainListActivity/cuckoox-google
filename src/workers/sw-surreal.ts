@@ -131,7 +131,20 @@ self.addEventListener('activate', (event) => {
       initializeComponents(),
       // 确保初始化完成
       initializationPromise || Promise.resolve()
-    ])
+    ]).then(async () => {
+      // 向所有客户端发送Service Worker已更新的通知
+      const clients = await self.clients.matchAll();
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'sw-activated',
+          payload: {
+            version: SW_VERSION,
+            timestamp: Date.now()
+          }
+        });
+      });
+      console.log(`Service Worker v2.0 激活完成，已通知 ${clients.length} 个客户端`);
+    })
   );
 });
 
@@ -167,6 +180,11 @@ self.addEventListener('message', async (event) => {
 
       case 'config_update':
         await handleConfigUpdate(event, payload);
+        break;
+
+      case 'SKIP_WAITING':
+        console.log('Service Worker v2.0: 收到跳过等待请求');
+        await self.skipWaiting();
         break;
 
       default:

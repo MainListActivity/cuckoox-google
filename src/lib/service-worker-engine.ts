@@ -73,12 +73,17 @@ export class ServiceWorkerEngine extends AbstractEngine {
     reject: (error: any) => void;
   }>();
   private liveQueryCallbacks = new Map<string, (action: string, result: unknown) => void>();
+  private registration?: ServiceWorkerRegistration;
+  private messageListener?: (event: MessageEvent) => void;
 
   constructor() {
     // 创建Service Worker引擎上下文
     const context = new ServiceWorkerEngineContext();
     super(context as any); // 类型断言，简化实现
     console.log('ServiceWorkerEngine: 初始化Service Worker引擎');
+    
+    // 初始化消息监听器
+    this.messageListener = this.handleMessage.bind(this);
   }
 
   /**
@@ -105,7 +110,7 @@ export class ServiceWorkerEngine extends AbstractEngine {
       this.setStatus(ConnectionStatus.Connected);
       
       // 触发连接事件
-      this.emitter.emit('open');
+      this.emitter.emit('connected', []);
       console.log('ServiceWorkerEngine: 连接成功');
     } catch (error) {
       console.error('ServiceWorkerEngine: 连接失败', error);
@@ -124,8 +129,17 @@ export class ServiceWorkerEngine extends AbstractEngine {
     this.liveQueryCallbacks.clear();
     this.setStatus(ConnectionStatus.Disconnected);
     
+    // 清理消息监听器
+    if (this.messageListener) {
+      navigator.serviceWorker.removeEventListener('message', this.messageListener);
+    }
+    
+    // 清理Service Worker引用
+    this.serviceWorker = undefined;
+    this.registration = undefined;
+    
     // 触发断开事件
-    this.emitter.emit('close');
+    this.emitter.emit("disconnected", []);
   }
 
   /**
@@ -195,15 +209,15 @@ export class ServiceWorkerEngine extends AbstractEngine {
    */
   private async setupServiceWorkerConnection(): Promise<void> {
     // 等待Service Worker准备就绪
-    const registration = await navigator.serviceWorker.ready;
+    this.registration = await navigator.serviceWorker.ready;
     console.log('ServiceWorkerEngine: Service Worker注册状态', {
-      active: !!registration.active,
-      installing: !!registration.installing,
-      waiting: !!registration.waiting
+      active: !!this.registration.active,
+      installing: !!this.registration.installing,
+      waiting: !!this.registration.waiting
     });
 
     // 尝试获取活跃的Service Worker
-    this.serviceWorker = registration.active || registration.waiting || registration.installing;
+    this.serviceWorker = this.registration.active || this.registration.waiting || this.registration.installing!;
 
     if (!this.serviceWorker) {
       throw new Error('Service Worker不可用 - 未找到任何可用的Service Worker实例');
@@ -229,13 +243,64 @@ export class ServiceWorkerEngine extends AbstractEngine {
       });
     }
 
-    // 监听Service Worker消息
-    navigator.serviceWorker.addEventListener('message', this.handleMessage.bind(this));
+    // 清理旧的消息监听器
+    if (this.messageListener) {
+      navigator.serviceWorker.removeEventListener('message', this.messageListener);
+    }
+
+    // 添加Service Worker消息监听器
+    navigator.serviceWorker.addEventListener('message', this.messageListener!);
+    
+    // 监听Service Worker更新
+    this.setupServiceWorkerUpdateListener();
     
     console.log('ServiceWorkerEngine: Service Worker连接已建立', {
       state: this.serviceWorker.state,
       scriptURL: this.serviceWorker.scriptURL
     });
+  }
+
+  /**
+   * 设置Service Worker更新监听器
+   * 注意: 与Workbox协作，避免重复处理
+   */
+  private setupServiceWorkerUpdateListener(): void {
+    if (!this.registration) return;
+
+    // 只监听控制权变更事件，让Workbox处理更新检测
+    // 当Workbox决定激活新Service Worker时，我们会收到controllerchange事件
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      console.log('ServiceWorkerEngine: Service Worker控制权发生变更 (由Workbox管理)');
+      // 控制权变更意味着新的Service Worker已接管，需要更新引用
+      this.handleControllerChange();
+    });
+  }
+
+
+  /**
+   * 处理控制权变更 (与Workbox协作)
+   */
+  private async handleControllerChange(): Promise<void> {
+    if (navigator.serviceWorker.controller) {
+      console.log('ServiceWorkerEngine: Workbox已激活新Service Worker，更新引用');
+      
+      // 更新Service Worker引用为当前控制器
+      this.serviceWorker = navigator.serviceWorker.controller;
+      
+      console.log('ServiceWorkerEngine: Service Worker引用已更新，通信将使用新实例');
+    }
+  }
+
+  /**
+   * 处理Service Worker激活通知
+   */
+  private handleServiceWorkerActivated(payload: any): void {
+    console.log('ServiceWorkerEngine: Service Worker已激活', payload);
+    
+    // 更新Service Worker引用为当前控制器
+    if (navigator.serviceWorker.controller) {
+      this.serviceWorker = navigator.serviceWorker.controller;
+    }
   }
 
   /**
@@ -251,6 +316,10 @@ export class ServiceWorkerEngine extends AbstractEngine {
         
       case 'live_query_callback':
         this.handleLiveQueryCallback(payload);
+        break;
+        
+      case 'sw-activated':
+        this.handleServiceWorkerActivated(payload);
         break;
         
       default:
