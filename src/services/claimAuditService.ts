@@ -647,17 +647,15 @@ export class ClaimAuditService {
     allowed: boolean;
     reason?: string;
   }> {
-    try {
-      // 这里可以实现具体的权限验证逻辑
-      // 目前返回允许访问，实际应该根据用户角色和债权状态进行验证
-      return { allowed: true };
-    } catch (error) {
-      console.error("验证访问权限失败:", error);
-      return {
-        allowed: false,
-        reason: "权限验证失败",
-      };
-    }
+    // 这里可以实现具体的权限验证逻辑
+    // 目前返回允许访问，实际应该根据用户角色和债权状态进行验证
+    
+    // TODO: 实现真正的权限验证逻辑
+    // - 检查用户角色
+    // - 检查债权状态
+    // - 检查访问类型权限
+    
+    return { allowed: true };
   }
 }
 

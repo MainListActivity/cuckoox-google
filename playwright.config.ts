@@ -49,7 +49,7 @@ export default defineConfig({
       use: { ...devices['Desktop Safari'] },
     },
   ],
-  // 配置测试服务器 - 使用preview服务器（现在禁用，使用手动启动的服务器）
+  // 配置测试服务器 - 使用preview服务器（暂时禁用自动启动）
   // webServer: {
   //   command: 'bun run build && bun run preview',
   //   url: 'http://localhost:4173',

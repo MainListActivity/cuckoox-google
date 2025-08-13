@@ -442,14 +442,15 @@ export class ClaimOperationService {
     claimId: string | RecordId,
     operationType: OperationType,
   ): Promise<boolean> {
-    try {
-      // 这里可以实现具体的权限验证逻辑
-      // 目前返回true，实际应该根据用户角色和债权状态进行验证
-      return true;
-    } catch (error) {
-      console.error("验证操作权限失败:", error);
-      return false;
-    }
+    // 这里可以实现具体的权限验证逻辑
+    // 目前返回true，实际应该根据用户角色和债权状态进行验证
+    
+    // TODO: 实现真正的操作权限验证
+    // - 检查用户对该债权的操作权限
+    // - 根据操作类型验证权限级别
+    // - 检查债权状态是否允许该操作
+    
+    return true;
   }
 
   /**

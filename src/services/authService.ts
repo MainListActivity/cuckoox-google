@@ -1,6 +1,6 @@
 import { UserManager, WebStorageStateStore, User as OidcUser, UserManagerSettings } from 'oidc-client-ts';
-import { RecordId } from 'surrealdb';
-import { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
+import Surreal, { RecordId } from 'surrealdb';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 
 // JWT Token Management
 interface JwtLoginRequest {
@@ -35,6 +35,7 @@ interface JwtRefreshResponse {
 
 // User profile interface
 interface AppUser extends Record<string, any> {
+  [x: string]: any;
   id: RecordId;
   github_id: string;
   name: string;
@@ -62,23 +63,17 @@ const userManager = new UserManager(oidcSettings);
 class AuthService {
   private currentUser: any = null;
   private isAuthenticated = false;
-  private surrealClient: SurrealWorkerAPI | null = null;
+  private surreal:Surreal | null = null;
 
-  /**
-   * Set the Surreal client instance (injected by SurrealProvider)
-   */
-  setSurrealClient(client: SurrealWorkerAPI | null) {
-    this.surrealClient = client;
+  public setSurrealClient(client: Surreal) {
+    this.surreal = client;
   }
 
   /**
    * Get the current Surreal client
    */
-  private async getSurrealClient(): Promise<SurrealWorkerAPI> {
-    if (!this.surrealClient) {
-      throw new Error('SurrealDB client not available. Make sure SurrealProvider is properly initialized.');
-    }
-    return this.surrealClient;
+  private async getSurrealClient(): Promise<Surreal> {
+    return this.surreal!;
   }
 
   // JWT Authentication
@@ -177,14 +172,15 @@ class AuthService {
   async setAuthTokens(accessToken: string, refreshToken?: string, expiresIn?: number): Promise<void> {
     // 新的Service Worker架构中，认证由SurrealProvider统一管理
     // authService只需要存储token到localStorage，让Service Worker处理认证
-    localStorage.setItem('access_token', accessToken);
-    if (refreshToken) {
-      localStorage.setItem('refresh_token', refreshToken);
-    }
-    if (expiresIn) {
-      localStorage.setItem('token_expires_in', expiresIn.toString());
-    }
-
+    // localStorage.setItem('access_token', accessToken);
+    // if (refreshToken) {
+    //   localStorage.setItem('refresh_token', refreshToken);
+    // }
+    // if (expiresIn) {
+    //   localStorage.setItem('token_expires_in', expiresIn.toString());
+    // }
+    const client = await this.getSurrealClient();
+    client.authenticate(accessToken);
     this.isAuthenticated = true;
     console.log('Auth tokens stored, Service Worker will handle authentication');
   }
@@ -219,25 +215,18 @@ class AuthService {
   async setTenantCode(tenantCode: string): Promise<void> {
     // Store tenant code in localStorage for service worker access
     localStorage.setItem('tenant_code', tenantCode);
-
+    
+      const client = await this.getSurrealClient();
+      await client.use({namespace: 'ck_go', database: tenantCode});
     // 新的Service Worker架构不需要在authService中处理连接
     // SurrealProvider会通过switchTenant方法处理租户切换
     console.log('Tenant code set:', tenantCode);
-  }
-
-  async getTenantCode(): Promise<string | null> {
-    // Service Worker handles database selection internally
-    return null;
   }
 
   // 从SurrealDB获取登录状态
   async getAuthStatusFromSurreal(): Promise<boolean> {
     try {
       // 检查客户端是否可用
-      if (!this.surrealClient) {
-        console.log('SurrealDB client not available, skipping auth status check');
-        return false;
-      }
 
       const client = await this.getSurrealClient();
       if (!client) {
@@ -245,7 +234,7 @@ class AuthService {
       }
 
       // 使用SurrealQL的 $auth 变量检查认证状态
-      const result = await client.query('RETURN $auth;');
+      const result = await client.query<any>('RETURN $auth;');
       
       // 如果 $auth 存在且不为null/undefined，则表示已认证
       return result && Array.isArray(result) && result[0] && result[0]!== null && result[0] !== undefined;
@@ -336,14 +325,14 @@ class AuthService {
         updated_at: new Date(),
       }) as AppUser;
     } else {
-      appUser = await client.create('user', {
+      appUser = await client.create<AppUser,AppUser>(recordId, {
         id: recordId,
         github_id: githubId,
         name: name,
         email: email,
         created_at: new Date(),
         updated_at: new Date(),
-      }) as AppUser;
+      });
     }
 
     if (!appUser) {

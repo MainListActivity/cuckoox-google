@@ -51,22 +51,22 @@ export enum ConnectionState {
   AUTHENTICATED = 'authenticated',
   ERROR = 'error'
 }
-  // 获取 WASM 引擎
-  const  getWasmEngines = async(): Promise<any>=> {
-    let retryCount = 0;
-    const maxRetries = 50;
+// 获取 WASM 引擎
+const getWasmEngines = async (): Promise<any> => {
+  let retryCount = 0;
+  const maxRetries = 50;
 
-    while (!(globalThis as any).__surrealdbWasmEngines && retryCount < maxRetries) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      retryCount++;
-    }
-
-    if (!(globalThis as any).__surrealdbWasmEngines) {
-      throw new Error('WASM engines not loaded after waiting');
-    }
-
-    return (globalThis as any).__surrealdbWasmEngines();
+  while (!(globalThis as any).__surrealdbWasmEngines && retryCount < maxRetries) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retryCount++;
   }
+
+  if (!(globalThis as any).__surrealdbWasmEngines) {
+    throw new Error('WASM engines not loaded after waiting');
+  }
+
+  return (globalThis as any).__surrealdbWasmEngines();
+}
 
 /**
  * 统一连接管理器
@@ -106,8 +106,8 @@ export class UnifiedConnectionManager {
 
     try {
       // 1. 连接本地数据库（内存数据库）
-      await this.localDb.connect('indxdb://cuckoox-storage');
-      await this.localDb.use({
+      await this.localDb?.connect('indxdb://cuckoox-storage');
+      await this.localDb?.use({
         namespace: config.localDb.namespace,
         database: config.localDb.database
       });
@@ -116,7 +116,7 @@ export class UnifiedConnectionManager {
       // 2. 连接远程数据库（如果配置了）
       if (config.remoteDb) {
         this.remoteDb = new Surreal();
-        await this.remoteDb.connect(config.remoteDb.url);
+        await this.remoteDb.connect(config.remoteDb.url, { reconnect: true });
         await this.remoteDb.use({
           namespace: config.remoteDb.namespace,
           database: config.remoteDb.database
@@ -143,7 +143,7 @@ export class UnifiedConnectionManager {
    */
   async disconnect(): Promise<void> {
     console.log('UnifiedConnectionManager: 开始断开连接');
-    
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
@@ -156,11 +156,11 @@ export class UnifiedConnectionManager {
       if (this.remoteDb) {
         await this.remoteDb.close();
       }
-      
+
       this.connectionState = ConnectionState.DISCONNECTED;
       this.authState = undefined;
       this.currentTenant = undefined;
-      
+
       console.log('UnifiedConnectionManager: 连接已断开');
     } catch (error) {
       console.error('UnifiedConnectionManager: 断开连接时发生错误', error);
@@ -182,7 +182,7 @@ export class UnifiedConnectionManager {
       const tenantDatabase = `${this.config.localDb.database}_${tenantCode}`;
 
       // 切换本地数据库
-      await this.localDb.use({
+      await this.localDb?.use({
         namespace: this.config.localDb.namespace,
         database: tenantDatabase
       });
@@ -252,7 +252,6 @@ export class UnifiedConnectionManager {
    */
   private setupDisconnectionHandler(): void {
     if (!this.remoteDb) return;
-
     // TODO: 实现WebSocket断线监听
     console.log('UnifiedConnectionManager: 设置断线监听器');
   }
@@ -262,9 +261,9 @@ export class UnifiedConnectionManager {
    */
   private async handleDisconnection(): Promise<void> {
     console.log('UnifiedConnectionManager: 检测到连接断开，开始处理');
-    
+
     this.connectionState = ConnectionState.ERROR;
-    
+
     // 启动自动重连
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       await this.reconnect();
@@ -290,7 +289,7 @@ export class UnifiedConnectionManager {
       try {
         if (this.config) {
           await this.connect(this.config);
-          
+
           // 恢复认证状态
           if (this.authState) {
             await this.authenticate({
@@ -298,12 +297,12 @@ export class UnifiedConnectionManager {
               tenant_code: this.authState.tenant_code
             });
           }
-          
+
           console.log('UnifiedConnectionManager: 重连成功');
         }
       } catch (error) {
         console.error(`UnifiedConnectionManager: 重连失败 (${this.reconnectAttempts}/${this.maxReconnectAttempts})`, error);
-        
+
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           await this.reconnect();
         }
@@ -315,7 +314,7 @@ export class UnifiedConnectionManager {
    * 获取本地数据库实例
    */
   getLocalDb(): Surreal {
-    return this.localDb;
+    return this.localDb!;
   }
 
   /**
@@ -350,8 +349,8 @@ export class UnifiedConnectionManager {
    * 检查是否已连接
    */
   isConnected(): boolean {
-    return this.connectionState === ConnectionState.CONNECTED || 
-           this.connectionState === ConnectionState.AUTHENTICATED;
+    return this.connectionState === ConnectionState.CONNECTED ||
+      this.connectionState === ConnectionState.AUTHENTICATED;
   }
 
   /**

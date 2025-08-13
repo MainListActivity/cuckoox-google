@@ -127,6 +127,7 @@ self.addEventListener('activate', (event) => {
     Promise.all([
       self.clients.claim(),
       cleanupOutdatedCaches(),
+      cleanupOutdatedAppCaches(),
       initializeComponents(),
       // 确保初始化完成
       initializationPromise || Promise.resolve()
@@ -204,9 +205,6 @@ async function initializeServiceWorker(): Promise<void> {
     // 初始化本地数据库Schema
     await initializeLocalDatabaseSchema();
 
-    // 启动连接保活机制
-    startConnectionHealthMonitor();
-
     // 标记初始化完成
     isInitialized = true;
 
@@ -231,19 +229,46 @@ async function initializeComponents(): Promise<void> {
   try {
     // 初始化PWA功能组件
     staticCacheManager = new StaticResourceCacheManager();
-    pushManager = new PWAPushManager();
-    performanceManager = new PWAPerformanceManager();
+    pushManager = new PWAPushManager({
+      vapidPublicKey: '',
+      serviceWorkerPath: '/sw.js',
+      notificationOptions: {},
+      serverEndpoint: ''
+    });
+    performanceManager = new PWAPerformanceManager({
+      appShell: {
+        coreResources: ['/assets/index.css', '/assets/index.js'],
+        shellCacheName: 'cuckoox-app-shell-v1',
+        version: '1.0.0'
+      },
+      preloading: {
+        criticalResources: ['/api/auth', '/api/config'],
+        preloadStrategy: 'conservative',
+        maxPreloadSize: 1024 * 1024 // 1MB
+      },
+      lazyLoading: {
+        routes: ['/cases', '/claims', '/creditors'],
+        chunkSize: 512 * 1024, // 512KB
+        loadingThreshold: 100 // ms
+      },
+      performance: {
+        memoryThreshold: 100, // MB
+        cleanupInterval: 300000, // 5 minutes
+        targetFCP: 2000, // 2s
+        targetLCP: 2500 // 2.5s
+      }
+    });
 
     console.log('Service Worker v2.0: PWA组件初始化完成');
-  } catch (error) {
+  } catch (error: any) {
     console.error('Service Worker v2.0: PWA组件初始化失败', error);
   }
 }
 
 /**
- * 清理过期缓存
+ * 清理过期的应用缓存
  */
-async function cleanupOutdatedCaches(): Promise<void> {
+async function cleanupOutdatedAppCaches(): Promise<void> {
   const cacheNames = await caches.keys();
   const outdatedCaches = cacheNames.filter(name =>
     name.startsWith('cuckoox-sw-') && name !== SW_CACHE_NAME
@@ -333,7 +358,7 @@ async function handleRpcRequest(event: ExtendableMessageEvent, payload: RpcReque
       event.source?.postMessage(response);
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Service Worker v2.0: RPC请求失败 ${method}`, error);
 
     // 发送错误响应
@@ -468,7 +493,7 @@ async function handleConfigUpdate(event: ExtendableMessageEvent, payload: any): 
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     event.source?.postMessage({
       type: 'config_updated',
       payload: {
@@ -499,33 +524,6 @@ async function getPerformanceReport(timeRange?: { startTime: number; endTime: nu
 async function resetPerformanceMetrics(): Promise<any> {
   console.log('Service Worker v2.0: 重置性能指标');
   return { reset: true, timestamp: Date.now() };
-}
-
-/**
- * 启动连接健康监控
- */
-function startConnectionHealthMonitor(): void {
-  // 每30秒检查一次连接状态
-  setInterval(async () => {
-    if (!connectionManager) return;
-
-    try {
-      // 检查连接状态
-      if (!connectionManager.isConnected()) {
-        console.log('Service Worker v2.0: 检测到连接断开，尝试重连');
-        await reconnectIfNeeded();
-      } else {
-        // 发送心跳包确保连接活跃
-        const remoteDb = connectionManager.getRemoteDb();
-        if (remoteDb) {
-          await remoteDb.query('return 1;');
-        }
-      }
-    } catch (error) {
-      console.error('Service Worker v2.0: 连接健康检查失败', error);
-      await reconnectIfNeeded();
-    }
-  }, 30000); // 30秒检查一次
 }
 
 /**

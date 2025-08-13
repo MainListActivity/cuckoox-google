@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Always respond in Chinese-simplified.
 
-注意在任务完成前根据mcp-feedback-enhanced工具的要求进行工具调用
 
-用户确认完成任务后务必确认单元测试用例全部通过，执行命令 `bun run test:integration`，并且确保 `bun run lint` 没有任何错误
+
+用户确认完成任务后务必确认单元测试用例全部通过，执行命令 `bun run test:e2e e2e/auth.e2e.test.ts`，并且确保 `bun run lint` 没有任何错误
 
 ## Development Commands
 

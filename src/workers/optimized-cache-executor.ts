@@ -31,20 +31,20 @@ export class OptimizedCacheExecutor {
     const sql = params[0] as string || '';
     const paramArray = params[1] as Record<string, unknown> || {};
     try {
-      const route = await this.queryRouter.routeQuery(sql, paramArray);
-      console.log('OptimizedCacheExecutor: 查询路由结果', route);
 
       let result: QueryResult;
       if (method === 'query') {
+        const route = await this.queryRouter.routeQuery(sql, paramArray);
+        console.log('OptimizedCacheExecutor: 查询路由结果', route);
 
         switch (route.strategy) {
           case 'CACHED': {
-            result = await this.executeLocalRpc(method, sql, paramArray);
+            result = await this.executeLocalRpc(method, params);
             break;
           }
 
           case 'REMOTE': {
-            result = await this.executeRemoteRpc(method, sql, paramArray);
+            result = await this.executeRemoteRpc(method, params);
             // 检查是否需要启用表缓存
             const analysis = this.queryRouter.analyzeQuery(sql, paramArray);
             await this.considerEnablingCache(analysis.tables);
@@ -52,7 +52,7 @@ export class OptimizedCacheExecutor {
           }
 
           case 'WRITE_THROUGH': {
-            result = await this.executeWriteThroughRpc(method, sql, paramArray);
+            result = await this.executeWriteThroughRpc(method, params);
             break;
           }
 
@@ -60,7 +60,8 @@ export class OptimizedCacheExecutor {
             throw new Error(`不支持的查询策略: ${route.strategy}`);
         }
       } else {
-        result = await this.executeWriteThroughRpc(method, sql, paramArray);
+        // 其他方法默认使用WRITE_THROUGH
+        result = await this.executeWriteThroughRpc(method, params);
       }
 
       const executionTime = Date.now() - startTime;
@@ -79,19 +80,21 @@ export class OptimizedCacheExecutor {
   /**
    * 执行本地查询
    */
-  private async executeLocalRpc(method: string, sql: string, params?: Record<string, unknown>): Promise<QueryResult> {
+  private async executeLocalRpc(method: string, params: unknown[]): Promise<QueryResult> {
     const startTime = Date.now();
 
     try {
       // 检查是否包含认证查询
-      const hasAuth = sql.includes('$auth') || sql.includes('return $auth');
 
-      if (hasAuth) {
+      const sql = params[0] as string || '';
+      const paramArray = params[1] as Record<string, unknown> || {};
+      const hasAuth = sql.includes('return $auth');
+      if (method == 'query' && hasAuth) {
         // 处理包含认证的查询
-        return await this.executeAuthQuery(sql, params);
+        return await this.executeAuthQuery(sql, paramArray);
       } else {
         // 直接在本地数据库执行查询
-        const data = await this.localDb.rpc(method, [sql, params]);
+        const data = await this.localDb.rpc(method, params);
         const executionTime = Date.now() - startTime;
 
         return {
@@ -110,7 +113,7 @@ export class OptimizedCacheExecutor {
   /**
    * 执行远程查询
    */
-  private async executeRemoteRpc(method: string, sql: string, params?: Record<string, unknown>): Promise<QueryResult> {
+  private async executeRemoteRpc(method: string, params: unknown[]): Promise<QueryResult> {
     if (!this.remoteDb) {
       throw new Error('远程数据库未连接');
     }
@@ -118,7 +121,7 @@ export class OptimizedCacheExecutor {
     const startTime = Date.now();
 
     try {
-      const data = await this.remoteDb.rpc(method, [sql, params]);
+      const data = await this.remoteDb.rpc(method, params);
       const executionTime = Date.now() - startTime;
 
       return {
@@ -135,7 +138,7 @@ export class OptimizedCacheExecutor {
   /**
    * 执行写透查询（Write-Through）
    */
-  private async executeWriteThroughRpc(method: string, sql: string, params?: Record<string, unknown>): Promise<QueryResult> {
+  private async executeWriteThroughRpc(method: string, params: unknown[]): Promise<QueryResult> {
     if (!this.remoteDb) {
       throw new Error('远程数据库未连接');
     }
@@ -144,8 +147,16 @@ export class OptimizedCacheExecutor {
 
     try {
       // 写操作先写远程数据库
-      const data = await this.remoteDb.rpc(method, [sql, params]);
-      await this.localDb.rpc(method, [sql, params]);
+      //use 方法只在本地执行， authenticate 只在远程执行
+      let data = null;
+      if (method === 'use') {
+        data = await this.localDb.rpc(method, params);
+      } else if (method === 'authenticate') {
+        data = await this.remoteDb.rpc(method, params);
+      } else {
+        data = await this.remoteDb.rpc(method, params);
+        await this.localDb.rpc(method, params);
+      }
       const executionTime = Date.now() - startTime;
 
       // Live Query会自动更新本地缓存，这里不需要手动更新

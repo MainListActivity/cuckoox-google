@@ -879,7 +879,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       isMounted = false;
       clearTimeout(emergencyTimeout);
     };
-  }, [isConnected, user, isLoggedIn, isLoading]); // 🔧 添加更多依赖确保状态同步
+  }, [isConnected, user, isLoggedIn]); // 🔧 添加更多依赖确保状态同步
 
   // 监听认证状态变化事件
   useEffect(() => {
