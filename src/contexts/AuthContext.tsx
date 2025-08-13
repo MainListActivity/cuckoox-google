@@ -1065,11 +1065,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       setUser((prevUser) =>
         prevUser ? { ...prevUser, last_login_case_id: recordId } : null,
       );
-
-      // 更新数据库中的last_login_case_id（备用方式）
-      if (user?.id) {
-        await updateLastSelectedCaseInDB(user.id, recordId);
-      }
     } catch (error) {
       console.error(`Error selecting case ${recordId}:`, error);
     } finally {
