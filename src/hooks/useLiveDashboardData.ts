@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSurrealContext } from "@/src/contexts/SurrealProvider";
-import { Uuid } from "surrealdb";
+import { Table, Uuid } from "surrealdb";
 
 // Generic type for count results
 interface CountResult {
@@ -191,33 +191,26 @@ function createLiveMetricHook<TResultType, TDataType>(
           if (!isMounted) return;
 
           // Step 2: Set up the live query for the entire claim table (no parameters allowed)
-          const liveSelectQuery = `LIVE SELECT * FROM claim;`;
-          const queryResponse = await client.query<[Uuid]>(liveSelectQuery);
+          liveQueryId = await client.live(new Table("claim"), (_action, data) => {
+            if (!isMounted) return;
 
-          if (queryResponse && queryResponse[0]) {
-            liveQueryId = queryResponse[0];
-
-            // Step 3: Subscribe to live events with case filtering
-            client.subscribeLive(String(liveQueryId), (_action, data) => {
-              if (!isMounted) return;
-
-              // Filter for relevant case_id changes
-              // data contains the changed record, check if it matches our caseId
-              if (data && typeof data === "object" && "case_id" in data) {
-                const recordCaseId = data.case_id;
-                if (
-                  recordCaseId === caseId ||
-                  String(recordCaseId) === String(caseId)
-                ) {
-                  // Re-fetch the metric when relevant claim changes
-                  fetchMetric(caseId);
-                }
-              } else {
-                // Fallback: refresh on any claim change (less efficient but safe)
+            // Filter for relevant case_id changes
+            // data contains the changed record, check if it matches our caseId
+            if (data && typeof data === "object" && "case_id" in data) {
+              const recordCaseId = data.case_id;
+              if (
+                recordCaseId === caseId ||
+                String(recordCaseId) === String(caseId)
+              ) {
+                // Re-fetch the metric when relevant claim changes
                 fetchMetric(caseId);
               }
-            });
-          }
+            } else {
+              // Fallback: refresh on any claim change (less efficient but safe)
+              fetchMetric(caseId);
+            }
+          });
+
         } catch (err) {
           if (!isMounted) return;
           console.error(
@@ -234,7 +227,7 @@ function createLiveMetricHook<TResultType, TDataType>(
       return () => {
         isMounted = false;
         if (liveQueryId && client) {
-          client.kill(String(liveQueryId)).catch((killError) => {
+          client.kill(liveQueryId).catch((killError) => {
             console.error(
               `Error killing live query ${liveQueryId} for ${debugName}:`,
               killError,
@@ -242,7 +235,7 @@ function createLiveMetricHook<TResultType, TDataType>(
           });
         }
       };
-    }, [caseId, client, isConnected, limit, fetchMetric]);
+    }, [caseId, client, isConnected, limit]);
 
     return { data: metricValue, isLoading, error };
   };

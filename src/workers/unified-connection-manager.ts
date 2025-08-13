@@ -116,7 +116,7 @@ export class UnifiedConnectionManager {
       // 2. 连接远程数据库（如果配置了）
       if (config.remoteDb) {
         this.remoteDb = new Surreal();
-        await this.remoteDb.connect(config.remoteDb.url, { reconnect: true });
+        await this.remoteDb.connect(config.remoteDb.url, { reconnect: { enabled: true, attempts: -1, retryDelayMax: 10000, retryDelay: 1000 } });
         await this.remoteDb.use({
           namespace: config.remoteDb.namespace,
           database: config.remoteDb.database
