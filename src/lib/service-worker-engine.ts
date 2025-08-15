@@ -1,7 +1,6 @@
 import {
   ConnectionUnavailable,
-  EngineDisconnected,
-  ReconnectExhaustion,
+  Publisher,
 } from "surrealdb";
 
 import type {
@@ -9,13 +8,10 @@ import type {
   DriverContext,
   EngineEvents,
   SurrealEngine,
-  RpcRequest, 
+  RpcRequest,
   RpcResponse,
   LiveMessage,
 } from "surrealdb";
-
-import { Publisher } from "surrealdb";
-
 
 
 interface Call<T> {
@@ -31,8 +27,7 @@ interface RpcRequestMessage {
   type: 'rpc_request';
   payload: {
     requestId: string;
-    method: string;
-    params: unknown[];
+    encodeParam: Uint8Array;
   };
 }
 
@@ -75,8 +70,6 @@ export class ServiceWorkerEngine implements SurrealEngine {
   #serviceWorker?: ServiceWorker;
   #calls = new Map<string, Call<unknown>>();
   #context: DriverContext;
-  #active = false;
-  #terminated = false;
   private registration?: ServiceWorkerRegistration;
   private messageListener?: (event: MessageEvent) => void;
 
@@ -106,67 +99,19 @@ export class ServiceWorkerEngine implements SurrealEngine {
    */
   open(state: ConnectionState): void {
     this.#publisher.publish("connecting");
-    this.#terminated = false;
     this.#state = state;
 
-    const { reconnect } = state;
     console.log('ServiceWorkerEngine: 开始连接Service Worker, URL:', state.url.toString());
-
     (async () => {
-      while (true) {
-        // 打开新连接并等待关闭
-        const error = await this.createServiceWorkerConnection(() => {
-          this.#active = true;
-          reconnect.reset();
-
-          // 重新发送所有待处理请求
-          for (const { request } of this.#calls.values()) {
-            this.#serviceWorker?.postMessage({
-              type: 'rpc_request',
-              payload: request
-            });
-          }
-
-          this.#publisher.publish("connected");
+      await this.setupServiceWorkerConnection();
+      // 重新发送所有待处理请求
+      for (const { request } of this.#calls.values()) {
+        this.#serviceWorker?.postMessage({
+          type: 'rpc_request',
+          payload: request
         });
-
-        this.#serviceWorker = undefined;
-
-        if (error) {
-          this.#publisher.publish("error", error);
-        }
-
-        // 检查是否应该继续迭代和重连
-        if (this.#terminated || !reconnect.enabled || !reconnect.allowed) {
-          // 传播重连耗尽
-          if (reconnect.enabled && !reconnect.allowed) {
-            this.#publisher.publish("error", new ReconnectExhaustion());
-          }
-
-          // 可选择终止待处理调用
-          if (!this.#terminated) {
-            for (const { reject } of this.#calls.values()) {
-              reject(new EngineDisconnected());
-            }
-          }
-
-          this.#state = undefined;
-          this.#active = false;
-          this.#calls.clear();
-          this.#publisher.publish("disconnected");
-          break;
-        }
-
-        // 传播捕获的错误
-        if (error) {
-          reconnect.propagate(error);
-        }
-
-        this.#publisher.publish("reconnecting");
-
-        // 执行重连迭代冷却
-        await reconnect.iterate();
       }
+      this.#publisher.publish("connected");
     })();
   }
 
@@ -177,7 +122,6 @@ export class ServiceWorkerEngine implements SurrealEngine {
     console.log('ServiceWorkerEngine: 断开连接');
 
     this.#state = undefined;
-    this.#terminated = true;
 
     // 清理消息监听器
     if (this.messageListener) {
@@ -188,9 +132,7 @@ export class ServiceWorkerEngine implements SurrealEngine {
     this.#serviceWorker = undefined;
     this.registration = undefined;
 
-    if (this.#active) {
-      await this.#publisher.subscribeFirst("disconnected");
-    }
+    await this.#publisher.subscribeFirst("disconnected");
   }
 
   /**
@@ -200,11 +142,6 @@ export class ServiceWorkerEngine implements SurrealEngine {
     request: RpcRequest<Method, Params>,
   ): Promise<RpcResponse<Result>> {
     return new Promise((resolve, reject) => {
-      if (!this.#active) {
-        reject(new ConnectionUnavailable());
-        return;
-      }
-
       const id = this.generateUniqueId();
       const call: Call<Result> = {
         request: { id, ...request },
@@ -216,13 +153,13 @@ export class ServiceWorkerEngine implements SurrealEngine {
 
       this.#calls.set(id, call as Call<unknown>);
 
+      const encoded = this.#context.encode({ id, ...request });
       // 发送RPC请求到Service Worker
       const message: RpcRequestMessage = {
         type: 'rpc_request',
         payload: {
           requestId: id,
-          method: request.method,
-          params: request.params || []
+          encodeParam: encoded,
         }
       };
 
@@ -422,7 +359,7 @@ export class ServiceWorkerEngine implements SurrealEngine {
    * 处理Live Query回调
    */
   private handleLiveQueryCallback(payload: LiveQueryCallbackMessage['payload']): void {
-    const { result  } = payload;
+    const { result } = payload;
 
     // 发布live事件到订阅者
     this.#publisher.publish("live", result as LiveMessage);

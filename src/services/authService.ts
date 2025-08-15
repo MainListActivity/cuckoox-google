@@ -62,7 +62,7 @@ const userManager = new UserManager(oidcSettings);
 class AuthService {
   private currentUser: any = null;
   private isAuthenticated = false;
-  private surreal:Surreal | null = null;
+  private surreal: Surreal | null = null;
 
   public setSurrealClient(client: Surreal) {
     this.surreal = client;
@@ -214,9 +214,9 @@ class AuthService {
   async setTenantCode(tenantCode: string): Promise<void> {
     // Store tenant code in localStorage for service worker access
     localStorage.setItem('tenant_code', tenantCode);
-    
-      const client = await this.getSurrealClient();
-      await client.use({namespace: 'ck_go', database: tenantCode});
+
+    const client = await this.getSurrealClient();
+    await client.use({ namespace: 'ck_go', database: tenantCode });
     // 新的Service Worker架构不需要在authService中处理连接
     // SurrealProvider会通过switchTenant方法处理租户切换
     console.log('Tenant code set:', tenantCode);
@@ -234,9 +234,9 @@ class AuthService {
 
       // 使用SurrealQL的 $auth 变量检查认证状态
       const result = await client.query<any>('RETURN $auth;');
-      
+
       // 如果 $auth 存在且不为null/undefined，则表示已认证
-      return result && Array.isArray(result) && result[0] && result[0]!== null && result[0] !== undefined;
+      return result && Array.isArray(result) && result[0] && result[0] !== null && result[0] !== undefined;
     } catch (error) {
       // 如果错误信息包含 "not ready"，说明客户端尚未准备好，这是正常情况
       if (error instanceof Error && error.message.includes('not ready')) {
@@ -324,7 +324,7 @@ class AuthService {
         updated_at: new Date(),
       }) as AppUser;
     } else {
-      appUser = await client.create<AppUser,AppUser>(recordId, {
+      appUser = await client.create<AppUser, AppUser>(recordId, {
         id: recordId,
         github_id: githubId,
         name: name,

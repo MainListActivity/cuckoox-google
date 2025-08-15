@@ -1,4 +1,5 @@
 import { Surreal } from 'surrealdb';
+import { surrealdbWasmEngines } from "./surreal";
 
 /**
  * 连接配置接口
@@ -51,22 +52,6 @@ export enum ConnectionState {
   AUTHENTICATED = 'authenticated',
   ERROR = 'error'
 }
-// 获取 WASM 引擎
-const getWasmEngines = async (): Promise<any> => {
-  let retryCount = 0;
-  const maxRetries = 50;
-
-  while (!(globalThis as any).__surrealdbWasmEngines && retryCount < maxRetries) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    retryCount++;
-  }
-
-  if (!(globalThis as any).__surrealdbWasmEngines) {
-    throw new Error('WASM engines not loaded after waiting');
-  }
-
-  return (globalThis as any).__surrealdbWasmEngines();
-}
 
 /**
  * 统一连接管理器
@@ -85,15 +70,11 @@ export class UnifiedConnectionManager {
   private reconnectDelay = 1000; // 1秒基础延迟
 
   constructor() {
-
-    // 获取 WASM 引擎
-    getWasmEngines().then((engines) => {
-      console.log('WASM engines loaded:', engines);
-      this.localDb = new Surreal({
-        engines: engines
-      });
-      console.log('UnifiedConnectionManager: 初始化连接管理器');
+    console.log('WASM engines loaded:');
+    this.localDb = new Surreal({
+      engines: surrealdbWasmEngines()
     });
+    console.log('UnifiedConnectionManager: 初始化连接管理器');
   }
 
   /**

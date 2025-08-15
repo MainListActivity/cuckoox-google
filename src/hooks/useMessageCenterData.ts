@@ -203,7 +203,7 @@ export function useSystemNotifications(
     >
   >; // Added setter
 } {
-  const { client, isConnected } = useSurrealContext();
+  const { client, isConnected } = useSurreal();
   const [notifications, setNotifications] = useState<
     (CaseRobotReminderMessage | BusinessNotificationMessage)[]
   >([]);

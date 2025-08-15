@@ -19,6 +19,8 @@ console.log(`Service Worker v2.0 启动 - ${SW_VERSION}`);
 // 导入核心管理器
 import { UnifiedConnectionManager, type ConnectionConfig } from './unified-connection-manager.js';
 import { EnhancedQueryProcessor } from './enhanced-query-processor.js';
+import init from "@cuckoox/surrealdb-wasm";
+import { decodeCbor, RpcRequest } from "surrealdb";
 
 // PWA功能模块
 import { StaticResourceCacheManager } from "./static-resource-cache-manager.js";
@@ -32,8 +34,7 @@ interface RpcRequestMessage {
   type: 'rpc_request';
   payload: {
     requestId: number;
-    method: string;
-    params: unknown[];
+    encodeParam: Uint8Array;
   };
 }
 
@@ -107,10 +108,10 @@ const pageSubscriptions = new Map<string, {
 self.addEventListener('install', (event) => {
   console.log(`Service Worker v2.0 安装中 - ${SW_VERSION}`);
 
-
   event.waitUntil(
     Promise.all([
       self.skipWaiting(),
+      init(),
     ])
   );
 });
@@ -345,8 +346,8 @@ async function initializeLocalDatabaseSchema(): Promise<void> {
  * 处理RPC请求
  */
 async function handleRpcRequest(event: ExtendableMessageEvent, payload: RpcRequestMessage['payload']): Promise<void> {
-  const { requestId, method, params } = payload;
-
+  const { requestId, encodeParam } = payload;
+  const { method, params } = decodeCbor<RpcRequest>(encodeParam);
   console.log(`Service Worker v2.0: 处理RPC请求 ${method}`, params);
 
   try {

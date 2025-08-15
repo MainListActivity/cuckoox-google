@@ -1,5 +1,5 @@
-import { Surreal, Uuid } from 'surrealdb';
-import { OptimizedQueryRouter, } from './optimized-query-router.js';
+import { Surreal, Uuid,Table, LiveHandler } from 'surrealdb';
+import { OptimizedQueryRouter, QueryRoute, } from './optimized-query-router.js';
 
 /**
  * 查询执行结果
@@ -25,16 +25,15 @@ export class OptimizedCacheExecutor {
   /**
    * 执行查询
    */
-  async executeRpc(method: string, params: unknown[]): Promise<QueryResult> {
+  async executeRpc(route: QueryRoute,method: string, params?: unknown[]): Promise<QueryResult> {
     const startTime = Date.now();
 
-    const sql = params[0] as string || '';
-    const paramArray = params[1] as Record<string, unknown> || {};
+    const sql = params&&params[0] as string || '';
+    const paramArray = params&&params[1] as Record<string, unknown> || {};
     try {
 
       let result: QueryResult;
       if (method === 'query') {
-        const route = await this.queryRouter.routeQuery(sql, paramArray);
         console.log('OptimizedCacheExecutor: 查询路由结果', route);
 
         switch (route.strategy) {
@@ -80,14 +79,14 @@ export class OptimizedCacheExecutor {
   /**
    * 执行本地查询
    */
-  private async executeLocalRpc(method: string, params: unknown[]): Promise<QueryResult> {
+  private async executeLocalRpc(method: string, params?: unknown[]): Promise<QueryResult> {
     const startTime = Date.now();
 
     try {
       // 检查是否包含认证查询
 
-      const sql = params[0] as string || '';
-      const paramArray = params[1] as Record<string, unknown> || {};
+      const sql = params&&params[0] as string || '';
+      const paramArray = params&&params[1] as Record<string, unknown> || {};
       const hasAuth = sql.includes('return $auth');
       if (method == 'query' && hasAuth) {
         // 处理包含认证的查询
@@ -113,7 +112,7 @@ export class OptimizedCacheExecutor {
   /**
    * 执行远程查询
    */
-  private async executeRemoteRpc(method: string, params: unknown[]): Promise<QueryResult> {
+  private async executeRemoteRpc(method: string, params?: unknown[]): Promise<QueryResult> {
     if (!this.remoteDb) {
       throw new Error('远程数据库未连接');
     }
@@ -138,7 +137,7 @@ export class OptimizedCacheExecutor {
   /**
    * 执行写透查询（Write-Through）
    */
-  private async executeWriteThroughRpc(method: string, params: unknown[]): Promise<QueryResult> {
+  private async executeWriteThroughRpc(method: string, params?: unknown[]): Promise<QueryResult> {
     if (!this.remoteDb) {
       throw new Error('远程数据库未连接');
     }
@@ -311,7 +310,7 @@ export class OptimizedCacheExecutor {
 
     try {
       // 从远程数据库获取全表数据
-      const data = await this.remoteDb.select(table);
+      const data = await this.remoteDb.select(new Table(table));
 
       // 清空本地表
       await this.localDb.query(`DELETE FROM ${table}`);
@@ -340,12 +339,13 @@ export class OptimizedCacheExecutor {
 
     try {
       // 创建Live Query订阅
-      const queryUuid = await this.remoteDb.live(table, async (action, result) => {
-        await this.handleTableLiveQueryUpdate(table, action, result);
+      const queryResult = await this.remoteDb.live(new Table(table));
+      queryResult.subscribe((...[action, result]) => {
+        this.handleTableLiveQueryUpdate(table, action, result);
       });
 
-      console.log(`OptimizedCacheExecutor: 表 ${table} 的Live Query同步已启用，UUID: ${queryUuid}`);
-      return queryUuid;
+      console.log(`OptimizedCacheExecutor: 表 ${table} 的Live Query同步已启用，UUID: ${queryResult.id}`);
+      return queryResult.id;
     } catch (error) {
       console.error(`OptimizedCacheExecutor: 设置表 ${table} 的Live Query同步失败`, error);
       return undefined;
@@ -357,7 +357,7 @@ export class OptimizedCacheExecutor {
    */
   private async handleTableLiveQueryUpdate(
     table: string,
-    action: "CLOSE" | "CREATE" | "UPDATE" | "DELETE",
+    action: "CLOSED" | "CREATE" | "UPDATE" | "DELETE",
     result: any
   ): Promise<void> {
     try {

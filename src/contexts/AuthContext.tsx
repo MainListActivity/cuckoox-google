@@ -695,52 +695,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({
       setIsLoading(true);
 
       try {
-        // 🔧 优化：Service Worker等待逻辑，更短超时时间，更好的降级处理
-        let serviceWorkerReady = false;
         try {
-          const waitPromise = serviceWorkerComm.waitForReady();
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("Service Worker wait timeout")),
-              3000, // 🔧 缩短到3秒，避免长时间阻塞
-            ),
-          );
-
-          await Promise.race([waitPromise, timeoutPromise]);
-          serviceWorkerReady = true;
-          console.log(
-            "🔧 Service Worker ready, proceeding with authentication check",
-          );
-        } catch (waitError) {
-          console.warn(
-            "🔧 Service Worker not ready within timeout, proceeding with fallback mode:",
-            waitError.message,
-          );
-          // 🔧 即使Service Worker未就绪也继续，使用降级模式
-          serviceWorkerReady = false;
-        }
-
-        // 🔧 根据Service Worker状态决定认证策略
-        if (serviceWorkerReady) {
-          try {
-            const result = await queryWithAuth<AppUser[]>(
-              client,
-              "select * from user where id=$auth;",
-            );
-            // 从SurrealDB获取登录状态
-            if (result && result.length > 0) {
-              await initializeUserSession(result[0], null);
-              if (isMounted()) {
-                setIsLoading(false);
-              }
-              return;
+          const result = await client.query<AppUser[]>("select * from user where id=$auth;");
+          // 从SurrealDB获取登录状态
+          if (result && result.length > 0) {
+            await initializeUserSession(result[0], null);
+            if (isMounted()) {
+              setIsLoading(false);
             }
-          } catch (authError) {
-            console.warn(
-              "🔧 queryWithAuth failed, falling back to cached data:",
-              authError,
-            );
+            return;
           }
+        } catch (authError) {
+          console.warn(
+            "🔧 queryWithAuth failed, falling back to cached data:",
+            authError,
+          );
         }
 
         // 🔧 Service Worker未就绪或认证失败时，尝试使用缓存数据
