@@ -57,9 +57,11 @@ export default defineConfig(({ mode }) => {
         srcDir: "src/workers",
         filename: "sw-surreal.ts",
         includeAssets: ["assets/logo/*.svg", "favicon.ico"],
+        injectRegister: 'script',
         injectManifest: {
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB
           globIgnores: ["**/index_bg.wasm"], // 忽略WASM文件，不缓存
+          rollupFormat: "es", // 使用ES模块格式
         },
         manifest: {
           name: "CuckooX 破产案件管理系统",
@@ -100,6 +102,10 @@ export default defineConfig(({ mode }) => {
           enabled: true,
           type: "module",
         },
+        workbox: {
+          swDest: "sw-surreal.js",
+        },
+        useCredentials: false,
       }),
     ],
     // 将环境变量传递给Vite
@@ -117,6 +123,9 @@ export default defineConfig(({ mode }) => {
     build: {
       target: "esnext",
       rollupOptions: {
+        output: {
+          format: "es", // 确保输出ES模块格式
+        },
       },
     },
     optimizeDeps: {
