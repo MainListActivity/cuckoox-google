@@ -17,15 +17,15 @@ const SW_CACHE_NAME = `cuckoox-sw-${SW_VERSION}`;
 console.log(`Service Worker v2.0 启动 - ${SW_VERSION}`);
 
 // 导入核心管理器
-import { UnifiedConnectionManager, type ConnectionConfig } from './unified-connection-manager.js';
-import { EnhancedQueryProcessor } from './enhanced-query-processor.js';
+import { UnifiedConnectionManager, type ConnectionConfig } from './unified-connection-manager';
+import { EnhancedQueryProcessor } from './enhanced-query-processor';
 import init from "@cuckoox/surrealdb-wasm";
 import { decodeCbor, encodeCbor, RpcRequest } from "surrealdb";
 
 // PWA功能模块
-import { StaticResourceCacheManager } from "./static-resource-cache-manager.js";
-import { PWAPushManager } from "./pwa-push-manager.js";
-import { PWAPerformanceManager } from "./pwa-performance-manager.js";
+import { StaticResourceCacheManager } from "./static-resource-cache-manager";
+import { PWAPushManager } from "./pwa-push-manager";
+import { PWAPerformanceManager } from "./pwa-performance-manager";
 
 /**
  * RPC请求消息接口
