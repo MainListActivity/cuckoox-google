@@ -38,7 +38,7 @@ interface RpcResponseMessage {
   type: 'rpc_response';
   payload: {
     requestId: string;
-    result?: unknown;
+    encodeResp: Uint8Array;
     error?: {
       code: string;
       details: string;
@@ -105,10 +105,16 @@ export class ServiceWorkerEngine implements SurrealEngine {
     (async () => {
       await this.setupServiceWorkerConnection();
       // 重新发送所有待处理请求
-      for (const { request } of this.#calls.values()) {
+      for (const [requestId, call] of this.#calls.entries()) {
+        const {request} = call;
+        if(!request){
+          console.warn('ServiceWorkerEngine: 无效的RPC请求，跳过发送');
+          this.#calls.delete(requestId);
+          continue;
+        }
         this.#serviceWorker?.postMessage({
           type: 'rpc_request',
-          payload: request
+          payload: this.#context.encode(request)
         });
       }
       this.#publisher.publish("connected");
@@ -120,19 +126,6 @@ export class ServiceWorkerEngine implements SurrealEngine {
    */
   async close(): Promise<void> {
     console.log('ServiceWorkerEngine: 断开连接');
-
-    this.#state = undefined;
-
-    // 清理消息监听器
-    if (this.messageListener) {
-      navigator.serviceWorker.removeEventListener('message', this.messageListener);
-    }
-
-    // 清理Service Worker引用
-    this.#serviceWorker = undefined;
-    this.registration = undefined;
-
-    await this.#publisher.subscribeFirst("disconnected");
   }
 
   /**
@@ -148,12 +141,13 @@ export class ServiceWorkerEngine implements SurrealEngine {
         resolve,
         reject,
       };
-
-      console.log(`ServiceWorkerEngine: 发送RPC请求 ${request.method}`, request.params);
+      const encoded = this.#context.encode(call.request);
+      const decoder = new TextDecoder("utf-8"); // 指定编码格式为 UTF-8
+      const result = decoder.decode(encoded);
+      console.log(`ServiceWorkerEngine: 发送RPC请求 ${request.method}`, request.params, new String(result));
 
       this.#calls.set(id, call as Call<unknown>);
 
-      const encoded = this.#context.encode({ id, ...request });
       // 发送RPC请求到Service Worker
       const message: RpcRequestMessage = {
         type: 'rpc_request',
@@ -190,23 +184,6 @@ export class ServiceWorkerEngine implements SurrealEngine {
     // 通过Service Worker代理导出请求
     const response = await this.send<'export', undefined, string>({ method: 'export' });
     return response.result || '';
-  }
-
-  /**
-   * 创建Service Worker连接
-   */
-  private async createServiceWorkerConnection(onConnected: () => void): Promise<Error | null> {
-    if (!this.#state) {
-      throw new ConnectionUnavailable();
-    }
-
-    try {
-      await this.setupServiceWorkerConnection();
-      onConnected();
-      return null;
-    } catch (error) {
-      return error as Error;
-    }
   }
 
   /**
@@ -335,9 +312,9 @@ export class ServiceWorkerEngine implements SurrealEngine {
    * 处理RPC响应
    */
   private handleRpcResponse(payload: RpcResponseMessage['payload']): void {
-    const { requestId, result, error } = payload;
+    const { requestId, encodeResp, error } = payload;
     const call = this.#calls.get(requestId);
-
+    const rpcResp = this.#context.decode<RpcResponse>(encodeResp); // 解码响应
     if (call) {
       try {
         if (error) {
@@ -347,7 +324,7 @@ export class ServiceWorkerEngine implements SurrealEngine {
           (errorObj as any).information = error.information;
           call.reject(errorObj);
         } else {
-          call.resolve({ result } as RpcResponse<unknown>);
+          call.resolve(rpcResp);
         }
       } finally {
         this.#calls.delete(requestId);

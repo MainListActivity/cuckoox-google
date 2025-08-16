@@ -195,8 +195,8 @@ export default defineConfig(({ mode }) => {
       },
       // Reduce memory usage
       logHeapUsage: false, // 禁用内存使用日志
-      // 禁用详细输出
-      silent: true,
+      // 允许 console 输出以便调试
+      silent: false,
       outputFile: undefined,
       // 使用超简洁的自定义reporter
       reporters: ["./tests/reporters/file-status-reporter.ts", "default"],
