@@ -1,4 +1,4 @@
-import { Surreal } from 'surrealdb';
+import { Surreal, u } from 'surrealdb';
 import { UnifiedConnectionManager } from './unified-connection-manager.js';
 import { OptimizedQueryRouter } from './optimized-query-router.js';
 import { OptimizedCacheExecutor, type QueryResult } from './optimized-cache-executor.js';
@@ -47,7 +47,7 @@ export class EnhancedQueryProcessor {
    */
   async handleRPC(
     method: string,
-    params: unknown[],
+    params?: unknown[],
     userId?: string,
     caseId?: string
   ): Promise<QueryProcessorResult> {
@@ -55,8 +55,8 @@ export class EnhancedQueryProcessor {
 
     console.log('EnhancedQueryProcessor: 处理rpc', { method, params, userId, caseId });
 
-    const sql = params[0] as string || '';
-    const paramArray = params[1] as Record<string, unknown> || {};
+    const sql = params && params[0] as string || '';
+    const paramArray = params && params[1] as Record<string, unknown> || {};
     try {
       // 检查连接状态
       if (!this.connectionManager.isConnected()) {
@@ -64,12 +64,12 @@ export class EnhancedQueryProcessor {
       }
       // 分析查询并获取路由信息
       const analysis = this.queryRouter.analyzeQuery(sql, paramArray);
-      const route = await this.queryRouter.routeQuery(sql, paramArray);
+      const route = await this.queryRouter.routeQuery(analysis);
 
       console.log('EnhancedQueryProcessor: 查询分析完成', { analysis, route });
 
       // 执行查询
-      const result = await this.cacheExecutor.executeRpc(method, params);
+      const result = await this.cacheExecutor.executeRpc(route, method, params);
 
       // 记录性能指标
       await this.recordPerformanceMetrics(sql, result, analysis, route);
@@ -226,7 +226,7 @@ export class EnhancedQueryProcessor {
 
       if (Array.isArray(metadata) && metadata.length > 0 && metadata[0].live_query_uuid) {
         if (this.remoteDb) {
-          await this.remoteDb.kill(metadata[0].live_query_uuid);
+          (await this.remoteDb.liveOf(u`${metadata[0].live_query_uuid}`)).kill();
         }
       }
 

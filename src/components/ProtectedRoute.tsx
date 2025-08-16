@@ -49,26 +49,28 @@ const pathMatches = (path: string, patterns: string[]): boolean => {
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole: _requiredRole }) => {
   const { 
     isLoggedIn, 
-    user: _user, // Need user object for role in autoNavigateConfig
+    user: _user, 
     hasRole: _hasRole, 
     selectedCaseId, 
     isLoading: isAuthLoading, 
+    isInitialized,
     isCaseLoading 
   } = useAuth();
   const { caseStatus: _caseStatus } = useCaseStatus();
   const location = useLocation();
   const { t } = useTranslation();
 
-  // 1. Authentication Check (Primary)
-  if (isAuthLoading) {
+  // 1. 等待初始化完成
+  if (!isInitialized || isAuthLoading) {
     return <GlobalLoader message={t('authenticating', 'Authenticating...')} />;
   }
 
+  // 2. 认证检查
   if (!isLoggedIn) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. Case Selection Check (Secondary, after login confirmed)
+  // 3. Case Selection Check (Secondary, after login confirmed)
   if (
     pathMatches(location.pathname, routesRequiringCaseSelection) &&
     !selectedCaseId &&

@@ -6,41 +6,6 @@ import { fileURLToPath, URL } from "node:url";
 import fs from "fs";
 import path from "path";
 
-// 将import手动添加到文件开头 - 在所有插件处理完成后执行（仅在需要时）
-function prependImportToSwSurreal(): Plugin<unknown> {
-  return {
-    name: `prepend-import-to-sw-surreal`,
-    enforce: "post", // 确保在所有其他插件之后执行
-    generateBundle: {
-      order: "post", // 在最后阶段执行
-      handler(_options, bundle) {
-        // 找到 sw-surreal.js 文件
-        const swSurrealFile = Object.keys(bundle).find(
-          (key) => key.includes("sw-surreal.js") || key === "sw-surreal.js",
-        );
-
-        if (swSurrealFile && bundle[swSurrealFile]) {
-          const file = bundle[swSurrealFile];
-          if (file.type === "chunk") {
-            const importStatement = `import '/sw/wasm-shim.js';`;
-
-            // 检查是否已经包含该import语句，避免重复添加
-            if (!file.code.includes(importStatement)) {
-              file.code = `${importStatement}\n${file.code}`;
-              console.log(
-                `Added import statement to ${swSurrealFile} (post-processing)`,
-              );
-            } else {
-              console.log(
-                `Import statement already exists in ${swSurrealFile}, skipping`,
-              );
-            }
-          }
-        }
-      },
-    },
-  };
-}
 
 // 注：之前的 fixRegisterSW 插件已移除，因为使用 injectManifest 模式时不需要修改 registerSW.js
 
@@ -89,8 +54,8 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: "autoUpdate",
         strategies: "injectManifest",
-        srcDir: "public/sw",
-        filename: "sw-surreal.js",
+        srcDir: "src/workers",
+        filename: "sw-surreal.ts",
         includeAssets: ["assets/logo/*.svg", "favicon.ico"],
         injectManifest: {
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15MB
@@ -136,7 +101,6 @@ export default defineConfig(({ mode }) => {
           type: "module",
         },
       }),
-      prependImportToSwSurreal(),
     ],
     // 将环境变量传递给Vite
     define: {
@@ -153,17 +117,6 @@ export default defineConfig(({ mode }) => {
     build: {
       target: "esnext",
       rollupOptions: {
-        external: [
-          // 将SurrealDB WASM作为外部依赖，不打包
-          /@surrealdb\/wasm.*\.wasm$/,
-        ],
-        output: {
-          paths: {
-            // 将WASM文件指向CDN
-            "@surrealdb/wasm/dist/surreal/index_bg.wasm":
-              "https://unpkg.com/@surrealdb/wasm@1.4.1/dist/surreal/index_bg.wasm",
-          },
-        },
       },
     },
     optimizeDeps: {
@@ -173,7 +126,7 @@ export default defineConfig(({ mode }) => {
         "@emotion/react",
         "@emotion/styled",
       ],
-      exclude: ["@mui/icons-material/esm", "@surrealdb/wasm"],
+      exclude: ["@mui/icons-material/esm", "@cuckoox/surrealdb-wasm"],
       force: true, // 强制重新优化依赖，解决@emotion重复加载问题
       esbuildOptions: {
         target: "esnext",
@@ -242,8 +195,8 @@ export default defineConfig(({ mode }) => {
       },
       // Reduce memory usage
       logHeapUsage: false, // 禁用内存使用日志
-      // 禁用详细输出
-      silent: true,
+      // 允许 console 输出以便调试
+      silent: false,
       outputFile: undefined,
       // 使用超简洁的自定义reporter
       reporters: ["./tests/reporters/file-status-reporter.ts", "default"],

@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { Surreal } from "surrealdb";
 import { useMutation } from "@tanstack/react-query";
-import { serviceWorkerEngines } from "@/src/lib/service-worker-engine";
+import { ServiceWorkerEngine } from "@/src/lib/service-worker-engine";
 
 /**
  * 自定义错误类
@@ -49,7 +49,7 @@ export interface SurrealProviderState {
   /** 连接错误信息 */
   error: unknown;
   /** 连接到SurrealDB实例 */
-  connect: () => Promise<true>;
+  connect: () => Promise<boolean>;
   /** 关闭SurrealDB连接 */
   close: () => Promise<true>;
 }
@@ -134,7 +134,7 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   const [surrealInstance] = useState(() => {
     if (client) return client;
     return new Surreal({
-      engines: serviceWorkerEngines()
+      engines: {sw:ServiceWorkerEngine}
     });
   });
 
@@ -149,7 +149,9 @@ export const SurrealProvider: React.FC<SurrealProviderProps> = ({
   } = useMutation({
     mutationFn: async () => {
       // 将真实URL协议修改为sw协议（适配Service Worker引擎）
-      return await surrealInstance.connect('sw://localhost', params);
+      const conn = await surrealInstance.connect('sw://localhost', params);
+      console.log(conn);
+      return true;
     },
   });
 

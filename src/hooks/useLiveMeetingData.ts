@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSurrealContext } from "@/src/contexts/SurrealProvider"; // Adjust path as needed
-import { RecordId, Uuid } from "surrealdb";
+import { RecordId, Table } from "surrealdb";
 
 // Interface for Meeting data, aligning with expected DB structure
 export interface Meeting extends Record<string, any> {
@@ -61,7 +61,7 @@ export function useLiveMeetings(caseId: string | null): Meeting[] {
     }
 
     let isMounted = true;
-    let liveQueryId: Uuid | null = null;
+    let liveQuery: { kill: () => Promise<void> } | null = null;
     const setupLiveSubscription = async () => {
       try {
         // Step 1: Fetch initial data and sort it
@@ -77,22 +77,14 @@ export function useLiveMeetings(caseId: string | null): Meeting[] {
         setMeetingsList(sortMeetings(initialMeetings));
         setError(null);
 
-        // Step 2: Set up the live query for entire meeting table (no parameters allowed)
-        const liveQueryResult = await client.query<[{ result: Uuid }]>(
-          "LIVE SELECT * FROM meeting;",
-        );
-        if (
-          !isMounted ||
-          !liveQueryResult ||
-          !liveQueryResult[0] ||
-          !liveQueryResult[0].result
-        )
-          return;
-        liveQueryId = liveQueryResult[0].result;
+        // Step 2: Set up the live query using new API
+        const meetingTable = new Table("meeting");
+        liveQuery = await client.live(meetingTable);
+        
         if (!isMounted) return;
 
         // Step 3: Subscribe to live events with case filtering
-        client.subscribeLive<Meeting>(liveQueryId, (action, result) => {
+        liveQuery.subscribe((action, result, record) => {
           if (!isMounted || result === "killed" || result === "disconnected")
             return;
 
@@ -176,10 +168,10 @@ export function useLiveMeetings(caseId: string | null): Meeting[] {
     // Step 4: Cleanup function
     return () => {
       isMounted = false;
-      if (liveQueryId && client) {
-        client.kill(liveQueryId).catch((killError) => {
+      if (liveQuery) {
+        liveQuery.kill().catch((killError) => {
           console.error(
-            `Error killing live query ${liveQueryId} on cleanup:`,
+            `Error killing live query on cleanup:`,
             killError,
           );
         });

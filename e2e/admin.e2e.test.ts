@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, devices } from '@playwright/test';
 import { loginAsAdmin } from './helpers/login';
 
 test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
@@ -394,6 +394,187 @@ test.describe('管理员功能测试 - 使用 TEST1 租户', () => {
 
       if (!hasPermissionError) {
         console.log('管理员权限验证可能未正确实施');
+      }
+    }
+  });
+
+  test('应该验证登录后刷新页面菜单不会消失', async ({ page }) => {
+    // 先访问管理员面板确保已经登录
+    await page.goto('/admin');
+    await page.waitForLoadState('networkidle');
+    
+    if (page.url().includes('/login')) {
+      test.skip(true, '需要认证 - 跳过菜单刷新测试');
+      return;
+    }
+
+    // 等待页面完全加载
+    await page.waitForTimeout(2000);
+    
+    // 查找导航菜单元素
+    const menuSelectors = [
+      page.locator('nav'),
+      page.locator('.MuiDrawer-root'),
+      page.locator('.sidebar'),
+      page.locator('[role="navigation"]'),
+      page.locator('.navigation'),
+      page.locator('.menu'),
+      page.getByRole('navigation'),
+    ];
+
+    // 记录刷新前的菜单状态
+    let menuFoundBefore = false;
+    let beforeMenuText = '';
+    let beforeMenuCount = 0;
+    
+    for (const selector of menuSelectors) {
+      const count = await selector.count();
+      if (count > 0) {
+        menuFoundBefore = true;
+        beforeMenuCount = count;
+        const text = await selector.first().textContent() || '';
+        beforeMenuText = text.substring(0, 200); // 取前200字符避免过长
+        console.log(`刷新前发现菜单元素: ${count}个, 内容长度: ${text.length}`);
+        break;
+      }
+    }
+
+    // 查找具体的菜单项（更详细的检查）
+    const menuItemSelectors = [
+      page.getByRole('link', { name: /管理|Admin|用户|User|系统|System|设置|Settings/i }),
+      page.locator('a[href*="admin"], a[href*="users"], a[href*="settings"]'),
+      page.locator('.MuiListItem-root'),
+      page.locator('.menu-item'),
+      page.locator('nav a'),
+      page.locator('[role="menuitem"]'),
+    ];
+
+    let menuItemsCountBefore = 0;
+    let menuItemsTextBefore = '';
+    
+    for (const selector of menuItemSelectors) {
+      const count = await selector.count();
+      if (count > 0) {
+        menuItemsCountBefore = count;
+        const allText = await selector.allTextContents();
+        menuItemsTextBefore = allText.join('|').substring(0, 300);
+        console.log(`刷新前发现菜单项: ${count}个, 内容: ${allText.slice(0, 5).join(', ')}`);
+        break;
+      }
+    }
+
+    if (!menuFoundBefore && menuItemsCountBefore === 0) {
+      console.log('警告: 刷新前未找到任何菜单元素，无法进行菜单刷新测试');
+      // 不要跳过测试，继续执行刷新并检查
+    }
+
+    console.log('执行页面刷新...');
+    // 刷新页面
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    
+    // 等待应用重新初始化
+    await page.waitForTimeout(3000);
+
+    // 检查是否被重定向到登录页面
+    const urlAfterRefresh = page.url();
+    if (urlAfterRefresh.includes('/login')) {
+      console.log('❌ 刷新后被重定向到登录页面 - 这表明会话状态丢失');
+      expect(false, '刷新后不应该被重定向到登录页面').toBeTruthy();
+      return;
+    }
+
+    console.log('✓ 刷新后仍在管理员页面，检查菜单状态...');
+
+    // 记录刷新后的菜单状态
+    let menuFoundAfter = false;
+    let afterMenuText = '';
+    let afterMenuCount = 0;
+    
+    for (const selector of menuSelectors) {
+      const count = await selector.count();
+      if (count > 0) {
+        menuFoundAfter = true;
+        afterMenuCount = count;
+        const text = await selector.first().textContent() || '';
+        afterMenuText = text.substring(0, 200);
+        console.log(`刷新后发现菜单元素: ${count}个, 内容长度: ${text.length}`);
+        break;
+      }
+    }
+
+    let menuItemsCountAfter = 0;
+    let menuItemsTextAfter = '';
+    
+    for (const selector of menuItemSelectors) {
+      const count = await selector.count();
+      if (count > 0) {
+        menuItemsCountAfter = count;
+        const allText = await selector.allTextContents();
+        menuItemsTextAfter = allText.join('|').substring(0, 300);
+        console.log(`刷新后发现菜单项: ${count}个, 内容: ${allText.slice(0, 5).join(', ')}`);
+        break;
+      }
+    }
+
+    // 比较刷新前后的菜单状态
+    console.log('=== 菜单状态比较 ===');
+    console.log(`菜单容器: 刷新前 ${beforeMenuCount}个 -> 刷新后 ${afterMenuCount}个`);
+    console.log(`菜单项: 刷新前 ${menuItemsCountBefore}个 -> 刷新后 ${menuItemsCountAfter}个`);
+    
+    // 检查菜单是否消失的逻辑
+    const menuDisappeared = (menuFoundBefore && !menuFoundAfter) || 
+                           (menuItemsCountBefore > 0 && menuItemsCountAfter === 0);
+    
+    const menuSignificantlyReduced = (menuItemsCountBefore > 0 && menuItemsCountAfter < menuItemsCountBefore * 0.5);
+
+    if (menuDisappeared) {
+      console.log('❌ 菜单在刷新后完全消失');
+      await page.screenshot({ path: 'playwright-report/test-results/menu-disappeared-after-refresh.png' });
+      expect(false, '菜单在页面刷新后不应该消失').toBeTruthy();
+    } else if (menuSignificantlyReduced) {
+      console.log('❌ 菜单项在刷新后显著减少');
+      await page.screenshot({ path: 'playwright-report/test-results/menu-reduced-after-refresh.png' });
+      expect(false, '菜单项在页面刷新后不应该显著减少').toBeTruthy();
+    } else if (menuFoundAfter || menuItemsCountAfter > 0) {
+      console.log('✓ 菜单在刷新后仍然存在');
+    } else {
+      console.log('⚠️ 刷新前后都未找到明显的菜单元素，可能是页面结构问题');
+      await page.screenshot({ path: 'playwright-report/test-results/no-menu-found.png' });
+      
+      // 输出页面内容用于调试
+      const bodyText = await page.locator('body').textContent() || '';
+      console.log(`页面内容包含关键词: ${/管理|admin|用户|user|菜单|menu|导航|nav/i.test(bodyText)}`);
+    }
+
+    // 额外检查：尝试与菜单交互
+    if (menuFoundAfter || menuItemsCountAfter > 0) {
+      console.log('测试菜单交互功能...');
+      
+      // 尝试点击第一个可见的菜单项
+      for (const selector of menuItemSelectors) {
+        const elements = selector;
+        const count = await elements.count();
+        if (count > 0) {
+          try {
+            const firstItem = elements.first();
+            await firstItem.waitFor({ state: 'visible', timeout: 3000 });
+            
+            // 获取菜单项文本
+            const itemText = await firstItem.textContent() || '';
+            console.log(`尝试点击菜单项: ${itemText.trim()}`);
+            
+            // 点击菜单项
+            await firstItem.click();
+            await page.waitForTimeout(1000);
+            
+            console.log('✓ 菜单项点击成功，功能正常');
+            break;
+          } catch (e) {
+            console.log('菜单项点击失败，继续测试下一个');
+            continue;
+          }
+        }
       }
     }
   });

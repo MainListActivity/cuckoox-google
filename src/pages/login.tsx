@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth,AppUser } from '@/src/contexts/AuthContext';
-import { useServiceWorkerComm } from '@/src/contexts/SurrealProvider';
+import { useAuth, AppUser } from '@/src/contexts/AuthContext';
+import { useSurrealClient } from '@/src/contexts/SurrealProvider';
 // import authService from '@/src/services/authService'; // GitHub OIDC login - 暂时屏蔽
 import authService from '@/src/services/authService';
 import { RecordId } from 'surrealdb';
@@ -34,9 +34,7 @@ import TenantHistoryManager, { TenantHistoryItem } from '@/src/utils/tenantHisto
 const LoginPage: React.FC = () => {
   const { t } = useTranslation();
   // 移除直接使用SurrealProvider的认证方法
-  const auth = useAuth(); // Store the full context
-  const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState, user } = auth; // Destructure user here
-  const serviceWorkerComm = useServiceWorkerComm();
+  const { isLoggedIn, isLoading: isAuthContextLoading, setAuthState, user, isInitialized } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
@@ -50,9 +48,7 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [turnstileError, setTurnstileError] = useState<string | null>(null);
   const [showTurnstile, setShowTurnstile] = useState<boolean>(false);
-  const [justClearedAuth, setJustClearedAuth] = useState<boolean>(false);
   const [tenantHistory, setTenantHistory] = useState<TenantHistoryItem[]>([]);
-  const [realAuthStatus, setRealAuthStatus] = useState<boolean | null>(null);
   const [turnstileRequired, setTurnstileRequired] = useState<boolean>(true); // 默认需要Turnstile验证
   const [checkingTenantConfig, setCheckingTenantConfig] = useState<boolean>(false);
 
@@ -113,7 +109,7 @@ const LoginPage: React.FC = () => {
       // 加载租户历史记录
       const history = TenantHistoryManager.getTenantHistory();
       setTenantHistory(history);
-      
+
       if (tenantFromUrl) {
         setTenantCode(tenantFromUrl.toUpperCase());
       } else {
@@ -133,85 +129,22 @@ const LoginPage: React.FC = () => {
     }
   }, [tenantCode, isRootAdminMode, checkTenantTurnstileConfig]);
 
-  // 直接查询Service Worker的认证状态，确保获取最新的真实状态
+  // 简化的重定向逻辑：只有在认证完成且确实已登录时才重定向
   useEffect(() => {
-    const checkRealAuthStatus = async () => {
-      try {
-        if (serviceWorkerComm) {
-          const response = await serviceWorkerComm.sendMessage('get_connection_state', {});
-          const newAuthStatus = response?.isAuthenticated || false;
-          
-          // 只在状态真正变化时才更新和记录日志
-          setRealAuthStatus(prev => {
-            if (prev !== newAuthStatus) {
-              console.log('LoginPage: Auth status changed from', prev, 'to', newAuthStatus);
-              return newAuthStatus;
-            }
-            return prev;
-          });
-        }
-      } catch (error) {
-        console.error('LoginPage: Error checking real auth status:', error);
-        setRealAuthStatus(false);
-      }
-    };
-
-    // 只在serviceWorkerComm可用时检查一次
-    if (serviceWorkerComm) {
-      checkRealAuthStatus();
-    }
-  }, [serviceWorkerComm]);
-
-  // 监听认证状态变化，防止在清除状态过程中的错误重定向
-  useEffect(() => {
-    // 如果用户对象突然消失，可能是刚刚清除了认证状态
-    if (!user && isLoggedIn) {
-      setJustClearedAuth(true);
-      // 500ms后重置标志，给状态更新足够时间
-      const timer = setTimeout(() => {
-        setJustClearedAuth(false);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [user, isLoggedIn]);
-
-  useEffect(() => {
-    // 添加短暂延迟，确保认证状态完全稳定后再重定向
-    // 避免在状态清除过程中的不一致导致错误重定向
-    const timer = setTimeout(() => {
-      // 如果刚刚清除了认证状态，不进行重定向
-      if (justClearedAuth) {
-        console.log('LoginPage: Just cleared auth, skipping redirect');
-        return;
-      }
+    if (!isInitialized || isAuthContextLoading) return;
+    
+    if (isLoggedIn && user && user.id) {
+      const from = location.state?.from?.pathname || '/dashboard';
       
-      // 检查Service Worker的真实认证状态，如果为false则不重定向
-      if (realAuthStatus === false) {
-        console.log('LoginPage: Service Worker reports not authenticated, skipping redirect');
-        return;
+      if (isAdminLoginAttempt && userIsAdmin()) {
+        console.log('LoginPage: 重定向管理员到 /admin');
+        navigate('/admin', { replace: true });
+      } else if (!isAdminLoginAttempt) {
+        console.log('LoginPage: 重定向已认证用户到:', from);
+        navigate(from, { replace: true });
       }
-      
-      // 只有在用户确实存在且认证状态正常时才进行重定向
-      // 避免因为本地状态不同步导致的错误重定向
-      // 额外检查用户对象是否有有效的ID，确保认证状态完全正常
-      // 同时确保Service Worker也确认用户已认证
-      if (!isAdminLoginAttempt && isLoggedIn && user && user.id && !isAuthContextLoading && realAuthStatus === true) {
-        const from = location.state?.from?.pathname || '/dashboard';
-        if (location.pathname !== from) {
-          console.log('LoginPage: Redirecting authenticated user to:', from);
-          navigate(from, { replace: true });
-        }
-      }
-      if (isAdminLoginAttempt && isLoggedIn && user && user.id && userIsAdmin() && !isAuthContextLoading && realAuthStatus === true) {
-        if (location.pathname !== '/admin') {
-          console.log('LoginPage: Redirecting authenticated admin to /admin');
-          navigate('/admin', { replace: true });
-        }
-      }
-    }, 100); // 100ms 延迟，确保状态稳定
-
-    return () => clearTimeout(timer);
-  }, [isLoggedIn, user, isAuthContextLoading, navigate, location.state, location.pathname, isAdminLoginAttempt, userIsAdmin, justClearedAuth, realAuthStatus]); // Added userIsAdmin, justClearedAuth and realAuthStatus to dependencies
+    }
+  }, [isInitialized, isLoggedIn, user, isAuthContextLoading, navigate, location.state, isAdminLoginAttempt, userIsAdmin]);
 
   const handleTurnstileSuccess = (token: string) => {
     console.log('Turnstile验证成功');
@@ -239,7 +172,7 @@ const LoginPage: React.FC = () => {
       // 统一使用后端认证API获取JWT token
       let apiUrl: string;
       let requestBody: any;
-      
+
       if (isRootAdminMode) {
         // Root管理员登录
         apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8082'}/api/root-admins/login`;
@@ -272,25 +205,25 @@ const LoginPage: React.FC = () => {
       }
 
       const data = await response.json();
-      
+
       // 统一的登录处理逻辑，token存储完全委托给service worker
       if (isRootAdminMode) {
         // Root管理员登录成功
         console.log('Root admin successfully logged in.');
-        
+
         // 对于rootAdmin，使用特殊的租户代码 'root'
         const rootTenantCode = 'root_system';
-        
+
         // 使用返回的JWT token进行SurrealDB认证
         const jwtToken = data.access_token || data.token;
         if (!jwtToken) {
           throw new Error('No JWT token returned from root admin login');
         }
-        
+
         // 直接通过Service Worker进行认证和token管理
         await authService.setTenantCode(rootTenantCode);
         await authService.setAuthTokens(jwtToken, data.refresh_token, data.expires_in);
-        
+
         // 创建Root管理员用户对象
         const rootAdminUser: AppUser = {
           id: new RecordId('root_admin', data.admin?.username || adminUsername),
@@ -304,12 +237,12 @@ const LoginPage: React.FC = () => {
       } else {
         // 租户用户登录成功
         console.log('Tenant user successfully logged in.');
-        
+
         // 设置租户代码并进行SurrealDB认证
         if (tenantCode) {
           // 登录成功后，将租户添加到历史记录
           TenantHistoryManager.addTenantToHistory(tenantCode);
-          
+
           // 设置租户代码并直接通过Service Worker进行认证和token管理
           await authService.setTenantCode(tenantCode);
           await authService.setAuthTokens(data.access_token, data.refresh_token, data.expires_in);
@@ -324,7 +257,7 @@ const LoginPage: React.FC = () => {
         };
 
         setAuthState(userAppUser, null);
-        
+
         // 根据用户角色决定跳转页面
         if (data.user.roles.includes('admin')) {
           navigate('/admin', { replace: true });
@@ -359,7 +292,7 @@ const LoginPage: React.FC = () => {
       }
 
       setIsProcessingAdminLogin(true);
-      
+
       if (isRootAdminMode) {
         // Root管理员直接登录，不需要Turnstile验证
         await handleAdminLoginWithToken('');
@@ -373,7 +306,7 @@ const LoginPage: React.FC = () => {
           await handleAdminLoginWithToken('');
         }
       }
-      
+
     } catch (error: unknown) {
       console.error("Admin form validation failed:", error);
       const errorMessage = error instanceof Error ? error.message : t('error_invalid_credentials_or_server');
@@ -401,12 +334,16 @@ const LoginPage: React.FC = () => {
   if (isProcessingAdminLogin && !showTurnstile) {
     return <GlobalLoader message={t('admin_login_attempt_loading', 'Attempting admin login...')} />;
   }
-  
-  if (isLoggedIn && user && user.id && !isAuthContextLoading && !isAdminLoginAttempt && !justClearedAuth && realAuthStatus === true) {
-     return <GlobalLoader message={t('redirecting', 'Redirecting...')} />;
+
+  if (!isInitialized || isAuthContextLoading) {
+    return <GlobalLoader message={t('loading_session', 'Loading session...')} />;
   }
-   if (isLoggedIn && user && user.id && userIsAdmin() && isAdminLoginAttempt && !isAuthContextLoading && !justClearedAuth && realAuthStatus === true) {
-     return <GlobalLoader message={t('redirecting_admin', 'Redirecting to admin dashboard...')} />;
+  
+  if (isLoggedIn && user && user.id && !isAdminLoginAttempt) {
+    return <GlobalLoader message={t('redirecting', 'Redirecting...')} />;
+  }
+  if (isLoggedIn && user && user.id && userIsAdmin() && isAdminLoginAttempt) {
+    return <GlobalLoader message={t('redirecting_admin', 'Redirecting to admin dashboard...')} />;
   }
 
   return (
@@ -487,7 +424,7 @@ const LoginPage: React.FC = () => {
                 <Typography variant="body1" color="text.secondary">
                   {isRootAdminMode
                     ? t('root_admin_login_subtitle', 'Root Administrator Login')
-                    : isAdminLoginAttempt 
+                    : isAdminLoginAttempt
                       ? t('tenant_login_subtitle', 'Tenant Login')
                       : t('login_subtitle', 'Sign in to your account')
                   }
@@ -515,235 +452,235 @@ const LoginPage: React.FC = () => {
 
               {/* Always show login form - either tenant or root admin */}
               {/* Tenant/Root Admin Login Form */}
-                <form onSubmit={handleAdminFormLogin}>
-                  {!isRootAdminMode && (
-                    <Autocomplete
-                      id="tenantCode"
-                      options={tenantHistory}
-                      getOptionLabel={(option) => typeof option === 'string' ? option : option.code}
-                      value={tenantCode}
-                      onChange={(_, newValue) => {
-                        const code = typeof newValue === 'string' ? newValue : newValue?.code || '';
-                        setTenantCode(code.toUpperCase());
-                        // Clear error when user selects
-                        if (adminLoginError) setAdminLoginError(null);
-                        // 立即检查租户配置
-                        if (code.trim()) {
-                          checkTenantTurnstileConfig(code.toUpperCase());
+              <form onSubmit={handleAdminFormLogin}>
+                {!isRootAdminMode && (
+                  <Autocomplete
+                    id="tenantCode"
+                    options={tenantHistory}
+                    getOptionLabel={(option) => typeof option === 'string' ? option : option.code}
+                    value={tenantCode}
+                    onChange={(_, newValue) => {
+                      const code = typeof newValue === 'string' ? newValue : newValue?.code || '';
+                      setTenantCode(code.toUpperCase());
+                      // Clear error when user selects
+                      if (adminLoginError) setAdminLoginError(null);
+                      // 立即检查租户配置
+                      if (code.trim()) {
+                        checkTenantTurnstileConfig(code.toUpperCase());
+                      }
+                    }}
+                    inputValue={tenantCode}
+                    onInputChange={(_, newInputValue) => {
+                      setTenantCode(newInputValue.toUpperCase());
+                      // Clear error when user starts typing
+                      if (adminLoginError) setAdminLoginError(null);
+                      // 用户输入时也检查配置（去抖动处理）
+                      if (newInputValue.trim()) {
+                        setTimeout(() => {
+                          checkTenantTurnstileConfig(newInputValue.toUpperCase());
+                        }, 500);
+                      }
+                    }}
+                    freeSolo
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label={t('tenant_code_label', 'Tenant Code')}
+                        required
+                        fullWidth
+                        variant="outlined"
+                        margin="normal"
+                        placeholder={t('tenant_code_placeholder', 'Enter tenant code')}
+                        inputProps={{
+                          ...params.inputProps,
+                          style: { fontSize: 16 }, // Prevent zoom on iOS
+                        }}
+                        InputProps={{
+                          ...params.InputProps,
+                          endAdornment: (
+                            <>
+                              {checkingTenantConfig && (
+                                <CircularProgress size={20} sx={{ mr: 1 }} />
+                              )}
+                              {params.InputProps.endAdornment}
+                            </>
+                          ),
+                        }}
+                        helperText={
+                          tenantCode && !checkingTenantConfig
+                            ? turnstileRequired
+                              ? t('turnstile_enabled_hint', '此租户已启用人机验证')
+                              : t('turnstile_disabled_hint', '此租户已禁用人机验证')
+                            : undefined
                         }
-                      }}
-                      inputValue={tenantCode}
-                      onInputChange={(_, newInputValue) => {
-                        setTenantCode(newInputValue.toUpperCase());
-                        // Clear error when user starts typing
-                        if (adminLoginError) setAdminLoginError(null);
-                        // 用户输入时也检查配置（去抖动处理）
-                        if (newInputValue.trim()) {
-                          setTimeout(() => {
-                            checkTenantTurnstileConfig(newInputValue.toUpperCase());
-                          }, 500);
-                        }
-                      }}
-                      freeSolo
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label={t('tenant_code_label', 'Tenant Code')}
-                          required
-                          fullWidth
-                          variant="outlined"
-                          margin="normal"
-                          placeholder={t('tenant_code_placeholder', 'Enter tenant code')}
-                          inputProps={{
-                            ...params.inputProps,
-                            style: { fontSize: 16 }, // Prevent zoom on iOS
-                          }}
-                          InputProps={{
-                            ...params.InputProps,
-                            endAdornment: (
-                              <>
-                                {checkingTenantConfig && (
-                                  <CircularProgress size={20} sx={{ mr: 1 }} />
-                                )}
-                                {params.InputProps.endAdornment}
-                              </>
-                            ),
-                          }}
-                          helperText={
-                            tenantCode && !checkingTenantConfig
-                              ? turnstileRequired
-                                ? t('turnstile_enabled_hint', '此租户已启用人机验证')
-                                : t('turnstile_disabled_hint', '此租户已禁用人机验证')
-                              : undefined
-                          }
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 2,
-                              minHeight: isMobile ? '44px' : 'auto',
-                            },
-                          }}
-                        />
-                      )}
-                      renderOption={(props, option) => (
-                        <Box
-                          component="li"
-                          {...props}
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                            py: 1,
-                          }}
-                        >
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {option.code}
-                            </Typography>
-                            {option.name && (
-                              <Typography variant="caption" color="text.secondary">
-                                {option.name}
-                              </Typography>
-                            )}
-                          </Box>
-                          <Typography variant="caption" color="text.secondary">
-                            {new Date(option.lastUsed).toLocaleDateString()}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: 2,
+                            minHeight: isMobile ? '44px' : 'auto',
+                          },
+                        }}
+                      />
+                    )}
+                    renderOption={(props, option) => (
+                      <Box
+                        component="li"
+                        {...props}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          py: 1,
+                        }}
+                      >
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {option.code}
                           </Typography>
+                          {option.name && (
+                            <Typography variant="caption" color="text.secondary">
+                              {option.name}
+                            </Typography>
+                          )}
                         </Box>
-                      )}
-                      sx={{
-                        '& .MuiAutocomplete-inputRoot': {
-                          borderRadius: 2,
-                        },
-                      }}
-                    />
-                  )}
-                  <TextField
-                    id="adminUsername"
-                    label={t('admin_username_label', 'Username')}
-                    type="text"
-                    value={adminUsername}
-                    onChange={(e) => {
-                      setAdminUsername(e.target.value);
-                      // Clear error when user starts typing
-                      if (adminLoginError) setAdminLoginError(null);
-                    }}
-                    required
-                    fullWidth
-                    variant="outlined"
-                    margin="normal"
-                    placeholder={isRootAdminMode 
-                      ? t('root_admin_username_placeholder', 'Enter root admin username')
-                      : t('admin_username_placeholder', 'Enter username')
-                    }
-                    inputProps={{ 
-                      style: { fontSize: 16 } // Prevent zoom on iOS
-                    }}
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(option.lastUsed).toLocaleDateString()}
+                        </Typography>
+                      </Box>
+                    )}
                     sx={{
-                      '& .MuiOutlinedInput-root': {
+                      '& .MuiAutocomplete-inputRoot': {
                         borderRadius: 2,
-                        minHeight: isMobile ? '44px' : 'auto',
                       },
                     }}
                   />
-                  <TextField
-                    id="adminPassword"
-                    label={t('admin_password_label', 'Password')}
-                    type={showPassword ? 'text' : 'password'}
-                    value={adminPassword}
-                    onChange={(e) => {
-                      setAdminPassword(e.target.value);
-                      // Clear error when user starts typing
-                      if (adminLoginError) setAdminLoginError(null);
-                    }}
-                    required
-                    fullWidth
-                    variant="outlined"
-                    margin="normal"
-                    placeholder={t('admin_password_placeholder', 'Enter admin password')}
-                    inputProps={{ 
-                      style: { fontSize: 16 } // Prevent zoom on iOS
-                    }}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            onClick={() => setShowPassword(!showPassword)}
-                            edge="end"
-                            aria-label="toggle password visibility"
-                            sx={isMobile ? { minHeight: '44px', minWidth: '44px' } : {}}
-                          >
-                            <SvgIcon fontSize="small">
-                              <path d={showPassword ? mdiEyeOff : mdiEye} />
-                            </SvgIcon>
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: 2,
-                        minHeight: isMobile ? '44px' : 'auto',
-                      },
-                    }}
-                  />
-                  
-                  <Button
-                    type="submit"
-                    disabled={isProcessingAdminLogin || (checkingTenantConfig && !isRootAdminMode)}
-                    fullWidth
-                    variant="contained"
-                    color="primary"
-                    size="large"
-                    sx={{ 
-                      mt: 3, 
-                      mb: 2,
-                      py: 1.5,
-                      minHeight: isMobile ? '48px' : 'auto',
+                )}
+                <TextField
+                  id="adminUsername"
+                  label={t('admin_username_label', 'Username')}
+                  type="text"
+                  value={adminUsername}
+                  onChange={(e) => {
+                    setAdminUsername(e.target.value);
+                    // Clear error when user starts typing
+                    if (adminLoginError) setAdminLoginError(null);
+                  }}
+                  required
+                  fullWidth
+                  variant="outlined"
+                  margin="normal"
+                  placeholder={isRootAdminMode
+                    ? t('root_admin_username_placeholder', 'Enter root admin username')
+                    : t('admin_username_placeholder', 'Enter username')
+                  }
+                  inputProps={{
+                    style: { fontSize: 16 } // Prevent zoom on iOS
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
                       borderRadius: 2,
-                      textTransform: 'none',
-                      fontSize: '1rem',
-                      fontWeight: 600,
-                      boxShadow: theme.shadows[4],
-                      '&:hover': {
-                        boxShadow: theme.shadows[8],
-                      },
-                    }}
-                    startIcon={(isProcessingAdminLogin || checkingTenantConfig) ? <CircularProgress size={20} color="inherit" /> : null}
-                  >
-                    {isProcessingAdminLogin 
-                      ? t('verifying_button', 'Verifying...') 
-                      : checkingTenantConfig 
-                        ? t('checking_config_button', 'Checking Config...')
-                        : t('login_button', 'Login')
-                    }
-                  </Button>
-
-                  <Divider sx={{ my: 3 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('or', 'OR')}
-                    </Typography>
-                  </Divider>
-
-                  <Button 
-                    component="button" 
-                    type="button" 
-                    onClick={() => navigate(isRootAdminMode ? '/login' : '/login?root=true')} 
-                    variant="outlined" 
-                    fullWidth
-                    sx={{ 
-                      borderRadius: 2,
-                      textTransform: 'none',
-                      py: 1,
                       minHeight: isMobile ? '44px' : 'auto',
-                    }}
-                  >
-                    {isRootAdminMode 
-                      ? t('back_to_tenant_login_link', 'Back to Tenant Login')
-                      : t('switch_to_root_admin_link', 'Switch to Root Administrator')
-                    }
-                  </Button>
+                    },
+                  }}
+                />
+                <TextField
+                  id="adminPassword"
+                  label={t('admin_password_label', 'Password')}
+                  type={showPassword ? 'text' : 'password'}
+                  value={adminPassword}
+                  onChange={(e) => {
+                    setAdminPassword(e.target.value);
+                    // Clear error when user starts typing
+                    if (adminLoginError) setAdminLoginError(null);
+                  }}
+                  required
+                  fullWidth
+                  variant="outlined"
+                  margin="normal"
+                  placeholder={t('admin_password_placeholder', 'Enter admin password')}
+                  inputProps={{
+                    style: { fontSize: 16 } // Prevent zoom on iOS
+                  }}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() => setShowPassword(!showPassword)}
+                          edge="end"
+                          aria-label="toggle password visibility"
+                          sx={isMobile ? { minHeight: '44px', minWidth: '44px' } : {}}
+                        >
+                          <SvgIcon fontSize="small">
+                            <path d={showPassword ? mdiEyeOff : mdiEye} />
+                          </SvgIcon>
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                      minHeight: isMobile ? '44px' : 'auto',
+                    },
+                  }}
+                />
 
-                  {/* 暂时屏蔽注册功能
+                <Button
+                  type="submit"
+                  disabled={isProcessingAdminLogin || (checkingTenantConfig && !isRootAdminMode)}
+                  fullWidth
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  sx={{
+                    mt: 3,
+                    mb: 2,
+                    py: 1.5,
+                    minHeight: isMobile ? '48px' : 'auto',
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    boxShadow: theme.shadows[4],
+                    '&:hover': {
+                      boxShadow: theme.shadows[8],
+                    },
+                  }}
+                  startIcon={(isProcessingAdminLogin || checkingTenantConfig) ? <CircularProgress size={20} color="inherit" /> : null}
+                >
+                  {isProcessingAdminLogin
+                    ? t('verifying_button', 'Verifying...')
+                    : checkingTenantConfig
+                      ? t('checking_config_button', 'Checking Config...')
+                      : t('login_button', 'Login')
+                  }
+                </Button>
+
+                <Divider sx={{ my: 3 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('or', 'OR')}
+                  </Typography>
+                </Divider>
+
+                <Button
+                  component="button"
+                  type="button"
+                  onClick={() => navigate(isRootAdminMode ? '/login' : '/login?root=true')}
+                  variant="outlined"
+                  fullWidth
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    py: 1,
+                    minHeight: isMobile ? '44px' : 'auto',
+                  }}
+                >
+                  {isRootAdminMode
+                    ? t('back_to_tenant_login_link', 'Back to Tenant Login')
+                    : t('switch_to_root_admin_link', 'Switch to Root Administrator')
+                  }
+                </Button>
+
+                {/* 暂时屏蔽注册功能
                   <Box sx={{ textAlign: 'center', mt: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                       {t('no_account_yet', "Don't have an account?")}{' '}
@@ -766,7 +703,7 @@ const LoginPage: React.FC = () => {
                     </Typography>
                   </Box>
                   */}
-                </form>
+              </form>
 
               {/* Footer */}
               <Box sx={{ mt: 4, textAlign: 'center' }}>

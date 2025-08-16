@@ -1,4 +1,4 @@
-import { RecordId } from 'surrealdb';
+import { RecordId, StringRecordId } from 'surrealdb';
 import { NavItemType } from '../contexts/AuthContext';
 import { queryWithAuth } from '@/src/utils/surrealAuth';
 import type { SurrealWorkerAPI } from '@/src/contexts/SurrealProvider';
@@ -41,17 +41,17 @@ interface OperationQueryResult {
  * @param caseId 案件ID（可选）
  * @returns 用户可访问的菜单列表
  */
-export async function loadUserMenus(client: SurrealWorkerAPI, caseId?: RecordId | null): Promise<NavItemType[]> {
+export async function loadUserMenus(client: SurrealWorkerAPI, caseId?: RecordId | StringRecordId | null): Promise<NavItemType[]> {
   console.log('MenuService.loadUserMenus using surrealClient');
-  
+
   try {
     // 使用权限检查查询获取用户可访问的菜单
     // 菜单查询需要用户登录后才能访问，所以使用 queryWithAuth
     const query = `select * from menu_metadata`;
-    
+
     const params = caseId ? { case_id: caseId } : {};
     console.log('Executing menu permission query with params:', params);
-    
+
     const menuItems = await queryWithAuth<MenuMetadata[]>(client, query, params);
 
     if (!Array.isArray(menuItems) || menuItems.length === 0) {
@@ -59,7 +59,7 @@ export async function loadUserMenus(client: SurrealWorkerAPI, caseId?: RecordId 
       return [];
     }
     console.log('Menu items from DB:', menuItems);
-    
+
     // 转换为 NavItemType 格式
     const navItems: NavItemType[] = menuItems
       .filter((menu) => menu.is_active) // 只返回激活的菜单
@@ -72,10 +72,10 @@ export async function loadUserMenus(client: SurrealWorkerAPI, caseId?: RecordId 
       }));
 
     console.log('Converted nav items:', navItems);
-    
+
     // TODO: 处理多级菜单（如果有 parent_menu_id）
     // 目前假设都是一级菜单
-    
+
     return navItems;
   } catch (error) {
     console.error('Error loading user menus:', error);
@@ -115,7 +115,7 @@ export async function loadUserOperations(client: SurrealWorkerAPI, menuId: strin
  * @param caseId 案件ID（可选）
  * @returns 是否有权限
  */
-export async function hasOperation(client: SurrealWorkerAPI, operationId: string, caseId?: RecordId | null): Promise<boolean> {
+export async function hasOperation(client: SurrealWorkerAPI, operationId: string, caseId?: RecordId | StringRecordId | null): Promise<boolean> {
   try {
     const query = `select * from operation_metadata where operation_id = $operation_id`;
     const params = caseId ? { case_id: caseId, operation_id: operationId } : { operation_id: operationId };
@@ -134,7 +134,7 @@ export async function hasOperation(client: SurrealWorkerAPI, operationId: string
  * @param caseId 案件ID（可选）
  * @returns 操作ID到权限的映射
  */
-export async function hasOperations(client: SurrealWorkerAPI, operationIds: string[], caseId?: RecordId | null): Promise<Record<string, boolean>> {
+export async function hasOperations(client: SurrealWorkerAPI, operationIds: string[], caseId?: RecordId | StringRecordId | null): Promise<Record<string, boolean>> {
   try {
     const query = `select * from operation_metadata`;
     const params = caseId ? { case_id: caseId } : {};
@@ -146,7 +146,7 @@ export async function hasOperations(client: SurrealWorkerAPI, operationIds: stri
     operationIds.forEach(id => {
       permissions[id] = availableOperations.has(id);
     });
-    
+
     return permissions;
   } catch (error) {
     console.error('Error checking operations:', error);
@@ -184,7 +184,7 @@ export async function hasMenuAccess(client: SurrealWorkerAPI, userId: string, me
           AND out.is_active = true
       ) LIMIT 1;
     `;
-    
+
     const result = await queryWithAuth<any[]>(client, query, {
       user_id: userId,
       menu_id: menuId,

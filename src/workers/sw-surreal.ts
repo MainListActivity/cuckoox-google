@@ -19,6 +19,8 @@ console.log(`Service Worker v2.0 启动 - ${SW_VERSION}`);
 // 导入核心管理器
 import { UnifiedConnectionManager, type ConnectionConfig } from './unified-connection-manager.js';
 import { EnhancedQueryProcessor } from './enhanced-query-processor.js';
+import init from "@cuckoox/surrealdb-wasm";
+import { decodeCbor, encodeCbor, RpcRequest } from "surrealdb";
 
 // PWA功能模块
 import { StaticResourceCacheManager } from "./static-resource-cache-manager.js";
@@ -32,8 +34,7 @@ interface RpcRequestMessage {
   type: 'rpc_request';
   payload: {
     requestId: number;
-    method: string;
-    params: unknown[];
+    encodeParam: Uint8Array;
   };
 }
 
@@ -44,7 +45,7 @@ interface RpcResponseMessage {
   type: 'rpc_response';
   payload: {
     requestId: number;
-    result?: unknown;
+    encodeResp?: Uint8Array;
     error?: {
       code: string;
       details: string;
@@ -107,10 +108,10 @@ const pageSubscriptions = new Map<string, {
 self.addEventListener('install', (event) => {
   console.log(`Service Worker v2.0 安装中 - ${SW_VERSION}`);
 
-
   event.waitUntil(
     Promise.all([
       self.skipWaiting(),
+      init(),
     ])
   );
 });
@@ -345,12 +346,11 @@ async function initializeLocalDatabaseSchema(): Promise<void> {
  * 处理RPC请求
  */
 async function handleRpcRequest(event: ExtendableMessageEvent, payload: RpcRequestMessage['payload']): Promise<void> {
-  const { requestId, method, params } = payload;
-
+  const { requestId, encodeParam } = payload;
+  const { method, params } = decodeCbor<RpcRequest>(encodeParam);
   console.log(`Service Worker v2.0: 处理RPC请求 ${method}`, params);
 
   try {
-    let result: any;
 
     // 确保查询处理器已初始化
     if (!isInitialized || !queryProcessor || !connectionManager) {
@@ -362,12 +362,12 @@ async function handleRpcRequest(event: ExtendableMessageEvent, payload: RpcReque
         throw new Error('Service Worker未完全初始化');
       }
     }
-    result = await queryProcessor!.handleRPC(method, params);
-
+    const result = await queryProcessor!.handleRPC(method, params);
+    const encodeResp = encodeCbor(result.data);
     // 发送成功响应
     const response: RpcResponseMessage = {
       type: 'rpc_response',
-      payload: { requestId, ...result.data }
+      payload: { requestId, encodeResp }
     };
 
     if (event.ports[0]) {
